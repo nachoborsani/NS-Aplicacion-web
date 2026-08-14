@@ -101,19 +101,13 @@
 
         <!-- USUARIOS -->
         <section id="view-users" style="display:none">
-          <div class="page-head"><h1>Usuarios</h1><p>Gestión de accesos y perfiles del sistema.</p></div>
-          <div class="toolbar">
-            <div class="search"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input class="inp" placeholder="Buscar usuario…"></div>
-            <div class="sp" style="flex:1"></div>
-            <button class="btn btn-primary" style="height:38px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 5v14M5 12h14" stroke="#04302f" stroke-width="2.4" stroke-linecap="round"/></svg>Agregar usuario</button>
-          </div>
+          <div class="page-head"><h1>Usuarios</h1><p>Usuarios con acceso al sistema.</p></div>
           <div class="tablecard">
             <table>
-              <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th><th style="width:56px"></th></tr></thead>
+              <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th></tr></thead>
               <tbody id="usersBody"></tbody>
             </table>
           </div>
-          <p style="color:var(--text-2);font-size:12px;margin-top:12px">Perfiles del sistema: <b style="color:var(--text)">Admin</b> (control total) · <b style="color:var(--text)">Operador</b> (carga y gestión) · <b style="color:var(--text)">Médico</b> · <b style="color:var(--text)">Clínica</b>. El detalle de permisos se define en la próxima etapa.</p>
         </section>
 
         <!-- SOON -->

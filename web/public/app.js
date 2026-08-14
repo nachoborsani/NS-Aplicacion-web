@@ -50,7 +50,7 @@ async function renderUsers(){
   var body = document.getElementById('usersBody');
   if (!body) return;
   var res = await api('/api/users');
-  if (!res.ok){ body.innerHTML = '<tr><td colspan="4" style="color:var(--text-2);padding:16px">No se pudo cargar la lista.</td></tr>'; return; }
+  if (!res.ok){ body.innerHTML = '<tr><td colspan="3" style="color:var(--text-2);padding:16px">No se pudo cargar la lista.</td></tr>'; return; }
   var users = res.data.users || [];
   body.innerHTML = users.map(function(u){
     var r = ROLE[u.role] || { chip:'admin', label:u.role, bg:'linear-gradient(135deg,#66788a,#4f6378)' };
@@ -61,7 +61,6 @@ async function renderUsers(){
       + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + esc(u.username) + '</div></div></div></td>'
       + '<td><span class="role ' + r.chip + '">' + esc(r.label) + '</span></td>'
       + '<td>' + st + '</td>'
-      + '<td><button class="rowbtn">···</button></td>'
       + '</tr>';
   }).join('');
   var dc = document.getElementById('dashUsersCount'), ds = document.getElementById('dashUsersSub');
