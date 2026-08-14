@@ -346,7 +346,7 @@
   .saved-report-table th:nth-child(4){width:135px}
   .saved-report-table th:nth-child(5){width:90px}
   .report-open-btn{height:32px;border-radius:8px;font-size:12px;padding:0 12px}
-  .client-report-controls{display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;align-items:end}
+  .client-report-controls{display:grid;grid-template-columns:minmax(240px,360px) 220px minmax(0,1fr);gap:12px;align-items:end}
   .client-report-controls .field{margin:0}
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
   .report-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}

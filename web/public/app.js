@@ -547,6 +547,8 @@ function clearClientReport(){
   CLIENT_REPORT_SOURCE = null;
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
+  var title = document.getElementById('clientReportTitle');
+  if (title) title.value = '';
   var st = document.getElementById('clientReportStatus');
   if (st) st.textContent = 'Visualizacion cerrada.';
   renderClientReportRows();
@@ -586,6 +588,7 @@ async function saveClientReport(){
   if (st) st.textContent = 'Guardando reporte...';
   var payload = {
     rows: CLIENT_REPORT_ROWS,
+    title: (document.getElementById('clientReportTitle') || {}).value || '',
     sourceFilename: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.filename,
     nomencladorPeriod: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod,
     nomencladorLabel: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorLabel
@@ -620,11 +623,14 @@ async function openClientReport(id){
   };
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
+  var title = document.getElementById('clientReportTitle');
+  if (title) title.value = report.title || '';
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
   renderClientReportRows();
 }
 async function uploadClientReport(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
+  var wasClosed = CLIENT_REPORT_MODE === 'closed';
   var st = document.getElementById('clientReportStatus');
   st.textContent = 'Procesando bandeja...';
   var period = document.getElementById('clientReportPeriod').value || '';
@@ -647,6 +653,8 @@ async function uploadClientReport(files){
   };
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
+  var title = document.getElementById('clientReportTitle');
+  if (title && wasClosed) title.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
   renderClientReportRows();
 }
