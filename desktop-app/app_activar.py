@@ -1275,13 +1275,12 @@ class PamiActivarModuleFrame(ctk.CTkFrame):
                 return saved_path
         return next((path for path in _default_nomenclador_candidates() if path.exists()), DEFAULT_NOMENCLADOR_PATH)
 
-    def _read_nomenclador_catalog(self, catalog_path: Path) -> list[PracticeCatalogItem]:
-        workbook = load_workbook(catalog_path, read_only=True, data_only=True)
-        if "Nomenclador" not in workbook.sheetnames:
-            raise RuntimeError("El archivo no tiene una hoja 'Nomenclador'.")
-        ws = workbook["Nomenclador"]
+    def _build_catalog_items_from_rows(self, rows) -> list[PracticeCatalogItem]:
+        """Arma los items desde filas posicionales (row[0..4]). Sirve para el Excel
+        y para el nomenclador que baja la web (mismo formato de fila)."""
         items: list[PracticeCatalogItem] = []
-        for row in ws.iter_rows(min_row=11, values_only=True):
+        seen: set[tuple[str, str, str]] = set()
+        for row in rows:
             if not row or len(row) < 4:
                 continue
             module_code = str(row[0] or "").strip()
@@ -1303,16 +1302,43 @@ class PamiActivarModuleFrame(ctk.CTkFrame):
             )
             if not module_code or not module_name or not practice_code or not description:
                 continue
+            module_id = f"{module_code}::{module_name}"
+            key = (module_id, normalized_practice_code, description)
+            if key in seen:
+                continue
+            seen.add(key)
             items.append(
                 PracticeCatalogItem(
-                    module_id=f"{module_code}::{module_name}",
+                    module_id=module_id,
                     module_name=module_name,
-                    code=self._normalize_code(practice_code),
+                    code=normalized_practice_code,
                     description=description,
                 )
             )
         items.sort(key=lambda item: (item.module_name.lower(), item.code))
         return items
+
+    def _read_nomenclador_catalog(self, catalog_path: Path) -> list[PracticeCatalogItem]:
+        workbook = load_workbook(catalog_path, read_only=True, data_only=True)
+        if "Nomenclador" not in workbook.sheetnames:
+            raise RuntimeError("El archivo no tiene una hoja 'Nomenclador'.")
+        ws = workbook["Nomenclador"]
+        return self._build_catalog_items_from_rows(ws.iter_rows(min_row=11, values_only=True))
+
+    def _web_catalog_items(self) -> list[PracticeCatalogItem]:
+        """Nomenclador del mes de trabajo bajado de la web (fuente principal)."""
+        try:
+            import ns_catalog
+
+            rows = ns_catalog.catalog_rows()
+        except Exception:
+            return []
+        if not rows:
+            return []
+        try:
+            return self._build_catalog_items_from_rows(rows)
+        except Exception:
+            return []
 
     def _refresh_practice_options_from_catalog(self, *, save: bool = True) -> None:
         displays = [
@@ -1331,23 +1357,32 @@ class PamiActivarModuleFrame(ctk.CTkFrame):
                 if item.code in self.active_catalog_practices and (not self.active_catalog_modules or item.module_id in self.active_catalog_modules)
             ]
         self._apply_practice_options(displays)
-        if save and self.practice_catalog_path:
+        if save and (self.practice_catalog_path or getattr(self, "using_web_catalog", False)):
             self._save_practice_catalog_state()
 
     def _initialize_practice_catalog(self) -> None:
         state = self._load_practice_catalog_state()
-        candidate_path = self._resolve_catalog_path_from_state(state)
-        if not candidate_path.exists():
-            self._apply_practice_options(list(PRACTICAS_ACTIVAR.keys()))
-            return
-        try:
-            items = self._read_nomenclador_catalog(candidate_path)
-        except Exception as exc:
-            self._push_log(f"Nomenclador no cargado: {exc}")
-            self._apply_practice_options(list(PRACTICAS_ACTIVAR.keys()))
-            return
+        # Opción A: la web es la fuente. Si hay nomenclador del mes de trabajo,
+        # se usa; si todavía no se bajó ninguno, cae al Excel local de respaldo.
+        web_items = self._web_catalog_items()
+        if web_items:
+            items = web_items
+            self.practice_catalog_path = None
+            self.using_web_catalog = True
+        else:
+            candidate_path = self._resolve_catalog_path_from_state(state)
+            if not candidate_path.exists():
+                self._apply_practice_options(list(PRACTICAS_ACTIVAR.keys()))
+                return
+            try:
+                items = self._read_nomenclador_catalog(candidate_path)
+            except Exception as exc:
+                self._push_log(f"Nomenclador no cargado: {exc}")
+                self._apply_practice_options(list(PRACTICAS_ACTIVAR.keys()))
+                return
+            self.practice_catalog_path = candidate_path
+            self.using_web_catalog = False
 
-        self.practice_catalog_path = candidate_path
         self.practice_catalog_items = items
         known_module_ids = {item.module_id for item in items}
         known_codes = {item.code for item in items}
