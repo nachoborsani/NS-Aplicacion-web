@@ -121,6 +121,7 @@ var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_EXPECTED_AMOUNT = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_SOURCE = null;
+var CLIENT_REPORT_FILE = null;
 var CLIENT_SAVED_REPORTS = [];
 function moneyFmt(n){
   var value = Number(n || 0);
@@ -618,6 +619,7 @@ function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
   CLIENT_REPORT_MODE = '';
   CLIENT_REPORT_SOURCE = null;
+  CLIENT_REPORT_FILE = null;
   resetClientReportFilters();
   setClientReportExpectedInput('');
   var title = document.getElementById('clientReportTitle');
@@ -691,8 +693,24 @@ async function openClientReport(id){
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
   renderClientReportRows();
 }
+async function changeClientReportPeriod(){
+  if (CLIENT_REPORT_MODE === 'closed') {
+    var closedStatus = document.getElementById('clientReportStatus');
+    if (closedStatus) closedStatus.textContent = 'Este reporte ya esta cerrado; el nomenclador no se recalcula.';
+    return;
+  }
+  if (!CLIENT_REPORT_ROWS.length) return;
+  if (!CLIENT_REPORT_FILE) {
+    clearClientReport();
+    var emptyStatus = document.getElementById('clientReportStatus');
+    if (emptyStatus) emptyStatus.textContent = 'Volvé a adjuntar la bandeja para cruzarla con este nomenclador.';
+    return;
+  }
+  await uploadClientReport([CLIENT_REPORT_FILE], { keepFile:true });
+}
 async function uploadClientReport(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
+  CLIENT_REPORT_FILE = files[0];
   var wasClosed = CLIENT_REPORT_MODE === 'closed';
   var st = document.getElementById('clientReportStatus');
   st.textContent = 'Procesando bandeja...';
@@ -706,13 +724,31 @@ async function uploadClientReport(files){
     st.textContent = data.error || 'No se pudo procesar la bandeja.';
     return;
   }
-  CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){ row.manualDebit = false; row.debitType = 'total'; row.debitAmount = ''; return row; });
+  var previousById = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(row){ previousById[row.id] = row; });
+  CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){
+    var prev = previousById[row.id];
+    row.manualDebit = prev ? !!prev.manualDebit : false;
+    row.debitType = prev ? (prev.debitType || 'total') : 'total';
+    row.debitAmount = prev ? (prev.debitAmount || 0) : '';
+    if (prev && prev.valueEdited) {
+      row.valueGross = prev.valueGross;
+      row.valueBillable = row.billable ? prev.valueGross : 0;
+      row.valueEdited = true;
+      row.matchFound = true;
+    }
+    return row;
+  });
   CLIENT_REPORT_MODE = 'draft';
   CLIENT_REPORT_SOURCE = {
     filename: data.filename || '',
     nomencladorPeriod: data.nomencladorPeriod || '',
     nomencladorLabel: data.nomencladorLabel || ''
   };
+  var periodSelect = document.getElementById('clientReportPeriod');
+  if (periodSelect && data.nomencladorPeriod && [].slice.call(periodSelect.options).some(function(option){ return option.value === data.nomencladorPeriod; })) {
+    periodSelect.value = data.nomencladorPeriod;
+  }
   resetClientReportFilters();
   if (wasClosed) setClientReportExpectedInput('');
   var title = document.getElementById('clientReportTitle');

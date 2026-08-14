@@ -1099,7 +1099,12 @@ const server = http.createServer(async (req, res) => {
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
     const store = loadNomencladorStore();
-    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    const requestedRawPeriod = String(url.searchParams.get("period") || "").trim();
+    const requestedPeriod = normalizePeriod(requestedRawPeriod) || requestedRawPeriod;
+    if (requestedPeriod && !store.items[requestedPeriod]) {
+      return json(res, 404, { error: `No esta cargado el nomenclador ${requestedPeriod}.` });
+    }
+    const payload = getNomencladorByPeriod(store, requestedPeriod);
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
     try {
       const raw = await readBuffer(req);
