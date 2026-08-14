@@ -146,6 +146,22 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { user: publicUser(u) });
   }
 
+  if (p === "/api/users") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const users = loadUsers() || [];
+    return json(res, 200, {
+      users: users.map((u) => ({
+        username: u.username,
+        name: u.name,
+        role: u.role,
+        active: u.active !== false,
+        mustChange: !!u.mustChange,
+      })),
+    });
+  }
+
   if (p === "/api/login" && req.method === "POST") {
     const { username, password } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();

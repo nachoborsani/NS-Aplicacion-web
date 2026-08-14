@@ -12,6 +12,7 @@ var titles = { dash:'Inicio', users:'Usuarios', soon:'Configuración general' };
 function go(v, el){
   ['dash','users','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
+  if (v === 'users') renderUsers();
   document.querySelectorAll('.nav a, .side-config a').forEach(function(a){ a.classList.remove('active'); });
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
@@ -38,6 +39,35 @@ function initials(name){
 function roleLabel(r){
   return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica' }[r] || r;
 }
+var ROLE = {
+  admin:    { chip:'admin', label:'Admin',    bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
+  operador: { chip:'oper',  label:'Operador', bg:'linear-gradient(135deg,#18B7B2,#0f7f7c)' },
+  medico:   { chip:'med',   label:'Médico',   bg:'linear-gradient(135deg,#3B82C4,#2a5f96)' },
+  clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
+};
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+async function renderUsers(){
+  var body = document.getElementById('usersBody');
+  if (!body) return;
+  var res = await api('/api/users');
+  if (!res.ok){ body.innerHTML = '<tr><td colspan="4" style="color:var(--text-2);padding:16px">No se pudo cargar la lista.</td></tr>'; return; }
+  var users = res.data.users || [];
+  body.innerHTML = users.map(function(u){
+    var r = ROLE[u.role] || { chip:'admin', label:u.role, bg:'linear-gradient(135deg,#66788a,#4f6378)' };
+    var st = !u.active ? '<span class="st off">Inactivo</span>'
+           : u.mustChange ? '<span class="st off">Debe cambiar clave</span>'
+           : '<span class="st on">Activo</span>';
+    return '<tr>'
+      + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + esc(u.username) + '</div></div></div></td>'
+      + '<td><span class="role ' + r.chip + '">' + esc(r.label) + '</span></td>'
+      + '<td>' + st + '</td>'
+      + '<td><button class="rowbtn">···</button></td>'
+      + '</tr>';
+  }).join('');
+  var dc = document.getElementById('dashUsersCount'), ds = document.getElementById('dashUsersSub');
+  if (dc) dc.textContent = users.length;
+  if (ds){ var pend = users.filter(function(u){ return u.mustChange || !u.active; }).length; ds.textContent = (users.length - pend) + ' activos · ' + pend + ' pendientes'; }
+}
 function setUser(u){
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
@@ -46,7 +76,7 @@ function setUser(u){
   document.getElementById('topAvatar').textContent = ini;
   document.getElementById('dashHello').textContent = 'Buen día, ' + (u.name.split(' ')[0]) + ' 👋';
 }
-function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); }
+function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); }
 function showChange(){ document.body.classList.remove('authed','booting'); document.body.classList.add('mustchange'); }
 function showLogin(){ document.body.classList.remove('authed','mustchange','booting'); }
 

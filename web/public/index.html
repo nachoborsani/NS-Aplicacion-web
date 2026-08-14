@@ -88,7 +88,7 @@
             <div><h3>Uso interno del equipo</h3><p>Por ahora la plataforma es para reportes y tareas propias de NS. En la etapa 2 se suman los operadores, y en la 3, centros y médicos.</p></div>
           </div>
           <div class="grid tiles">
-            <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M11 11a4 4 0 100-8 4 4 0 000 8" stroke="currentColor" stroke-width="1.8"/></svg></span>Usuarios</div><div class="v tnum">4</div><div class="m">2 activos · 2 pendientes</div></div>
+            <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M11 11a4 4 0 100-8 4 4 0 000 8" stroke="currentColor" stroke-width="1.8"/></svg></span>Usuarios</div><div class="v tnum" id="dashUsersCount">—</div><div class="m" id="dashUsersSub">del sistema</div></div>
             <div class="card tile ok"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Reportes OK</div><div class="v tnum">0</div><div class="m">este mes</div></div>
             <div class="card tile warn"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Pendientes</div><div class="v tnum">0</div><div class="m">sin observaciones</div></div>
             <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8"/></svg></span>Notificaciones</div><div class="v tnum">0</div><div class="m">nada configurado aún</div></div>
@@ -101,7 +101,7 @@
 
         <!-- USUARIOS -->
         <section id="view-users" style="display:none">
-          <div class="page-head"><h1>Usuarios</h1><p>Gestión de accesos y perfiles. <span style="color:var(--turq);font-weight:600">Vista base — funcionalidad a desarrollar.</span></p></div>
+          <div class="page-head"><h1>Usuarios</h1><p>Gestión de accesos y perfiles del sistema.</p></div>
           <div class="toolbar">
             <div class="search"><svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input class="inp" placeholder="Buscar usuario…"></div>
             <div class="sp" style="flex:1"></div>
@@ -109,37 +109,8 @@
           </div>
           <div class="tablecard">
             <table>
-              <thead><tr><th>Usuario</th><th>Perfil</th><th class="em-hide">Última actividad</th><th>Estado</th><th style="width:56px"></th></tr></thead>
-              <tbody>
-                <tr>
-                  <td><div class="u"><div class="av" style="background:linear-gradient(135deg,#3a3f8f,#5a60c0)">IB</div><div><div class="nm">Ignacio Borsani</div><div class="em">nacho@ns.com</div></div></div></td>
-                  <td><span class="role admin">Admin</span></td>
-                  <td class="em-hide tnum">hoy, 10:24</td>
-                  <td><span class="st on">Activo</span></td>
-                  <td><button class="rowbtn">···</button></td>
-                </tr>
-                <tr>
-                  <td><div class="u"><div class="av" style="background:linear-gradient(135deg,var(--turq),#0f7f7c)">AO</div><div><div class="nm">Ana Operadora</div><div class="em">ana@ns.com</div></div></div></td>
-                  <td><span class="role oper">Operador</span></td>
-                  <td class="em-hide tnum">ayer, 18:03</td>
-                  <td><span class="st on">Activo</span></td>
-                  <td><button class="rowbtn">···</button></td>
-                </tr>
-                <tr class="muted-row">
-                  <td><div class="u"><div class="av" style="background:linear-gradient(135deg,#3B82C4,#2a5f96)">DM</div><div><div class="nm">Dr. Martínez</div><div class="em">martinez@clinica.com</div></div></div></td>
-                  <td><span class="role med">Médico</span></td>
-                  <td class="em-hide">—</td>
-                  <td><span class="st off">Pendiente</span></td>
-                  <td><button class="rowbtn">···</button></td>
-                </tr>
-                <tr class="muted-row">
-                  <td><div class="u"><div class="av" style="background:linear-gradient(135deg,#7a4fd0,#5a37a0)">CS</div><div><div class="nm">Clínica San Roque</div><div class="em">admin@sanroque.com</div></div></div></td>
-                  <td><span class="role clin">Clínica</span></td>
-                  <td class="em-hide">—</td>
-                  <td><span class="st off">Pendiente</span></td>
-                  <td><button class="rowbtn">···</button></td>
-                </tr>
-              </tbody>
+              <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th><th style="width:56px"></th></tr></thead>
+              <tbody id="usersBody"></tbody>
             </table>
           </div>
           <p style="color:var(--text-2);font-size:12px;margin-top:12px">Perfiles del sistema: <b style="color:var(--text)">Admin</b> (control total) · <b style="color:var(--text)">Operador</b> (carga y gestión) · <b style="color:var(--text)">Médico</b> · <b style="color:var(--text)">Clínica</b>. El detalle de permisos se define en la próxima etapa.</p>
