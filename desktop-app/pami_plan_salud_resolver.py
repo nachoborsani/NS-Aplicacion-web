@@ -132,14 +132,12 @@ def _default_nomenclador_candidates() -> list[Path]:
     return result
 
 
-@lru_cache(maxsize=4)
-def _read_catalog(catalog_path: str) -> tuple[PracticeCatalogItem, ...]:
-    workbook = load_workbook(catalog_path, read_only=True, data_only=True)
-    if "Nomenclador" not in workbook.sheetnames:
-        return ()
-    ws = workbook["Nomenclador"]
+def _build_items_from_rows(rows) -> tuple[PracticeCatalogItem, ...]:
+    """Arma los items desde filas posicionales (row[0..4]). Sirve tanto para el
+    Excel como para el nomenclador que baja la web (mismo formato de fila)."""
     items: list[PracticeCatalogItem] = []
-    for row in ws.iter_rows(min_row=11, values_only=True):
+    seen: set[tuple[str, str, str]] = set()
+    for row in rows:
         if not row or len(row) < 4:
             continue
         module_code = str(row[0] or "").strip()
@@ -153,9 +151,14 @@ def _read_catalog(catalog_path: str) -> tuple[PracticeCatalogItem, ...]:
         description = next((value for value in descriptions if value and normalize_code(value) != practice_code), "")
         if not module_code or not module_name or not practice_code or not description:
             continue
+        module_id = f"{module_code}::{module_name}"
+        key = (module_id, practice_code, description)
+        if key in seen:
+            continue
+        seen.add(key)
         items.append(
             PracticeCatalogItem(
-                module_id=f"{module_code}::{module_name}",
+                module_id=module_id,
                 module_name=module_name,
                 code=practice_code,
                 description=description,
@@ -164,7 +167,32 @@ def _read_catalog(catalog_path: str) -> tuple[PracticeCatalogItem, ...]:
     return tuple(items)
 
 
+@lru_cache(maxsize=4)
+def _read_catalog(catalog_path: str) -> tuple[PracticeCatalogItem, ...]:
+    workbook = load_workbook(catalog_path, read_only=True, data_only=True)
+    if "Nomenclador" not in workbook.sheetnames:
+        return ()
+    ws = workbook["Nomenclador"]
+    return _build_items_from_rows(ws.iter_rows(min_row=11, values_only=True))
+
+
+def _web_catalog_items() -> tuple[PracticeCatalogItem, ...]:
+    """Nomenclador del mes de trabajo bajado de la web (fuente principal)."""
+    try:
+        import ns_catalog
+
+        rows = ns_catalog.catalog_rows()
+    except Exception:
+        return ()
+    return _build_items_from_rows(rows) if rows else ()
+
+
 def _catalog_items() -> tuple[PracticeCatalogItem, ...]:
+    # Opción A: la web es la fuente. El Excel local queda solo de respaldo por si
+    # todavía no se descargó ningún mes en esta PC.
+    web = _web_catalog_items()
+    if web:
+        return web
     for path in _default_nomenclador_candidates():
         items = _read_catalog(str(path))
         if items:

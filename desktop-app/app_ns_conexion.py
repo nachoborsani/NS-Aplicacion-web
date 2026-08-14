@@ -18,6 +18,7 @@ from app_theme import (
     SECONDARY_HOVER, SECTION_BG, SUCCESS, SURFACE, SURFACE_ALT, TEXT,
     TEXT_MUTED, TEXT_SOFT, small_font, title_font,
 )
+import ns_catalog
 from ns_web import DEFAULT_BASE_URL, NSWebClient, NSWebError, load_config, save_config
 
 
@@ -28,6 +29,7 @@ class NSConexionFrame(ctk.CTkFrame):
         self.client: NSWebClient | None = None
         self.busy = False
         self.periodos: list[dict] = []
+        self._work_label_to_period: dict = {}
         self.cfg = load_config()
 
         # Los hilos de red no pueden tocar Tk directamente: dejan la actualizacion
@@ -125,24 +127,39 @@ class NSConexionFrame(ctk.CTkFrame):
     def _build_nomenclador_card(self, parent) -> None:
         card = self._card(parent, 1, "Nomenclador")
 
-        self._field_label(card, 1, "Mes / período")
+        # Traer un mes desde la web (descarga a esta PC)
+        self._field_label(card, 1, "Traer de la web")
         self.period_var = ctk.StringVar(value="")
         self.period_combo = ctk.CTkComboBox(
-            card, variable=self.period_var, values=["(conectate primero)"], state="disabled", height=28,
+            card, variable=self.period_var, values=["(conectate primero)"], state="disabled", height=28, width=210,
         )
         self.period_combo.grid(row=1, column=1, padx=(0, 8), pady=4, sticky="w")
         self.download_btn = ctk.CTkButton(
-            card, text="Actualizar este mes", height=28, width=170,
-            fg_color=PRIMARY, hover_color=PRIMARY_HOVER, font=small_font(11, bold=True),
+            card, text="Descargar este mes", height=28, width=170,
+            fg_color=SECONDARY, hover_color=SECONDARY_HOVER, font=small_font(11, bold=True),
             state="disabled", command=self._on_download,
         )
         self.download_btn.grid(row=1, column=2, padx=(0, 12), pady=4, sticky="e")
 
         self.nom_status = ctk.CTkLabel(card, text="", font=small_font(11), text_color=TEXT_SOFT)
-        self.nom_status.grid(row=2, column=0, columnspan=3, padx=12, pady=(2, 4), sticky="w")
+        self.nom_status.grid(row=2, column=0, columnspan=3, padx=12, pady=(2, 6), sticky="w")
+
+        # Mes de trabajo: lo que usan OME y Activar (por defecto, el último)
+        self._field_label(card, 3, "Mes de trabajo")
+        self.work_var = ctk.StringVar(value="")
+        self.work_combo = ctk.CTkComboBox(
+            card, variable=self.work_var, values=["(ninguno descargado)"], state="disabled", height=28, width=210,
+            command=self._on_work_change,
+        )
+        self.work_combo.grid(row=3, column=1, padx=(0, 8), pady=4, sticky="w")
+        ctk.CTkLabel(card, text="lo usan OME y Activar", font=small_font(11), text_color=TEXT_SOFT).grid(
+            row=3, column=2, padx=(0, 12), pady=4, sticky="w"
+        )
 
         self.cached_label = ctk.CTkLabel(card, text="", font=small_font(11), text_color=TEXT_MUTED)
-        self.cached_label.grid(row=3, column=0, columnspan=3, padx=12, pady=(0, 12), sticky="w")
+        self.cached_label.grid(row=4, column=0, columnspan=3, padx=12, pady=(4, 12), sticky="w")
+
+        self._refresh_work_combo()
 
     # -------------------------------------------------------------- helpers --
     def _ui(self, fn) -> None:
@@ -180,15 +197,39 @@ class NSConexionFrame(ctk.CTkFrame):
             self.download_btn.configure(state="disabled")
 
     def _refresh_cached_label(self) -> None:
-        try:
-            client = self.client or NSWebClient(self.url_var.get())
-            meses = client.cached_periods()
-        except Exception:
-            meses = []
+        meses = ns_catalog.available_periods()
+        wp = ns_catalog.working_period()
         if meses:
-            self.cached_label.configure(text="En esta PC: " + ", ".join(meses))
+            self.cached_label.configure(text=f"En esta PC: {', '.join(meses)}  ·  mes de trabajo: {wp or '—'}")
         else:
             self.cached_label.configure(text="En esta PC todavía no hay ningún mes descargado.")
+
+    def _refresh_work_combo(self) -> None:
+        periods = ns_catalog.available_periods()
+        labelmap = {p.get("period"): self._period_label(p) for p in self.periodos}
+        self._work_label_to_period = {}
+        if periods:
+            values = []
+            for per in periods:
+                label = labelmap.get(per, per)
+                self._work_label_to_period[label] = per
+                values.append(label)
+            self.work_combo.configure(values=values, state="readonly")
+            wp = ns_catalog.working_period()
+            self.work_var.set(labelmap.get(wp, wp) if wp else values[-1])
+        else:
+            self.work_combo.configure(values=["(ninguno descargado)"], state="disabled")
+            self.work_var.set("")
+
+    def _on_work_change(self, _value=None) -> None:
+        period = self._work_label_to_period.get(self.work_var.get(), "")
+        if not period:
+            return
+        periods = ns_catalog.available_periods()
+        # Si elige el último, lo dejo en "auto-último" (no lo fija); si elige otro
+        # mes, lo fija hasta que lo cambie. Así el default siempre es el último.
+        ns_catalog.set_working_period("" if periods and period == periods[-1] else period)
+        self._refresh_cached_label()
 
     def _go_home(self) -> None:
         if self.on_back:
@@ -250,6 +291,7 @@ class NSConexionFrame(ctk.CTkFrame):
         else:
             self.period_combo.configure(values=["(no hay nomencladores en la web)"], state="disabled")
             self.nom_status.configure(text="La web todavía no tiene ningún nomenclador cargado.", text_color=TEXT_MUTED)
+        self._refresh_work_combo()
         self._set_busy(False)
 
     @staticmethod
@@ -304,6 +346,7 @@ class NSConexionFrame(ctk.CTkFrame):
             text=f"Listo: {cat.get('count', 0)} prácticas de {cat.get('label') or cat.get('period')}{estado}.",
             text_color=color,
         )
+        self._refresh_work_combo()
         self._refresh_cached_label()
 
 
