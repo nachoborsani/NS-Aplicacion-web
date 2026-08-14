@@ -235,15 +235,36 @@
               </section>
 
               <section id="client-section-reportes" class="client-section" style="display:none">
-                <div class="client-card">
+                <div class="client-card report-upload-card">
                   <div class="client-card-head">
                     <h3>Valorizacion de practicas transmitidas</h3>
-                    <span class="client-status muted">Borrador</span>
+                    <label class="btn btn-primary file-btn">
+                      Adjuntar bandeja
+                      <input type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadClientReport(this.files); this.value=''">
+                    </label>
                   </div>
-                  <div class="report-model-grid">
-                    <div><b>Base detectada</b><span>Reporte de practicas transmitidas</span></div>
-                    <div><b>Cruce</b><span>Codigo de practica + nomenclador</span></div>
-                    <div><b>Ajustes</b><span>Debitos y modificaciones</span></div>
+                  <div class="client-report-controls">
+                    <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod"><option value="">Ultimo disponible</option></select></label>
+                    <div id="clientReportStatus" class="nom-muted">Subi la bandeja de transmision para previsualizar la factura.</div>
+                  </div>
+                </div>
+
+                <div class="report-summary-grid" id="clientReportSummary">
+                  <div><b>$ 0,00</b><span>Bruto facturable</span></div>
+                  <div><b>$ 0,00</b><span>Debitos manuales</span></div>
+                  <div><b>$ 0,00</b><span>Neto estimado</span></div>
+                  <div><b>0</b><span>Ausentes / activas</span></div>
+                </div>
+
+                <div class="tablecard nom-table">
+                  <div class="table-head">
+                    <div><b>Practicas</b><span id="clientReportMeta">Todavia no hay bandeja cargada.</span></div>
+                  </div>
+                  <div class="table-scroll">
+                    <table class="report-results-table">
+                      <thead><tr><th>Paciente</th><th>Practica</th><th>Turno / transmision</th><th>Estado</th><th>Bruto</th><th>Debito</th><th>Neto</th></tr></thead>
+                      <tbody id="clientReportBody"><tr><td colspan="7" class="muted-cell">No hay datos cargados.</td></tr></tbody>
+                    </table>
                   </div>
                 </div>
               </section>

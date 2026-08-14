@@ -113,6 +113,7 @@ var CLIENTS = [];
 var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'basica';
+var CLIENT_REPORT_ROWS = [];
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -216,6 +217,17 @@ function fillClientPeriodSelect(items, selected){
   if (preferred && [].slice.call(el.options).some(function(o){ return o.value === preferred; })) el.value = preferred;
   else if (el.options.length) el.value = el.options[0].value;
 }
+function fillClientReportPeriodSelect(items, selected){
+  var el = document.getElementById('clientReportPeriod');
+  if (!el) return;
+  var list = items || [];
+  el.innerHTML = list.map(function(item){
+    var suffix = item.rowCount ? ' (' + item.rowCount + ')' : '';
+    return '<option value="' + esc(item.value) + '">' + esc(item.label + suffix) + '</option>';
+  }).join('') || '<option value="">Sin cargar</option>';
+  var preferred = selected || (list[0] ? list[0].value : '');
+  if (preferred && [].slice.call(el.options).some(function(o){ return o.value === preferred; })) el.value = preferred;
+}
 function renderNomencladorRows(rows, bodyId, metaId, total){
   var body = document.getElementById(bodyId);
   if (!body) return;
@@ -299,6 +311,7 @@ async function renderActiveClient(){
   if (summary.ok) {
     var items = summary.data.nomencladores || [];
     fillClientPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
+    fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
   await loadClientNomenclador();
 }
@@ -372,6 +385,107 @@ async function saveClientModules(){
   renderClientList();
   closeClientModulesModal();
   await renderActiveClient();
+}
+function reportBaseGross(row){
+  return row.billable ? Number(row.valueGross || 0) : 0;
+}
+function reportDebitAmount(row){
+  var gross = reportBaseGross(row);
+  if (!row.manualDebit || gross <= 0) return 0;
+  if (row.debitType === 'partial') return Math.max(0, Math.min(gross, Number(row.debitAmount || 0)));
+  return gross;
+}
+function reportNetAmount(row){
+  return Math.max(0, reportBaseGross(row) - reportDebitAmount(row));
+}
+function updateClientReportSummary(){
+  var rows = CLIENT_REPORT_ROWS || [];
+  var gross = 0, debit = 0, net = 0, absent = 0, outside = 0, unmatched = 0;
+  rows.forEach(function(row){
+    gross += reportBaseGross(row);
+    debit += reportDebitAmount(row);
+    net += reportNetAmount(row);
+    if (row.absent) absent += 1;
+    if (row.outsideCutoff) outside += 1;
+    if (!row.matchFound) unmatched += 1;
+  });
+  var cards = document.querySelectorAll('#clientReportSummary div');
+  if (cards[0]) cards[0].querySelector('b').textContent = moneyFmt(gross);
+  if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
+  if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
+  if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
+  var meta = rows.length + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
+  if (outside) meta += ' - ' + outside + ' fuera de corte';
+  if (unmatched) meta += ' - ' + unmatched + ' sin valor';
+  document.getElementById('clientReportMeta').textContent = rows.length ? meta : 'Todavia no hay bandeja cargada.';
+}
+function renderClientReportRows(){
+  var body = document.getElementById('clientReportBody');
+  if (!body) return;
+  if (!CLIENT_REPORT_ROWS.length){
+    body.innerHTML = '<tr><td colspan="7" class="muted-cell">No hay datos cargados.</td></tr>';
+    updateClientReportSummary();
+    return;
+  }
+  body.innerHTML = CLIENT_REPORT_ROWS.map(function(row, idx){
+    var disabled = reportBaseGross(row) <= 0 ? ' disabled' : '';
+    var checked = row.manualDebit ? ' checked' : '';
+    var type = row.debitType || 'total';
+    var partialDisabled = !row.manualDebit || type !== 'partial' ? ' disabled' : '';
+    var badgeClass = row.billable ? 'ok' : (row.absent ? 'warn' : 'muted');
+    return '<tr data-report-row="' + idx + '">'
+      + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
+      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + '</div></td>'
+      + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
+      + '<td><span class="report-status ' + badgeClass + '">' + esc(row.status || '-') + '</span></td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b></td>'
+      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="partial"' + (type === 'partial' ? ' selected' : '') + '>Parcial</option></select><input class="inp debit-amount" type="number" min="0" step="0.01" value="' + esc(row.debitAmount || '') + '" oninput="setReportDebitAmount(' + idx + ', this.value)"' + partialDisabled + '></div></td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
+      + '</tr>';
+  }).join('');
+  updateClientReportSummary();
+}
+function toggleReportDebit(index, checked){
+  var row = CLIENT_REPORT_ROWS[index];
+  if (!row) return;
+  row.manualDebit = checked;
+  if (checked && !row.debitType) row.debitType = 'total';
+  renderClientReportRows();
+}
+function setReportDebitType(index, value){
+  var row = CLIENT_REPORT_ROWS[index];
+  if (!row) return;
+  row.manualDebit = true;
+  row.debitType = value === 'partial' ? 'partial' : 'total';
+  renderClientReportRows();
+}
+function setReportDebitAmount(index, value){
+  var row = CLIENT_REPORT_ROWS[index];
+  if (!row) return;
+  row.manualDebit = true;
+  row.debitType = 'partial';
+  row.debitAmount = Number(value || 0);
+  updateClientReportSummary();
+  var tr = document.querySelector('[data-report-row="' + index + '"]');
+  if (tr) tr.lastChild.querySelector('b').textContent = moneyFmt(reportNetAmount(row));
+}
+async function uploadClientReport(files){
+  if (!files || !files[0] || !ACTIVE_CLIENT) return;
+  var st = document.getElementById('clientReportStatus');
+  st.textContent = 'Procesando bandeja...';
+  var period = document.getElementById('clientReportPeriod').value || '';
+  var form = new FormData();
+  form.append('file', files[0]);
+  var res = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/preview' + (period ? '?period=' + encodeURIComponent(period) : ''), { method:'POST', body:form });
+  var data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok){
+    st.textContent = data.error || 'No se pudo procesar la bandeja.';
+    return;
+  }
+  CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){ row.manualDebit = false; row.debitType = 'total'; row.debitAmount = ''; return row; });
+  st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
+  renderClientReportRows();
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');

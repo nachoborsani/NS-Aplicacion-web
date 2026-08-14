@@ -301,6 +301,64 @@ function inferScope(moduleDescription, type, practiceDescription) {
 function displayScope(scope) {
   return { ambulatorio: "Ambulatorio", internacion: "Internacion", otros: "Otros" }[scope] || scope;
 }
+function cleanIdentifier(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+  return String(value || "").replace(/\.0$/, "").trim();
+}
+function getRowValue(row, aliases) {
+  for (const [key, value] of Object.entries(row || {})) {
+    const normalized = normalizeText(key);
+    if (aliases.some((alias) => normalized === alias || normalized.includes(alias))) return value;
+  }
+  return "";
+}
+function parseDateTime(value, options = {}) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && value > 25000 && value < 70000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      const hour = parsed.H || 0;
+      const minute = parsed.M || 0;
+      const second = Math.floor(parsed.S || 0);
+      if (options.preferDayMonth && parsed.d >= 1 && parsed.d <= 12) {
+        const swapped = new Date(parsed.y, parsed.d - 1, parsed.m, hour, minute, second);
+        if (swapped.getMonth() === parsed.d - 1 && swapped.getDate() === parsed.m) return swapped;
+      }
+      return new Date(parsed.y, parsed.m - 1, parsed.d, hour, minute, second);
+    }
+  }
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const match = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s*(?:-|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!match) return null;
+  const year = Number(match[3].length === 2 ? `20${match[3]}` : match[3]);
+  const month = Number(match[2]);
+  const day = Number(match[1]);
+  const hour = Number(match[4] || 0);
+  const minute = Number(match[5] || 0);
+  const second = Number(match[6] || 0);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function isoDateTime(date) {
+  if (!date) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+function displayDateTime(date) {
+  if (!date) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const hhmm = date.getHours() || date.getMinutes() ? ` ${pad(date.getHours())}:${pad(date.getMinutes())}` : "";
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}${hhmm}`;
+}
+function prestationPeriod(date) {
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+function cutoffForPrestacion(date) {
+  if (!date) return null;
+  return new Date(date.getFullYear(), date.getMonth() + 1, 15, 23, 59, 59);
+}
 function normalizePeriod(value) {
   const raw = String(value || "").trim();
   let match = raw.match(/^(\d{4})-(\d{1,2})$/);
@@ -521,6 +579,108 @@ function nomencladorSummary(store, payload) {
     rowCount: payload.rowCount,
     columns: payload.columns,
     filters: payload.filters,
+  };
+}
+function splitPractice(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const match = text.match(/^(\d+)\s*-\s*(.+)$/);
+  return {
+    code: match ? match[1] : "",
+    description: match ? match[2].trim() : text,
+    text,
+  };
+}
+function findNomencladorMatch(payload, client, practice) {
+  const activeModules = new Set((client.activeModules || []).map((module) => String(module.code)));
+  let candidates = (payload.rows || []).filter((row) => String(row.practiceCode || "") === practice.code);
+  const activeCandidates = candidates.filter((row) => !activeModules.size || activeModules.has(String(row.moduleCode || "")));
+  if (activeCandidates.length) candidates = activeCandidates;
+  if (!candidates.length) return null;
+  const wanted = normalizeText(practice.description);
+  return candidates.find((row) => normalizeText(row.practiceDescription) === wanted)
+    || candidates.find((row) => normalizeText(row.practiceDescription).includes(wanted) || wanted.includes(normalizeText(row.practiceDescription)))
+    || candidates[0];
+}
+function parseTransmisionWorkbook(buffer, filename, payload, client) {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error("El archivo no tiene hojas.");
+  const ws = wb.Sheets[sheetName];
+  const sourceRows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
+  if (!sourceRows.length) throw new Error("El archivo no tiene filas para procesar.");
+
+  const rows = sourceRows.map((source, index) => {
+    const practice = splitPractice(getRowValue(source, ["PRACTICA"]));
+    const appointmentAt = parseDateTime(getRowValue(source, ["TURNO"]));
+    const transmittedAt = parseDateTime(getRowValue(source, ["F TRANSMITIDA"]), { preferDayMonth: true });
+    const validatedAt = parseDateTime(getRowValue(source, ["F VALIDACION"]), { preferDayMonth: true });
+    const transmitted = normalizeText(getRowValue(source, ["TRASMITIDA"])) === "S";
+    const validated = normalizeText(getRowValue(source, ["VALIDADA"])) === "S";
+    const cutoff = cutoffForPrestacion(appointmentAt);
+    const outsideCutoff = !!(validated && transmitted && transmittedAt && cutoff && transmittedAt > cutoff);
+    const match = practice.code ? findNomencladorMatch(payload, client, practice) : null;
+    const valueGross = match ? Number(match.total || 0) : 0;
+    const facturable = validated && transmitted;
+    const billable = facturable && !outsideCutoff;
+    const absent = !validated;
+    let status = "Pendiente";
+    if (absent) status = "Ausente/activa";
+    else if (!transmitted) status = "Validada sin transmitir";
+    else if (outsideCutoff) status = "Fuera de corte";
+    else status = "Facturable";
+    return {
+      id: `${cleanIdentifier(getRowValue(source, ["NRO. ORDEN", "NRO ORDEN"])) || index + 1}-${index}`,
+      order: cleanIdentifier(getRowValue(source, ["NRO. ORDEN", "NRO ORDEN"])),
+      benefit: cleanIdentifier(getRowValue(source, ["NRO. BENEFICIO", "NRO BENEFICIO", "BENEFICIO"])),
+      patientName: String(getRowValue(source, ["APELLIDO Y NOMBRE", "NOMBRE"]) || "").trim(),
+      practiceText: practice.text,
+      practiceCode: practice.code,
+      practiceDescription: practice.description,
+      appointmentAt: isoDateTime(appointmentAt),
+      appointmentLabel: displayDateTime(appointmentAt),
+      transmitted,
+      transmittedAt: isoDateTime(transmittedAt),
+      transmittedLabel: displayDateTime(transmittedAt),
+      validated,
+      validatedAt: isoDateTime(validatedAt),
+      validatedLabel: displayDateTime(validatedAt),
+      period: prestationPeriod(appointmentAt),
+      cutoffLabel: displayDateTime(cutoff),
+      outsideCutoff,
+      facturable,
+      billable,
+      absent,
+      status,
+      valueGross,
+      valueBillable: billable ? valueGross : 0,
+      moduleCode: match ? match.moduleCode : "",
+      moduleDescription: match ? match.moduleDescription : "",
+      matchFound: !!match,
+    };
+  }).filter((row) => row.order || row.practiceText || row.patientName);
+
+  const summary = rows.reduce((acc, row) => {
+    acc.totalRows += 1;
+    if (row.validated) acc.validated += 1;
+    if (row.transmitted) acc.transmitted += 1;
+    if (row.facturable) acc.facturable += 1;
+    if (row.billable) acc.billable += 1;
+    if (row.absent) acc.absent += 1;
+    if (row.outsideCutoff) acc.outsideCutoff += 1;
+    if (!row.matchFound) acc.unmatched += 1;
+    acc.gross += row.valueGross;
+    acc.billableGross += row.valueBillable;
+    return acc;
+  }, { totalRows: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, billableGross: 0 });
+
+  return {
+    filename,
+    sheetName,
+    nomencladorPeriod: payload.period,
+    nomencladorLabel: payload.label || periodLabel(payload.period),
+    rowCount: rows.length,
+    summary,
+    rows,
   };
 }
 function readBuffer(req, limit = 25 * 1024 * 1024) {
@@ -747,6 +907,29 @@ const server = http.createServer(async (req, res) => {
     clients[idx].activeModules = modules;
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
+  }
+
+  const clientReportPreviewMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/preview$/);
+  if (clientReportPreviewMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportPreviewMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+    try {
+      const raw = await readBuffer(req);
+      const multipart = extractMultipart(raw, req.headers["content-type"]);
+      const ext = path.extname(multipart.file.filename).toLowerCase();
+      if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
+        return json(res, 400, { error: "Subi una bandeja Excel .xls, .xlsx o .xlsm." });
+      }
+      return json(res, 200, parseTransmisionWorkbook(multipart.file.data, multipart.file.filename, payload, client));
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar la bandeja." });
+    }
   }
 
   // ---- Nomencladores ----
