@@ -119,6 +119,12 @@ function readBody(req) {
 function publicUser(u) {
   return { username: u.username, name: u.name, role: u.role, mustChange: !!u.mustChange };
 }
+
+// Perfiles validos y reglas de nombre de usuario
+const ROLES = new Set(["admin", "operador", "medico", "clinica"]);
+function validUsername(u) {
+  return /^[a-z0-9._-]{3,20}$/.test(u);
+}
 function sendFile(res, filePath) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
@@ -146,7 +152,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { user: publicUser(u) });
   }
 
-  if (p === "/api/users") {
+  if (p === "/api/users" && (req.method === "GET" || !req.method)) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
@@ -160,6 +166,82 @@ const server = http.createServer(async (req, res) => {
         mustChange: !!u.mustChange,
       })),
     });
+  }
+
+  // Crear usuario (admin)
+  if (p === "/api/users" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const { username, name, role, password } = await readBody(req);
+    const uname = String(username || "").trim().toLowerCase();
+    const nm = String(name || "").trim();
+    const rl = String(role || "").trim();
+    const pw = String(password || "");
+    if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
+    if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
+    if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
+    if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
+    const users = loadUsers() || [];
+    if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
+    users.push({ username: uname, name: nm, role: rl, password: hashPassword(pw), mustChange: true, active: true });
+    saveUsers(users);
+    return json(res, 201, { ok: true });
+  }
+
+  // Editar / resetear clave / eliminar un usuario (admin)
+  const um = p.match(/^\/api\/users\/([a-z0-9._-]+)(\/password)?$/);
+  if (um) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const target = um[1].toLowerCase();
+    const isPwd = !!um[2];
+    const users = loadUsers() || [];
+    const idx = users.findIndex((x) => x.username === target);
+    if (idx < 0) return json(res, 404, { error: "No existe ese usuario." });
+
+    // Resetear clave -> queda con "debe cambiar" en el proximo ingreso
+    if (isPwd && req.method === "POST") {
+      const { password } = await readBody(req);
+      const pw = String(password || "");
+      if (pw.length < 6) return json(res, 400, { error: "La clave debe tener al menos 6 caracteres." });
+      users[idx].password = hashPassword(pw);
+      users[idx].mustChange = true;
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
+
+    // Editar nombre / perfil / activo
+    if (!isPwd && (req.method === "PATCH" || req.method === "PUT")) {
+      const body = await readBody(req);
+      if (body.name !== undefined) {
+        const nm = String(body.name).trim();
+        if (!nm) return json(res, 400, { error: "El nombre no puede quedar vacío." });
+        users[idx].name = nm;
+      }
+      if (body.role !== undefined) {
+        const rl = String(body.role).trim();
+        if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
+        if (target === me.username && rl !== "admin") return json(res, 400, { error: "No podés quitarte a vos mismo el perfil de administrador." });
+        users[idx].role = rl;
+      }
+      if (body.active !== undefined) {
+        const act = !!body.active;
+        if (target === me.username && !act) return json(res, 400, { error: "No podés desactivar tu propio usuario." });
+        users[idx].active = act;
+      }
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
+
+    // Eliminar
+    if (!isPwd && req.method === "DELETE") {
+      if (target === me.username) return json(res, 400, { error: "No podés eliminar tu propio usuario." });
+      users.splice(idx, 1);
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
   }
 
   if (p === "/api/login" && req.method === "POST") {

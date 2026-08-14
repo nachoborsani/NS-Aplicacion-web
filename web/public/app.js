@@ -46,28 +46,142 @@ var ROLE = {
   clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
 };
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+var USERS = [];
+var SVG_EDIT  = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var SVG_KEY   = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M10.85 12.15L20 3M17 6l2.5 2.5M14 9l2.5 2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var SVG_POWER = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v9M6.4 6.4a8 8 0 1011.2 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 async function renderUsers(){
   var body = document.getElementById('usersBody');
   if (!body) return;
   var res = await api('/api/users');
-  if (!res.ok){ body.innerHTML = '<tr><td colspan="3" style="color:var(--text-2);padding:16px">No se pudo cargar la lista.</td></tr>'; return; }
+  if (!res.ok){ body.innerHTML = '<tr><td colspan="4" style="color:var(--text-2);padding:16px">No se pudo cargar la lista.</td></tr>'; return; }
   var users = res.data.users || [];
+  USERS = users;
+  var meU = (ME && ME.username) || '';
   body.innerHTML = users.map(function(u){
     var r = ROLE[u.role] || { chip:'admin', label:u.role, bg:'linear-gradient(135deg,#66788a,#4f6378)' };
     var st = !u.active ? '<span class="st off">Inactivo</span>'
            : u.mustChange ? '<span class="st off">Debe cambiar clave</span>'
            : '<span class="st on">Activo</span>';
+    var self = u.username === meU;
+    var un = esc(u.username);
+    var acts = '<button class="rowbtn" title="Editar" onclick="openUserModal(\'edit\',\'' + un + '\')">' + SVG_EDIT + '</button>'
+             + '<button class="rowbtn" title="Clave" onclick="openReset(\'' + un + '\')">' + SVG_KEY + '</button>';
+    if (!self){
+      acts += '<button class="rowbtn" title="' + (u.active ? 'Desactivar' : 'Activar') + '" onclick="toggleActive(\'' + un + '\',' + (u.active ? 'false' : 'true') + ')">' + SVG_POWER + '</button>'
+            + '<button class="rowbtn danger" title="Eliminar" onclick="openDel(\'' + un + '\')">' + SVG_TRASH + '</button>';
+    }
     return '<tr>'
-      + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + esc(u.username) + '</div></div></div></td>'
+      + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + un + '</div></div></div></td>'
       + '<td><span class="role ' + r.chip + '">' + esc(r.label) + '</span></td>'
       + '<td>' + st + '</td>'
+      + '<td><div class="row-actions">' + acts + '</div></td>'
       + '</tr>';
   }).join('');
   var dc = document.getElementById('dashUsersCount'), ds = document.getElementById('dashUsersSub');
   if (dc) dc.textContent = users.length;
   if (ds){ var pend = users.filter(function(u){ return u.mustChange || !u.active; }).length; ds.textContent = (users.length - pend) + ' activos · ' + pend + ' pendientes'; }
 }
+
+function findUser(un){ return USERS.filter(function(u){ return u.username === un; })[0]; }
+
+// ---------- alta / edición ----------
+var UM_MODE = 'create', UM_TARGET = '';
+function openUserModal(mode, un){
+  UM_MODE = mode; UM_TARGET = un || '';
+  var isEdit = mode === 'edit';
+  var u = isEdit ? findUser(un) : null;
+  document.getElementById('umTitle').textContent = isEdit ? 'Editar usuario' : 'Nuevo usuario';
+  document.getElementById('umSave').textContent = isEdit ? 'Guardar cambios' : 'Crear usuario';
+  document.getElementById('umName').value = u ? u.name : '';
+  document.getElementById('umUser').value = u ? u.username : '';
+  document.getElementById('umRole').value = u ? u.role : 'operador';
+  document.getElementById('umPwd').value = '';
+  document.getElementById('umActive').checked = u ? u.active : true;
+  document.getElementById('umError').textContent = '';
+  // usuario editable solo al crear; clave inicial solo al crear; activo solo al editar
+  document.getElementById('umUserField').style.display = isEdit ? 'none' : '';
+  document.getElementById('umPwdField').style.display = isEdit ? 'none' : '';
+  document.getElementById('umActiveField').style.display = isEdit ? 'flex' : 'none';
+  showModal('userModal','umScrim');
+  document.getElementById('umName').focus();
+}
+function closeUserModal(){ hideModal('userModal','umScrim'); }
+async function saveUser(){
+  var err = document.getElementById('umError'); err.textContent = '';
+  var btn = document.getElementById('umSave'); btn.disabled = true;
+  var name = document.getElementById('umName').value.trim();
+  var role = document.getElementById('umRole').value;
+  var res;
+  if (UM_MODE === 'create'){
+    var username = document.getElementById('umUser').value.trim().toLowerCase();
+    var password = document.getElementById('umPwd').value;
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, password: password });
+  } else {
+    var active = document.getElementById('umActive').checked;
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, active: active });
+  }
+  btn.disabled = false;
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
+  closeUserModal();
+  await renderUsers();
+}
+
+// ---------- resetear clave ----------
+function openReset(un){
+  UM_TARGET = un;
+  var u = findUser(un);
+  document.getElementById('pwWho').textContent = (u ? u.name : un) + ' (@' + un + ')';
+  document.getElementById('pwNew').value = '';
+  document.getElementById('pwError').textContent = '';
+  showModal('pwdModal','pwScrim');
+  document.getElementById('pwNew').focus();
+}
+function closePwdModal(){ hideModal('pwdModal','pwScrim'); }
+async function saveResetPwd(){
+  var err = document.getElementById('pwError'); err.textContent = '';
+  var btn = document.getElementById('pwSave'); btn.disabled = true;
+  var password = document.getElementById('pwNew').value;
+  var res = await req('POST', '/api/users/' + encodeURIComponent(UM_TARGET) + '/password', { password: password });
+  btn.disabled = false;
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudo cambiar la clave.'; return; }
+  closePwdModal();
+  await renderUsers();
+}
+
+// ---------- activar / desactivar ----------
+async function toggleActive(un, active){
+  var res = await req('PATCH', '/api/users/' + encodeURIComponent(un), { active: active });
+  if (!res.ok){ alert(res.data.error || 'No se pudo cambiar el estado.'); return; }
+  await renderUsers();
+}
+
+// ---------- eliminar ----------
+function openDel(un){
+  UM_TARGET = un;
+  var u = findUser(un);
+  document.getElementById('delWho').textContent = (u ? u.name : un) + ' (@' + un + ')';
+  document.getElementById('delError').textContent = '';
+  showModal('delModal','delScrim');
+}
+function closeDelModal(){ hideModal('delModal','delScrim'); }
+async function saveDelete(){
+  var err = document.getElementById('delError'); err.textContent = '';
+  var btn = document.getElementById('delSave'); btn.disabled = true;
+  var res = await req('DELETE', '/api/users/' + encodeURIComponent(UM_TARGET));
+  btn.disabled = false;
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudo eliminar.'; return; }
+  closeDelModal();
+  await renderUsers();
+}
+
+function showModal(id, scrimId){ document.getElementById(scrimId).classList.add('show'); document.getElementById(id).classList.add('show'); }
+function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remove('show'); document.getElementById(id).classList.remove('show'); }
+var ME = null;
 function setUser(u){
+  ME = u;
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
@@ -82,6 +196,14 @@ function showLogin(){ document.body.classList.remove('authed','mustchange','boot
 async function api(path, body){
   var opt = { method: body ? 'POST' : 'GET', headers: { 'content-type':'application/json' } };
   if (body) opt.body = JSON.stringify(body);
+  var r = await fetch(path, opt);
+  var data = {};
+  try { data = await r.json(); } catch (e) {}
+  return { ok: r.ok, status: r.status, data: data };
+}
+async function req(method, path, body){
+  var opt = { method: method, headers: { 'content-type':'application/json' } };
+  if (body !== undefined) opt.body = JSON.stringify(body);
   var r = await fetch(path, opt);
   var data = {};
   try { data = await r.json(); } catch (e) {}

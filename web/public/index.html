@@ -101,10 +101,16 @@
 
         <!-- USUARIOS -->
         <section id="view-users" style="display:none">
-          <div class="page-head"><h1>Usuarios</h1><p>Usuarios con acceso al sistema.</p></div>
+          <div class="head-row">
+            <div class="page-head" style="margin:0"><h1>Usuarios</h1><p>Usuarios con acceso al sistema.</p></div>
+            <button class="btn btn-primary" onclick="openUserModal('create')">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Agregar usuario
+            </button>
+          </div>
           <div class="tablecard">
             <table>
-              <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
               <tbody id="usersBody"></tbody>
             </table>
           </div>
@@ -115,6 +121,77 @@
           <div class="page-head"><h1>Configuración general</h1><p>Esta sección se construye más adelante.</p></div>
           <div class="card" style="text-align:center;padding:50px"><div class="empty" style="padding:0"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.5"/></svg></div><b>Próximamente</b><span>Configuración general del sistema.</span></div></div>
         </section>
+      </div>
+    </div>
+
+    <!-- ===== Modal: alta / edición de usuario ===== -->
+    <div class="scrim" id="umScrim" onclick="closeUserModal()"></div>
+    <div class="modal" id="userModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="umTitle">Nuevo usuario</h3><button class="x" onclick="closeUserModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <div class="field"><label>Nombre y apellido</label><input class="inp" id="umName" spellcheck="false"></div>
+        <div class="field" id="umUserField">
+          <label>Usuario</label>
+          <input class="inp" id="umUser" spellcheck="false" autocomplete="off">
+          <div class="hint">Con esto inicia sesión. Letras, números, punto o guion.</div>
+        </div>
+        <div class="field"><label>Perfil</label>
+          <select class="inp" id="umRole">
+            <option value="operador">Operador</option>
+            <option value="medico">Médico</option>
+            <option value="clinica">Clínica</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <div class="field" id="umPwdField">
+          <label>Contraseña inicial</label>
+          <div class="pwd-wrap">
+            <input class="inp" id="umPwd" type="password" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="eyeToggle('umPwd','umPwdIco')" aria-label="Ver"><svg id="umPwdIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          </div>
+          <div class="hint">La va a cambiar en su primer ingreso.</div>
+        </div>
+        <label class="chk" id="umActiveField"><input type="checkbox" id="umActive" checked> Usuario activo</label>
+        <div class="msg err" id="umError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeUserModal()">Cancelar</button>
+        <button class="btn btn-primary" id="umSave" onclick="saveUser()">Crear usuario</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: resetear clave ===== -->
+    <div class="scrim" id="pwScrim" onclick="closePwdModal()"></div>
+    <div class="modal" id="pwdModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Resetear contraseña</h3><button class="x" onclick="closePwdModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <p class="modal-note">Le asignás una clave nueva a <b id="pwWho">—</b>. La va a tener que cambiar en su próximo ingreso.</p>
+        <div class="field">
+          <label>Nueva contraseña</label>
+          <div class="pwd-wrap">
+            <input class="inp" id="pwNew" type="password" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="eyeToggle('pwNew','pwNewIco')" aria-label="Ver"><svg id="pwNewIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          </div>
+        </div>
+        <div class="msg err" id="pwError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closePwdModal()">Cancelar</button>
+        <button class="btn btn-primary" id="pwSave" onclick="saveResetPwd()">Guardar clave</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: confirmar baja ===== -->
+    <div class="scrim" id="delScrim" onclick="closeDelModal()"></div>
+    <div class="modal" id="delModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Eliminar usuario</h3><button class="x" onclick="closeDelModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <p class="modal-note">¿Seguro que querés eliminar a <b id="delWho">—</b>? No se puede deshacer. Si solo querés impedirle el acceso, mejor desactivalo.</p>
+        <div class="msg err" id="delError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeDelModal()">Cancelar</button>
+        <button class="btn btn-danger" id="delSave" onclick="saveDelete()">Sí, eliminar</button>
       </div>
     </div>
 
