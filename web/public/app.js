@@ -168,6 +168,16 @@ function moneyFmt(n){
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
   catch (e) { return '$ ' + value.toFixed(2); }
 }
+function numberFmt(n){
+  var value = Number(n || 0);
+  try { return value.toLocaleString('es-AR', { maximumFractionDigits:0 }); }
+  catch (e) { return String(Math.round(value)); }
+}
+function percentFmt(n){
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '-';
+  try { return Number(n).toLocaleString('es-AR', { style:'percent', maximumFractionDigits:1 }); }
+  catch (e) { return Math.round(Number(n) * 1000) / 10 + '%'; }
+}
 function parseMoneyInput(value){
   var raw = String(value == null ? '' : value).trim();
   if (!raw) return 0;
@@ -386,6 +396,7 @@ async function renderActiveClient(){
     fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
   await loadClientReports();
+  await loadClientDashboard();
   restoreClientReportDraft();
   await loadClientNomenclador();
 }
@@ -495,6 +506,81 @@ async function loadClientReports(){
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes');
   CLIENT_SAVED_REPORTS = res.ok ? (res.data.reports || []) : [];
   renderSavedClientReports();
+}
+function fillClientDashboardSelects(periods, currentPeriod, comparePeriod){
+  var current = document.getElementById('clientDashPeriod');
+  var compare = document.getElementById('clientDashCompare');
+  var options = (periods || []).map(function(item){
+    var suffix = item.reportCount ? ' (' + item.reportCount + ')' : '';
+    return '<option value="' + esc(item.period) + '">' + esc(item.label + suffix) + '</option>';
+  }).join('');
+  if (current) {
+    current.innerHTML = options || '<option value="">Sin reportes</option>';
+    if (currentPeriod && [].slice.call(current.options).some(function(option){ return option.value === currentPeriod; })) current.value = currentPeriod;
+  }
+  if (compare) {
+    compare.innerHTML = '<option value="">Sin comparacion</option>' + options;
+    if (comparePeriod && [].slice.call(compare.options).some(function(option){ return option.value === comparePeriod; })) compare.value = comparePeriod;
+  }
+}
+function deltaText(label, delta, money){
+  if (!delta) return '';
+  var value = money ? moneyFmt(delta.value || 0) : numberFmt(delta.value || 0);
+  var signClass = Number(delta.value || 0) >= 0 ? 'good' : 'bad';
+  var pct = delta.percent === null ? '' : ' (' + percentFmt(delta.percent) + ')';
+  return '<span class="' + signClass + '">' + esc(label) + ': ' + esc(value + pct) + '</span>';
+}
+function renderClientDashboard(data){
+  data = data || {};
+  var current = data.current || {};
+  var compare = data.compare || {};
+  fillClientDashboardSelects(data.periods || [], current.period || '', compare.period || '');
+  var kpis = document.getElementById('clientDashboardKpis');
+  if (kpis) {
+    kpis.innerHTML = ''
+      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span></div>'
+      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small></div>'
+      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small></div>'
+      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span></div>'
+      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small></div>';
+  }
+  var compareBox = document.getElementById('clientDashboardCompare');
+  if (compareBox) {
+    if (!current.period) {
+      compareBox.textContent = 'Sin reportes guardados para comparar.';
+    } else if (!compare.period) {
+      compareBox.innerHTML = '<b>' + esc(current.label || current.period) + '</b><span>No hay otro mes seleccionado para comparar.</span>';
+    } else {
+      compareBox.innerHTML = '<b>' + esc((current.label || current.period) + ' vs ' + (compare.label || compare.period)) + '</b>'
+        + deltaText('Neto', data.deltas && data.deltas.net, true)
+        + deltaText('Prestaciones', data.deltas && data.deltas.totalRows, false)
+        + deltaText('Consultas', data.deltas && data.deltas.consultations, false)
+        + deltaText('Practicas', data.deltas && data.deltas.practices, false)
+        + deltaText('Promedio', data.deltas && data.deltas.averageNet, true);
+    }
+  }
+  var body = document.getElementById('clientDashboardModules');
+  if (body) {
+    var modules = (current.modules || []).slice(0, 8);
+    body.innerHTML = modules.length ? modules.map(function(module){
+      return '<tr>'
+        + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
+        + '<td class="tnum">' + esc(numberFmt(module.consultations || 0)) + '</td>'
+        + '<td class="tnum">' + esc(numberFmt(module.practices || 0)) + '</td>'
+        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b></td>'
+        + '</tr>';
+    }).join('') : '<tr><td colspan="4" class="muted-cell">Sin datos para este mes.</td></tr>';
+  }
+}
+async function loadClientDashboard(){
+  if (!ACTIVE_CLIENT) return;
+  var period = document.getElementById('clientDashPeriod');
+  var compare = document.getElementById('clientDashCompare');
+  var params = new URLSearchParams();
+  if (period && period.value) params.set('period', period.value);
+  if (compare && compare.value) params.set('compare', compare.value);
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/dashboard' + (params.toString() ? '?' + params.toString() : ''));
+  if (res.ok) renderClientDashboard(res.data);
 }
 function reportBaseGross(row){
   return row.billable ? Number(row.valueGross || 0) : 0;
@@ -866,6 +952,7 @@ async function saveClientReport(){
   clearClientReport();
   if (st) st.textContent = method === 'PUT' ? 'Cambios guardados y reporte cerrado.' : 'Reporte guardado y cerrado.';
   await loadClientReports();
+  await loadClientDashboard();
 }
 async function openClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;

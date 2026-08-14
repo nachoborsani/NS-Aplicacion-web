@@ -197,6 +197,33 @@
                 </article>
               </div>
 
+              <div class="client-card client-dashboard-card">
+                <div class="client-card-head dashboard-head">
+                  <div>
+                    <h3>Dashboard de reportes</h3>
+                    <p>Resumen armado desde reportes guardados.</p>
+                  </div>
+                  <div class="client-dashboard-controls">
+                    <label class="field"><span>Mes</span><select class="inp" id="clientDashPeriod" onchange="loadClientDashboard()"><option value="">Sin reportes</option></select></label>
+                    <label class="field"><span>Comparar con</span><select class="inp" id="clientDashCompare" onchange="loadClientDashboard()"><option value="">Sin comparacion</option></select></label>
+                  </div>
+                </div>
+                <div class="dashboard-kpis" id="clientDashboardKpis">
+                  <div><b>$ 0,00</b><span>Facturacion neta</span></div>
+                  <div><b>0</b><span>Consultas</span></div>
+                  <div><b>0</b><span>Practicas / estudios</span></div>
+                  <div><b>$ 0,00</b><span>Debitos</span></div>
+                  <div><b>0</b><span>Ausentes</span></div>
+                </div>
+                <div class="dashboard-compare" id="clientDashboardCompare">Sin reportes guardados para comparar.</div>
+                <div class="dashboard-module-wrap">
+                  <table class="dashboard-module-table">
+                    <thead><tr><th>Modulo</th><th>Consultas</th><th>Practicas</th><th>Neto</th></tr></thead>
+                    <tbody id="clientDashboardModules"><tr><td colspan="4" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+
               <div class="client-nomenclador collapsed" id="clientNomencladorBox">
                 <div class="client-nom-head">
                   <div>

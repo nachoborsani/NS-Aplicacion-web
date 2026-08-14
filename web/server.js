@@ -785,6 +785,8 @@ function sanitizeReportRows(rows) {
 function summarizeReportRows(rows) {
   return (rows || []).reduce((acc, row) => {
     acc.totalRows += 1;
+    if (isConsultationRow(row)) acc.consultations += 1;
+    else acc.practices += 1;
     if (row.validated) acc.validated += 1;
     if (row.transmitted) acc.transmitted += 1;
     if (row.facturable) acc.facturable += 1;
@@ -795,10 +797,150 @@ function summarizeReportRows(rows) {
     acc.gross += reportRowGross(row);
     acc.debit += reportRowDebit(row);
     acc.net += reportRowNet(row);
+    if (isConsultationRow(row)) acc.consultationNet += reportRowNet(row);
+    else acc.practiceNet += reportRowNet(row);
     return acc;
-  }, { totalRows: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0 });
+  }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0, consultationNet: 0, practiceNet: 0 });
+}
+function isConsultationRow(row) {
+  const code = String(row && row.practiceCode || "");
+  const text = normalizeText([row && row.practiceDescription, row && row.practiceText].join(" "));
+  return code.startsWith("820") || text.includes("CONSULTA");
+}
+function reportDashboardPeriod(report) {
+  const counts = new Map();
+  for (const row of report.rows || []) {
+    const period = normalizePeriod(row.period || String(row.appointmentAt || "").slice(0, 7));
+    if (period) counts.set(period, (counts.get(period) || 0) + 1);
+  }
+  if (counts.size) {
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0][0];
+  }
+  return inferPeriodFromText(report.title, report.sourceFilename, report.closedAt) || String(report.closedAt || "").slice(0, 7);
+}
+function emptyDashboardPeriod(period) {
+  return {
+    period,
+    label: periodLabel(period),
+    reportCount: 0,
+    totalRows: 0,
+    consultations: 0,
+    practices: 0,
+    validated: 0,
+    transmitted: 0,
+    facturable: 0,
+    billable: 0,
+    absent: 0,
+    outsideCutoff: 0,
+    unmatched: 0,
+    gross: 0,
+    debit: 0,
+    net: 0,
+    consultationNet: 0,
+    practiceNet: 0,
+    averageNet: 0,
+    consultationShare: 0,
+    modules: [],
+  };
+}
+function addRowToDashboardPeriod(target, row) {
+  target.totalRows += 1;
+  const consultation = isConsultationRow(row);
+  if (consultation) target.consultations += 1;
+  else target.practices += 1;
+  if (row.validated) target.validated += 1;
+  if (row.transmitted) target.transmitted += 1;
+  if (row.facturable) target.facturable += 1;
+  if (row.billable) target.billable += 1;
+  if (row.absent) target.absent += 1;
+  if (row.outsideCutoff) target.outsideCutoff += 1;
+  if (!row.matchFound && !row.valueEdited) target.unmatched += 1;
+  const gross = reportRowGross(row);
+  const debit = reportRowDebit(row);
+  const net = reportRowNet(row);
+  target.gross += gross;
+  target.debit += debit;
+  target.net += net;
+  if (consultation) target.consultationNet += net;
+  else target.practiceNet += net;
+  const moduleCode = String(row.moduleCode || "Sin modulo");
+  let module = target._modules[moduleCode];
+  if (!module) {
+    module = target._modules[moduleCode] = {
+      moduleCode,
+      moduleDescription: row.moduleDescription || "",
+      totalRows: 0,
+      consultations: 0,
+      practices: 0,
+      gross: 0,
+      debit: 0,
+      net: 0,
+    };
+  }
+  module.totalRows += 1;
+  if (consultation) module.consultations += 1;
+  else module.practices += 1;
+  module.gross += gross;
+  module.debit += debit;
+  module.net += net;
+}
+function finalizeDashboardPeriod(target) {
+  target.gross = money(target.gross);
+  target.debit = money(target.debit);
+  target.net = money(target.net);
+  target.consultationNet = money(target.consultationNet);
+  target.practiceNet = money(target.practiceNet);
+  target.averageNet = target.totalRows ? money(target.net / target.totalRows) : 0;
+  target.consultationShare = target.totalRows ? target.consultations / target.totalRows : 0;
+  target.modules = Object.values(target._modules || {})
+    .map((module) => ({ ...module, gross: money(module.gross), debit: money(module.debit), net: money(module.net) }))
+    .sort((a, b) => b.net - a.net || String(a.moduleCode).localeCompare(String(b.moduleCode)));
+  delete target._modules;
+  return target;
+}
+function metricDelta(current, previous, key) {
+  const a = Number(current && current[key] || 0);
+  const b = Number(previous && previous[key] || 0);
+  return { value: money(a - b), percent: b ? (a - b) / b : null };
+}
+function buildClientDashboard(slug, periodFilter, compareFilter) {
+  const reports = (loadClientReportsStore().items || []).filter((report) => report.clientSlug === slug);
+  const byPeriod = new Map();
+  for (const report of reports) {
+    const period = reportDashboardPeriod(report);
+    if (!period) continue;
+    if (!byPeriod.has(period)) {
+      const item = emptyDashboardPeriod(period);
+      item._modules = {};
+      byPeriod.set(period, item);
+    }
+    const target = byPeriod.get(period);
+    target.reportCount += 1;
+    for (const row of report.rows || []) addRowToDashboardPeriod(target, row);
+  }
+  const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
+  const selectedPeriod = normalizePeriod(periodFilter) || (periods[0] && periods[0].period) || "";
+  const selectedIndex = periods.findIndex((item) => item.period === selectedPeriod);
+  const comparePeriod = normalizePeriod(compareFilter) || (periods[selectedIndex + 1] && periods[selectedIndex + 1].period) || "";
+  const current = periods.find((item) => item.period === selectedPeriod) || emptyDashboardPeriod(selectedPeriod);
+  const previous = periods.find((item) => item.period === comparePeriod) || emptyDashboardPeriod(comparePeriod);
+  return {
+    periods: periods.map((item) => ({ period: item.period, label: item.label, reportCount: item.reportCount })),
+    current,
+    compare: previous,
+    deltas: {
+      totalRows: metricDelta(current, previous, "totalRows"),
+      consultations: metricDelta(current, previous, "consultations"),
+      practices: metricDelta(current, previous, "practices"),
+      gross: metricDelta(current, previous, "gross"),
+      debit: metricDelta(current, previous, "debit"),
+      net: metricDelta(current, previous, "net"),
+      averageNet: metricDelta(current, previous, "averageNet"),
+    },
+  };
 }
 function reportListItem(report) {
+  const summary = summarizeReportRows(report.rows || []);
   return {
     id: report.id,
     clientSlug: report.clientSlug,
@@ -813,11 +955,11 @@ function reportListItem(report) {
     updatedBy: report.updatedBy,
     expectedAmount: report.expectedAmount,
     observations: report.observations,
-    summary: report.summary,
+    summary,
   };
 }
 function buildClientReportWorkbook(report) {
-  const summary = report.summary || summarizeReportRows(report.rows || []);
+  const summary = summarizeReportRows(report.rows || []);
   const wb = XLSX.utils.book_new();
   const resumen = [
     ["Reporte", report.title || ""],
@@ -832,6 +974,12 @@ function buildClientReportWorkbook(report) {
     ["Bruto facturable", money(summary.gross)],
     ["Debitos manuales", money(summary.debit)],
     ["Neto estimado", money(summary.net)],
+    ["Cantidad de consultas", summary.consultations || 0],
+    ["Importe consultas", money(summary.consultationNet)],
+    ["Cantidad de practicas / estudios", summary.practices || 0],
+    ["Importe practicas / estudios", money(summary.practiceNet)],
+    ["Valor promedio por prestacion", summary.totalRows ? money(summary.net / summary.totalRows) : 0],
+    ["% consultas sobre total", summary.totalRows ? (summary.consultations || 0) / summary.totalRows : 0],
     ["Ausentes / activas", summary.absent || 0],
     ["Fuera de corte", summary.outsideCutoff || 0],
     ["Sin valor", summary.unmatched || 0],
@@ -1086,6 +1234,16 @@ const server = http.createServer(async (req, res) => {
     clients[idx].activeModules = modules;
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
+  }
+
+  const clientDashboardMatch = p.match(/^\/api\/clientes\/([^/]+)\/dashboard$/);
+  if (clientDashboardMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientDashboardMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    return json(res, 200, buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare")));
   }
 
   const clientReportsMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes$/);
