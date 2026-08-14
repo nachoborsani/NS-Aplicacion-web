@@ -14,6 +14,14 @@ var root=document.getElementById('root');
     if(el) el.classList.add('active');
     document.body.classList.remove('nav-open');
   }
+  function togglePwd(){
+    var inp=document.getElementById('pwd'), ic=document.getElementById('pwdEyeIco');
+    var show = inp.type==='password';
+    inp.type = show ? 'text' : 'password';
+    ic.innerHTML = show
+      ? '<path d="M17.94 17.94A10 10 0 0112 20c-7 0-11-8-11-8a18 18 0 015.06-5.94M9.9 4.24A9 9 0 0112 4c7 0 11 8 11 8a18 18 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+      : '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>';
+  }
   function openDrawer(){document.getElementById('drawer').classList.add('show');document.getElementById('scrim').classList.add('show');}
   function closeDrawer(){document.getElementById('drawer').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
   // demo toggle active state

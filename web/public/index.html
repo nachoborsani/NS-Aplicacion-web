@@ -15,7 +15,7 @@
       <img class="logo-login" src="/logo.png" alt="NS · Gestión Integral en Salud">
       <div class="login-card">
       <div class="field"><label>Usuario</label><input class="inp" value="nacho" spellcheck="false"></div>
-      <div class="field"><label>Contraseña</label><input class="inp" type="password" value="········"></div>
+      <div class="field"><label>Contraseña</label><div class="pwd-wrap"><input class="inp" id="pwd" type="password" value="········"><button type="button" class="pwd-eye" onclick="togglePwd()" aria-label="Mostrar u ocultar clave"><svg id="pwdEyeIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></div>
       <div class="row"><label style="display:flex;gap:7px;align-items:center;font-weight:500"><input type="checkbox" checked> Recordarme</label><a>¿Olvidaste tu clave?</a></div>
       <button class="btn btn-primary btn-block" onclick="document.body.classList.add('authed')">Ingresar</button>
       <div class="foot">NS · Gestión Integral en Salud — v0.1</div>

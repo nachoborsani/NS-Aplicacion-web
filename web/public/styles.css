@@ -58,6 +58,11 @@
   .field label{display:block;font-size:11.5px;font-weight:600;color:var(--text-2);margin-bottom:6px;letter-spacing:.02em}
   .inp{width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:14px;outline:none}
   .inp:focus{border-color:var(--turq);box-shadow:0 0 0 3px var(--ring)}
+  .pwd-wrap{position:relative}
+  .pwd-wrap .inp{padding-right:44px}
+  .pwd-eye{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--text-2);width:34px;height:34px;display:grid;place-items:center;border-radius:8px;cursor:pointer}
+  .pwd-eye:hover{color:var(--turq)}
+  .pwd-eye svg{width:19px;height:19px}
   .btn{height:42px;border:0;border-radius:10px;font-weight:700;font-size:14px;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s,background .15s}
   .btn:hover{filter:brightness(1.05)}
   .btn-primary{background:var(--turq);color:#04302f}
