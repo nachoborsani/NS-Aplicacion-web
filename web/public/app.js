@@ -106,6 +106,13 @@ function moneyFmt(n){
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
   catch (e) { return '$ ' + value.toFixed(2); }
 }
+function cleanNomType(value){
+  var text = String(value || '').trim();
+  return (!text || text === '0') ? '-' : text;
+}
+function scopeLabel(scope){
+  return scope === 'internacion' ? 'Internacion' : scope === 'ambulatorio' ? 'Ambulatorio' : 'Otros';
+}
 function dateFmt(iso){
   if (!iso) return '';
   try { return new Date(iso).toLocaleString('es-AR'); } catch (e) { return iso; }
@@ -222,13 +229,14 @@ async function searchNomenclador(){
     return;
   }
   body.innerHTML = rows.map(function(row){
+    var scope = row.scope || 'otros';
     return '<tr>'
       + '<td><div class="nom-code">' + esc(row.moduleCode || '-') + '</div><div class="nom-muted">' + esc(row.moduleDescription || '') + '</div></td>'
       + '<td><div class="nom-code">' + esc(row.practiceCode || '-') + '</div><div class="nom-desc">' + esc(row.practiceDescription || '') + '</div><div class="nom-muted">' + esc(row.effectiveDate || '') + (row.observations ? ' - ' + esc(row.observations) : '') + '</div></td>'
-      + '<td>' + esc(row.type || '-') + '</td>'
-      + '<td><span class="role oper">' + esc(row.scope === 'internacion' ? 'Internacion' : row.scope === 'ambulatorio' ? 'Ambulatorio' : 'Otros') + '</span></td>'
-      + '<td><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'
-      + '<td>' + esc(row.authLevel || '-') + '</td>'
+      + '<td class="nom-type">' + esc(cleanNomType(row.type)) + '</td>'
+      + '<td><span class="scope-badge scope-' + esc(scope) + '">' + esc(scopeLabel(scope)) + '</span></td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'
+      + '<td class="nom-auth">' + esc(row.authLevel || '-') + '</td>'
       + '</tr>';
   }).join('');
 }

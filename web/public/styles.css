@@ -159,7 +159,7 @@
   .table-scroll{width:100%;overflow:auto}
   table{width:100%;border-collapse:collapse}
   th{text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-2);font-weight:700;padding:12px 16px;background:var(--hover);border-bottom:1px solid var(--border)}
-  td{padding:12px 16px;border-top:1px solid var(--border);font-size:13.5px}
+  td{padding:12px 16px;border-top:1px solid var(--border);font-size:13.5px;vertical-align:middle}
   tbody tr:hover{background:var(--hover)}
   .u{display:flex;align-items:center;gap:10px}
   .u .av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff;flex:0 0 auto}
@@ -228,17 +228,39 @@
   .month-field .inp{height:42px}
   .nom-status{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
   .nom-status b,.nom-status span{display:block}
-  .nom-status span,.nom-muted{color:var(--text-2);font-size:12px;line-height:1.35}
+  .nom-status span,.nom-muted{color:var(--text-2);font-size:11.5px;line-height:1.3}
   .nom-cols{font-size:12px;color:var(--text-2);white-space:nowrap}
   .nom-filters{display:grid;grid-template-columns:minmax(170px,1fr) minmax(120px,.7fr) minmax(220px,1.5fr) minmax(160px,1fr) minmax(140px,.8fr) minmax(170px,1fr);gap:12px;margin-bottom:14px}
   .nom-filters .field{margin:0}
   .nom-delete-field .btn{height:42px}
-  .nom-table .table-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .nom-table{border-radius:12px}
+  .nom-table .table-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
   .nom-table .table-head b,.nom-table .table-head span{display:block}
-  .nom-table .table-head span{color:var(--text-2);font-size:12px;margin-top:2px}
-  .nom-table table{min-width:980px}
-  .nom-code{font-weight:750;color:var(--text)}
-  .nom-desc{font-weight:600;max-width:420px}
+  .nom-table .table-head span{color:var(--text-2);font-size:11.5px;margin-top:1px}
+  .nom-results-table{min-width:1040px;table-layout:fixed}
+  .nom-results-table .col-module{width:190px}
+  .nom-results-table .col-practice{width:360px}
+  .nom-results-table .col-type{width:190px}
+  .nom-results-table .col-scope{width:130px}
+  .nom-results-table .col-total{width:150px}
+  .nom-results-table .col-auth{width:130px}
+  .nom-results-table th{padding:9px 14px;font-size:10px;background:#f7f9fc}
+  .nom-results-table td{padding:10px 14px;font-size:12.5px;line-height:1.25}
+  .nom-results-table tbody tr:hover{background:#fbfdff}
+  .nom-code{font-weight:750;color:var(--text);line-height:1.2}
+  .nom-desc{font-weight:650;max-width:100%;line-height:1.25}
+  .nom-type{color:var(--text);font-size:12px}
+  .nom-money b{font-size:12.5px}
+  .nom-auth{color:var(--text-2)}
+  .scope-badge{display:inline-flex;align-items:center;gap:6px;min-height:22px;border-radius:999px;padding:0 9px;font-size:11px;font-weight:750;white-space:nowrap}
+  .scope-badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+  .scope-ambulatorio{background:#e4f8f6;color:#0b817e}
+  .scope-internacion{background:var(--info-bg);color:var(--info)}
+  .scope-otros{background:#eef2f7;color:var(--text-2)}
+  [data-theme="dark"] .nom-results-table th{background:#132840}
+  [data-theme="dark"] .nom-results-table tbody tr:hover{background:#142942}
+  [data-theme="dark"] .scope-ambulatorio{background:#123b3a;color:#66d5d0}
+  [data-theme="dark"] .scope-otros{background:#1b2f47;color:#a7b6c8}
   .muted-cell{color:var(--text-2);padding:18px!important;text-align:center}
 
   /* checkbox simple */
