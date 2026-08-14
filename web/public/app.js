@@ -114,6 +114,7 @@ var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'basica';
 var CLIENT_REPORT_ROWS = [];
+var CLIENT_REPORT_QUERY = '';
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -398,8 +399,26 @@ function reportDebitAmount(row){
 function reportNetAmount(row){
   return Math.max(0, reportBaseGross(row) - reportDebitAmount(row));
 }
+function normalizeReportSearch(value){
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function getClientReportVisibleRows(){
+  var q = normalizeReportSearch(CLIENT_REPORT_QUERY);
+  return (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
+    if (!q) return true;
+    var haystack = normalizeReportSearch([
+      item.row.patientName,
+      item.row.benefit,
+      item.row.order,
+      item.row.practiceCode,
+      item.row.practiceDescription
+    ].join(' '));
+    return haystack.indexOf(q) >= 0;
+  });
+}
 function updateClientReportSummary(){
-  var rows = CLIENT_REPORT_ROWS || [];
+  var visible = getClientReportVisibleRows();
+  var rows = visible.map(function(item){ return item.row; });
   var gross = 0, debit = 0, net = 0, absent = 0, outside = 0, unmatched = 0;
   rows.forEach(function(row){
     gross += reportBaseGross(row);
@@ -414,12 +433,13 @@ function updateClientReportSummary(){
   if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
-  var meta = rows.length + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
+  var totalRows = (CLIENT_REPORT_ROWS || []).length;
+  var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
   if (unmatched) meta += ' - ' + unmatched + ' sin valor';
-  document.getElementById('clientReportMeta').textContent = rows.length ? meta : 'Todavia no hay bandeja cargada.';
+  document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
-  if (clearBtn) clearBtn.disabled = !rows.length;
+  if (clearBtn) clearBtn.disabled = !totalRows;
 }
 function renderClientReportRows(){
   var body = document.getElementById('clientReportBody');
@@ -429,7 +449,15 @@ function renderClientReportRows(){
     updateClientReportSummary();
     return;
   }
-  body.innerHTML = CLIENT_REPORT_ROWS.map(function(row, idx){
+  var visible = getClientReportVisibleRows();
+  if (!visible.length){
+    body.innerHTML = '<tr><td colspan="7" class="muted-cell">No hay resultados para esa busqueda.</td></tr>';
+    updateClientReportSummary();
+    return;
+  }
+  body.innerHTML = visible.map(function(item){
+    var row = item.row;
+    var idx = item.index;
     var disabled = reportBaseGross(row) <= 0 ? ' disabled' : '';
     var checked = row.manualDebit ? ' checked' : '';
     var type = row.debitType || 'total';
@@ -447,8 +475,15 @@ function renderClientReportRows(){
   }).join('');
   updateClientReportSummary();
 }
+function setClientReportSearch(value){
+  CLIENT_REPORT_QUERY = value || '';
+  renderClientReportRows();
+}
 function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
+  CLIENT_REPORT_QUERY = '';
+  var search = document.getElementById('clientReportSearch');
+  if (search) search.value = '';
   var st = document.getElementById('clientReportStatus');
   if (st) st.textContent = 'Bandeja eliminada de la previsualizacion.';
   renderClientReportRows();
@@ -492,6 +527,9 @@ async function uploadClientReport(files){
     return;
   }
   CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){ row.manualDebit = false; row.debitType = 'total'; row.debitAmount = ''; return row; });
+  CLIENT_REPORT_QUERY = '';
+  var search = document.getElementById('clientReportSearch');
+  if (search) search.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
   renderClientReportRows();
 }

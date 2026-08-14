@@ -335,6 +335,7 @@
   .report-model-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
   .report-upload-card{display:grid;gap:10px}
   .report-head-actions{display:flex;gap:8px;align-items:center}
+  .report-search{width:300px;height:36px;border-radius:9px;font-size:13px}
   .client-report-controls{display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;align-items:end}
   .client-report-controls .field{margin:0}
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
@@ -393,5 +394,5 @@
   .module-edit-option input{width:15px;height:15px;margin:0;accent-color:var(--turq);flex:0 0 auto}
   .module-edit-option b{font-weight:800}
 
-  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid,.report-summary-grid,.client-report-controls{grid-template-columns:1fr}.client-nom-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr} }
+  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid,.report-summary-grid,.client-report-controls{grid-template-columns:1fr}.client-nom-head,.nom-table .table-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr}.report-search{width:100%} }
   @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column}.module-edit-list{grid-template-columns:1fr} }
