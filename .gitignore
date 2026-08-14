@@ -1,0 +1,69 @@
+# Entorno local
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.agents/
+.codex/
+
+# Build / ejecutables
+build/
+dist/
+*.spec.tmp
+playwright-browsers/
+catalog_cache/
+
+# Datos generados por la app
+logs/
+errores/
+salidas/
+CREDENCIALES/
+
+# Credenciales y perfiles locales
+usuarios_*.json
+credentials/
+resources/credentials.json
+token_gmail.json
+token_gmail*.json
+token_drive.json
+token_drive*.json
+token_sheets.json
+token_sheets*.json
+window_state.json
+*_sheets_config.json
+*_nomenclador_practicas.json
+configuracion_medicos.json
+documentacion_config.json
+validacion_ome_beta.json
+
+# Archivos de pacientes / reportes locales
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.pdf
+*.doc
+beneficios_ejemplo.txt
+Drive/
+documentacion_zip_extraidos/
+tmp/
+tmp_*/
+window_dump_*.xml
+
+# Capturas/exportaciones temporales del portal
+_credencial_page.html
+_credencial_result.html
+_CredencialProvisoria.js
+_bot_script_check.js
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Frontend local
+node_modules/
+*.log

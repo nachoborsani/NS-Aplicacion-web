@@ -1,0 +1,5 @@
+{
+  "version": "1.0.0",
+  "download_url": "https://drive.google.com/file/d/1BjQkQoCR0BVWrjubk8kYFQ7wBLL1SyRS/view",
+  "notes": "Archivo modelo. Para produccion, sube este version.json a una URL publica y configura UPDATE_METADATA_URL en app_version.py."
+}

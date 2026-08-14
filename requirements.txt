@@ -1,0 +1,10 @@
+playwright>=1.45,<2.0
+openpyxl>=3.1,<4.0
+customtkinter>=5.2,<6.0
+pypdf>=4.0,<6.0
+google-api-python-client>=2.0,<3.0
+google-auth>=2.0,<3.0
+google-auth-oauthlib>=1.0,<2.0
+truststore>=0.10,<1.0
+rapidocr-onnxruntime>=1.2,<2.0
+pytesseract>=0.3,<1.0

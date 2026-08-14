@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Transmision Movil</title>
+    <link rel="stylesheet" href="/static/app.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <p class="eyebrow">PAMI</p>
+        <h1>Transmision desde el celular</h1>
+        <p class="hero-copy">
+          Esta web controla la automatizacion que corre en tu PC. El navegador de PAMI se abre en la computadora.
+        </p>
+      </section>
+
+      <section class="panel panel-soft intro-panel">
+        <div class="panel-header">
+          <h2>Instrucciones</h2>
+        </div>
+        <p class="steps-compact">
+          1. Elegi un perfil. 2. Revisa usuario y clave. 3. Define filtros si hace falta.
+          4. Usa <strong>Abrir PAMI + Iniciar bot</strong> o entra manual y luego inicia el bot.
+        </p>
+      </section>
+
+      <section class="panel" id="messageBox" hidden></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Perfil</h2>
+          <button id="refreshProfilesBtn" class="ghost">Actualizar</button>
+        </div>
+
+        <label class="field">
+          <span>Perfil guardado</span>
+          <select id="profileSelect"></select>
+        </label>
+
+        <div class="actions">
+          <button id="newProfileBtn" class="info">Nuevo perfil</button>
+          <button id="deleteProfileBtn" class="ghost">Borrar perfil</button>
+        </div>
+
+        <div class="grid">
+          <label class="field">
+            <span>Cliente</span>
+            <input id="cliente" type="text" placeholder="Nombre del cliente o centro">
+          </label>
+          <label class="field">
+            <span>Usuario</span>
+            <input id="usuario" type="text" placeholder="UP...">
+          </label>
+        </div>
+
+        <div class="grid password-grid">
+          <label class="field">
+            <span>Clave</span>
+            <input id="clave" type="password" placeholder="Clave PAMI">
+          </label>
+          <div class="field last-bot-field">
+            <span>Ultima boteada</span>
+            <div id="ultimaBoteada" class="inline-value">Sin registro</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="togglePasswordBtn" class="ghost">Ver clave</button>
+          <button id="saveProfileBtn" class="secondary">Guardar perfil</button>
+          <button id="autofillBtn" class="secondary">Autocompletar login</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Filtros automaticos de Transmision</h2>
+          <button id="statusBtn" class="ghost">Ver estado</button>
+        </div>
+
+        <div class="grid">
+          <label class="field">
+            <span>Fecha desde</span>
+            <input id="fechaDesde" type="date">
+          </label>
+          <label class="field">
+            <span>Fecha hasta</span>
+            <input id="fechaHasta" type="date">
+          </label>
+        </div>
+
+        <div class="grid">
+          <label class="field">
+            <span>Validada</span>
+            <select id="validada">
+              <option value="">Sin filtro</option>
+              <option value="Si">Si</option>
+              <option value="No">No</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Transmitida</span>
+            <select id="transmitida">
+              <option value="">Sin filtro</option>
+              <option value="No">No</option>
+              <option value="Si">Si</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="check-row">
+          <input id="headlessMode" type="checkbox">
+          <span>No ver navegador</span>
+        </label>
+
+        <div class="actions stack">
+          <button id="openStartBtn" class="success">Abrir PAMI + Iniciar bot</button>
+          <button id="openBtn">Abrir PAMI (manual)</button>
+          <button id="exportBtn" class="secondary">Exportar Excel</button>
+          <button id="startBtn">Iniciar bot (manual)</button>
+          <button id="pauseBtn" class="warning">Pausar</button>
+          <button id="resumeBtn" class="info">Reanudar</button>
+          <button id="resetBtn" class="secondary">Resetear</button>
+          <button id="closeBtn" class="danger">Cerrar navegador</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Estado y actividad</h2>
+          <span id="connectionBadge" class="badge">Sin consultar</span>
+        </div>
+
+        <div id="statusLine" class="status-line">Estado: Sin iniciar | Proceso: Esperando acciones | Procesados: 0</div>
+        <div id="summaryLine" class="summary-line">Esperando acciones...</div>
+
+        <details class="raw-state">
+          <summary>Ver estado tecnico</summary>
+          <pre id="stateBox" class="state-box">Todavia no hay estado cargado.</pre>
+        </details>
+
+        <div id="logList" class="log-list"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+  </html>
