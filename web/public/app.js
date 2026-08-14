@@ -23,6 +23,8 @@ var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomenclador
 function go(v, el){
   ['dash','users','clientes','nomencladores','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
+  document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
+  document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'users') renderUsers();
   if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
