@@ -239,6 +239,8 @@
                     <div class="report-head-actions">
                       <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
                       <button class="btn btn-ghost" id="clientReportEditBtn" onclick="unlockClientReport()" type="button" disabled>Editar reporte</button>
+                      <button class="btn btn-ghost" id="clientReportDownloadBtn" onclick="downloadActiveClientReport()" type="button" disabled>Descargar informe</button>
+                      <button class="btn btn-ghost" id="clientReportCloseBtn" onclick="closeClientReportView()" type="button" disabled>Cerrar visualizacion</button>
                       <button class="btn btn-ghost" id="clientReportDiscardBtn" onclick="discardClientReportDraft()" type="button" disabled>Descartar reporte</button>
                       <button class="icon-danger-btn mini" id="clientReportClearBtn" onclick="discardClientReportDraft()" type="button" title="Descartar reporte" aria-label="Descartar reporte" disabled>
                         <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>

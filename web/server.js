@@ -180,6 +180,14 @@ function json(res, code, obj) {
   res.writeHead(code, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(JSON.stringify(obj));
 }
+function downloadName(value) {
+  return String(value || "reporte")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90) || "reporte";
+}
 function readBody(req) {
   return new Promise((resolve) => {
     let d = "";
@@ -808,6 +816,52 @@ function reportListItem(report) {
     summary: report.summary,
   };
 }
+function buildClientReportWorkbook(report) {
+  const summary = report.summary || summarizeReportRows(report.rows || []);
+  const wb = XLSX.utils.book_new();
+  const resumen = [
+    ["Reporte", report.title || ""],
+    ["Cliente", report.clientName || ""],
+    ["Archivo origen", report.sourceFilename || ""],
+    ["Nomenclador", report.nomencladorLabel || report.nomencladorPeriod || ""],
+    ["Cerrado", report.closedAt || ""],
+    ["Cerrado por", report.closedBy || ""],
+    ["Actualizado", report.updatedAt || ""],
+    ["Actualizado por", report.updatedBy || ""],
+    ["Monto esperado", money(report.expectedAmount)],
+    ["Bruto facturable", money(summary.gross)],
+    ["Debitos manuales", money(summary.debit)],
+    ["Neto estimado", money(summary.net)],
+    ["Ausentes / activas", summary.absent || 0],
+    ["Fuera de corte", summary.outsideCutoff || 0],
+    ["Sin valor", summary.unmatched || 0],
+    [],
+    ["Observaciones"],
+    [report.observations || ""],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+  const rows = (report.rows || []).map((row) => ({
+    Paciente: row.patientName || "",
+    Beneficio: row.benefit || "",
+    OME: row.order || "",
+    "Codigo practica": row.practiceCode || "",
+    Prestacion: row.practiceDescription || row.practiceText || "",
+    Modulo: [row.moduleCode || "", row.moduleDescription || ""].filter(Boolean).join(" "),
+    Turno: row.appointmentLabel || row.appointmentAt || "",
+    Transmision: row.transmittedLabel || row.transmittedAt || "",
+    Estado: row.status || "",
+    Bruto: reportRowGross(row),
+    Debito: reportRowDebit(row),
+    Neto: reportRowNet(row),
+    "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : "Total") : "",
+    "Valor fuente": row.valueSourceCode || "",
+    "Valor editado": row.valueEdited ? "Si" : "",
+    "Sin valor": (!row.matchFound && !row.valueEdited) ? "Si" : "",
+    "Fuera de corte": row.outsideCutoff ? "Si" : "",
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Practicas");
+  return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+}
 function readBuffer(req, limit = 25 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -1085,6 +1139,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   const clientReportDetailMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)$/);
+  const clientReportDownloadMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/download$/);
+  if (clientReportDownloadMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportDownloadMatch[1]);
+    const id = decodeURIComponent(clientReportDownloadMatch[2]);
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const buffer = buildClientReportWorkbook(report);
+    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}.xlsx`;
+    res.writeHead(200, {
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
+    });
+    return res.end(buffer);
+  }
+
   if (clientReportDetailMatch && req.method === "PUT") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

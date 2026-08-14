@@ -460,9 +460,17 @@ function renderSavedClientReports(){
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
       + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0)) + '</div></td>'
-      + '<td><button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button></td>'
+      + '<td><div class="report-row-actions"><button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button><button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Descargar</button></div></td>'
       + '</tr>';
   }).join('');
+}
+function downloadClientReport(id){
+  if (!ACTIVE_CLIENT || !id) return;
+  window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/download';
+}
+function downloadActiveClientReport(){
+  if (!CLIENT_REPORT_ID) return;
+  downloadClientReport(CLIENT_REPORT_ID);
 }
 async function loadClientReports(){
   if (!ACTIVE_CLIENT) return;
@@ -517,6 +525,10 @@ function updateClientReportFormState(){
   if (period) period.disabled = locked || CLIENT_REPORT_MODE === 'edit';
   var editBtn = document.getElementById('clientReportEditBtn');
   if (editBtn) editBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'closed';
+  var downloadBtn = document.getElementById('clientReportDownloadBtn');
+  if (downloadBtn) downloadBtn.disabled = !CLIENT_REPORT_ID || CLIENT_REPORT_MODE !== 'closed';
+  var closeBtn = document.getElementById('clientReportCloseBtn');
+  if (closeBtn) closeBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'closed';
   var discardBtn = document.getElementById('clientReportDiscardBtn');
   if (discardBtn) {
     discardBtn.disabled = !totalRows || !editable;
@@ -779,6 +791,12 @@ function discardClientReportDraft(){
   clearClientReport();
   var st = document.getElementById('clientReportStatus');
   if (st) st.textContent = 'Borrador descartado.';
+}
+function closeClientReportView(){
+  if (CLIENT_REPORT_MODE !== 'closed') return;
+  clearClientReport();
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Visualizacion cerrada. El reporte guardado sigue disponible en la lista.';
 }
 function toggleReportDebit(index, checked){
   if (CLIENT_REPORT_MODE === 'closed') return;
