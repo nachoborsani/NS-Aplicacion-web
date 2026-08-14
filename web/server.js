@@ -590,16 +590,28 @@ function splitPractice(value) {
     text,
   };
 }
+const clientPracticeValueAliases = {
+  "sala-millon": {
+    "820113": "570129",
+  },
+};
 function findNomencladorMatch(payload, client, practice) {
   const activeModules = new Set((client.activeModules || []).map((module) => String(module.code)));
+  const aliasCode = ((clientPracticeValueAliases[client.slug] || {})[practice.code]) || "";
+  let valueSourceCode = practice.code;
   let candidates = (payload.rows || []).filter((row) => String(row.practiceCode || "") === practice.code);
+  if (!candidates.length && aliasCode) {
+    valueSourceCode = aliasCode;
+    candidates = (payload.rows || []).filter((row) => String(row.practiceCode || "") === aliasCode);
+  }
   const activeCandidates = candidates.filter((row) => !activeModules.size || activeModules.has(String(row.moduleCode || "")));
   if (activeCandidates.length) candidates = activeCandidates;
   if (!candidates.length) return null;
   const wanted = normalizeText(practice.description);
-  return candidates.find((row) => normalizeText(row.practiceDescription) === wanted)
+  const match = candidates.find((row) => normalizeText(row.practiceDescription) === wanted)
     || candidates.find((row) => normalizeText(row.practiceDescription).includes(wanted) || wanted.includes(normalizeText(row.practiceDescription)))
     || candidates[0];
+  return { ...match, valueSourceCode };
 }
 function parseTransmisionWorkbook(buffer, filename, payload, client) {
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
@@ -655,6 +667,7 @@ function parseTransmisionWorkbook(buffer, filename, payload, client) {
       valueBillable: billable ? valueGross : 0,
       moduleCode: match ? match.moduleCode : "",
       moduleDescription: match ? match.moduleDescription : "",
+      valueSourceCode: match ? match.valueSourceCode : "",
       matchFound: !!match,
     };
   }).filter((row) => row.order || row.practiceText || row.patientName);

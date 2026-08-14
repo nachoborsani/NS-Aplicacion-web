@@ -463,9 +463,10 @@ function renderClientReportRows(){
     var type = row.debitType || 'total';
     var partialDisabled = !row.manualDebit || type !== 'partial' ? ' disabled' : '';
     var badgeClass = row.billable ? 'ok' : (row.absent ? 'warn' : 'muted');
+    var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     return '<tr data-report-row="' + idx + '">'
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
-      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + '</div></td>'
+      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
       + '<td><span class="report-status ' + badgeClass + '">' + esc(row.status || '-') + '</span></td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b></td>'
