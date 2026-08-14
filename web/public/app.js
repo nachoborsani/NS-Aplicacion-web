@@ -1,76 +1,24 @@
-const defaultTasks = [
-  { doctor: "Medico Demo", type: "Credencial provisoria", benefit: "Beneficio de prueba" },
-  { doctor: "Operador NS", type: "Generar OME", benefit: "DNI de prueba" },
-  { doctor: "Panel Local", type: "Transmision", benefit: "Pendiente de agente" },
-];
-
-const taskList = document.querySelector("#taskList");
-const taskForm = document.querySelector("#taskForm");
-const pendingCount = document.querySelector("#pendingCount");
-const clearTasks = document.querySelector("#clearTasks");
-
-function getTasks() {
-  const stored = localStorage.getItem("ns-web-tasks");
-  if (!stored) return defaultTasks;
-
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : defaultTasks;
-  } catch {
-    return defaultTasks;
+var root=document.getElementById('root');
+  function toggleTheme(){
+    var d=root.getAttribute('data-theme')==='dark';
+    root.setAttribute('data-theme', d?'light':'dark');
+    document.getElementById('thIco').innerHTML = d
+      ? '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+      : '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
   }
-}
-
-function saveTasks(tasks) {
-  localStorage.setItem("ns-web-tasks", JSON.stringify(tasks));
-}
-
-function renderTasks() {
-  const tasks = getTasks();
-  pendingCount.textContent = String(tasks.length);
-  taskList.innerHTML = "";
-
-  for (const task of tasks) {
-    const row = document.createElement("article");
-    row.className = "task-row";
-    row.innerHTML = `
-      <div>
-        <strong>${escapeHtml(task.type)}</strong>
-        <span>${escapeHtml(task.doctor)} · ${escapeHtml(task.benefit)}</span>
-      </div>
-      <span class="badge">Pendiente</span>
-    `;
-    taskList.appendChild(row);
+  var titles={dash:'Inicio',users:'Usuarios',soon:'Configuración general'};
+  function go(v,el){
+    ['dash','users','soon'].forEach(function(x){document.getElementById('view-'+x).style.display = x===v?'block':'none';});
+    document.getElementById('pageTitle').textContent=titles[v];
+    document.querySelectorAll('.nav a, .side-config a').forEach(function(a){a.classList.remove('active');});
+    if(el) el.classList.add('active');
+    document.body.classList.remove('nav-open');
   }
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-taskForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const formData = new FormData(taskForm);
-  const task = {
-    doctor: formData.get("doctor") || "Sin medico",
-    type: formData.get("type") || "Tarea",
-    benefit: formData.get("benefit") || "Sin dato",
-  };
-
-  const tasks = [task, ...getTasks()].slice(0, 12);
-  saveTasks(tasks);
-  taskForm.reset();
-  renderTasks();
-});
-
-clearTasks.addEventListener("click", () => {
-  saveTasks([]);
-  renderTasks();
-});
-
-renderTasks();
+  function openDrawer(){document.getElementById('drawer').classList.add('show');document.getElementById('scrim').classList.add('show');}
+  function closeDrawer(){document.getElementById('drawer').classList.remove('show');document.getElementById('scrim').classList.remove('show');}
+  // demo toggle active state
+  document.querySelector('.demo').addEventListener('click',function(e){
+    if(e.target.tagName!=='BUTTON')return;
+    document.getElementById('d-login').classList.toggle('on', e.target.id==='d-login');
+    document.getElementById('d-app').classList.toggle('on', e.target.id==='d-app');
+  });
