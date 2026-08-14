@@ -1,12 +1,23 @@
-var root = document.getElementById('root');
-
+// El tema vive en <html> para que el fondo del body y el texto heredado
+// también cambien (si se pone en #root, el body queda con el tema claro).
+var root = document.documentElement;
+var TH_MOON = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+var TH_SUN  = '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+function applyThemeIcon(){
+  var el = document.getElementById('thIco');
+  if (el) el.innerHTML = (root.getAttribute('data-theme') === 'dark') ? TH_SUN : TH_MOON;
+}
 function toggleTheme(){
   var d = root.getAttribute('data-theme') === 'dark';
-  root.setAttribute('data-theme', d ? 'light' : 'dark');
-  document.getElementById('thIco').innerHTML = d
-    ? '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
-    : '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
+  var next = d ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('ns-theme', next); } catch (e) {}
+  applyThemeIcon();
 }
+(function(){
+  try { var t = localStorage.getItem('ns-theme'); if (t === 'dark' || t === 'light') root.setAttribute('data-theme', t); } catch (e) {}
+  applyThemeIcon();
+})();
 
 var titles = { dash:'Inicio', users:'Usuarios', soon:'Configuración general' };
 function go(v, el){
