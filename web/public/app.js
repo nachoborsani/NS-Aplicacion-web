@@ -206,11 +206,13 @@ function fillPeriodSelect(items, selected){
 function fillClientPeriodSelect(items, selected){
   var el = document.getElementById('clientNomPeriod');
   if (!el) return;
+  var list = items || [];
   el.innerHTML = (items || []).map(function(item){
     var suffix = item.rowCount ? ' (' + item.rowCount + ')' : '';
     return '<option value="' + esc(item.value) + '">' + esc(item.label + suffix) + '</option>';
   }).join('') || '<option value="">Sin cargar</option>';
-  if (selected && [].slice.call(el.options).some(function(o){ return o.value === selected; })) el.value = selected;
+  var preferred = selected || (list[0] ? list[0].value : '');
+  if (preferred && [].slice.call(el.options).some(function(o){ return o.value === preferred; })) el.value = preferred;
   else if (el.options.length) el.value = el.options[0].value;
 }
 function renderNomencladorRows(rows, bodyId, metaId, total){
@@ -275,9 +277,12 @@ async function renderActiveClient(){
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){
     return '<span class="module-chip"><b>' + esc(module.code) + '</b> ' + esc(module.name) + '</span>';
   }).join('');
+  var editBtn = document.getElementById('clientModulesEdit');
+  if (editBtn) editBtn.style.display = ME && ME.role === 'admin' ? 'grid' : 'none';
   var summary = await api('/api/nomencladores');
   if (summary.ok) {
-    fillClientPeriodSelect(summary.data.nomencladores || [], summary.data.activePeriod);
+    var items = summary.data.nomencladores || [];
+    fillClientPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
   await loadClientNomenclador();
 }
@@ -299,6 +304,58 @@ async function loadClientNomenclador(){
     return;
   }
   renderNomencladorRows(res.data.rows || [], 'clientNomBody', 'clientNomMeta', res.data.total || 0);
+}
+function moduleNameFromOption(option){
+  var code = String(option.value || '').trim();
+  var label = String(option.label || '').trim();
+  var prefix = code ? code + ' - ' : '';
+  return label.indexOf(prefix) === 0 ? label.slice(prefix.length).trim() : label;
+}
+async function openClientModulesModal(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientModulesError');
+  err.textContent = '';
+  var box = document.getElementById('clientModulesOptions');
+  box.innerHTML = '<div class="muted-cell">Cargando modulos...</div>';
+  showModal('clientModulesModal','cmScrim');
+  var period = document.getElementById('clientNomPeriod').value || '';
+  var summary = await api('/api/nomencladores' + (period ? '?period=' + encodeURIComponent(period) : ''));
+  if (!summary.ok || !summary.data.loaded){
+    box.innerHTML = '<div class="muted-cell">Primero carga un nomenclador.</div>';
+    return;
+  }
+  var activeByCode = {};
+  ACTIVE_CLIENT.activeModules.forEach(function(module){ activeByCode[String(module.code)] = module; });
+  var options = ((summary.data.filters || {}).modules || []).map(function(option){
+    return { code:String(option.value || '').trim(), name:moduleNameFromOption(option) };
+  }).filter(function(option){ return option.code; });
+  ACTIVE_CLIENT.activeModules.forEach(function(module){
+    if (!options.some(function(option){ return option.code === module.code; })) options.push(module);
+  });
+  box.innerHTML = options.map(function(option){
+    var checked = activeByCode[option.code] ? ' checked' : '';
+    return '<label class="module-edit-option"><input type="checkbox" value="' + esc(option.code) + '" data-name="' + esc(option.name) + '"' + checked + '><span><b>' + esc(option.code) + '</b> ' + esc(option.name) + '</span></label>';
+  }).join('') || '<div class="muted-cell">No hay modulos disponibles en este nomenclador.</div>';
+}
+function closeClientModulesModal(){ hideModal('clientModulesModal','cmScrim'); }
+async function saveClientModules(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientModulesError');
+  err.textContent = '';
+  var selected = [].slice.call(document.querySelectorAll('#clientModulesOptions input:checked')).map(function(input){
+    return { code:input.value, name:input.getAttribute('data-name') || '' };
+  });
+  if (!selected.length){ err.textContent = 'Selecciona al menos un modulo.'; return; }
+  var btn = document.getElementById('clientModulesSave');
+  btn.disabled = true;
+  var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/modules', { activeModules:selected });
+  btn.disabled = false;
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudieron guardar los modulos.'; return; }
+  CLIENTS = res.data.clients || CLIENTS;
+  ACTIVE_CLIENT = res.data.client || ACTIVE_CLIENT;
+  renderClientList();
+  closeClientModulesModal();
+  await renderActiveClient();
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');

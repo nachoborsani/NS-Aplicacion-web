@@ -10,6 +10,7 @@ const publicDir = path.join(__dirname, "public");
 // Persistencia: usa el volumen de Railway si esta montado; si no, ./data local.
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
+const clientesFile = path.join(dataDir, "clientes.json");
 const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 
@@ -196,7 +197,7 @@ function publicUser(u) {
 
 // Perfiles validos y reglas de nombre de usuario
 const ROLES = new Set(["admin", "operador", "medico", "clinica"]);
-const CLIENTS = [
+const DEFAULT_CLIENTS = [
   {
     slug: "sala-millon",
     name: "Sala Millon",
@@ -212,6 +213,51 @@ const CLIENTS = [
     ],
   },
 ];
+function normalizeClientModules(modules) {
+  const seen = new Set();
+  const result = [];
+  for (const item of Array.isArray(modules) ? modules : []) {
+    const rawCode = typeof item === "object" ? item.code : item;
+    const rawName = typeof item === "object" ? item.name : "";
+    const code = String(rawCode || "").trim();
+    const name = String(rawName || "").replace(/\s+/g, " ").trim();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    result.push({ code, name });
+  }
+  return result;
+}
+function normalizeClient(client, fallback) {
+  const base = fallback || {};
+  const modules = normalizeClientModules(client.activeModules);
+  return {
+    slug: String(client.slug || base.slug || "").trim(),
+    name: String(client.name || base.name || "").trim(),
+    businessName: String(client.businessName || base.businessName || "").trim(),
+    cuit: String(client.cuit || base.cuit || "").trim(),
+    activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
+  };
+}
+function loadClientsStore() {
+  let saved = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientesFile, "utf8"));
+    saved = Array.isArray(parsed) ? parsed : [];
+  } catch {}
+
+  const bySlug = new Map();
+  for (const client of DEFAULT_CLIENTS) bySlug.set(client.slug, normalizeClient(client));
+  for (const client of saved) {
+    const slug = String(client.slug || "").trim();
+    if (!slug) continue;
+    bySlug.set(slug, normalizeClient(client, bySlug.get(slug)));
+  }
+  return Array.from(bySlug.values()).filter((client) => client.slug && client.name);
+}
+function saveClientsStore(clients) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientesFile, JSON.stringify(clients.map((client) => normalizeClient(client)), null, 2));
+}
 function validUsername(u) {
   return /^[a-z0-9._-]{3,20}$/.test(u);
 }
@@ -683,7 +729,24 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/clientes" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    return json(res, 200, { clients: CLIENTS });
+    return json(res, 200, { clients: loadClientsStore() });
+  }
+
+  const clientModulesMatch = p.match(/^\/api\/clientes\/([^/]+)\/modules$/);
+  if (clientModulesMatch && req.method === "PATCH") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede modificar clientes." });
+    const slug = decodeURIComponent(clientModulesMatch[1]);
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((client) => client.slug === slug);
+    if (idx < 0) return json(res, 404, { error: "Cliente no encontrado." });
+    const body = await readBody(req);
+    const modules = normalizeClientModules(body.activeModules);
+    if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
+    clients[idx].activeModules = modules;
+    saveClientsStore(clients);
+    return json(res, 200, { client: clients[idx], clients });
   }
 
   // ---- Nomencladores ----
