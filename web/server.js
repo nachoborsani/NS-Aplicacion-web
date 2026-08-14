@@ -801,7 +801,10 @@ function reportListItem(report) {
     rowCount: report.rowCount,
     closedAt: report.closedAt,
     closedBy: report.closedBy,
+    updatedAt: report.updatedAt,
+    updatedBy: report.updatedBy,
     expectedAmount: report.expectedAmount,
+    observations: report.observations,
     summary: report.summary,
   };
 }
@@ -1071,6 +1074,7 @@ const server = http.createServer(async (req, res) => {
       closedAt,
       closedBy: me.username,
       expectedAmount,
+      observations: String(body.observations || "").trim(),
       summary,
       rows,
     };
@@ -1081,6 +1085,40 @@ const server = http.createServer(async (req, res) => {
   }
 
   const clientReportDetailMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)$/);
+  if (clientReportDetailMatch && req.method === "PUT") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportDetailMatch[1]);
+    const id = decodeURIComponent(clientReportDetailMatch[2]);
+    const store = loadClientReportsStore();
+    const idx = (store.items || []).findIndex((item) => item.clientSlug === slug && item.id === id);
+    if (idx < 0) return json(res, 404, { error: "Reporte no encontrado." });
+    const body = await readBody(req);
+    const rows = sanitizeReportRows(body.rows);
+    if (!rows.length) return json(res, 400, { error: "No hay practicas para guardar." });
+    const current = store.items[idx];
+    const summary = summarizeReportRows(rows);
+    const period = String(body.nomencladorPeriod || current.nomencladorPeriod || "").trim();
+    const expectedAmount = money(body.expectedAmount);
+    const updated = {
+      ...current,
+      title: String(body.title || "").trim() || current.title || `${current.clientName || "Cliente"} - ${periodLabel(rows[0].period || period)} - ${rows.length} practicas`,
+      sourceFilename: path.basename(String(body.sourceFilename || current.sourceFilename || "bandeja_transmision.xls")),
+      nomencladorPeriod: period,
+      nomencladorLabel: String(body.nomencladorLabel || current.nomencladorLabel || periodLabel(period)),
+      rowCount: rows.length,
+      expectedAmount,
+      observations: String(body.observations || "").trim(),
+      summary,
+      rows,
+      updatedAt: new Date().toISOString(),
+      updatedBy: me.username,
+    };
+    store.items[idx] = updated;
+    saveClientReportsStore(store);
+    return json(res, 200, { report: reportListItem(updated) });
+  }
+
   if (clientReportDetailMatch && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

@@ -122,8 +122,10 @@ var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_EXPECTED_AMOUNT = '';
 var CLIENT_REPORT_SORT = '';
 var CLIENT_REPORT_MODE = '';
+var CLIENT_REPORT_ID = '';
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_REPORT_FILE = null;
+var CLIENT_REPORT_OBSERVATIONS = '';
 var CLIENT_SAVED_REPORTS = [];
 function clientReportDraftKey(){
   return ACTIVE_CLIENT && ACTIVE_CLIENT.slug ? 'ns-client-report-draft:' + ACTIVE_CLIENT.slug : '';
@@ -132,15 +134,22 @@ function getClientReportTitleValue(){
   var title = document.getElementById('clientReportTitle');
   return title ? title.value : '';
 }
+function getClientReportObservationsValue(){
+  var notes = document.getElementById('clientReportObservations');
+  return notes ? notes.value : CLIENT_REPORT_OBSERVATIONS;
+}
 function saveClientReportDraft(){
-  if (!ACTIVE_CLIENT || CLIENT_REPORT_MODE !== 'draft' || !CLIENT_REPORT_ROWS.length) return;
+  if (!ACTIVE_CLIENT || (CLIENT_REPORT_MODE !== 'draft' && CLIENT_REPORT_MODE !== 'edit') || !CLIENT_REPORT_ROWS.length) return;
   var key = clientReportDraftKey();
   if (!key) return;
   try {
     localStorage.setItem(key, JSON.stringify({
       savedAt:new Date().toISOString(),
+      mode:CLIENT_REPORT_MODE,
+      reportId:CLIENT_REPORT_ID,
       title:getClientReportTitleValue(),
       expectedAmount:CLIENT_REPORT_EXPECTED_AMOUNT,
+      observations:getClientReportObservationsValue(),
       source:CLIENT_REPORT_SOURCE,
       rows:CLIENT_REPORT_ROWS
     }));
@@ -445,8 +454,9 @@ function renderSavedClientReports(){
   }
   body.innerHTML = reports.map(function(report){
     var summary = report.summary || {};
+    var notes = String(report.observations || '').trim();
     return '<tr>'
-      + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + '</div></td>'
+      + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
       + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0)) + '</div></td>'
@@ -492,6 +502,31 @@ function updateExpectedAmountStatus(net){
   }
   status.className = 'report-match-status bad';
   status.textContent = 'Diferencia ' + moneyFmt(diff);
+}
+function updateClientReportFormState(){
+  var totalRows = (CLIENT_REPORT_ROWS || []).length;
+  var locked = CLIENT_REPORT_MODE === 'closed';
+  var editable = CLIENT_REPORT_MODE === 'draft' || CLIENT_REPORT_MODE === 'edit';
+  var title = document.getElementById('clientReportTitle');
+  if (title) title.disabled = locked;
+  var expected = document.getElementById('clientReportExpectedAmount');
+  if (expected) expected.disabled = locked;
+  var notes = document.getElementById('clientReportObservations');
+  if (notes) notes.disabled = locked || !totalRows;
+  var period = document.getElementById('clientReportPeriod');
+  if (period) period.disabled = locked || CLIENT_REPORT_MODE === 'edit';
+  var editBtn = document.getElementById('clientReportEditBtn');
+  if (editBtn) editBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'closed';
+  var discardBtn = document.getElementById('clientReportDiscardBtn');
+  if (discardBtn) {
+    discardBtn.disabled = !totalRows || !editable;
+    discardBtn.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Descartar cambios' : 'Descartar reporte';
+  }
+  var saveBtn = document.getElementById('clientReportSaveBtn');
+  if (saveBtn) {
+    saveBtn.disabled = !totalRows || !editable;
+    saveBtn.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Guardar cambios' : 'Guardar reporte';
+  }
 }
 function normalizeReportSearch(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -560,10 +595,7 @@ function updateClientReportSummary(){
   document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
   if (clearBtn) clearBtn.disabled = !totalRows;
-  var discardBtn = document.getElementById('clientReportDiscardBtn');
-  if (discardBtn) discardBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
-  var saveBtn = document.getElementById('clientReportSaveBtn');
-  if (saveBtn) saveBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
+  updateClientReportFormState();
   var sortIcon = document.getElementById('clientReportPracticeSortIcon');
   if (sortIcon) sortIcon.textContent = CLIENT_REPORT_SORT === 'practice-desc' ? 'Z-A' : 'A-Z';
 }
@@ -674,6 +706,15 @@ function setClientReportExpectedInput(value){
   var input = document.getElementById('clientReportExpectedAmount');
   if (input) input.value = value || '';
 }
+function setClientReportObservationsInput(value){
+  CLIENT_REPORT_OBSERVATIONS = value || '';
+  var input = document.getElementById('clientReportObservations');
+  if (input) input.value = value || '';
+}
+function setClientReportObservations(value){
+  CLIENT_REPORT_OBSERVATIONS = value || '';
+  saveClientReportDraft();
+}
 function editReportValue(index){
   if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
@@ -702,27 +743,31 @@ function restoreClientReportDraft(){
   try { draft = JSON.parse(raw); } catch (e) { return; }
   if (!draft || !Array.isArray(draft.rows) || !draft.rows.length) return;
   CLIENT_REPORT_ROWS = draft.rows;
-  CLIENT_REPORT_MODE = 'draft';
+  CLIENT_REPORT_MODE = draft.mode === 'edit' && draft.reportId ? 'edit' : 'draft';
+  CLIENT_REPORT_ID = draft.reportId || '';
   CLIENT_REPORT_SOURCE = draft.source || null;
   CLIENT_REPORT_FILE = null;
   renderClientReportModuleFilter();
   resetClientReportFilters();
   setClientReportExpectedInput(draft.expectedAmount || '');
+  setClientReportObservationsInput(draft.observations || '');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = draft.title || '';
   var periodSelect = document.getElementById('clientReportPeriod');
   if (periodSelect && CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod) periodSelect.value = CLIENT_REPORT_SOURCE.nomencladorPeriod;
   var st = document.getElementById('clientReportStatus');
-  if (st) st.textContent = 'Borrador restaurado. Para cambiar el nomenclador, volve a adjuntar la bandeja.';
+  if (st) st.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Edicion restaurada. Guarda cambios para cerrar el reporte.' : 'Borrador restaurado. Para cambiar el nomenclador, volve a adjuntar la bandeja.';
   renderClientReportRows();
 }
 function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
   CLIENT_REPORT_MODE = '';
+  CLIENT_REPORT_ID = '';
   CLIENT_REPORT_SOURCE = null;
   CLIENT_REPORT_FILE = null;
   resetClientReportFilters();
   setClientReportExpectedInput('');
+  setClientReportObservationsInput('');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = '';
   var st = document.getElementById('clientReportStatus');
@@ -755,20 +800,27 @@ function setReportDebitType(index, value){
   saveClientReportDraft();
 }
 async function saveClientReport(){
-  if (!ACTIVE_CLIENT || !CLIENT_REPORT_ROWS.length || CLIENT_REPORT_MODE !== 'draft') return;
+  if (!ACTIVE_CLIENT || !CLIENT_REPORT_ROWS.length || (CLIENT_REPORT_MODE !== 'draft' && CLIENT_REPORT_MODE !== 'edit')) return;
   var btn = document.getElementById('clientReportSaveBtn');
   var st = document.getElementById('clientReportStatus');
   if (btn) btn.disabled = true;
-  if (st) st.textContent = 'Guardando reporte...';
+  if (st) st.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Guardando cambios...' : 'Guardando reporte...';
   var payload = {
     rows: CLIENT_REPORT_ROWS,
     title: (document.getElementById('clientReportTitle') || {}).value || '',
     expectedAmount: parseMoneyInput(CLIENT_REPORT_EXPECTED_AMOUNT),
+    observations: getClientReportObservationsValue(),
     sourceFilename: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.filename,
     nomencladorPeriod: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod,
     nomencladorLabel: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorLabel
   };
-  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes', payload);
+  var path = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes';
+  var method = 'POST';
+  if (CLIENT_REPORT_MODE === 'edit' && CLIENT_REPORT_ID) {
+    path += '/' + encodeURIComponent(CLIENT_REPORT_ID);
+    method = 'PUT';
+  }
+  var res = await req(method, path, payload);
   if (!res.ok){
     if (st) st.textContent = res.data.error || 'No se pudo guardar el reporte.';
     updateClientReportSummary();
@@ -776,7 +828,7 @@ async function saveClientReport(){
   }
   removeClientReportDraft();
   clearClientReport();
-  if (st) st.textContent = 'Reporte guardado y cerrado.';
+  if (st) st.textContent = method === 'PUT' ? 'Cambios guardados y reporte cerrado.' : 'Reporte guardado y cerrado.';
   await loadClientReports();
 }
 async function openClientReport(id){
@@ -791,6 +843,7 @@ async function openClientReport(id){
   var report = res.data.report || {};
   CLIENT_REPORT_ROWS = report.rows || [];
   CLIENT_REPORT_MODE = 'closed';
+  CLIENT_REPORT_ID = report.id || id;
   CLIENT_REPORT_SOURCE = {
     filename: report.sourceFilename || '',
     nomencladorPeriod: report.nomencladorPeriod || '',
@@ -799,15 +852,29 @@ async function openClientReport(id){
   renderClientReportModuleFilter();
   resetClientReportFilters();
   setClientReportExpectedInput(report.expectedAmount ? String(report.expectedAmount).replace('.', ',') : '');
+  setClientReportObservationsInput(report.observations || '');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = report.title || '';
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
   renderClientReportRows();
 }
+function unlockClientReport(){
+  if (CLIENT_REPORT_MODE !== 'closed' || !CLIENT_REPORT_ROWS.length || !CLIENT_REPORT_ID) return;
+  CLIENT_REPORT_MODE = 'edit';
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Reporte desbloqueado para editar. Guarda cambios para volver a cerrarlo.';
+  renderClientReportRows();
+  saveClientReportDraft();
+}
 async function changeClientReportPeriod(){
   if (CLIENT_REPORT_MODE === 'closed') {
     var closedStatus = document.getElementById('clientReportStatus');
     if (closedStatus) closedStatus.textContent = 'Este reporte ya esta cerrado; el nomenclador no se recalcula.';
+    return;
+  }
+  if (CLIENT_REPORT_MODE === 'edit') {
+    var editStatus = document.getElementById('clientReportStatus');
+    if (editStatus) editStatus.textContent = 'En una edicion de reporte viejo no se recalcula el nomenclador. Carga una bandeja nueva para rehacerlo.';
     return;
   }
   if (!CLIENT_REPORT_ROWS.length) return;
@@ -850,6 +917,7 @@ async function uploadClientReport(files){
     return row;
   });
   CLIENT_REPORT_MODE = 'draft';
+  CLIENT_REPORT_ID = '';
   CLIENT_REPORT_SOURCE = {
     filename: data.filename || '',
     nomencladorPeriod: data.nomencladorPeriod || '',
@@ -862,6 +930,7 @@ async function uploadClientReport(files){
   renderClientReportModuleFilter();
   resetClientReportFilters();
   if (wasClosed) setClientReportExpectedInput('');
+  if (wasClosed) setClientReportObservationsInput('');
   var title = document.getElementById('clientReportTitle');
   if (title && wasClosed) title.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
