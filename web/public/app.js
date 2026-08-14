@@ -291,7 +291,7 @@ async function searchNomenclador(){
     var scope = row.scope || 'otros';
     return '<tr>'
       + '<td><div class="nom-code">' + esc(row.moduleCode || '-') + '</div><div class="nom-muted">' + esc(row.moduleDescription || '') + '</div></td>'
-      + '<td><div class="nom-code">' + esc(row.practiceCode || '-') + '</div><div class="nom-desc">' + esc(row.practiceDescription || '') + '</div><div class="nom-muted">' + esc(row.effectiveDate || '') + (row.observations ? ' - ' + esc(row.observations) : '') + '</div></td>'
+      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div>' + (row.observations ? '<div class="nom-muted">' + esc(row.observations) + '</div>' : '') + '</td>'
       + '<td class="nom-type">' + esc(cleanNomType(row.type)) + '</td>'
       + '<td><span class="scope-badge scope-' + esc(scope) + '">' + esc(scopeLabel(scope)) + '</span></td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'

@@ -253,18 +253,20 @@
   .nom-table .table-head b,.nom-table .table-head span{display:block}
   .nom-table .table-head span{color:var(--text-2);font-size:11.5px;margin-top:1px}
   .nom-results-table{min-width:1040px;table-layout:fixed}
-  .nom-results-table .col-module{width:190px}
-  .nom-results-table .col-practice{width:360px}
-  .nom-results-table .col-type{width:190px}
+  .nom-results-table .col-module{width:175px}
+  .nom-results-table .col-practice{width:430px}
+  .nom-results-table .col-type{width:170px}
   .nom-results-table .col-scope{width:130px}
   .nom-results-table .col-total{width:150px}
   .nom-results-table .col-auth{width:130px}
-  .nom-results-table th{padding:9px 14px;font-size:10px;background:#f7f9fc}
-  .nom-results-table td{padding:10px 14px;font-size:12.5px;line-height:1.25}
+  .nom-results-table th{padding:8px 12px;font-size:9.5px;background:#f7f9fc}
+  .nom-results-table td{padding:7px 12px;font-size:12px;line-height:1.2}
   .nom-results-table tbody tr:hover{background:#fbfdff}
-  .nom-code{font-weight:750;color:var(--text);line-height:1.2}
-  .nom-desc{font-weight:650;max-width:100%;line-height:1.25}
-  .nom-type{color:var(--text);font-size:12px}
+  .nom-code{font-weight:750;color:var(--text);line-height:1.15}
+  .nom-practice-line{display:flex;align-items:baseline;gap:8px;max-width:100%}
+  .nom-practice-line .nom-code{flex:0 0 auto}
+  .nom-desc{font-weight:650;max-width:100%;line-height:1.2}
+  .nom-type{color:var(--text);font-size:11.5px}
   .nom-money b{font-size:12.5px}
   .nom-auth{color:var(--text-2)}
   .scope-badge{display:inline-flex;align-items:center;gap:6px;min-height:22px;border-radius:999px;padding:0 9px;font-size:11px;font-weight:750;white-space:nowrap}
