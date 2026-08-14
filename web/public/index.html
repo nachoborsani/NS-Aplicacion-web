@@ -159,7 +159,7 @@
             <div class="page-head" style="margin:0"><h1>Nomencladores</h1><p>Carga y busqueda interna de prestaciones PAMI.</p></div>
             <div class="nom-upload">
               <label class="month-field">
-                <span>Mes</span>
+                <span>Mes opcional</span>
                 <input class="inp" id="nomUploadPeriod" type="month">
               </label>
               <label class="btn btn-primary file-btn">
@@ -178,6 +178,10 @@
             <div class="field">
               <label>Nomenclador</label>
               <select class="inp" id="nomPeriod" onchange="loadNomencladorSummary(this.value)"><option value="">Sin cargar</option></select>
+            </div>
+            <div class="field nom-delete-field">
+              <label>Acciones</label>
+              <button class="btn btn-ghost btn-block" id="nomDeleteBtn" onclick="deleteNomenclador()" type="button">Eliminar</button>
             </div>
             <div class="field nom-search">
               <label>Prestacion, codigo o modulo</label>

@@ -132,9 +132,8 @@ function fillPeriodSelect(items, selected){
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');
-  if (!el || el.value) return;
-  var d = new Date();
-  el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  if (!el) return;
+  el.value = '';
 }
 async function loadNomencladorSummary(period){
   var st = document.getElementById('nomStatus');
@@ -168,14 +167,9 @@ async function uploadNomenclador(files){
   var st = document.getElementById('nomStatus');
   var input = document.getElementById('nomFile');
   var period = document.getElementById('nomUploadPeriod').value;
-  if (!period){
-    st.innerHTML = '<div><b>Falta el mes</b><span>Elegi a que mes corresponde el nomenclador antes de adjuntar el Excel.</span></div>';
-    if (input) input.value = '';
-    return;
-  }
-  st.innerHTML = '<div><b>Procesando Excel...</b><span>Esto puede tardar unos segundos.</span></div>';
+  st.innerHTML = '<div><b>Procesando Excel...</b><span>Esto puede tardar unos segundos. Si no elegiste mes, se detecta desde el archivo.</span></div>';
   var fd = new FormData();
-  fd.append('period', period);
+  if (period) fd.append('period', period);
   fd.append('file', files[0]);
   var r = await fetch('/api/nomencladores/upload', { method:'POST', body: fd });
   var data = {};
@@ -186,6 +180,22 @@ async function uploadNomenclador(files){
     return;
   }
   await loadNomencladorSummary(data.activePeriod || period);
+}
+async function deleteNomenclador(){
+  var period = document.getElementById('nomPeriod').value || NOM_ACTIVE_PERIOD;
+  if (!period || !NOM_READY) return;
+  var label = document.getElementById('nomPeriod').selectedOptions[0] ? document.getElementById('nomPeriod').selectedOptions[0].textContent : period;
+  if (!confirm('Eliminar nomenclador ' + label + '?')) return;
+  var st = document.getElementById('nomStatus');
+  st.innerHTML = '<div><b>Eliminando nomenclador...</b><span>' + esc(label) + '</span></div>';
+  var res = await req('DELETE', '/api/nomencladores?period=' + encodeURIComponent(period));
+  if (!res.ok){
+    st.innerHTML = '<div><b>No se pudo eliminar</b><span>' + esc(res.data.error || 'Revisa permisos o sesion.') + '</span></div>';
+    return;
+  }
+  NOM_READY = !!res.data.loaded;
+  NOM_ACTIVE_PERIOD = res.data.activePeriod || '';
+  await loadNomencladorSummary(NOM_ACTIVE_PERIOD);
 }
 function queueNomencladorSearch(){
   clearTimeout(NOM_TIMER);

@@ -264,6 +264,8 @@ function inferPeriodFromText(...values) {
   if (match) return normalizePeriod(`${match[2]}/${match[3]}`);
   match = text.match(/(20\d{2})[-_ ]?(\d{2})/);
   if (match) return normalizePeriod(`${match[1]}-${match[2]}`);
+  match = text.match(/(\d{2})[-_ ](20\d{2})/);
+  if (match) return normalizePeriod(`${match[1]}/${match[2]}`);
   const months = {
     enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
     julio: "07", agosto: "08", septiembre: "09", setiembre: "09", octubre: "10", noviembre: "11", diciembre: "12",
@@ -718,6 +720,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----
+  if (p === "/api/nomencladores" && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede eliminar nomencladores." });
+    const period = normalizePeriod(url.searchParams.get("period")) || String(url.searchParams.get("period") || "").trim();
+    if (!period) return json(res, 400, { error: "Elegi el nomenclador que queres eliminar." });
+    const store = loadNomencladorStore();
+    if (!store.items[period]) return json(res, 404, { error: "No existe ese nomenclador." });
+    delete store.items[period];
+    const remaining = Object.keys(store.items).sort().reverse();
+    store.activePeriod = remaining[0] || "";
+    saveNomencladorStore(store);
+    return json(res, 200, nomencladorSummary(store, getNomencladorByPeriod(store, store.activePeriod)));
+  }
+
   if (p === "/api/forgot" && req.method === "POST") {
     const { identifier } = await readBody(req);
     const id = String(identifier || "").trim().toLowerCase();
