@@ -74,7 +74,7 @@ async function renderUsers(){
             + '<button class="rowbtn danger" title="Eliminar" onclick="openDel(\'' + un + '\')">' + SVG_TRASH + '</button>';
     }
     return '<tr>'
-      + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + un + '</div></div></div></td>'
+      + '<td><div class="u"><div class="av" style="background:' + r.bg + '">' + esc(initials(u.name)) + '</div><div><div class="nm">' + esc(u.name) + '</div><div class="em">@' + un + (u.email ? ' · ' + esc(u.email) : '') + '</div></div></div></td>'
       + '<td><span class="role ' + r.chip + '">' + esc(r.label) + '</span></td>'
       + '<td>' + st + '</td>'
       + '<td><div class="row-actions">' + acts + '</div></td>'
@@ -98,6 +98,7 @@ function openUserModal(mode, un){
   document.getElementById('umName').value = u ? u.name : '';
   document.getElementById('umUser').value = u ? u.username : '';
   document.getElementById('umRole').value = u ? u.role : 'operador';
+  document.getElementById('umEmail').value = u ? (u.email || '') : '';
   document.getElementById('umPwd').value = '';
   document.getElementById('umActive').checked = u ? u.active : true;
   document.getElementById('umError').textContent = '';
@@ -114,14 +115,15 @@ async function saveUser(){
   var btn = document.getElementById('umSave'); btn.disabled = true;
   var name = document.getElementById('umName').value.trim();
   var role = document.getElementById('umRole').value;
+  var email = document.getElementById('umEmail').value.trim();
   var res;
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, password: password });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, active: active });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
@@ -191,7 +193,7 @@ function setUser(u){
 }
 function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); }
 function showChange(){ document.body.classList.remove('authed','booting'); document.body.classList.add('mustchange'); }
-function showLogin(){ document.body.classList.remove('authed','mustchange','booting'); }
+function showLogin(){ document.body.classList.remove('authed','mustchange','booting','resetting'); }
 
 async function api(path, body){
   var opt = { method: body ? 'POST' : 'GET', headers: { 'content-type':'application/json' } };
@@ -226,10 +228,44 @@ async function doLogin(){
   if (res.data.user.mustChange) showChange(); else showApp();
 }
 
+// ---------- olvidé mi contraseña ----------
 function openForgot(){
-  var err = document.getElementById('loginError'); err.textContent = '';
+  document.getElementById('fgId').value = document.getElementById('loginUser').value.trim();
+  document.getElementById('fgError').textContent = '';
+  document.getElementById('fgOk').textContent = '';
+  document.getElementById('fgSend').disabled = false;
+  showModal('forgotModal','fgScrim');
+  document.getElementById('fgId').focus();
+}
+function closeForgot(){ hideModal('forgotModal','fgScrim'); }
+async function sendForgot(){
+  var err = document.getElementById('fgError'); err.textContent = '';
+  var ok = document.getElementById('fgOk'); ok.textContent = '';
+  var id = document.getElementById('fgId').value.trim();
+  if (!id){ err.textContent = 'Escribí tu usuario o email.'; return; }
+  var btn = document.getElementById('fgSend'); btn.disabled = true;
+  await req('POST', '/api/forgot', { identifier: id });
+  ok.textContent = 'Si hay una cuenta con un email registrado, te enviamos el enlace. Revisá tu correo (y el spam).';
+}
+
+// ---------- restablecer desde el mail ----------
+var RESET_TOKEN = '';
+function showReset(){ document.body.classList.remove('authed','mustchange','booting'); document.body.classList.add('resetting'); }
+async function doReset(){
+  var err = document.getElementById('resetError'); err.textContent = '';
+  var a = document.getElementById('rp1').value, b = document.getElementById('rp2').value;
+  if (a !== b){ err.textContent = 'Las contraseñas no coinciden'; return; }
+  if (a.length < 6){ err.textContent = 'La clave debe tener al menos 6 caracteres'; return; }
+  var res = await req('POST', '/api/reset', { token: RESET_TOKEN, newPassword: a });
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudo restablecer la clave.'; return; }
+  document.getElementById('rp1').value = '';
+  document.getElementById('rp2').value = '';
+  // limpio el token de la URL y vuelvo al login con aviso
+  try { history.replaceState({}, '', location.pathname); } catch (e) {}
+  document.body.classList.remove('resetting');
+  showLogin();
   var info = document.getElementById('loginInfo');
-  if (info) info.textContent = 'Pedile a un administrador (Nacho o Seba) que te blanquee la clave desde el sistema.';
+  if (info) info.textContent = 'Listo, tu clave se actualizó. Ya podés ingresar.';
 }
 
 function openChange(){
@@ -258,8 +294,10 @@ async function doLogout(){
   showLogin();
 }
 
-// ---------- init: ¿hay sesión? ----------
+// ---------- init: ¿restablecer? ¿hay sesión? ----------
 (async function(){
+  var m = location.search.match(/[?&]reset=([^&]+)/);
+  if (m){ RESET_TOKEN = decodeURIComponent(m[1]); showReset(); return; }
   var res = await api('/api/me');
   if (res.ok){
     setUser(res.data.user);

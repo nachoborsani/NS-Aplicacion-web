@@ -74,6 +74,64 @@ function seedUsers() {
 }
 seedUsers();
 
+// ---------- Envio de mails (Gmail via nodemailer) ----------
+// Se configura con dos variables de entorno en Railway:
+//   GMAIL_USER          -> la casilla (ej. blanqueos@gaussbio.com o una @gmail.com de NS)
+//   GMAIL_APP_PASSWORD  -> "contraseña de aplicacion" de Google (16 letras, sin espacios)
+// Sin esas variables el sistema sigue funcionando, pero no manda el mail de blanqueo.
+let nodemailer = null;
+try { nodemailer = require("nodemailer"); } catch { console.log("[mail] nodemailer no instalado"); }
+let _transport = null;
+function mailConfigured() {
+  return !!(nodemailer && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
+}
+function getTransport() {
+  if (!mailConfigured()) return null;
+  if (!_transport) {
+    _transport = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+    });
+  }
+  return _transport;
+}
+async function sendResetEmail(to, name, link) {
+  const t = getTransport();
+  if (!t) { console.log("[mail] sin configurar; no envio blanqueo a", to); return false; }
+  const saludo = name ? `Hola ${name},` : "Hola,";
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;max-width:480px;margin:auto;color:#1D2939">
+      <div style="background:#0B1F3A;color:#fff;padding:20px;border-radius:12px 12px 0 0;text-align:center">
+        <div style="font-size:22px;font-weight:800;letter-spacing:1px">NS</div>
+        <div style="font-size:11px;letter-spacing:2px;color:#9fb3c8">GESTIÓN INTEGRAL EN SALUD</div>
+      </div>
+      <div style="border:1px solid #D9E1E8;border-top:0;border-radius:0 0 12px 12px;padding:24px">
+        <p>${saludo}</p>
+        <p>Recibimos un pedido para restablecer la contraseña de tu cuenta. Tocá el botón para elegir una clave nueva:</p>
+        <p style="text-align:center;margin:26px 0">
+          <a href="${link}" style="background:#18B7B2;color:#04302f;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:10px;display:inline-block">Elegir nueva contraseña</a>
+        </p>
+        <p style="font-size:12.5px;color:#667085">El enlace vence en 1 hora. Si no pediste esto, ignorá este mail: tu contraseña no cambia.</p>
+        <p style="font-size:11.5px;color:#98a2b3;word-break:break-all">Si el botón no funciona, copiá este enlace:<br>${link}</p>
+      </div>
+    </div>`;
+  const text = `${saludo}\n\nPara restablecer tu contraseña entrá a:\n${link}\n\nEl enlace vence en 1 hora. Si no lo pediste, ignorá este mail.`;
+  await t.sendMail({
+    from: `NS · Gestión Integral en Salud <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "Restablecer tu contraseña — NS",
+    text,
+    html,
+  });
+  console.log("[mail] blanqueo enviado a", to);
+  return true;
+}
+function validEmail(e) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+}
+
 // ---------- Sesion (cookie firmada HMAC) ----------
 function sign(value) {
   const sig = crypto.createHmac("sha256", SESSION_SECRET).update(value).digest("hex");
@@ -175,6 +233,7 @@ const server = http.createServer(async (req, res) => {
         username: u.username,
         name: u.name,
         role: u.role,
+        email: u.email || "",
         active: u.active !== false,
         mustChange: !!u.mustChange,
       })),
@@ -186,18 +245,20 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password } = await readBody(req);
+    const { username, name, role, password, email } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
     const pw = String(password || "");
+    const em = String(email || "").trim().toLowerCase();
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
     if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
+    if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
     const users = loadUsers() || [];
     if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
-    users.push({ username: uname, name: nm, role: rl, password: hashPassword(pw), mustChange: true, active: true });
+    users.push({ username: uname, name: nm, role: rl, email: em, password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
   }
@@ -244,6 +305,11 @@ const server = http.createServer(async (req, res) => {
         if (target === me.username && !act) return json(res, 400, { error: "No podés desactivar tu propio usuario." });
         users[idx].active = act;
       }
+      if (body.email !== undefined) {
+        const em = String(body.email).trim().toLowerCase();
+        if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
+        users[idx].email = em;
+      }
       saveUsers(users);
       return json(res, 200, { ok: true });
     }
@@ -287,6 +353,47 @@ const server = http.createServer(async (req, res) => {
 
   if (p === "/api/logout" && req.method === "POST") {
     clearSessionCookie(res);
+    return json(res, 200, { ok: true });
+  }
+
+  // ---- Olvide mi contraseña: pedir enlace ----
+  if (p === "/api/forgot" && req.method === "POST") {
+    const { identifier } = await readBody(req);
+    const id = String(identifier || "").trim().toLowerCase();
+    if (id) {
+      const users = loadUsers() || [];
+      const u = users.find((x) => x.active !== false && (x.username === id || String(x.email || "").toLowerCase() === id));
+      if (u && u.email) {
+        const token = crypto.randomBytes(24).toString("hex");
+        const idx = users.findIndex((x) => x.username === u.username);
+        users[idx].reset = { token, exp: Date.now() + 60 * 60 * 1000 }; // 1 hora
+        saveUsers(users);
+        const proto = String(req.headers["x-forwarded-proto"] || "https").split(",")[0];
+        const base = process.env.APP_URL || `${proto}://${req.headers.host}`;
+        const link = `${base}/?reset=${token}`;
+        try { await sendResetEmail(u.email, u.name, link); } catch (e) { console.log("[mail] error al enviar:", e && e.message); }
+      }
+    }
+    // Respuesta uniforme: no revelamos si el usuario o el mail existen.
+    return json(res, 200, { ok: true });
+  }
+
+  // ---- Restablecer con el token del mail ----
+  if (p === "/api/reset" && req.method === "POST") {
+    const { token, newPassword } = await readBody(req);
+    const tk = String(token || "");
+    const np = String(newPassword || "");
+    const users = loadUsers() || [];
+    const idx = users.findIndex((x) => x.reset && x.reset.token === tk);
+    if (idx < 0 || !users[idx].reset || users[idx].reset.exp < Date.now()) {
+      return json(res, 400, { error: "El enlace no es válido o ya venció. Pedí uno nuevo desde 'Olvidaste tu contraseña'." });
+    }
+    if (np.length < 6) return json(res, 400, { error: "La clave debe tener al menos 6 caracteres." });
+    if (np === "123456") return json(res, 400, { error: "Elegí una clave más segura." });
+    users[idx].password = hashPassword(np);
+    users[idx].mustChange = false;
+    delete users[idx].reset;
+    saveUsers(users);
     return json(res, 200, { ok: true });
   }
 

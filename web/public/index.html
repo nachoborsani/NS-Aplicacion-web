@@ -45,6 +45,37 @@
     </div>
   </div>
 
+  <!-- ================= RESTABLECER (desde el mail) ================= -->
+  <div class="reset">
+    <div class="login-wrap">
+      <img class="logo-login" src="/logo.png" alt="NS">
+      <div class="login-card">
+        <h1 class="ch-title">Elegí tu nueva contraseña</h1>
+        <p class="ch-sub">Restablecé el acceso a tu cuenta.</p>
+        <div class="field"><label>Nueva contraseña</label><div class="pwd-wrap"><input class="inp" id="rp1" type="password" autocomplete="new-password"><button type="button" class="pwd-eye" onclick="eyeToggle('rp1','rpIco1')" aria-label="Ver"><svg id="rpIco1" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></div>
+        <div class="field"><label>Repetir contraseña</label><input class="inp" id="rp2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')doReset()"></div>
+        <div class="msg err" id="resetError"></div>
+        <button class="btn btn-primary btn-block" onclick="doReset()">Guardar y entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: olvidé mi contraseña ===== -->
+  <div class="scrim" id="fgScrim" onclick="closeForgot()"></div>
+  <div class="modal" id="forgotModal" role="dialog" aria-modal="true">
+    <div class="modal-head"><h3>Recuperar contraseña</h3><button class="x" onclick="closeForgot()" aria-label="Cerrar">×</button></div>
+    <div class="modal-body">
+      <p class="modal-note">Escribí tu usuario o tu email. Si tenés un correo registrado, te mandamos un enlace para elegir una clave nueva.</p>
+      <div class="field"><label>Usuario o email</label><input class="inp" id="fgId" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')sendForgot()"></div>
+      <div class="msg err" id="fgError"></div>
+      <div class="msg ok" id="fgOk"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeForgot()">Cancelar</button>
+      <button class="btn btn-primary" id="fgSend" onclick="sendForgot()">Enviar enlace</button>
+    </div>
+  </div>
+
   <!-- ================= APP ================= -->
   <div class="app">
     <!-- Sidebar -->
@@ -147,6 +178,11 @@
             <option value="clinica">Clínica</option>
             <option value="admin">Administrador</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Email <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label>
+          <input class="inp" id="umEmail" type="email" spellcheck="false" autocomplete="off">
+          <div class="hint">Sirve para que pueda recuperar la clave por su cuenta.</div>
         </div>
         <div class="field" id="umPwdField">
           <label>Contraseña inicial</label>

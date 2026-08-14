@@ -63,9 +63,12 @@
   .msg.ok{color:var(--success)}
   .chk.sm{font-size:12.5px;gap:7px;color:var(--text-2);margin-top:0}
   .chk.sm input{width:15px;height:15px}
-  body.booting .login, body.booting .app, body.booting .change{display:none !important}
-  body.mustchange .login, body.mustchange .app{display:none !important}
+  .reset{position:fixed;inset:0;display:none;place-items:center;padding:24px;background:radial-gradient(1200px 600px at 70% -10%, #14335a 0%, var(--navy) 55%);z-index:55}
+  body.booting .login, body.booting .app, body.booting .change, body.booting .reset{display:none !important}
+  body.mustchange .login, body.mustchange .app, body.mustchange .reset{display:none !important}
   body.mustchange .change{display:grid}
+  body.resetting .login, body.resetting .app, body.resetting .change{display:none !important}
+  body.resetting .reset{display:grid}
   .field{margin-bottom:14px}
   .field label{display:block;font-size:11.5px;font-weight:600;color:var(--text-2);margin-bottom:6px;letter-spacing:.02em}
   .inp{width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:14px;outline:none}
