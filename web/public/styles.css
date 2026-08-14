@@ -336,6 +336,11 @@
   .report-upload-card{display:grid;gap:10px}
   .report-head-actions{display:flex;gap:8px;align-items:center}
   .report-search{width:300px;height:36px;border-radius:9px;font-size:13px}
+  .report-filter-bar{display:grid;grid-template-columns:minmax(220px,300px) minmax(220px,300px) 132px 132px;gap:8px;align-items:end}
+  .report-filter-bar .report-search{width:100%}
+  .report-filter-bar .inp{height:36px;border-radius:9px;font-size:13px}
+  .date-filter{display:grid;gap:3px;margin:0}
+  .date-filter span{font-size:10.5px;font-weight:750;color:var(--text-2)}
   .report-list-card{overflow:hidden}
   .saved-report-table{min-width:760px;table-layout:fixed}
   .saved-report-table th{padding:8px 10px;font-size:9.5px;background:#f7f9fc}
@@ -407,5 +412,5 @@
   .module-edit-option input{width:15px;height:15px;margin:0;accent-color:var(--turq);flex:0 0 auto}
   .module-edit-option b{font-weight:800}
 
-  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid,.report-summary-grid,.client-report-controls{grid-template-columns:1fr}.client-nom-head,.nom-table .table-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr}.report-search{width:100%} }
-  @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column}.module-edit-list{grid-template-columns:1fr} }
+  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid,.report-summary-grid,.client-report-controls{grid-template-columns:1fr}.client-nom-head,.nom-table .table-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr}.report-search{width:100%}.report-filter-bar{grid-template-columns:1fr 1fr} }
+  @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column}.module-edit-list{grid-template-columns:1fr}.report-filter-bar{grid-template-columns:1fr} }

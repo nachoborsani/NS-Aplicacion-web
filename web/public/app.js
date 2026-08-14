@@ -115,6 +115,9 @@ var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'basica';
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
+var CLIENT_REPORT_PRACTICE_QUERY = '';
+var CLIENT_REPORT_TRANS_FROM = '';
+var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_SAVED_REPORTS = [];
@@ -443,16 +446,30 @@ function normalizeReportSearch(value){
 }
 function getClientReportVisibleRows(){
   var q = normalizeReportSearch(CLIENT_REPORT_QUERY);
+  var practiceQ = normalizeReportSearch(CLIENT_REPORT_PRACTICE_QUERY);
+  var transFrom = CLIENT_REPORT_TRANS_FROM || '';
+  var transTo = CLIENT_REPORT_TRANS_TO || '';
   return (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
-    if (!q) return true;
-    var haystack = normalizeReportSearch([
-      item.row.patientName,
-      item.row.benefit,
-      item.row.order,
-      item.row.practiceCode,
-      item.row.practiceDescription
-    ].join(' '));
-    return haystack.indexOf(q) >= 0;
+    if (q) {
+      var haystack = normalizeReportSearch([
+        item.row.patientName,
+        item.row.benefit,
+        item.row.order
+      ].join(' '));
+      if (haystack.indexOf(q) < 0) return false;
+    }
+    if (practiceQ) {
+      var practiceHaystack = normalizeReportSearch([
+        item.row.practiceCode,
+        item.row.practiceDescription,
+        item.row.practiceText
+      ].join(' '));
+      if (practiceHaystack.indexOf(practiceQ) < 0) return false;
+    }
+    var transDate = String(item.row.transmittedAt || '').slice(0, 10);
+    if (transFrom && (!transDate || transDate < transFrom)) return false;
+    if (transTo && (!transDate || transDate > transTo)) return false;
+    return true;
   });
 }
 function updateClientReportSummary(){
@@ -524,6 +541,31 @@ function setClientReportSearch(value){
   CLIENT_REPORT_QUERY = value || '';
   renderClientReportRows();
 }
+function setClientReportPracticeFilter(value){
+  CLIENT_REPORT_PRACTICE_QUERY = value || '';
+  renderClientReportRows();
+}
+function setClientReportTransmissionFilter(){
+  var from = document.getElementById('clientReportTransFrom');
+  var to = document.getElementById('clientReportTransTo');
+  CLIENT_REPORT_TRANS_FROM = from ? from.value : '';
+  CLIENT_REPORT_TRANS_TO = to ? to.value : '';
+  renderClientReportRows();
+}
+function resetClientReportFilters(){
+  CLIENT_REPORT_QUERY = '';
+  CLIENT_REPORT_PRACTICE_QUERY = '';
+  CLIENT_REPORT_TRANS_FROM = '';
+  CLIENT_REPORT_TRANS_TO = '';
+  var search = document.getElementById('clientReportSearch');
+  if (search) search.value = '';
+  var practice = document.getElementById('clientReportPracticeFilter');
+  if (practice) practice.value = '';
+  var from = document.getElementById('clientReportTransFrom');
+  if (from) from.value = '';
+  var to = document.getElementById('clientReportTransTo');
+  if (to) to.value = '';
+}
 function editReportValue(index){
   if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
@@ -542,11 +584,9 @@ function editReportValue(index){
 }
 function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
-  CLIENT_REPORT_QUERY = '';
   CLIENT_REPORT_MODE = '';
   CLIENT_REPORT_SOURCE = null;
-  var search = document.getElementById('clientReportSearch');
-  if (search) search.value = '';
+  resetClientReportFilters();
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = '';
   var st = document.getElementById('clientReportStatus');
@@ -614,15 +654,13 @@ async function openClientReport(id){
   }
   var report = res.data.report || {};
   CLIENT_REPORT_ROWS = report.rows || [];
-  CLIENT_REPORT_QUERY = '';
   CLIENT_REPORT_MODE = 'closed';
   CLIENT_REPORT_SOURCE = {
     filename: report.sourceFilename || '',
     nomencladorPeriod: report.nomencladorPeriod || '',
     nomencladorLabel: report.nomencladorLabel || ''
   };
-  var search = document.getElementById('clientReportSearch');
-  if (search) search.value = '';
+  resetClientReportFilters();
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = report.title || '';
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
@@ -644,15 +682,13 @@ async function uploadClientReport(files){
     return;
   }
   CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){ row.manualDebit = false; row.debitType = 'total'; row.debitAmount = ''; return row; });
-  CLIENT_REPORT_QUERY = '';
   CLIENT_REPORT_MODE = 'draft';
   CLIENT_REPORT_SOURCE = {
     filename: data.filename || '',
     nomencladorPeriod: data.nomencladorPeriod || '',
     nomencladorLabel: data.nomencladorLabel || ''
   };
-  var search = document.getElementById('clientReportSearch');
-  if (search) search.value = '';
+  resetClientReportFilters();
   var title = document.getElementById('clientReportTitle');
   if (title && wasClosed) title.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;

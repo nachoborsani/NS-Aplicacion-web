@@ -278,7 +278,12 @@
                 <div class="tablecard nom-table">
                   <div class="table-head">
                     <div><b>Practicas</b><span id="clientReportMeta">Todavia no hay bandeja cargada.</span></div>
-                    <input class="inp report-search" id="clientReportSearch" placeholder="Buscar paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
+                    <div class="report-filter-bar">
+                      <input class="inp report-search" id="clientReportSearch" placeholder="Paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
+                      <input class="inp report-search" id="clientReportPracticeFilter" placeholder="Codigo o practica..." oninput="setClientReportPracticeFilter(this.value)">
+                      <label class="date-filter"><span>Transm. desde</span><input class="inp" type="date" id="clientReportTransFrom" onchange="setClientReportTransmissionFilter()"></label>
+                      <label class="date-filter"><span>Transm. hasta</span><input class="inp" type="date" id="clientReportTransTo" onchange="setClientReportTransmissionFilter()"></label>
+                    </div>
                   </div>
                   <div class="table-scroll">
                     <table class="report-results-table">
