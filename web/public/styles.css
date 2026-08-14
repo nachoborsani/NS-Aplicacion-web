@@ -232,7 +232,10 @@
   .nom-cols{font-size:12px;color:var(--text-2);white-space:nowrap}
   .nom-filters{display:grid;grid-template-columns:minmax(170px,1fr) minmax(120px,.7fr) minmax(220px,1.5fr) minmax(160px,1fr) minmax(140px,.8fr) minmax(170px,1fr);gap:12px;margin-bottom:14px}
   .nom-filters .field{margin:0}
-  .nom-delete-field .btn{height:42px}
+  .nom-delete-field{max-width:72px}
+  .icon-danger-btn{width:42px;height:42px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text-2);display:grid;place-items:center}
+  .icon-danger-btn:hover{border-color:var(--error);color:var(--error);background:var(--error-bg)}
+  .icon-danger-btn svg{width:17px;height:17px}
   .multi-select{position:relative}
   .multi-trigger{display:flex;align-items:center;justify-content:space-between;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .multi-trigger::after{content:"";width:9px;height:9px;border-right:2px solid var(--text-2);border-bottom:2px solid var(--text-2);transform:rotate(45deg) translateY(-2px);margin-left:10px;flex:0 0 auto}
