@@ -60,6 +60,9 @@
   .msg{font-size:12.5px;margin:0 0 10px;line-height:1.4}
   .msg:empty{display:none}
   .msg.err{color:var(--error)}
+  .msg.ok{color:var(--success)}
+  .chk.sm{font-size:12.5px;gap:7px;color:var(--text-2);margin-top:0}
+  .chk.sm input{width:15px;height:15px}
   body.booting .login, body.booting .app, body.booting .change{display:none !important}
   body.mustchange .login, body.mustchange .app{display:none !important}
   body.mustchange .change{display:grid}

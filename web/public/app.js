@@ -212,16 +212,24 @@ async function req(method, path, body){
 
 async function doLogin(){
   var err = document.getElementById('loginError'); err.textContent = '';
+  var info = document.getElementById('loginInfo'); if (info) info.textContent = '';
   var btn = document.getElementById('loginBtn'); btn.disabled = true;
   var username = document.getElementById('loginUser').value.trim();
   var password = document.getElementById('pwd').value;
+  var remember = document.getElementById('remember').checked;
   if (!username || !password){ btn.disabled = false; err.textContent = 'Completá usuario y contraseña'; return; }
-  var res = await api('/api/login', { username: username, password: password });
+  var res = await api('/api/login', { username: username, password: password, remember: remember });
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo ingresar'; return; }
   document.getElementById('pwd').value = '';
   setUser(res.data.user);
   if (res.data.user.mustChange) showChange(); else showApp();
+}
+
+function openForgot(){
+  var err = document.getElementById('loginError'); err.textContent = '';
+  var info = document.getElementById('loginInfo');
+  if (info) info.textContent = 'Pedile a un administrador (Nacho o Seba) que te blanquee la clave desde el sistema.';
 }
 
 function openChange(){

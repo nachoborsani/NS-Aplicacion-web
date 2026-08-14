@@ -18,7 +18,12 @@
       <div class="login-card">
       <div class="field"><label>Usuario</label><input class="inp" id="loginUser" spellcheck="false" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <div class="field"><label>Contraseña</label><div class="pwd-wrap"><input class="inp" id="pwd" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"><button type="button" class="pwd-eye" onclick="togglePwd()" aria-label="Mostrar u ocultar clave"><svg id="pwdEyeIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></div>
+      <div class="row">
+        <label class="chk sm"><input type="checkbox" id="remember" checked> Recordarme</label>
+        <a onclick="openForgot()">¿Olvidaste tu contraseña?</a>
+      </div>
       <div class="msg err" id="loginError"></div>
+      <div class="msg ok" id="loginInfo"></div>
       <button class="btn btn-primary btn-block" id="loginBtn" onclick="doLogin()">Ingresar</button>
       <div class="foot">NS · Gestión Integral en Salud — v0.1</div>
       </div>

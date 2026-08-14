@@ -10,9 +10,18 @@ const publicDir = path.join(__dirname, "public");
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
 
-// Secreto para firmar la cookie de sesion. En produccion conviene setear
-// SESSION_SECRET (env) para que las sesiones sobrevivan a los redeploys.
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+// Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
+// en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
+// a los redeploys en vez de invalidarse en cada uno.
+function getSessionSecret() {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const f = path.join(dataDir, "session_secret");
+  try { return fs.readFileSync(f, "utf8").trim(); } catch {}
+  const s = crypto.randomBytes(32).toString("hex");
+  try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(f, s); } catch {}
+  return s;
+}
+const SESSION_SECRET = getSessionSecret();
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -91,9 +100,13 @@ function getSessionUser(req) {
   const users = loadUsers() || [];
   return users.find((u) => u.username === username && u.active) || null;
 }
-function setSessionCookie(res, username) {
+function setSessionCookie(res, username, remember) {
   const val = encodeURIComponent(sign(username));
-  res.setHeader("Set-Cookie", `ns_session=${val}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`);
+  let cookie = `ns_session=${val}; HttpOnly; Path=/; SameSite=Lax`;
+  // Con "Recordarme": cookie persistente 30 dias. Sin el tilde: cookie de
+  // sesion (se borra al cerrar el navegador).
+  if (remember) cookie += `; Max-Age=${60 * 60 * 24 * 30}`;
+  res.setHeader("Set-Cookie", cookie);
 }
 function clearSessionCookie(res) {
   res.setHeader("Set-Cookie", "ns_session=; HttpOnly; Path=/; Max-Age=0");
@@ -245,14 +258,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (p === "/api/login" && req.method === "POST") {
-    const { username, password } = await readBody(req);
+    const { username, password, remember } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const users = loadUsers() || [];
     const u = users.find((x) => x.username === uname && x.active);
     if (!u || !verifyPassword(password, u.password)) {
       return json(res, 401, { error: "Usuario o contraseña incorrectos" });
     }
-    setSessionCookie(res, u.username);
+    setSessionCookie(res, u.username, !!remember);
     return json(res, 200, { user: publicUser(u) });
   }
 
