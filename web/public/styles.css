@@ -305,6 +305,12 @@
   .crumb{font-size:11.5px;color:var(--text-2);margin-bottom:3px}
   .client-top h2{margin:0;font-size:19px;line-height:1.2}
   .client-status{background:var(--success-bg);color:var(--success);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:750;white-space:nowrap}
+  .client-status.muted{background:var(--hover);color:var(--text-2)}
+  .client-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border)}
+  .client-tabs button{border:0;background:transparent;color:var(--text-2);font-size:13px;font-weight:700;padding:9px 12px;border-radius:9px 9px 0 0}
+  .client-tabs button:hover{background:var(--hover);color:var(--text)}
+  .client-tabs button.active{color:var(--turq);box-shadow:inset 0 -2px 0 var(--turq)}
+  .client-section{display:block}
   .client-grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.35fr);gap:14px}
   .client-card{padding:15px 16px}
   .client-card h3,.client-nom-head h3{margin:0 0 10px;font-size:14.5px}
@@ -322,6 +328,11 @@
   .client-nom-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:15px 16px;border-bottom:1px solid var(--border)}
   .client-nom-head p{margin:0;color:var(--text-2);font-size:12px}
   .client-nom-controls{display:grid;grid-template-columns:170px minmax(220px,320px);gap:10px}
+  .report-model-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .report-model-grid div{border:1px solid var(--border);border-radius:10px;padding:11px;background:var(--surface-2)}
+  .report-model-grid b,.report-model-grid span{display:block}
+  .report-model-grid b{font-size:12px}
+  .report-model-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
 
   /* checkbox simple */
   .chk{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text);cursor:pointer;user-select:none;margin-top:2px}
@@ -351,5 +362,5 @@
   .module-edit-option input{width:15px;height:15px;margin:0;accent-color:var(--turq);flex:0 0 auto}
   .module-edit-option b{font-weight:800}
 
-  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid{grid-template-columns:1fr}.client-nom-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr} }
+  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid{grid-template-columns:1fr}.client-nom-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr} }
   @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column}.module-edit-list{grid-template-columns:1fr} }

@@ -112,6 +112,7 @@ var NOM_SELECTED_MODULES = [];
 var CLIENTS = [];
 var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
+var CLIENT_SECTION = 'basica';
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -264,14 +265,29 @@ function renderClientList(){
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
+  CLIENT_SECTION = 'basica';
   renderClientList();
   renderActiveClient();
+}
+function setClientSection(section){
+  CLIENT_SECTION = section === 'reportes' ? 'reportes' : 'basica';
+  var basica = document.getElementById('client-section-basica');
+  var reportes = document.getElementById('client-section-reportes');
+  var tabBasica = document.getElementById('clientTabBasica');
+  var tabReportes = document.getElementById('clientTabReportes');
+  if (basica) basica.style.display = CLIENT_SECTION === 'basica' ? 'block' : 'none';
+  if (reportes) reportes.style.display = CLIENT_SECTION === 'reportes' ? 'block' : 'none';
+  if (tabBasica) tabBasica.classList.toggle('active', CLIENT_SECTION === 'basica');
+  if (tabReportes) tabReportes.classList.toggle('active', CLIENT_SECTION === 'reportes');
+  var crumb = document.getElementById('clientCrumbSection');
+  if (crumb) crumb.textContent = CLIENT_SECTION === 'reportes' ? 'Reportes' : 'Informacion basica';
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
   if (!client) return;
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
+  setClientSection(CLIENT_SECTION);
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){

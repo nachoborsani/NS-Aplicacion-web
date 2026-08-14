@@ -168,12 +168,18 @@
           <section class="client-detail">
               <div class="client-top">
                 <div>
-                  <div class="crumb">Clientes / <span id="clientCrumbName">Sala Millon</span> / Informacion basica</div>
+                  <div class="crumb">Clientes / <span id="clientCrumbName">Sala Millon</span> / <span id="clientCrumbSection">Informacion basica</span></div>
                   <h2 id="clientName">Sala Millon</h2>
                 </div>
                 <span class="client-status">Activo</span>
               </div>
 
+              <div class="client-tabs">
+                <button class="active" id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
+                <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Reportes</button>
+              </div>
+
+              <section id="client-section-basica" class="client-section">
               <div class="client-grid">
                 <article class="client-card">
                   <h3>Informacion basica</h3>
@@ -226,6 +232,21 @@
                   </div>
                 </div>
               </div>
+              </section>
+
+              <section id="client-section-reportes" class="client-section" style="display:none">
+                <div class="client-card">
+                  <div class="client-card-head">
+                    <h3>Valorizacion de practicas transmitidas</h3>
+                    <span class="client-status muted">Borrador</span>
+                  </div>
+                  <div class="report-model-grid">
+                    <div><b>Base detectada</b><span>Reporte de practicas transmitidas</span></div>
+                    <div><b>Cruce</b><span>Codigo de practica + nomenclador</span></div>
+                    <div><b>Ajustes</b><span>Debitos y modificaciones</span></div>
+                  </div>
+                </div>
+              </section>
           </section>
         </section>
 
