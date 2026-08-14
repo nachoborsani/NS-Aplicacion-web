@@ -125,6 +125,32 @@ var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_REPORT_FILE = null;
 var CLIENT_SAVED_REPORTS = [];
+function clientReportDraftKey(){
+  return ACTIVE_CLIENT && ACTIVE_CLIENT.slug ? 'ns-client-report-draft:' + ACTIVE_CLIENT.slug : '';
+}
+function getClientReportTitleValue(){
+  var title = document.getElementById('clientReportTitle');
+  return title ? title.value : '';
+}
+function saveClientReportDraft(){
+  if (!ACTIVE_CLIENT || CLIENT_REPORT_MODE !== 'draft' || !CLIENT_REPORT_ROWS.length) return;
+  var key = clientReportDraftKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      savedAt:new Date().toISOString(),
+      title:getClientReportTitleValue(),
+      expectedAmount:CLIENT_REPORT_EXPECTED_AMOUNT,
+      source:CLIENT_REPORT_SOURCE,
+      rows:CLIENT_REPORT_ROWS
+    }));
+  } catch (e) {}
+}
+function removeClientReportDraft(){
+  var key = clientReportDraftKey();
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch (e) {}
+}
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -333,6 +359,7 @@ async function renderActiveClient(){
     fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
   await loadClientReports();
+  restoreClientReportDraft();
   await loadClientNomenclador();
 }
 function queueClientNomencladorSearch(){
@@ -533,6 +560,8 @@ function updateClientReportSummary(){
   document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
   if (clearBtn) clearBtn.disabled = !totalRows;
+  var discardBtn = document.getElementById('clientReportDiscardBtn');
+  if (discardBtn) discardBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
   var saveBtn = document.getElementById('clientReportSaveBtn');
   if (saveBtn) saveBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
   var sortIcon = document.getElementById('clientReportPracticeSortIcon');
@@ -622,6 +651,7 @@ function setClientReportTransmissionFilter(){
 function setClientReportExpectedAmount(value){
   CLIENT_REPORT_EXPECTED_AMOUNT = value || '';
   updateClientReportSummary();
+  saveClientReportDraft();
 }
 function resetClientReportFilters(){
   CLIENT_REPORT_QUERY = '';
@@ -659,6 +689,32 @@ function editReportValue(index){
   if (next > 0) row.matchFound = true;
   row.debitAmount = 0;
   renderClientReportRows();
+  saveClientReportDraft();
+}
+function restoreClientReportDraft(){
+  if (!ACTIVE_CLIENT || CLIENT_REPORT_MODE === 'draft') return;
+  var key = clientReportDraftKey();
+  if (!key) return;
+  var raw = '';
+  try { raw = localStorage.getItem(key) || ''; } catch (e) {}
+  if (!raw) return;
+  var draft = null;
+  try { draft = JSON.parse(raw); } catch (e) { return; }
+  if (!draft || !Array.isArray(draft.rows) || !draft.rows.length) return;
+  CLIENT_REPORT_ROWS = draft.rows;
+  CLIENT_REPORT_MODE = 'draft';
+  CLIENT_REPORT_SOURCE = draft.source || null;
+  CLIENT_REPORT_FILE = null;
+  renderClientReportModuleFilter();
+  resetClientReportFilters();
+  setClientReportExpectedInput(draft.expectedAmount || '');
+  var title = document.getElementById('clientReportTitle');
+  if (title) title.value = draft.title || '';
+  var periodSelect = document.getElementById('clientReportPeriod');
+  if (periodSelect && CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod) periodSelect.value = CLIENT_REPORT_SOURCE.nomencladorPeriod;
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Borrador restaurado. Para cambiar el nomenclador, volve a adjuntar la bandeja.';
+  renderClientReportRows();
 }
 function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
@@ -673,6 +729,12 @@ function clearClientReport(){
   if (st) st.textContent = 'Visualizacion cerrada.';
   renderClientReportRows();
 }
+function discardClientReportDraft(){
+  removeClientReportDraft();
+  clearClientReport();
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Borrador descartado.';
+}
 function toggleReportDebit(index, checked){
   if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
@@ -680,6 +742,7 @@ function toggleReportDebit(index, checked){
   row.manualDebit = checked;
   if (checked && !row.debitType) row.debitType = 'total';
   renderClientReportRows();
+  saveClientReportDraft();
 }
 function setReportDebitType(index, value){
   if (CLIENT_REPORT_MODE === 'closed') return;
@@ -689,6 +752,7 @@ function setReportDebitType(index, value){
   row.debitType = value === 'pay40' || value === 'pay60' ? value : 'total';
   row.debitAmount = 0;
   renderClientReportRows();
+  saveClientReportDraft();
 }
 async function saveClientReport(){
   if (!ACTIVE_CLIENT || !CLIENT_REPORT_ROWS.length || CLIENT_REPORT_MODE !== 'draft') return;
@@ -710,6 +774,7 @@ async function saveClientReport(){
     updateClientReportSummary();
     return;
   }
+  removeClientReportDraft();
   clearClientReport();
   if (st) st.textContent = 'Reporte guardado y cerrado.';
   await loadClientReports();
@@ -747,9 +812,8 @@ async function changeClientReportPeriod(){
   }
   if (!CLIENT_REPORT_ROWS.length) return;
   if (!CLIENT_REPORT_FILE) {
-    clearClientReport();
     var emptyStatus = document.getElementById('clientReportStatus');
-    if (emptyStatus) emptyStatus.textContent = 'Volvé a adjuntar la bandeja para cruzarla con este nomenclador.';
+    if (emptyStatus) emptyStatus.textContent = 'Volve a adjuntar la bandeja para recalcular con otro nomenclador. El borrador no se perdio.';
     return;
   }
   await uploadClientReport([CLIENT_REPORT_FILE], { keepFile:true });
@@ -802,6 +866,7 @@ async function uploadClientReport(files){
   if (title && wasClosed) title.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
   renderClientReportRows();
+  saveClientReportDraft();
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');
