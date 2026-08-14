@@ -13,6 +13,7 @@ const usersFile = path.join(dataDir, "users.json");
 const clientesFile = path.join(dataDir, "clientes.json");
 const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
+const clientReportsFile = path.join(dataDir, "client_reports.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -184,7 +185,7 @@ function readBody(req) {
     let d = "";
     req.on("data", (c) => {
       d += c;
-      if (d.length > 1e6) req.destroy();
+      if (d.length > 10e6) req.destroy();
     });
     req.on("end", () => {
       try { resolve(JSON.parse(d || "{}")); } catch { resolve({}); }
@@ -258,6 +259,21 @@ function saveClientsStore(clients) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientesFile, JSON.stringify(clients.map((client) => normalizeClient(client)), null, 2));
 }
+function createClientReportsStore() {
+  return { items: [] };
+}
+function loadClientReportsStore() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientReportsFile, "utf8"));
+    if (parsed && Array.isArray(parsed.items)) return parsed;
+    if (Array.isArray(parsed)) return { items: parsed };
+  } catch {}
+  return createClientReportsStore();
+}
+function saveClientReportsStore(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientReportsFile, JSON.stringify({ items: store.items || [] }, null, 2));
+}
 function validUsername(u) {
   return /^[a-z0-9._-]{3,20}$/.test(u);
 }
@@ -278,6 +294,10 @@ function toNumber(value) {
 }
 function money(value) {
   return Math.round(toNumber(value) * 100) / 100;
+}
+function clampMoney(value, min, max) {
+  const n = money(value);
+  return Math.max(min, Math.min(max, n));
 }
 function formatExcelDate(value) {
   if (!value) return "";
@@ -696,6 +716,92 @@ function parseTransmisionWorkbook(buffer, filename, payload, client) {
     rows,
   };
 }
+function reportRowGross(row) {
+  return row && row.billable ? money(row.valueGross) : 0;
+}
+function reportRowDebit(row) {
+  const gross = reportRowGross(row);
+  if (!row || !row.manualDebit || gross <= 0) return 0;
+  if (row.debitType === "partial") return clampMoney(row.debitAmount, 0, gross);
+  return gross;
+}
+function reportRowNet(row) {
+  return Math.max(0, money(reportRowGross(row) - reportRowDebit(row)));
+}
+function sanitizeReportRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row, index) => {
+    const valueGross = money(row.valueGross);
+    const manualDebit = !!row.manualDebit;
+    const debitType = row.debitType === "partial" ? "partial" : "total";
+    const sanitized = {
+      id: String(row.id || `${cleanIdentifier(row.order) || index + 1}-${index}`),
+      order: cleanIdentifier(row.order),
+      benefit: cleanIdentifier(row.benefit),
+      patientName: String(row.patientName || "").trim(),
+      practiceText: String(row.practiceText || "").trim(),
+      practiceCode: cleanIdentifier(row.practiceCode),
+      practiceDescription: String(row.practiceDescription || "").trim(),
+      appointmentAt: String(row.appointmentAt || ""),
+      appointmentLabel: String(row.appointmentLabel || ""),
+      transmitted: !!row.transmitted,
+      transmittedAt: String(row.transmittedAt || ""),
+      transmittedLabel: String(row.transmittedLabel || ""),
+      validated: !!row.validated,
+      validatedAt: String(row.validatedAt || ""),
+      validatedLabel: String(row.validatedLabel || ""),
+      period: String(row.period || ""),
+      cutoffLabel: String(row.cutoffLabel || ""),
+      outsideCutoff: !!row.outsideCutoff,
+      facturable: !!row.facturable,
+      billable: !!row.billable,
+      absent: !!row.absent,
+      status: String(row.status || ""),
+      valueGross,
+      manualDebit,
+      debitType,
+      debitAmount: debitType === "partial" ? clampMoney(row.debitAmount, 0, Math.max(0, valueGross)) : 0,
+      valueEdited: !!row.valueEdited,
+      moduleCode: cleanIdentifier(row.moduleCode),
+      moduleDescription: String(row.moduleDescription || "").trim(),
+      valueSourceCode: cleanIdentifier(row.valueSourceCode),
+      matchFound: !!row.matchFound,
+    };
+    sanitized.valueBillable = reportRowGross(sanitized);
+    sanitized.debitTotal = reportRowDebit(sanitized);
+    sanitized.netTotal = reportRowNet(sanitized);
+    return sanitized;
+  }).filter((row) => row.order || row.practiceText || row.patientName);
+}
+function summarizeReportRows(rows) {
+  return (rows || []).reduce((acc, row) => {
+    acc.totalRows += 1;
+    if (row.validated) acc.validated += 1;
+    if (row.transmitted) acc.transmitted += 1;
+    if (row.facturable) acc.facturable += 1;
+    if (row.billable) acc.billable += 1;
+    if (row.absent) acc.absent += 1;
+    if (row.outsideCutoff) acc.outsideCutoff += 1;
+    if (!row.matchFound && !row.valueEdited) acc.unmatched += 1;
+    acc.gross += reportRowGross(row);
+    acc.debit += reportRowDebit(row);
+    acc.net += reportRowNet(row);
+    return acc;
+  }, { totalRows: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0 });
+}
+function reportListItem(report) {
+  return {
+    id: report.id,
+    clientSlug: report.clientSlug,
+    title: report.title,
+    sourceFilename: report.sourceFilename,
+    nomencladorPeriod: report.nomencladorPeriod,
+    nomencladorLabel: report.nomencladorLabel,
+    rowCount: report.rowCount,
+    closedAt: report.closedAt,
+    closedBy: report.closedBy,
+    summary: report.summary,
+  };
+}
 function readBuffer(req, limit = 25 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -920,6 +1026,64 @@ const server = http.createServer(async (req, res) => {
     clients[idx].activeModules = modules;
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
+  }
+
+  const clientReportsMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes$/);
+  if (clientReportsMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportsMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadClientReportsStore();
+    const reports = (store.items || [])
+      .filter((report) => report.clientSlug === slug)
+      .sort((a, b) => String(b.closedAt || "").localeCompare(String(a.closedAt || "")))
+      .map(reportListItem);
+    return json(res, 200, { reports });
+  }
+
+  if (clientReportsMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportsMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const body = await readBody(req);
+    const rows = sanitizeReportRows(body.rows);
+    if (!rows.length) return json(res, 400, { error: "No hay practicas para guardar." });
+    const summary = summarizeReportRows(rows);
+    const closedAt = new Date().toISOString();
+    const period = String(body.nomencladorPeriod || "").trim();
+    const report = {
+      id: crypto.randomUUID(),
+      clientSlug: slug,
+      clientName: client.name,
+      title: String(body.title || "").trim() || `${client.name} - ${periodLabel(rows[0].period || period)} - ${rows.length} practicas`,
+      sourceFilename: path.basename(String(body.sourceFilename || "bandeja_transmision.xls")),
+      nomencladorPeriod: period,
+      nomencladorLabel: String(body.nomencladorLabel || periodLabel(period)),
+      rowCount: rows.length,
+      closedAt,
+      closedBy: me.username,
+      summary,
+      rows,
+    };
+    const store = loadClientReportsStore();
+    store.items = [report, ...(store.items || [])];
+    saveClientReportsStore(store);
+    return json(res, 200, { report: reportListItem(report) });
+  }
+
+  const clientReportDetailMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)$/);
+  if (clientReportDetailMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportDetailMatch[1]);
+    const id = decodeURIComponent(clientReportDetailMatch[2]);
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    return json(res, 200, { report });
   }
 
   const clientReportPreviewMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/preview$/);

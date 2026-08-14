@@ -239,6 +239,7 @@
                   <div class="client-card-head">
                     <h3>Valorizacion de practicas transmitidas</h3>
                     <div class="report-head-actions">
+                      <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
                       <button class="icon-danger-btn mini" id="clientReportClearBtn" onclick="clearClientReport()" type="button" title="Eliminar bandeja cargada" aria-label="Eliminar bandeja cargada" disabled>
                         <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                       </button>
@@ -251,6 +252,18 @@
                   <div class="client-report-controls">
                     <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod"><option value="">Ultimo disponible</option></select></label>
                     <div id="clientReportStatus" class="nom-muted">Subi la bandeja de transmision para previsualizar la factura.</div>
+                  </div>
+                </div>
+
+                <div class="tablecard nom-table report-list-card">
+                  <div class="table-head">
+                    <div><b>Reportes cerrados</b><span id="clientSavedReportMeta">Sin reportes guardados.</span></div>
+                  </div>
+                  <div class="table-scroll">
+                    <table class="saved-report-table">
+                      <thead><tr><th>Reporte</th><th>Nomenclador</th><th>Practicas</th><th>Neto</th><th>Accion</th></tr></thead>
+                      <tbody id="clientSavedReportsBody"><tr><td colspan="5" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
+                    </table>
                   </div>
                 </div>
 

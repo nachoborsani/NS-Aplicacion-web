@@ -115,10 +115,21 @@ var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'basica';
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
+var CLIENT_REPORT_MODE = '';
+var CLIENT_REPORT_SOURCE = null;
+var CLIENT_SAVED_REPORTS = [];
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
   catch (e) { return '$ ' + value.toFixed(2); }
+}
+function parseMoneyInput(value){
+  var raw = String(value == null ? '' : value).trim();
+  if (!raw) return 0;
+  if (raw.indexOf(',') >= 0) raw = raw.replace(/\./g, '').replace(',', '.');
+  raw = raw.replace(/[^\d.-]/g, '');
+  var n = Number(raw);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 function cleanNomType(value){
   var text = String(value || '').trim();
@@ -314,6 +325,7 @@ async function renderActiveClient(){
     fillClientPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
     fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
+  await loadClientReports();
   await loadClientNomenclador();
 }
 function queueClientNomencladorSearch(){
@@ -387,6 +399,33 @@ async function saveClientModules(){
   closeClientModulesModal();
   await renderActiveClient();
 }
+function renderSavedClientReports(){
+  var body = document.getElementById('clientSavedReportsBody');
+  var meta = document.getElementById('clientSavedReportMeta');
+  if (!body) return;
+  var reports = CLIENT_SAVED_REPORTS || [];
+  if (meta) meta.textContent = reports.length ? reports.length + ' reportes guardados.' : 'Sin reportes guardados.';
+  if (!reports.length){
+    body.innerHTML = '<tr><td colspan="5" class="muted-cell">Sin reportes guardados.</td></tr>';
+    return;
+  }
+  body.innerHTML = reports.map(function(report){
+    var summary = report.summary || {};
+    return '<tr>'
+      + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + '</div></td>'
+      + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
+      + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0)) + '</div></td>'
+      + '<td><button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button></td>'
+      + '</tr>';
+  }).join('');
+}
+async function loadClientReports(){
+  if (!ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes');
+  CLIENT_SAVED_REPORTS = res.ok ? (res.data.reports || []) : [];
+  renderSavedClientReports();
+}
 function reportBaseGross(row){
   return row.billable ? Number(row.valueGross || 0) : 0;
 }
@@ -426,7 +465,7 @@ function updateClientReportSummary(){
     net += reportNetAmount(row);
     if (row.absent) absent += 1;
     if (row.outsideCutoff) outside += 1;
-    if (!row.matchFound) unmatched += 1;
+    if (!row.matchFound && !row.valueEdited) unmatched += 1;
   });
   var cards = document.querySelectorAll('#clientReportSummary div');
   if (cards[0]) cards[0].querySelector('b').textContent = moneyFmt(gross);
@@ -440,6 +479,8 @@ function updateClientReportSummary(){
   document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
   if (clearBtn) clearBtn.disabled = !totalRows;
+  var saveBtn = document.getElementById('clientReportSaveBtn');
+  if (saveBtn) saveBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
 }
 function renderClientReportRows(){
   var body = document.getElementById('clientReportBody');
@@ -458,18 +499,21 @@ function renderClientReportRows(){
   body.innerHTML = visible.map(function(item){
     var row = item.row;
     var idx = item.index;
-    var disabled = reportBaseGross(row) <= 0 ? ' disabled' : '';
+    var readOnly = CLIENT_REPORT_MODE === 'closed';
+    var disabled = (readOnly || reportBaseGross(row) <= 0) ? ' disabled' : '';
     var checked = row.manualDebit ? ' checked' : '';
     var type = row.debitType || 'total';
-    var partialDisabled = !row.manualDebit || type !== 'partial' ? ' disabled' : '';
+    var partialDisabled = readOnly || !row.manualDebit || type !== 'partial' ? ' disabled' : '';
     var badgeClass = row.billable ? 'ok' : (row.absent ? 'warn' : 'muted');
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
+    var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
+    var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
     return '<tr data-report-row="' + idx + '">'
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
       + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
       + '<td><span class="report-status ' + badgeClass + '">' + esc(row.status || '-') + '</span></td>'
-      + '<td class="nom-money"><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b></td>'
+      + '<td class="nom-money report-value-cell"' + valueDblClick + '><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b>' + valueNote + '</td>'
       + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="partial"' + (type === 'partial' ? ' selected' : '') + '>Parcial</option></select><input class="inp debit-amount" type="number" min="0" step="0.01" value="' + esc(row.debitAmount || '') + '" oninput="setReportDebitAmount(' + idx + ', this.value)"' + partialDisabled + '></div></td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
       + '</tr>';
@@ -480,16 +524,35 @@ function setClientReportSearch(value){
   CLIENT_REPORT_QUERY = value || '';
   renderClientReportRows();
 }
+function editReportValue(index){
+  if (CLIENT_REPORT_MODE === 'closed') return;
+  var row = CLIENT_REPORT_ROWS[index];
+  if (!row) return;
+  var current = Number(row.valueGross || 0);
+  var entered = window.prompt('Nuevo valor bruto para esta practica', current ? String(current).replace('.', ',') : '');
+  if (entered === null) return;
+  var next = parseMoneyInput(entered);
+  if (next < 0) next = 0;
+  row.valueGross = next;
+  row.valueBillable = row.billable ? next : 0;
+  row.valueEdited = true;
+  if (next > 0) row.matchFound = true;
+  if (row.debitType === 'partial') row.debitAmount = Math.min(Number(row.debitAmount || 0), next);
+  renderClientReportRows();
+}
 function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
   CLIENT_REPORT_QUERY = '';
+  CLIENT_REPORT_MODE = '';
+  CLIENT_REPORT_SOURCE = null;
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
   var st = document.getElementById('clientReportStatus');
-  if (st) st.textContent = 'Bandeja eliminada de la previsualizacion.';
+  if (st) st.textContent = 'Visualizacion cerrada.';
   renderClientReportRows();
 }
 function toggleReportDebit(index, checked){
+  if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = checked;
@@ -497,6 +560,7 @@ function toggleReportDebit(index, checked){
   renderClientReportRows();
 }
 function setReportDebitType(index, value){
+  if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = true;
@@ -504,6 +568,7 @@ function setReportDebitType(index, value){
   renderClientReportRows();
 }
 function setReportDebitAmount(index, value){
+  if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = true;
@@ -512,6 +577,51 @@ function setReportDebitAmount(index, value){
   updateClientReportSummary();
   var tr = document.querySelector('[data-report-row="' + index + '"]');
   if (tr) tr.lastChild.querySelector('b').textContent = moneyFmt(reportNetAmount(row));
+}
+async function saveClientReport(){
+  if (!ACTIVE_CLIENT || !CLIENT_REPORT_ROWS.length || CLIENT_REPORT_MODE !== 'draft') return;
+  var btn = document.getElementById('clientReportSaveBtn');
+  var st = document.getElementById('clientReportStatus');
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = 'Guardando reporte...';
+  var payload = {
+    rows: CLIENT_REPORT_ROWS,
+    sourceFilename: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.filename,
+    nomencladorPeriod: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod,
+    nomencladorLabel: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorLabel
+  };
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes', payload);
+  if (!res.ok){
+    if (st) st.textContent = res.data.error || 'No se pudo guardar el reporte.';
+    updateClientReportSummary();
+    return;
+  }
+  clearClientReport();
+  if (st) st.textContent = 'Reporte guardado y cerrado.';
+  await loadClientReports();
+}
+async function openClientReport(id){
+  if (!ACTIVE_CLIENT || !id) return;
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Abriendo reporte cerrado...';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id));
+  if (!res.ok){
+    if (st) st.textContent = res.data.error || 'No se pudo abrir el reporte.';
+    return;
+  }
+  var report = res.data.report || {};
+  CLIENT_REPORT_ROWS = report.rows || [];
+  CLIENT_REPORT_QUERY = '';
+  CLIENT_REPORT_MODE = 'closed';
+  CLIENT_REPORT_SOURCE = {
+    filename: report.sourceFilename || '',
+    nomencladorPeriod: report.nomencladorPeriod || '',
+    nomencladorLabel: report.nomencladorLabel || ''
+  };
+  var search = document.getElementById('clientReportSearch');
+  if (search) search.value = '';
+  if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
+  renderClientReportRows();
 }
 async function uploadClientReport(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
@@ -529,6 +639,12 @@ async function uploadClientReport(files){
   }
   CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){ row.manualDebit = false; row.debitType = 'total'; row.debitAmount = ''; return row; });
   CLIENT_REPORT_QUERY = '';
+  CLIENT_REPORT_MODE = 'draft';
+  CLIENT_REPORT_SOURCE = {
+    filename: data.filename || '',
+    nomencladorPeriod: data.nomencladorPeriod || '',
+    nomencladorLabel: data.nomencladorLabel || ''
+  };
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
