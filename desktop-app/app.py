@@ -97,6 +97,7 @@ class HomeFrame(ctk.CTkFrame):
         open_documentacion,
         open_validacion,
         open_afip,
+        open_ns_conexion,
     ) -> None:
         super().__init__(master, fg_color=APP_BG)
         self.card_columns = card_columns
@@ -155,6 +156,11 @@ class HomeFrame(ctk.CTkFrame):
                 "Facturación AFIP",
                 "Generar Factura C para PAMI desde Comprobantes en línea y guardar PDF, ZIPs y datos de emisión.",
                 open_afip,
+            ),
+            (
+                "Conexión con NS",
+                "Conectarse a la web NS y traer los nomencladores del mes que elijas, sin copiar el Excel a mano.",
+                open_ns_conexion,
             ),
         ]
         self.grid_columnconfigure(0, weight=1)
@@ -279,6 +285,7 @@ class PamiDesktopApp(ctk.CTk):
             self.show_documentacion_module,
             self.show_validacion_module,
             self.show_afip_module,
+            self.show_ns_conexion_module,
         )
 
         self.padron_frame = None
@@ -294,6 +301,7 @@ class PamiDesktopApp(ctk.CTk):
         self.documentacion_frame = None
         self.validacion_frame = None
         self.afip_frame = None
+        self.ns_conexion_frame = None
 
         self._show_start_destination()
         self.bind("<Configure>", self._on_window_configure)
@@ -364,6 +372,7 @@ class PamiDesktopApp(ctk.CTk):
             "documentacion": self.show_documentacion_module,
             "validacion": self.show_validacion_module,
             "afip": self.show_afip_module,
+            "ns_conexion": self.show_ns_conexion_module,
         }
 
     def _show_start_destination(self) -> None:
@@ -513,6 +522,7 @@ class PamiDesktopApp(ctk.CTk):
             self.documentacion_frame,
             self.validacion_frame,
             self.afip_frame,
+            self.ns_conexion_frame,
         ):
             if frame is not None:
                 yield frame
@@ -633,6 +643,13 @@ class PamiDesktopApp(ctk.CTk):
             self.afip_frame = AfipFacturacionFrame(self, self.show_home)
         return self.afip_frame
 
+    def _get_ns_conexion_frame(self):
+        if self.ns_conexion_frame is None:
+            from app_ns_conexion import NSConexionFrame
+
+            self.ns_conexion_frame = NSConexionFrame(self, self.show_home)
+        return self.ns_conexion_frame
+
     def show_home(self) -> None:
         self._hide_all()
         self.current_module_key = "home"
@@ -692,6 +709,10 @@ class PamiDesktopApp(ctk.CTk):
     def show_afip_module(self) -> None:
         self.current_module_key = "afip"
         self._show_module(self._get_afip_frame())
+
+    def show_ns_conexion_module(self) -> None:
+        self.current_module_key = "ns_conexion"
+        self._show_module(self._get_ns_conexion_frame())
 
     def _close_modules(self) -> None:
         for frame in self._iter_frames():
