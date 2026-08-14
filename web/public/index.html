@@ -85,7 +85,14 @@
         <a class="active" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
         <a onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 16v-5M13 16V8M18 16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Reportes</a>
         <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
-        <a onclick="go('clientes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a2 2 0 012-2h9a2 2 0 012 2v16M8 7h5M8 11h5M8 15h5M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Clientes</a>
+        <div class="nav-group" id="clientsNavGroup">
+          <button class="nav-parent" id="clientsNavToggle" type="button" onclick="go('clientes',this)">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a2 2 0 012-2h9a2 2 0 012 2v16M8 7h5M8 11h5M8 15h5M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Clientes</span>
+            <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="nav-sub" id="clientNavList"></div>
+        </div>
       </nav>
       <div class="side-foot">
         <div class="side-user">
@@ -158,10 +165,7 @@
         <section id="view-clientes" style="display:none">
           <div class="page-head"><h1>Clientes</h1><p>Informacion operativa por cliente.</p></div>
 
-          <div class="client-layout">
-            <aside class="client-list" id="clientList"></aside>
-
-            <section class="client-detail">
+          <section class="client-detail">
               <div class="client-top">
                 <div>
                   <div class="crumb">Clientes / <span id="clientCrumbName">Sala Millon</span> / Informacion basica</div>
@@ -217,8 +221,7 @@
                   </div>
                 </div>
               </div>
-            </section>
-          </div>
+          </section>
         </section>
 
         <!-- NOMENCLADORES -->

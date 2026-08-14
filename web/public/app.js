@@ -26,7 +26,12 @@ function go(v, el){
   if (v === 'users') renderUsers();
   if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
-  document.querySelectorAll('.nav a, .side-config a').forEach(function(a){ a.classList.remove('active'); });
+  document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
+  var clientsGroup = document.getElementById('clientsNavGroup');
+  if (clientsGroup) {
+    clientsGroup.classList.toggle('open', v === 'clientes');
+    clientsGroup.classList.toggle('active', v === 'clientes');
+  }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
 }
@@ -231,23 +236,26 @@ function renderNomencladorRows(rows, bodyId, metaId, total){
       + '</tr>';
   }).join('');
 }
-async function loadClients(){
+async function loadClients(options){
+  options = options || {};
   var res = await api('/api/clientes');
   if (!res.ok) return;
   CLIENTS = res.data.clients || [];
   if (!ACTIVE_CLIENT && CLIENTS.length) ACTIVE_CLIENT = CLIENTS[0];
   renderClientList();
+  if (options.detail === false) return;
   renderActiveClient();
 }
 function renderClientList(){
-  var list = document.getElementById('clientList');
+  var list = document.getElementById('clientNavList');
   if (!list) return;
   list.innerHTML = CLIENTS.map(function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
-    return '<button class="client-list-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '"><strong>' + esc(client.name) + '</strong><span>' + esc(client.activeModules.length) + ' modulos activos</span></button>';
+    return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
   }).join('');
   list.querySelectorAll('[data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
+      go('clientes', document.getElementById('clientsNavToggle'));
       selectClient(button.getAttribute('data-client-slug'));
     });
   });
@@ -494,7 +502,7 @@ function setUser(u){
   document.getElementById('topAvatar').textContent = ini;
   document.getElementById('dashHello').textContent = 'Buen día, ' + (u.name.split(' ')[0]) + ' 👋';
 }
-function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); }
+function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); loadClients({ detail:false }); }
 function showChange(){ document.body.classList.remove('authed','booting'); document.body.classList.add('mustchange'); }
 function showLogin(){ document.body.classList.remove('authed','mustchange','booting','resetting'); }
 

@@ -98,12 +98,23 @@
   .sidebar .brand{padding:6px 8px 16px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:12px}
   .nav{display:flex;flex-direction:column;gap:3px;flex:1;overflow:auto}
   .nav .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f7893;padding:14px 12px 6px;font-weight:700}
-  .nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:9px;color:#c4d2e2;font-size:13.5px;font-weight:500}
-  .nav a svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
-  .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
-  .nav a.active{background:var(--petrol);color:#fff}
-  .nav a.active svg{opacity:1;color:var(--turq)}
+  .nav a,.nav-parent{display:flex;align-items:center;gap:11px;width:100%;padding:9px 12px;border:0;border-radius:9px;background:transparent;color:#c4d2e2;font-size:13.5px;font-weight:500;text-align:left}
+  .nav a svg,.nav-parent svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
+  .nav a:hover,.nav-parent:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav a.active,.nav-parent.active{background:var(--petrol);color:#fff}
+  .nav a.active svg,.nav-parent.active svg{opacity:1;color:var(--turq)}
   .nav a .chip{margin-left:auto;background:var(--turq);color:#04302f;font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px}
+  .nav-group{display:grid;gap:3px}
+  .nav-group.active .nav-parent{background:var(--petrol);color:#fff}
+  .nav-group.active .nav-parent svg{opacity:1;color:var(--turq)}
+  .nav-parent span{min-width:0;flex:1}
+  .nav-caret{margin-left:auto;transition:transform .15s ease}
+  .nav-group.open .nav-caret{transform:rotate(180deg)}
+  .nav-sub{display:none;margin:0 0 2px 29px;padding-left:9px;border-left:1px solid rgba(255,255,255,.12)}
+  .nav-group.open .nav-sub{display:grid;gap:2px}
+  .client-nav-item{border:0;background:transparent;color:#9db2c8;border-radius:8px;padding:6px 9px;text-align:left;font-size:12.5px;font-weight:600}
+  .client-nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+  .client-nav-item.active{background:rgba(24,183,178,.14);color:#dff8f7}
   .side-user{display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,.05);margin-top:8px}
   .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--turq),#0f7f7c);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex:0 0 auto}
   .side-user .who{min-width:0}
