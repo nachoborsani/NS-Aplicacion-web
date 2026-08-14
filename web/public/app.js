@@ -118,6 +118,7 @@ var CLIENT_REPORT_QUERY = '';
 var CLIENT_REPORT_PRACTICE_QUERY = '';
 var CLIENT_REPORT_TRANS_FROM = '';
 var CLIENT_REPORT_TRANS_TO = '';
+var CLIENT_REPORT_EXPECTED_AMOUNT = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_SAVED_REPORTS = [];
@@ -443,6 +444,25 @@ function reportDebitAmount(row){
 function reportNetAmount(row){
   return Math.max(0, reportBaseGross(row) - reportDebitAmount(row));
 }
+function updateExpectedAmountStatus(net){
+  var status = document.getElementById('clientReportExpectedStatus');
+  if (!status) return;
+  var expectedRaw = String(CLIENT_REPORT_EXPECTED_AMOUNT || '').trim();
+  var expected = parseMoneyInput(expectedRaw);
+  status.className = 'report-match-status muted';
+  if (!expectedRaw || expected <= 0){
+    status.textContent = 'Sin control';
+    return;
+  }
+  var diff = Math.round((net - expected) * 100) / 100;
+  if (Math.abs(diff) <= 0.01){
+    status.className = 'report-match-status ok';
+    status.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Coincide</span>';
+    return;
+  }
+  status.className = 'report-match-status bad';
+  status.textContent = 'Diferencia ' + moneyFmt(diff);
+}
 function normalizeReportSearch(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
@@ -491,6 +511,7 @@ function updateClientReportSummary(){
   if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
+  updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
@@ -554,6 +575,10 @@ function setClientReportTransmissionFilter(){
   CLIENT_REPORT_TRANS_TO = to ? to.value : '';
   renderClientReportRows();
 }
+function setClientReportExpectedAmount(value){
+  CLIENT_REPORT_EXPECTED_AMOUNT = value || '';
+  updateClientReportSummary();
+}
 function resetClientReportFilters(){
   CLIENT_REPORT_QUERY = '';
   CLIENT_REPORT_PRACTICE_QUERY = '';
@@ -567,6 +592,11 @@ function resetClientReportFilters(){
   if (from) from.value = '';
   var to = document.getElementById('clientReportTransTo');
   if (to) to.value = '';
+}
+function setClientReportExpectedInput(value){
+  CLIENT_REPORT_EXPECTED_AMOUNT = value || '';
+  var input = document.getElementById('clientReportExpectedAmount');
+  if (input) input.value = value || '';
 }
 function editReportValue(index){
   if (CLIENT_REPORT_MODE === 'closed') return;
@@ -589,6 +619,7 @@ function clearClientReport(){
   CLIENT_REPORT_MODE = '';
   CLIENT_REPORT_SOURCE = null;
   resetClientReportFilters();
+  setClientReportExpectedInput('');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = '';
   var st = document.getElementById('clientReportStatus');
@@ -621,6 +652,7 @@ async function saveClientReport(){
   var payload = {
     rows: CLIENT_REPORT_ROWS,
     title: (document.getElementById('clientReportTitle') || {}).value || '',
+    expectedAmount: parseMoneyInput(CLIENT_REPORT_EXPECTED_AMOUNT),
     sourceFilename: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.filename,
     nomencladorPeriod: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod,
     nomencladorLabel: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorLabel
@@ -653,6 +685,7 @@ async function openClientReport(id){
     nomencladorLabel: report.nomencladorLabel || ''
   };
   resetClientReportFilters();
+  setClientReportExpectedInput(report.expectedAmount ? String(report.expectedAmount).replace('.', ',') : '');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = report.title || '';
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
@@ -681,6 +714,7 @@ async function uploadClientReport(files){
     nomencladorLabel: data.nomencladorLabel || ''
   };
   resetClientReportFilters();
+  if (wasClosed) setClientReportExpectedInput('');
   var title = document.getElementById('clientReportTitle');
   if (title && wasClosed) title.value = '';
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;

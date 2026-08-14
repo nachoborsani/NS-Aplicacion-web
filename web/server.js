@@ -801,6 +801,7 @@ function reportListItem(report) {
     rowCount: report.rowCount,
     closedAt: report.closedAt,
     closedBy: report.closedBy,
+    expectedAmount: report.expectedAmount,
     summary: report.summary,
   };
 }
@@ -1057,6 +1058,7 @@ const server = http.createServer(async (req, res) => {
     const summary = summarizeReportRows(rows);
     const closedAt = new Date().toISOString();
     const period = String(body.nomencladorPeriod || "").trim();
+    const expectedAmount = money(body.expectedAmount);
     const report = {
       id: crypto.randomUUID(),
       clientSlug: slug,
@@ -1068,6 +1070,7 @@ const server = http.createServer(async (req, res) => {
       rowCount: rows.length,
       closedAt,
       closedBy: me.username,
+      expectedAmount,
       summary,
       rows,
     };

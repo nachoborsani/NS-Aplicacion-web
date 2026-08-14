@@ -354,11 +354,19 @@
   .client-report-controls{display:grid;grid-template-columns:minmax(240px,360px) 220px minmax(0,1fr);gap:12px;align-items:end}
   .client-report-controls .field{margin:0}
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
-  .report-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .report-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
   .report-summary-grid div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
   .report-summary-grid b,.report-summary-grid span{display:block}
   .report-summary-grid b{font-size:17px}
   .report-summary-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
+  .report-expected-card{display:grid;gap:7px}
+  .report-expected-card label{display:grid;gap:5px}
+  .report-expected-card .inp{height:34px;border-radius:8px;font-size:13px}
+  .report-match-status{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800}
+  .report-match-status svg{width:16px;height:16px}
+  .report-match-status.ok{color:var(--success)}
+  .report-match-status.bad{color:var(--error)}
+  .report-match-status.muted{color:var(--text-2)}
   .report-results-table{min-width:1260px;table-layout:fixed}
   .report-results-table th{padding:8px 10px;font-size:9.5px;background:#f7f9fc}
   .report-results-table td{padding:7px 10px;font-size:12px;line-height:1.2}
