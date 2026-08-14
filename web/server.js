@@ -875,6 +875,7 @@ function addRowToDashboardPeriod(target, row) {
       gross: 0,
       debit: 0,
       net: 0,
+      rows: [],
     };
   }
   module.totalRows += 1;
@@ -883,6 +884,20 @@ function addRowToDashboardPeriod(target, row) {
   module.gross += gross;
   module.debit += debit;
   module.net += net;
+  module.rows.push({
+    patientName: row.patientName || "",
+    benefit: row.benefit || "",
+    order: row.order || "",
+    practiceCode: row.practiceCode || "",
+    practiceDescription: row.practiceDescription || row.practiceText || "",
+    kind: consultation ? "Consulta" : "Practica",
+    status: row.status || "",
+    gross,
+    debit,
+    net,
+    matchFound: !!row.matchFound,
+    valueEdited: !!row.valueEdited,
+  });
 }
 function finalizeDashboardPeriod(target) {
   target.gross = money(target.gross);
@@ -893,7 +908,13 @@ function finalizeDashboardPeriod(target) {
   target.averageNet = target.totalRows ? money(target.net / target.totalRows) : 0;
   target.consultationShare = target.totalRows ? target.consultations / target.totalRows : 0;
   target.modules = Object.values(target._modules || {})
-    .map((module) => ({ ...module, gross: money(module.gross), debit: money(module.debit), net: money(module.net) }))
+    .map((module) => ({
+      ...module,
+      gross: money(module.gross),
+      debit: money(module.debit),
+      net: money(module.net),
+      rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
+    }))
     .sort((a, b) => b.net - a.net || String(a.moduleCode).localeCompare(String(b.moduleCode)));
   delete target._modules;
   return target;

@@ -342,6 +342,14 @@
   .dashboard-module-table{min-width:640px}
   .dashboard-module-table th{padding:7px 10px;font-size:9.5px}
   .dashboard-module-table td{padding:7px 10px;font-size:12px}
+  .dashboard-module-row{cursor:pointer}
+  .dashboard-module-row:hover{background:var(--hover)}
+  .dashboard-detail-btn{height:28px;border-radius:8px;font-size:11.5px;padding:0 10px;pointer-events:none}
+  .dashboard-module-detail td{background:var(--surface-2);padding:0}
+  .dashboard-detail-scroll{max-height:280px;overflow:auto}
+  .dashboard-detail-scroll table{min-width:860px}
+  .dashboard-detail-scroll th{padding:7px 10px;font-size:9px}
+  .dashboard-detail-scroll td{padding:7px 10px;font-size:11.5px;background:var(--surface)}
   .icon-btn.mini{width:32px;height:32px;border-radius:8px}
   .icon-btn.mini svg{width:16px;height:16px}
   .info-list{display:grid;gap:9px;margin:0}

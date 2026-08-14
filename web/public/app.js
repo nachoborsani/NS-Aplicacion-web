@@ -561,16 +561,39 @@ function renderClientDashboard(data){
   }
   var body = document.getElementById('clientDashboardModules');
   if (body) {
-    var modules = (current.modules || []).slice(0, 8);
-    body.innerHTML = modules.length ? modules.map(function(module){
-      return '<tr>'
+    var modules = current.modules || [];
+    body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
+      var rows = module.rows || [];
+      var detailRows = rows.map(function(row){
+        var flags = [];
+        if (!row.matchFound && !row.valueEdited) flags.push('sin valor');
+        if (row.valueEdited) flags.push('editado');
+        return '<tr>'
+          + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
+          + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div><div class="nom-muted">' + esc(row.kind || '') + (flags.length ? ' - ' + esc(flags.join(', ')) : '') + '</div></td>'
+          + '<td>' + esc(row.status || '-') + '</td>'
+          + '<td class="nom-money"><b>' + esc(moneyFmt(row.net || 0)) + '</b><div class="nom-muted">Bruto ' + esc(moneyFmt(row.gross || 0)) + '</div></td>'
+          + '</tr>';
+      }).join('');
+      return '<tr class="dashboard-module-row" onclick="toggleDashboardModuleDetail(' + moduleIndex + ')">'
         + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
         + '<td class="tnum">' + esc(numberFmt(module.consultations || 0)) + '</td>'
         + '<td class="tnum">' + esc(numberFmt(module.practices || 0)) + '</td>'
         + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b></td>'
+        + '<td><button class="btn btn-ghost dashboard-detail-btn" type="button">' + esc(rows.length) + ' filas</button></td>'
+        + '</tr>'
+        + '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + '" style="display:none"><td colspan="5">'
+        + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Paciente</th><th>Prestacion</th><th>Estado</th><th>Neto</th></tr></thead><tbody>'
+        + (detailRows || '<tr><td colspan="4" class="muted-cell">Sin detalle para este modulo.</td></tr>')
+        + '</tbody></table></div></td>'
         + '</tr>';
-    }).join('') : '<tr><td colspan="4" class="muted-cell">Sin datos para este mes.</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="muted-cell">Sin datos para este mes.</td></tr>';
   }
+}
+function toggleDashboardModuleDetail(index){
+  var row = document.getElementById('dashboardModuleDetail' + index);
+  if (!row) return;
+  row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
 }
 async function loadClientDashboard(){
   if (!ACTIVE_CLIENT) return;
