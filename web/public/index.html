@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NS Web</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Navegacion principal">
+        <div class="brand">
+          <span class="brand-mark">NS</span>
+          <span>
+            <strong>NS Web</strong>
+            <small>Panel operativo</small>
+          </span>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" type="button">Tareas</button>
+          <button class="nav-item" type="button">Medicos</button>
+          <button class="nav-item" type="button">Resultados</button>
+          <button class="nav-item" type="button">Ajustes</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>Cola de tareas</h1>
+            <p>Base web para cargar pedidos y sincronizarlos con el agente local.</p>
+          </div>
+          <div class="status-pill">
+            <span class="pulse"></span>
+            Railway activo
+          </div>
+        </header>
+
+        <section class="summary-grid" aria-label="Estado general">
+          <article class="metric">
+            <span>Pendientes</span>
+            <strong id="pendingCount">3</strong>
+          </article>
+          <article class="metric">
+            <span>En proceso</span>
+            <strong>1</strong>
+          </article>
+          <article class="metric">
+            <span>Agente local</span>
+            <strong>Offline</strong>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <form class="task-panel" id="taskForm">
+            <h2>Nueva tarea</h2>
+            <label>
+              Medico
+              <input name="doctor" placeholder="Nombre o usuario" autocomplete="off" />
+            </label>
+            <label>
+              Tipo
+              <select name="type">
+                <option>Credencial provisoria</option>
+                <option>Generar OME</option>
+                <option>Transmision</option>
+                <option>Validacion</option>
+              </select>
+            </label>
+            <label>
+              Beneficio o DNI
+              <input name="benefit" placeholder="Dato de prueba" autocomplete="off" />
+            </label>
+            <button class="primary-button" type="submit">Agregar tarea</button>
+          </form>
+
+          <section class="queue-panel">
+            <div class="panel-head">
+              <h2>Tareas recientes</h2>
+              <button class="icon-button" type="button" id="clearTasks" aria-label="Limpiar tareas">Limpiar</button>
+            </div>
+            <div class="task-list" id="taskList"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
