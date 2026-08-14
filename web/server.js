@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const XLSX = require("xlsx");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -9,6 +10,7 @@ const publicDir = path.join(__dirname, "public");
 // Persistencia: usa el volumen de Railway si esta montado; si no, ./data local.
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
+const nomencladorFile = path.join(dataDir, "nomenclador.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -196,6 +198,216 @@ const ROLES = new Set(["admin", "operador", "medico", "clinica"]);
 function validUsername(u) {
   return /^[a-z0-9._-]{3,20}$/.test(u);
 }
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+function toNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const clean = String(value || "").replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+  const n = Number(clean);
+  return Number.isFinite(n) ? n : 0;
+}
+function money(value) {
+  return Math.round(toNumber(value) * 100) / 100;
+}
+function formatExcelDate(value) {
+  if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toLocaleDateString("es-AR");
+  }
+  if (typeof value === "number" && value > 25000 && value < 70000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      return `${String(parsed.d).padStart(2, "0")}/${String(parsed.m).padStart(2, "0")}/${parsed.y}`;
+    }
+  }
+  return String(value).trim();
+}
+function inferScope(moduleDescription, type, practiceDescription) {
+  const text = normalizeText(`${moduleDescription} ${type} ${practiceDescription}`);
+  if (text.includes("INTERNACION") || text.includes("SANATORIAL")) return "internacion";
+  if (text.includes("AMBULATOR") || text.includes("CONSULTA") || text.includes("DOMICILI")) return "ambulatorio";
+  return "otros";
+}
+function displayScope(scope) {
+  return { ambulatorio: "Ambulatorio", internacion: "Internacion", otros: "Otros" }[scope] || scope;
+}
+function getHeaderIndexMap(headerRow) {
+  const map = {};
+  headerRow.forEach((header, index) => {
+    const h = normalizeText(header);
+    if (h.includes("CODIGO DE MODULO")) map.moduleCode = index;
+    else if (h.includes("DESCRIPCION DE MODULO")) map.moduleDescription = index;
+    else if (h.includes("CODIGO DE PRACTICA")) map.practiceCode = index;
+    else if (h.includes("DESCRIPCION DE PRACTICA")) map.practiceDescription = index;
+    else if (h.includes("INICIO DE VIGENCIA")) map.effectiveDate = index;
+    else if (h.includes("HONORARIOS")) map.honorarios = index;
+    else if (h.includes("GASTOS")) map.gastos = index;
+    else if (h === "TIPO" || h.includes(" TIPO")) map.type = index;
+    else if (h.includes("NIVEL DE AUTORIZACION")) map.authLevel = index;
+    else if (h.includes("OBSERVACIONES")) map.observations = index;
+    else if (h.includes("TOTAL EN")) map.total = index;
+  });
+  return map;
+}
+function loadNomenclador() {
+  try {
+    return JSON.parse(fs.readFileSync(nomencladorFile, "utf8"));
+  } catch {
+    return null;
+  }
+}
+function saveNomenclador(payload) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(nomencladorFile, JSON.stringify(payload, null, 2));
+}
+function buildNomencladorFilters(rows) {
+  const moduleMap = new Map();
+  const typeMap = new Map();
+  const scopeMap = new Map();
+  for (const row of rows) {
+    if (row.moduleCode || row.moduleDescription) {
+      const key = String(row.moduleCode || row.moduleDescription);
+      if (!moduleMap.has(key)) moduleMap.set(key, { value: key, label: `${row.moduleCode || "-"} - ${row.moduleDescription || "Sin descripcion"}` });
+    }
+    if (row.type) typeMap.set(row.type, { value: row.type, label: row.type });
+    if (row.scope) scopeMap.set(row.scope, { value: row.scope, label: displayScope(row.scope) });
+  }
+  return {
+    modules: Array.from(moduleMap.values()).sort((a, b) => Number(a.value) - Number(b.value) || a.label.localeCompare(b.label)),
+    types: Array.from(typeMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
+    scopes: Array.from(scopeMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
+  };
+}
+function parseNomencladorWorkbook(buffer, filename) {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheetName = wb.SheetNames.find((name) => normalizeText(name).includes("NOMENCLADOR")) || wb.SheetNames[0];
+  if (!sheetName) throw new Error("El Excel no tiene hojas.");
+  const ws = wb.Sheets[sheetName];
+  const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" });
+  const headerRowIndex = matrix.findIndex((row) => {
+    const text = normalizeText(row.join(" "));
+    return text.includes("CODIGO DE MODULO") && text.includes("DESCRIPCION DE PRACTICA");
+  });
+  if (headerRowIndex < 0) throw new Error("No pude encontrar encabezados de nomenclador en el Excel.");
+  const headerMap = getHeaderIndexMap(matrix[headerRowIndex]);
+  if (headerMap.practiceCode === undefined || headerMap.practiceDescription === undefined) {
+    throw new Error("Faltan columnas de practica/prestacion.");
+  }
+
+  const vigencia = matrix.slice(0, headerRowIndex).flat().map((v) => String(v || "").trim()).find((v) => normalizeText(v).includes("VIGENTE")) || "";
+  const rows = [];
+  for (let i = headerRowIndex + 1; i < matrix.length; i += 1) {
+    const source = matrix[i] || [];
+    const practiceCode = String(source[headerMap.practiceCode] || "").trim();
+    const practiceDescription = String(source[headerMap.practiceDescription] || "").replace(/\s+/g, " ").trim();
+    if (!practiceCode && !practiceDescription) continue;
+
+    const moduleCode = String(source[headerMap.moduleCode] || "").trim();
+    const moduleDescription = String(source[headerMap.moduleDescription] || "").replace(/\s+/g, " ").trim();
+    const type = String(source[headerMap.type] || "").replace(/\s+/g, " ").trim();
+    const honorarios = money(source[headerMap.honorarios]);
+    const gastos = money(source[headerMap.gastos]);
+    const total = headerMap.total !== undefined ? money(source[headerMap.total]) : money(honorarios + gastos);
+    const scope = inferScope(moduleDescription, type, practiceDescription);
+
+    rows.push({
+      moduleCode,
+      moduleDescription,
+      practiceCode,
+      practiceDescription,
+      effectiveDate: formatExcelDate(source[headerMap.effectiveDate]),
+      honorarios,
+      gastos,
+      total,
+      type,
+      authLevel: String(source[headerMap.authLevel] || "").replace(/\s+/g, " ").trim(),
+      observations: String(source[headerMap.observations] || "").replace(/\s+/g, " ").trim(),
+      scope,
+      search: normalizeText(`${moduleCode} ${moduleDescription} ${practiceCode} ${practiceDescription} ${type}`),
+    });
+  }
+
+  const payload = {
+    filename,
+    sheetName,
+    vigencia,
+    uploadedAt: new Date().toISOString(),
+    rowCount: rows.length,
+    columns: {
+      moduleCode: "CODIGO DE MODULO",
+      moduleDescription: "DESCRIPCION DE MODULO",
+      practiceCode: "CODIGO DE PRACTICA",
+      practiceDescription: "DESCRIPCION DE PRACTICA",
+      effectiveDate: "INICIO DE VIGENCIA",
+      honorarios: "HONORARIOS",
+      gastos: "GASTOS",
+      total: headerMap.total !== undefined ? "TOTAL EN $" : "HONORARIOS + GASTOS",
+      type: "TIPO",
+      authLevel: "NIVEL DE AUTORIZACION",
+      observations: "OBSERVACIONES",
+    },
+    filters: buildNomencladorFilters(rows),
+    rows,
+  };
+  return payload;
+}
+function nomencladorSummary(payload) {
+  if (!payload) return { loaded: false };
+  return {
+    loaded: true,
+    filename: payload.filename,
+    sheetName: payload.sheetName,
+    vigencia: payload.vigencia,
+    uploadedAt: payload.uploadedAt,
+    rowCount: payload.rowCount,
+    columns: payload.columns,
+    filters: payload.filters,
+  };
+}
+function readBuffer(req, limit = 25 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error("El archivo supera el limite permitido."));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+function extractMultipartFile(buffer, contentType) {
+  const match = String(contentType || "").match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw new Error("No se recibio un archivo valido.");
+  const boundary = Buffer.from(`--${match[1] || match[2]}`);
+  let cursor = buffer.indexOf(boundary);
+  while (cursor >= 0) {
+    const headerStart = cursor + boundary.length + 2;
+    const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), headerStart);
+    if (headerEnd < 0) break;
+    const headers = buffer.slice(headerStart, headerEnd).toString("latin1");
+    const fileNameMatch = headers.match(/filename="([^"]+)"/i);
+    const dataStart = headerEnd + 4;
+    const dataEnd = buffer.indexOf(Buffer.from(`\r\n--${match[1] || match[2]}`), dataStart);
+    if (fileNameMatch && dataEnd >= 0) {
+      return { filename: path.basename(fileNameMatch[1]), data: buffer.slice(dataStart, dataEnd) };
+    }
+    cursor = buffer.indexOf(boundary, headerEnd + 4);
+  }
+  throw new Error("No encontre ningun archivo en la carga.");
+}
 function sendFile(res, filePath) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
@@ -354,6 +566,56 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/logout" && req.method === "POST") {
     clearSessionCookie(res);
     return json(res, 200, { ok: true });
+  }
+
+  // ---- Nomencladores ----
+  if (p === "/api/nomencladores" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    return json(res, 200, nomencladorSummary(loadNomenclador()));
+  }
+
+  if (p === "/api/nomencladores/search" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const payload = loadNomenclador();
+    if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+
+    const query = normalizeText(url.searchParams.get("q") || "");
+    const moduleValue = String(url.searchParams.get("module") || "").trim();
+    const typeValue = String(url.searchParams.get("type") || "").trim();
+    const scopeValue = String(url.searchParams.get("scope") || "").trim();
+    const limit = Math.max(1, Math.min(300, Number(url.searchParams.get("limit") || 120)));
+
+    let rows = payload.rows || [];
+    if (query) rows = rows.filter((row) => row.search.includes(query));
+    if (moduleValue) rows = rows.filter((row) => String(row.moduleCode || row.moduleDescription) === moduleValue);
+    if (typeValue) rows = rows.filter((row) => row.type === typeValue);
+    if (scopeValue) rows = rows.filter((row) => row.scope === scopeValue);
+
+    return json(res, 200, {
+      total: rows.length,
+      rows: rows.slice(0, limit).map(({ search, ...row }) => row),
+    });
+  }
+
+  if (p === "/api/nomencladores/upload" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede cargar nomencladores." });
+    try {
+      const raw = await readBuffer(req);
+      const file = extractMultipartFile(raw, req.headers["content-type"]);
+      const ext = path.extname(file.filename).toLowerCase();
+      if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
+        return json(res, 400, { error: "Subi un archivo Excel .xls, .xlsx o .xlsm." });
+      }
+      const payload = parseNomencladorWorkbook(file.data, file.filename);
+      saveNomenclador(payload);
+      return json(res, 200, nomencladorSummary(payload));
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar el nomenclador." });
+    }
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----

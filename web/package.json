@@ -9,6 +9,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.14",
+    "xlsx": "^0.18.5"
   }
 }

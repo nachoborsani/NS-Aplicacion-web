@@ -19,11 +19,12 @@ function toggleTheme(){
   applyThemeIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', nomencladores:'Nomencladores', soon:'Configuracion general' };
 function go(v, el){
-  ['dash','users','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','nomencladores','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   if (v === 'users') renderUsers();
+  if (v === 'nomencladores') loadNomencladorSummary();
   document.querySelectorAll('.nav a, .side-config a').forEach(function(a){ a.classList.remove('active'); });
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
@@ -94,6 +95,102 @@ async function renderUsers(){
   var dc = document.getElementById('dashUsersCount'), ds = document.getElementById('dashUsersSub');
   if (dc) dc.textContent = users.length;
   if (ds){ var pend = users.filter(function(u){ return u.mustChange || !u.active; }).length; ds.textContent = (users.length - pend) + ' activos · ' + pend + ' pendientes'; }
+}
+
+// ---------- nomencladores ----------
+var NOM_READY = false;
+var NOM_TIMER = null;
+function moneyFmt(n){
+  var value = Number(n || 0);
+  try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
+  catch (e) { return '$ ' + value.toFixed(2); }
+}
+function dateFmt(iso){
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('es-AR'); } catch (e) { return iso; }
+}
+function fillSelect(id, items){
+  var el = document.getElementById(id);
+  if (!el) return;
+  var current = el.value;
+  el.innerHTML = '<option value="">Todos</option>' + (items || []).map(function(item){
+    return '<option value="' + esc(item.value) + '">' + esc(item.label) + '</option>';
+  }).join('');
+  if ([].slice.call(el.options).some(function(o){ return o.value === current; })) el.value = current;
+}
+async function loadNomencladorSummary(){
+  var st = document.getElementById('nomStatus');
+  if (!st) return;
+  var res = await api('/api/nomencladores');
+  if (!res.ok){
+    st.innerHTML = '<div><b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span></div>';
+    return;
+  }
+  NOM_READY = !!res.data.loaded;
+  if (!NOM_READY){
+    st.innerHTML = '<div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>';
+    document.getElementById('nomBody').innerHTML = '<tr><td colspan="6" class="muted-cell">No hay datos cargados.</td></tr>';
+    document.getElementById('nomResultMeta').textContent = 'Todavia no hay busqueda.';
+    return;
+  }
+  var d = res.data;
+  st.innerHTML = '<div><b>' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span></div>'
+    + '<div class="nom-cols">Valor: ' + esc(d.columns.total) + '</div>';
+  fillSelect('nomModule', d.filters.modules);
+  fillSelect('nomScope', d.filters.scopes);
+  fillSelect('nomType', d.filters.types);
+  await searchNomenclador();
+}
+async function uploadNomenclador(files){
+  if (!files || !files[0]) return;
+  var st = document.getElementById('nomStatus');
+  var input = document.getElementById('nomFile');
+  st.innerHTML = '<div><b>Procesando Excel...</b><span>Esto puede tardar unos segundos.</span></div>';
+  var fd = new FormData();
+  fd.append('file', files[0]);
+  var r = await fetch('/api/nomencladores/upload', { method:'POST', body: fd });
+  var data = {};
+  try { data = await r.json(); } catch (e) {}
+  if (input) input.value = '';
+  if (!r.ok){
+    st.innerHTML = '<div><b>No se pudo cargar</b><span>' + esc(data.error || 'Revisa el formato del archivo.') + '</span></div>';
+    return;
+  }
+  await loadNomencladorSummary();
+}
+function queueNomencladorSearch(){
+  clearTimeout(NOM_TIMER);
+  NOM_TIMER = setTimeout(searchNomenclador, 220);
+}
+async function searchNomenclador(){
+  if (!NOM_READY) return;
+  var q = document.getElementById('nomQ').value.trim();
+  var moduleValue = document.getElementById('nomModule').value;
+  var scope = document.getElementById('nomScope').value;
+  var type = document.getElementById('nomType').value;
+  var params = new URLSearchParams({ q:q, module:moduleValue, scope:scope, type:type, limit:'120' });
+  var res = await api('/api/nomencladores/search?' + params.toString());
+  var body = document.getElementById('nomBody');
+  if (!res.ok){
+    body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + esc(res.data.error || 'No se pudo buscar.') + '</td></tr>';
+    return;
+  }
+  var rows = res.data.rows || [];
+  document.getElementById('nomResultMeta').textContent = res.data.total + ' coincidencias' + (res.data.total > rows.length ? ' - mostrando ' + rows.length : '');
+  if (!rows.length){
+    body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin resultados para esos filtros.</td></tr>';
+    return;
+  }
+  body.innerHTML = rows.map(function(row){
+    return '<tr>'
+      + '<td><div class="nom-code">' + esc(row.moduleCode || '-') + '</div><div class="nom-muted">' + esc(row.moduleDescription || '') + '</div></td>'
+      + '<td><div class="nom-code">' + esc(row.practiceCode || '-') + '</div><div class="nom-desc">' + esc(row.practiceDescription || '') + '</div><div class="nom-muted">' + esc(row.effectiveDate || '') + (row.observations ? ' - ' + esc(row.observations) : '') + '</div></td>'
+      + '<td>' + esc(row.type || '-') + '</td>'
+      + '<td><span class="role oper">' + esc(row.scope === 'internacion' ? 'Internacion' : row.scope === 'ambulatorio' ? 'Ambulatorio' : 'Otros') + '</span></td>'
+      + '<td><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'
+      + '<td>' + esc(row.authLevel || '-') + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 function findUser(un){ return USERS.filter(function(u){ return u.username === un; })[0]; }

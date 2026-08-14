@@ -7,5 +7,9 @@
   },
   "scripts": {
     "start": "node web/server.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.14",
+    "xlsx": "^0.18.5"
   }
 }
