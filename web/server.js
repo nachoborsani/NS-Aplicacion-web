@@ -722,6 +722,8 @@ function reportRowGross(row) {
 function reportRowDebit(row) {
   const gross = reportRowGross(row);
   if (!row || !row.manualDebit || gross <= 0) return 0;
+  if (row.debitType === "pay40") return money(gross - (gross * 0.4));
+  if (row.debitType === "pay60") return money(gross - (gross * 0.6));
   if (row.debitType === "partial") return clampMoney(row.debitAmount, 0, gross);
   return gross;
 }
@@ -732,7 +734,7 @@ function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const valueGross = money(row.valueGross);
     const manualDebit = !!row.manualDebit;
-    const debitType = row.debitType === "partial" ? "partial" : "total";
+    const debitType = ["pay40", "pay60", "partial"].includes(row.debitType) ? row.debitType : "total";
     const sanitized = {
       id: String(row.id || `${cleanIdentifier(row.order) || index + 1}-${index}`),
       order: cleanIdentifier(row.order),

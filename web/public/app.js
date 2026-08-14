@@ -435,6 +435,8 @@ function reportBaseGross(row){
 function reportDebitAmount(row){
   var gross = reportBaseGross(row);
   if (!row.manualDebit || gross <= 0) return 0;
+  if (row.debitType === 'pay40') return Math.max(0, gross - (gross * 0.4));
+  if (row.debitType === 'pay60') return Math.max(0, gross - (gross * 0.6));
   if (row.debitType === 'partial') return Math.max(0, Math.min(gross, Number(row.debitAmount || 0)));
   return gross;
 }
@@ -520,7 +522,7 @@ function renderClientReportRows(){
     var disabled = (readOnly || reportBaseGross(row) <= 0) ? ' disabled' : '';
     var checked = row.manualDebit ? ' checked' : '';
     var type = row.debitType || 'total';
-    var partialDisabled = readOnly || !row.manualDebit || type !== 'partial' ? ' disabled' : '';
+    if (type === 'partial') type = reportNetAmount(row) >= reportBaseGross(row) * 0.5 ? 'pay60' : 'pay40';
     var badgeClass = row.billable ? 'ok' : (row.absent ? 'warn' : 'muted');
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
@@ -531,7 +533,7 @@ function renderClientReportRows(){
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
       + '<td><span class="report-status ' + badgeClass + '">' + esc(row.status || '-') + '</span></td>'
       + '<td class="nom-money report-value-cell"' + valueDblClick + '><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b>' + valueNote + '</td>'
-      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="partial"' + (type === 'partial' ? ' selected' : '') + '>Parcial</option></select><input class="inp debit-amount" type="number" min="0" step="0.01" value="' + esc(row.debitAmount || '') + '" oninput="setReportDebitAmount(' + idx + ', this.value)"' + partialDisabled + '></div></td>'
+      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option></select></div></td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
       + '</tr>';
   }).join('');
@@ -579,7 +581,7 @@ function editReportValue(index){
   row.valueBillable = row.billable ? next : 0;
   row.valueEdited = true;
   if (next > 0) row.matchFound = true;
-  if (row.debitType === 'partial') row.debitAmount = Math.min(Number(row.debitAmount || 0), next);
+  row.debitAmount = 0;
   renderClientReportRows();
 }
 function clearClientReport(){
@@ -606,19 +608,9 @@ function setReportDebitType(index, value){
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = true;
-  row.debitType = value === 'partial' ? 'partial' : 'total';
+  row.debitType = value === 'pay40' || value === 'pay60' ? value : 'total';
+  row.debitAmount = 0;
   renderClientReportRows();
-}
-function setReportDebitAmount(index, value){
-  if (CLIENT_REPORT_MODE === 'closed') return;
-  var row = CLIENT_REPORT_ROWS[index];
-  if (!row) return;
-  row.manualDebit = true;
-  row.debitType = 'partial';
-  row.debitAmount = Number(value || 0);
-  updateClientReportSummary();
-  var tr = document.querySelector('[data-report-row="' + index + '"]');
-  if (tr) tr.lastChild.querySelector('b').textContent = moneyFmt(reportNetAmount(row));
 }
 async function saveClientReport(){
   if (!ACTIVE_CLIENT || !CLIENT_REPORT_ROWS.length || CLIENT_REPORT_MODE !== 'draft') return;
