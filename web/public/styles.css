@@ -331,8 +331,12 @@
   .module-chip-list{display:flex;gap:7px;flex-wrap:wrap}
   .module-chip{display:inline-flex;gap:6px;align-items:center;background:var(--celeste);color:#0f7f7c;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:650}
   .client-nomenclador{overflow:hidden}
+  .client-nomenclador.collapsed .client-nom-controls,.client-nomenclador.collapsed .client-nom-body{display:none}
+  .client-nomenclador.collapsed .client-nom-head{border-bottom:0;align-items:center}
   .client-nom-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:15px 16px;border-bottom:1px solid var(--border)}
+  .client-nom-head h3{margin-bottom:2px}
   .client-nom-head p{margin:0;color:var(--text-2);font-size:12px}
+  .client-nom-toggle{height:34px;border-radius:8px;font-size:12px;padding:0 12px;margin-left:auto}
   .client-nom-controls{display:grid;grid-template-columns:170px minmax(220px,320px);gap:10px}
   .report-model-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .report-model-grid div{border:1px solid var(--border);border-radius:10px;padding:11px;background:var(--surface-2)}

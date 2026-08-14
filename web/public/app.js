@@ -115,6 +115,7 @@ var CLIENTS = [];
 var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'basica';
+var CLIENT_NOM_OPEN = false;
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
 var CLIENT_REPORT_PRACTICE_QUERY = '';
@@ -284,6 +285,19 @@ function fillClientReportPeriodSelect(items, selected){
   var preferred = selected || (list[0] ? list[0].value : '');
   if (preferred && [].slice.call(el.options).some(function(o){ return o.value === preferred; })) el.value = preferred;
 }
+function renderClientNomencladorPanel(){
+  var box = document.getElementById('clientNomencladorBox');
+  var btn = document.getElementById('clientNomToggleBtn');
+  if (box) box.classList.toggle('collapsed', !CLIENT_NOM_OPEN);
+  if (btn) {
+    btn.textContent = CLIENT_NOM_OPEN ? 'Ocultar' : 'Mostrar';
+    btn.setAttribute('aria-expanded', CLIENT_NOM_OPEN ? 'true' : 'false');
+  }
+}
+function toggleClientNomenclador(){
+  CLIENT_NOM_OPEN = !CLIENT_NOM_OPEN;
+  renderClientNomencladorPanel();
+}
 function renderNomencladorRows(rows, bodyId, metaId, total){
   var body = document.getElementById(bodyId);
   if (!body) return;
@@ -334,6 +348,7 @@ function renderClientList(){
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
   CLIENT_SECTION = 'basica';
+  CLIENT_NOM_OPEN = false;
   renderClientList();
   renderActiveClient();
 }
@@ -356,6 +371,7 @@ async function renderActiveClient(){
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
   setClientSection(CLIENT_SECTION);
+  renderClientNomencladorPanel();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){

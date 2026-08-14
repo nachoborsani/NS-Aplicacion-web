@@ -197,7 +197,7 @@
                 </article>
               </div>
 
-              <div class="client-nomenclador">
+              <div class="client-nomenclador collapsed" id="clientNomencladorBox">
                 <div class="client-nom-head">
                   <div>
                     <h3>Nomenclador del cliente</h3>
@@ -207,9 +207,10 @@
                     <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
                     <input class="inp" id="clientNomQ" placeholder="Buscar prestacion o codigo..." oninput="queueClientNomencladorSearch()">
                   </div>
+                  <button class="btn btn-ghost client-nom-toggle" id="clientNomToggleBtn" onclick="toggleClientNomenclador()" type="button" aria-expanded="false">Mostrar</button>
                 </div>
 
-                <div class="tablecard nom-table">
+                <div class="tablecard nom-table client-nom-body">
                   <div class="table-head">
                     <div><b>Resultados</b><span id="clientNomMeta">Todavia no hay busqueda.</span></div>
                   </div>
