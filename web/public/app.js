@@ -120,6 +120,7 @@ var CLIENT_REPORT_MODULE = '';
 var CLIENT_REPORT_TRANS_FROM = '';
 var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_EXPECTED_AMOUNT = '';
+var CLIENT_REPORT_SORT = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_REPORT_FILE = null;
@@ -474,7 +475,7 @@ function getClientReportVisibleRows(){
   var moduleValue = CLIENT_REPORT_MODULE || '';
   var transFrom = CLIENT_REPORT_TRANS_FROM || '';
   var transTo = CLIENT_REPORT_TRANS_TO || '';
-  return (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
+  var rows = (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
     if (q) {
       var haystack = normalizeReportSearch([
         item.row.patientName,
@@ -497,6 +498,15 @@ function getClientReportVisibleRows(){
     if (transTo && (!transDate || transDate > transTo)) return false;
     return true;
   });
+  if (CLIENT_REPORT_SORT === 'practice-asc' || CLIENT_REPORT_SORT === 'practice-desc') {
+    rows.sort(function(a, b){
+      var av = normalizeReportSearch([a.row.practiceCode, a.row.practiceDescription, a.row.practiceText].join(' '));
+      var bv = normalizeReportSearch([b.row.practiceCode, b.row.practiceDescription, b.row.practiceText].join(' '));
+      var cmp = av.localeCompare(bv);
+      return CLIENT_REPORT_SORT === 'practice-desc' ? -cmp : cmp;
+    });
+  }
+  return rows;
 }
 function updateClientReportSummary(){
   var visible = getClientReportVisibleRows();
@@ -525,6 +535,8 @@ function updateClientReportSummary(){
   if (clearBtn) clearBtn.disabled = !totalRows;
   var saveBtn = document.getElementById('clientReportSaveBtn');
   if (saveBtn) saveBtn.disabled = !totalRows || CLIENT_REPORT_MODE !== 'draft';
+  var sortIcon = document.getElementById('clientReportPracticeSortIcon');
+  if (sortIcon) sortIcon.textContent = CLIENT_REPORT_SORT === 'practice-desc' ? 'Z-A' : 'A-Z';
 }
 function renderClientReportRows(){
   var body = document.getElementById('clientReportBody');
@@ -594,6 +606,10 @@ function setClientReportPracticeFilter(value){
 }
 function setClientReportModuleFilter(value){
   CLIENT_REPORT_MODULE = value || '';
+  renderClientReportRows();
+}
+function toggleClientReportPracticeSort(){
+  CLIENT_REPORT_SORT = CLIENT_REPORT_SORT === 'practice-asc' ? 'practice-desc' : 'practice-asc';
   renderClientReportRows();
 }
 function setClientReportTransmissionFilter(){

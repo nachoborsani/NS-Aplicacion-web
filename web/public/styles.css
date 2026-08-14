@@ -370,6 +370,8 @@
   .report-results-table{min-width:1260px;table-layout:fixed}
   .report-results-table th{padding:8px 10px;font-size:9.5px;background:#f7f9fc}
   .report-results-table td{padding:7px 10px;font-size:12px;line-height:1.2}
+  .th-sort{border:0;background:transparent;color:inherit;font:inherit;font-weight:800;text-transform:uppercase;padding:0;display:inline-flex;align-items:center;gap:5px}
+  .th-sort span{font-size:9px;color:var(--text-2)}
   .report-results-table th:nth-child(1){width:205px}
   .report-results-table th:nth-child(2){width:360px}
   .report-results-table th:nth-child(3){width:160px}
