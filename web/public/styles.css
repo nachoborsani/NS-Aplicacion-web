@@ -336,7 +336,7 @@
   .report-upload-card{display:grid;gap:10px}
   .report-head-actions{display:flex;gap:8px;align-items:center}
   .report-search{width:300px;height:36px;border-radius:9px;font-size:13px}
-  .report-filter-bar{display:grid;grid-template-columns:minmax(220px,300px) minmax(220px,300px) 132px 132px;gap:8px;align-items:end}
+  .report-filter-bar{display:grid;grid-template-columns:minmax(210px,280px) minmax(210px,280px) minmax(180px,240px) 132px 132px;gap:8px;align-items:end}
   .report-filter-bar .report-search{width:100%}
   .report-filter-bar .inp{height:36px;border-radius:9px;font-size:13px}
   .date-filter{display:grid;gap:3px;margin:0}

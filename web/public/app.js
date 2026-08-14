@@ -116,6 +116,7 @@ var CLIENT_SECTION = 'basica';
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
 var CLIENT_REPORT_PRACTICE_QUERY = '';
+var CLIENT_REPORT_MODULE = '';
 var CLIENT_REPORT_TRANS_FROM = '';
 var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_EXPECTED_AMOUNT = '';
@@ -470,6 +471,7 @@ function normalizeReportSearch(value){
 function getClientReportVisibleRows(){
   var q = normalizeReportSearch(CLIENT_REPORT_QUERY);
   var practiceQ = normalizeReportSearch(CLIENT_REPORT_PRACTICE_QUERY);
+  var moduleValue = CLIENT_REPORT_MODULE || '';
   var transFrom = CLIENT_REPORT_TRANS_FROM || '';
   var transTo = CLIENT_REPORT_TRANS_TO || '';
   return (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
@@ -489,6 +491,7 @@ function getClientReportVisibleRows(){
       ].join(' '));
       if (practiceHaystack.indexOf(practiceQ) < 0) return false;
     }
+    if (moduleValue && String(item.row.moduleCode || '') !== moduleValue) return false;
     var transDate = String(item.row.transmittedAt || '').slice(0, 10);
     if (transFrom && (!transDate || transDate < transFrom)) return false;
     if (transTo && (!transDate || transDate > transTo)) return false;
@@ -561,12 +564,36 @@ function renderClientReportRows(){
   }).join('');
   updateClientReportSummary();
 }
+function renderClientReportModuleFilter(){
+  var el = document.getElementById('clientReportModuleFilter');
+  if (!el) return;
+  var modules = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(row){
+    var code = String(row.moduleCode || '').trim();
+    if (!code) return;
+    modules[code] = (code + ' - ' + (row.moduleDescription || 'Sin descripcion')).trim();
+  });
+  var current = CLIENT_REPORT_MODULE;
+  var options = Object.keys(modules).sort(function(a,b){ return Number(a) - Number(b) || a.localeCompare(b); }).map(function(code){
+    return '<option value="' + esc(code) + '">' + esc(modules[code]) + '</option>';
+  }).join('');
+  el.innerHTML = '<option value="">Todos los modulos</option>' + options;
+  if (current && modules[current]) el.value = current;
+  else {
+    CLIENT_REPORT_MODULE = '';
+    el.value = '';
+  }
+}
 function setClientReportSearch(value){
   CLIENT_REPORT_QUERY = value || '';
   renderClientReportRows();
 }
 function setClientReportPracticeFilter(value){
   CLIENT_REPORT_PRACTICE_QUERY = value || '';
+  renderClientReportRows();
+}
+function setClientReportModuleFilter(value){
+  CLIENT_REPORT_MODULE = value || '';
   renderClientReportRows();
 }
 function setClientReportTransmissionFilter(){
@@ -583,12 +610,14 @@ function setClientReportExpectedAmount(value){
 function resetClientReportFilters(){
   CLIENT_REPORT_QUERY = '';
   CLIENT_REPORT_PRACTICE_QUERY = '';
+  CLIENT_REPORT_MODULE = '';
   CLIENT_REPORT_TRANS_FROM = '';
   CLIENT_REPORT_TRANS_TO = '';
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
   var practice = document.getElementById('clientReportPracticeFilter');
   if (practice) practice.value = '';
+  renderClientReportModuleFilter();
   var from = document.getElementById('clientReportTransFrom');
   if (from) from.value = '';
   var to = document.getElementById('clientReportTransTo');
@@ -686,6 +715,7 @@ async function openClientReport(id){
     nomencladorPeriod: report.nomencladorPeriod || '',
     nomencladorLabel: report.nomencladorLabel || ''
   };
+  renderClientReportModuleFilter();
   resetClientReportFilters();
   setClientReportExpectedInput(report.expectedAmount ? String(report.expectedAmount).replace('.', ',') : '');
   var title = document.getElementById('clientReportTitle');
@@ -749,6 +779,7 @@ async function uploadClientReport(files){
   if (periodSelect && data.nomencladorPeriod && [].slice.call(periodSelect.options).some(function(option){ return option.value === data.nomencladorPeriod; })) {
     periodSelect.value = data.nomencladorPeriod;
   }
+  renderClientReportModuleFilter();
   resetClientReportFilters();
   if (wasClosed) setClientReportExpectedInput('');
   var title = document.getElementById('clientReportTitle');

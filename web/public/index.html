@@ -285,6 +285,7 @@
                     <div class="report-filter-bar">
                       <input class="inp report-search" id="clientReportSearch" placeholder="Paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
                       <input class="inp report-search" id="clientReportPracticeFilter" placeholder="Codigo o practica..." oninput="setClientReportPracticeFilter(this.value)">
+                      <select class="inp" id="clientReportModuleFilter" onchange="setClientReportModuleFilter(this.value)"><option value="">Todos los modulos</option></select>
                       <label class="date-filter"><span>Transm. desde</span><input class="inp" type="date" id="clientReportTransFrom" onchange="setClientReportTransmissionFilter()"></label>
                       <label class="date-filter"><span>Transm. hasta</span><input class="inp" type="date" id="clientReportTransTo" onchange="setClientReportTransmissionFilter()"></label>
                     </div>
