@@ -623,15 +623,32 @@ const clientPracticeValueAliases = {
     "820113": "570129",
   },
 };
+const clientPracticeValueOverrides = {
+  "sala-millon": {
+    "570126": {
+      moduleCode: "543",
+      moduleDescription: "CARDIOLOGIA",
+      practiceCode: "570126",
+      practiceDescription: "ELECTROCARDIOGRAMA",
+      total: 6905.52,
+      valueSourceCode: "570126",
+    },
+  },
+};
+function getClientPracticeOverride(clientSlug, practiceCode) {
+  return ((clientPracticeValueOverrides[clientSlug] || {})[String(practiceCode || "")]) || null;
+}
 function findNomencladorMatch(payload, client, practice) {
   const activeModules = new Set((client.activeModules || []).map((module) => String(module.code)));
   const aliasCode = ((clientPracticeValueAliases[client.slug] || {})[practice.code]) || "";
+  const override = getClientPracticeOverride(client.slug, practice.code);
   let valueSourceCode = practice.code;
   let candidates = (payload.rows || []).filter((row) => String(row.practiceCode || "") === practice.code);
   if (!candidates.length && aliasCode) {
     valueSourceCode = aliasCode;
     candidates = (payload.rows || []).filter((row) => String(row.practiceCode || "") === aliasCode);
   }
+  if (!candidates.length && override) return { ...override };
   const activeCandidates = candidates.filter((row) => !activeModules.size || activeModules.has(String(row.moduleCode || "")));
   if (activeCandidates.length) candidates = activeCandidates;
   if (!candidates.length) return null;
@@ -781,6 +798,28 @@ function sanitizeReportRows(rows) {
     sanitized.netTotal = reportRowNet(sanitized);
     return sanitized;
   }).filter((row) => row.order || row.practiceText || row.patientName);
+}
+function applyClientPracticeOverrides(clientSlug, rows) {
+  return (rows || []).map((row) => {
+    const override = getClientPracticeOverride(clientSlug, row.practiceCode);
+    if (!override || row.valueEdited) return row;
+    const next = {
+      ...row,
+      moduleCode: row.moduleCode || override.moduleCode || "",
+      moduleDescription: row.moduleDescription || override.moduleDescription || "",
+      practiceDescription: row.practiceDescription || override.practiceDescription || "",
+      valueGross: Number(row.valueGross || 0) > 0 ? row.valueGross : money(override.total),
+      valueSourceCode: row.valueSourceCode || override.valueSourceCode || override.practiceCode || "",
+      matchFound: true,
+    };
+    next.valueBillable = reportRowGross(next);
+    next.debitTotal = reportRowDebit(next);
+    next.netTotal = reportRowNet(next);
+    return next;
+  });
+}
+function reportRows(report) {
+  return applyClientPracticeOverrides(report.clientSlug, report.rows || []);
 }
 function summarizeReportRows(rows) {
   return (rows || []).reduce((acc, row) => {
@@ -937,7 +976,7 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     }
     const target = byPeriod.get(period);
     target.reportCount += 1;
-    for (const row of report.rows || []) addRowToDashboardPeriod(target, row);
+    for (const row of reportRows(report)) addRowToDashboardPeriod(target, row);
   }
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
   const selectedPeriod = normalizePeriod(periodFilter) || (periods[0] && periods[0].period) || "";
@@ -961,7 +1000,7 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   };
 }
 function reportListItem(report) {
-  const summary = summarizeReportRows(report.rows || []);
+  const summary = summarizeReportRows(reportRows(report));
   return {
     id: report.id,
     clientSlug: report.clientSlug,
@@ -980,7 +1019,8 @@ function reportListItem(report) {
   };
 }
 function buildClientReportWorkbook(report) {
-  const summary = summarizeReportRows(report.rows || []);
+  const rowsForReport = reportRows(report);
+  const summary = summarizeReportRows(rowsForReport);
   const wb = XLSX.utils.book_new();
   const resumen = [
     ["Reporte", report.title || ""],
@@ -1009,7 +1049,7 @@ function buildClientReportWorkbook(report) {
     [report.observations || ""],
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
-  const rows = (report.rows || []).map((row) => ({
+  const rows = rowsForReport.map((row) => ({
     Paciente: row.patientName || "",
     Beneficio: row.benefit || "",
     OME: row.order || "",
@@ -1377,7 +1417,7 @@ const server = http.createServer(async (req, res) => {
     const id = decodeURIComponent(clientReportDetailMatch[2]);
     const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
-    return json(res, 200, { report });
+    return json(res, 200, { report: { ...report, rows: reportRows(report), summary: summarizeReportRows(reportRows(report)) } });
   }
 
   const clientReportPreviewMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/preview$/);
