@@ -54,6 +54,15 @@
   .login .brand .tag{color:var(--text-2)}
   .login h1{font-size:18px;margin:0 0 3px;text-align:center}
   .login .sub{font-size:12.5px;color:var(--text-2);text-align:center;margin:0 0 22px}
+  .change{position:fixed;inset:0;display:none;place-items:center;padding:24px;background:radial-gradient(1200px 600px at 70% -10%, #14335a 0%, var(--navy) 55%);z-index:55}
+  .ch-title{font-size:18px;margin:0 0 4px;text-align:center;color:var(--text)}
+  .ch-sub{font-size:12.5px;color:var(--text-2);text-align:center;margin:0 0 20px}
+  .msg{font-size:12.5px;margin:0 0 10px;line-height:1.4}
+  .msg:empty{display:none}
+  .msg.err{color:var(--error)}
+  body.booting .login, body.booting .app, body.booting .change{display:none !important}
+  body.mustchange .login, body.mustchange .app{display:none !important}
+  body.mustchange .change{display:grid}
   .field{margin-bottom:14px}
   .field label{display:block;font-size:11.5px;font-weight:600;color:var(--text-2);margin-bottom:6px;letter-spacing:.02em}
   .inp{width:100%;height:42px;padding:0 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font-size:14px;outline:none}
