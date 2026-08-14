@@ -334,6 +334,7 @@
   .report-model-grid b{font-size:12px}
   .report-model-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
   .report-upload-card{display:grid;gap:10px}
+  .report-head-actions{display:flex;gap:8px;align-items:center}
   .client-report-controls{display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;align-items:end}
   .client-report-controls .field{margin:0}
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
@@ -360,6 +361,9 @@
   .debit-check{display:flex;gap:5px;align-items:center;font-size:11.5px;color:var(--text-2);font-weight:700}
   .debit-check input{width:14px;height:14px;accent-color:var(--turq)}
   .debit-amount:disabled{opacity:.55}
+  .icon-danger-btn.mini{width:34px;height:34px;border-radius:8px}
+  .icon-danger-btn.mini svg{width:16px;height:16px}
+  .icon-danger-btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
 
   /* checkbox simple */
   .chk{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text);cursor:pointer;user-select:none;margin-top:2px}

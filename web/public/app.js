@@ -418,6 +418,8 @@ function updateClientReportSummary(){
   if (outside) meta += ' - ' + outside + ' fuera de corte';
   if (unmatched) meta += ' - ' + unmatched + ' sin valor';
   document.getElementById('clientReportMeta').textContent = rows.length ? meta : 'Todavia no hay bandeja cargada.';
+  var clearBtn = document.getElementById('clientReportClearBtn');
+  if (clearBtn) clearBtn.disabled = !rows.length;
 }
 function renderClientReportRows(){
   var body = document.getElementById('clientReportBody');
@@ -444,6 +446,12 @@ function renderClientReportRows(){
       + '</tr>';
   }).join('');
   updateClientReportSummary();
+}
+function clearClientReport(){
+  CLIENT_REPORT_ROWS = [];
+  var st = document.getElementById('clientReportStatus');
+  if (st) st.textContent = 'Bandeja eliminada de la previsualizacion.';
+  renderClientReportRows();
 }
 function toggleReportDebit(index, checked){
   var row = CLIENT_REPORT_ROWS[index];
