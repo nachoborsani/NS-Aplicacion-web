@@ -101,6 +101,8 @@ async function renderUsers(){
 var NOM_READY = false;
 var NOM_TIMER = null;
 var NOM_ACTIVE_PERIOD = '';
+var NOM_MODULES = [];
+var NOM_SELECTED_MODULES = [];
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -126,6 +128,61 @@ function fillSelect(id, items){
   }).join('');
   if ([].slice.call(el.options).some(function(o){ return o.value === current; })) el.value = current;
 }
+function moduleOptionByValue(value){
+  return NOM_MODULES.filter(function(item){ return item.value === value; })[0];
+}
+function updateModuleTrigger(){
+  var trigger = document.getElementById('nomModuleTrigger');
+  if (!trigger) return;
+  if (!NOM_SELECTED_MODULES.length) {
+    trigger.textContent = 'Todos';
+    return;
+  }
+  if (NOM_SELECTED_MODULES.length === 1) {
+    var item = moduleOptionByValue(NOM_SELECTED_MODULES[0]);
+    trigger.textContent = item ? item.label : NOM_SELECTED_MODULES[0];
+    return;
+  }
+  trigger.textContent = NOM_SELECTED_MODULES.length + ' modulos';
+}
+function renderModuleOptions(items){
+  NOM_MODULES = items || [];
+  NOM_SELECTED_MODULES = NOM_SELECTED_MODULES.filter(function(value){
+    return NOM_MODULES.some(function(item){ return item.value === value; });
+  });
+  var box = document.getElementById('nomModuleOptions');
+  if (!box) return;
+  box.innerHTML = NOM_MODULES.map(function(item){
+    var checked = NOM_SELECTED_MODULES.includes(item.value) ? ' checked' : '';
+    return '<label class="multi-option"><input type="checkbox" value="' + esc(item.value) + '"' + checked + ' onchange="toggleModuleSelection(this)"> <span>' + esc(item.label) + '</span></label>';
+  }).join('') || '<div class="multi-empty">Sin modulos</div>';
+  updateModuleTrigger();
+}
+function toggleModuleMenu(){
+  var menu = document.getElementById('nomModuleMenu');
+  if (menu) menu.classList.toggle('show');
+}
+function toggleModuleSelection(input){
+  var value = input.value;
+  if (input.checked) {
+    if (!NOM_SELECTED_MODULES.includes(value)) NOM_SELECTED_MODULES.push(value);
+  } else {
+    NOM_SELECTED_MODULES = NOM_SELECTED_MODULES.filter(function(item){ return item !== value; });
+  }
+  updateModuleTrigger();
+  searchNomenclador();
+}
+function clearModuleSelection(){
+  NOM_SELECTED_MODULES = [];
+  document.querySelectorAll('#nomModuleOptions input[type="checkbox"]').forEach(function(input){ input.checked = false; });
+  updateModuleTrigger();
+  searchNomenclador();
+}
+document.addEventListener('click', function(event){
+  var multi = document.getElementById('nomModuleMulti');
+  var menu = document.getElementById('nomModuleMenu');
+  if (multi && menu && !multi.contains(event.target)) menu.classList.remove('show');
+});
 function fillPeriodSelect(items, selected){
   var el = document.getElementById('nomPeriod');
   if (!el) return;
@@ -153,7 +210,9 @@ async function loadNomencladorSummary(period){
     return;
   }
   NOM_READY = !!res.data.loaded;
+  var previousPeriod = NOM_ACTIVE_PERIOD;
   NOM_ACTIVE_PERIOD = res.data.activePeriod || '';
+  if (previousPeriod && NOM_ACTIVE_PERIOD && previousPeriod !== NOM_ACTIVE_PERIOD) NOM_SELECTED_MODULES = [];
   fillPeriodSelect(res.data.nomencladores || [], NOM_ACTIVE_PERIOD);
   if (!NOM_READY){
     st.innerHTML = '<div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>';
@@ -164,7 +223,7 @@ async function loadNomencladorSummary(period){
   var d = res.data;
   st.innerHTML = '<div><b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span></div>'
     + '<div class="nom-cols">Valor: ' + esc(d.columns.total) + '</div>';
-  fillSelect('nomModule', d.filters.modules);
+  renderModuleOptions(d.filters.modules);
   fillSelect('nomScope', d.filters.scopes);
   fillSelect('nomType', d.filters.types);
   await searchNomenclador();
@@ -211,11 +270,11 @@ function queueNomencladorSearch(){
 async function searchNomenclador(){
   if (!NOM_READY) return;
   var q = document.getElementById('nomQ').value.trim();
-  var moduleValue = document.getElementById('nomModule').value;
+  var moduleValues = NOM_SELECTED_MODULES.slice();
   var scope = document.getElementById('nomScope').value;
   var type = document.getElementById('nomType').value;
   var period = document.getElementById('nomPeriod').value || NOM_ACTIVE_PERIOD;
-  var params = new URLSearchParams({ period:period, q:q, module:moduleValue, scope:scope, type:type, limit:'120' });
+  var params = new URLSearchParams({ period:period, q:q, modules:moduleValues.join(','), scope:scope, type:type, limit:'120' });
   var res = await api('/api/nomencladores/search?' + params.toString());
   var body = document.getElementById('nomBody');
   if (!res.ok){

@@ -680,20 +680,42 @@ const server = http.createServer(async (req, res) => {
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
 
     const query = normalizeText(url.searchParams.get("q") || "");
-    const moduleValue = String(url.searchParams.get("module") || "").trim();
+    const moduleValues = [
+      ...url.searchParams.getAll("module"),
+      ...String(url.searchParams.get("modules") || "").split(","),
+    ].map((value) => String(value || "").trim()).filter(Boolean);
     const typeValue = String(url.searchParams.get("type") || "").trim();
     const scopeValue = String(url.searchParams.get("scope") || "").trim();
     const limit = Math.max(1, Math.min(300, Number(url.searchParams.get("limit") || 120)));
 
     let rows = payload.rows || [];
     if (query) rows = rows.filter((row) => row.search.includes(query));
-    if (moduleValue) rows = rows.filter((row) => String(row.moduleCode || row.moduleDescription) === moduleValue);
+    if (moduleValues.length) rows = rows.filter((row) => moduleValues.includes(String(row.moduleCode || row.moduleDescription)));
     if (typeValue) rows = rows.filter((row) => row.type === typeValue);
     if (scopeValue) rows = rows.filter((row) => row.scope === scopeValue);
 
     return json(res, 200, {
       total: rows.length,
       rows: rows.slice(0, limit).map(({ search, ...row }) => row),
+    });
+  }
+
+  // Export completo de un periodo, en una sola request (lo usa la app de
+  // escritorio para bajar el nomenclador entero; el search corta en 300).
+  if (p === "/api/nomencladores/export" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+    return json(res, 200, {
+      period: payload.period,
+      label: payload.label || periodLabel(payload.period),
+      vigencia: payload.vigencia || "",
+      uploadedAt: payload.uploadedAt || "",
+      rowCount: payload.rowCount,
+      columns: payload.columns,
+      rows: (payload.rows || []).map(({ search, ...row }) => row),
     });
   }
 

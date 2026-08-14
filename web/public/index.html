@@ -189,7 +189,16 @@
             </div>
             <div class="field">
               <label>Modulo</label>
-              <select class="inp" id="nomModule" onchange="searchNomenclador()"><option value="">Todos</option></select>
+              <div class="multi-select" id="nomModuleMulti">
+                <button class="inp multi-trigger" id="nomModuleTrigger" type="button" onclick="toggleModuleMenu()">Todos</button>
+                <div class="multi-menu" id="nomModuleMenu">
+                  <div class="multi-menu-head">
+                    <span>Modulos</span>
+                    <button type="button" onclick="clearModuleSelection()">Limpiar</button>
+                  </div>
+                  <div class="multi-options" id="nomModuleOptions"></div>
+                </div>
+              </div>
             </div>
             <div class="field">
               <label>Ambito</label>
