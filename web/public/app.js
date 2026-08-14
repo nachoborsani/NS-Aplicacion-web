@@ -19,11 +19,12 @@ function toggleTheme(){
   applyThemeIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', nomencladores:'Nomencladores', soon:'Configuracion general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', soon:'Configuracion general' };
 function go(v, el){
-  ['dash','users','nomencladores','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','clientes','nomencladores','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   if (v === 'users') renderUsers();
+  if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
   document.querySelectorAll('.nav a, .side-config a').forEach(function(a){ a.classList.remove('active'); });
   if (el) el.classList.add('active');
@@ -103,6 +104,9 @@ var NOM_TIMER = null;
 var NOM_ACTIVE_PERIOD = '';
 var NOM_MODULES = [];
 var NOM_SELECTED_MODULES = [];
+var CLIENTS = [];
+var ACTIVE_CLIENT = null;
+var CLIENT_NOM_TIMER = null;
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -193,6 +197,100 @@ function fillPeriodSelect(items, selected){
   el.innerHTML = options || '<option value="">Sin cargar</option>';
   if (selected && [].slice.call(el.options).some(function(o){ return o.value === selected; })) el.value = selected;
   else if (el.options.length) el.value = el.options[0].value;
+}
+function fillClientPeriodSelect(items, selected){
+  var el = document.getElementById('clientNomPeriod');
+  if (!el) return;
+  el.innerHTML = (items || []).map(function(item){
+    var suffix = item.rowCount ? ' (' + item.rowCount + ')' : '';
+    return '<option value="' + esc(item.value) + '">' + esc(item.label + suffix) + '</option>';
+  }).join('') || '<option value="">Sin cargar</option>';
+  if (selected && [].slice.call(el.options).some(function(o){ return o.value === selected; })) el.value = selected;
+  else if (el.options.length) el.value = el.options[0].value;
+}
+function renderNomencladorRows(rows, bodyId, metaId, total){
+  var body = document.getElementById(bodyId);
+  if (!body) return;
+  var safeRows = rows || [];
+  if (metaId) {
+    document.getElementById(metaId).textContent = total + ' coincidencias' + (total > safeRows.length ? ' - mostrando ' + safeRows.length : '');
+  }
+  if (!safeRows.length){
+    body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin resultados para esos filtros.</td></tr>';
+    return;
+  }
+  body.innerHTML = safeRows.map(function(row){
+    var scope = row.scope || 'otros';
+    return '<tr>'
+      + '<td><div class="nom-code">' + esc(row.moduleCode || '-') + '</div><div class="nom-muted">' + esc(row.moduleDescription || '') + '</div></td>'
+      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div>' + (row.observations ? '<div class="nom-muted">' + esc(row.observations) + '</div>' : '') + '</td>'
+      + '<td class="nom-type">' + esc(cleanNomType(row.type)) + '</td>'
+      + '<td><span class="scope-badge scope-' + esc(scope) + '">' + esc(scopeLabel(scope)) + '</span></td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'
+      + '<td class="nom-auth">' + esc(row.authLevel || '-') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+async function loadClients(){
+  var res = await api('/api/clientes');
+  if (!res.ok) return;
+  CLIENTS = res.data.clients || [];
+  if (!ACTIVE_CLIENT && CLIENTS.length) ACTIVE_CLIENT = CLIENTS[0];
+  renderClientList();
+  renderActiveClient();
+}
+function renderClientList(){
+  var list = document.getElementById('clientList');
+  if (!list) return;
+  list.innerHTML = CLIENTS.map(function(client){
+    var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
+    return '<button class="client-list-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '"><strong>' + esc(client.name) + '</strong><span>' + esc(client.activeModules.length) + ' modulos activos</span></button>';
+  }).join('');
+  list.querySelectorAll('[data-client-slug]').forEach(function(button){
+    button.addEventListener('click', function(){
+      selectClient(button.getAttribute('data-client-slug'));
+    });
+  });
+}
+function selectClient(slug){
+  ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
+  renderClientList();
+  renderActiveClient();
+}
+async function renderActiveClient(){
+  var client = ACTIVE_CLIENT;
+  if (!client) return;
+  document.getElementById('clientCrumbName').textContent = client.name;
+  document.getElementById('clientName').textContent = client.name;
+  document.getElementById('clientBusinessName').textContent = client.businessName;
+  document.getElementById('clientCuit').textContent = client.cuit;
+  document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){
+    return '<span class="module-chip"><b>' + esc(module.code) + '</b> ' + esc(module.name) + '</span>';
+  }).join('');
+  var summary = await api('/api/nomencladores');
+  if (summary.ok) {
+    fillClientPeriodSelect(summary.data.nomencladores || [], summary.data.activePeriod);
+  }
+  await loadClientNomenclador();
+}
+function queueClientNomencladorSearch(){
+  clearTimeout(CLIENT_NOM_TIMER);
+  CLIENT_NOM_TIMER = setTimeout(loadClientNomenclador, 220);
+}
+async function loadClientNomenclador(){
+  if (!ACTIVE_CLIENT) return;
+  var period = document.getElementById('clientNomPeriod').value || NOM_ACTIVE_PERIOD;
+  var q = document.getElementById('clientNomQ').value.trim();
+  var modules = ACTIVE_CLIENT.activeModules.map(function(module){ return module.code; }).join(',');
+  var params = new URLSearchParams({ period:period, q:q, modules:modules, limit:'120' });
+  var res = await api('/api/nomencladores/search?' + params.toString());
+  var body = document.getElementById('clientNomBody');
+  if (!res.ok){
+    body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + esc(res.data.error || 'No se pudo buscar.') + '</td></tr>';
+    document.getElementById('clientNomMeta').textContent = 'Sin datos para mostrar.';
+    return;
+  }
+  renderNomencladorRows(res.data.rows || [], 'clientNomBody', 'clientNomMeta', res.data.total || 0);
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');
@@ -287,17 +385,7 @@ async function searchNomenclador(){
     body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin resultados para esos filtros.</td></tr>';
     return;
   }
-  body.innerHTML = rows.map(function(row){
-    var scope = row.scope || 'otros';
-    return '<tr>'
-      + '<td><div class="nom-code">' + esc(row.moduleCode || '-') + '</div><div class="nom-muted">' + esc(row.moduleDescription || '') + '</div></td>'
-      + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div>' + (row.observations ? '<div class="nom-muted">' + esc(row.observations) + '</div>' : '') + '</td>'
-      + '<td class="nom-type">' + esc(cleanNomType(row.type)) + '</td>'
-      + '<td><span class="scope-badge scope-' + esc(scope) + '">' + esc(scopeLabel(scope)) + '</span></td>'
-      + '<td class="nom-money"><b>' + esc(moneyFmt(row.total)) + '</b><div class="nom-muted">H ' + esc(moneyFmt(row.honorarios)) + ' - G ' + esc(moneyFmt(row.gastos)) + '</div></td>'
-      + '<td class="nom-auth">' + esc(row.authLevel || '-') + '</td>'
-      + '</tr>';
-  }).join('');
+  renderNomencladorRows(rows, 'nomBody', 'nomResultMeta', res.data.total || 0);
 }
 
 function findUser(un){ return USERS.filter(function(u){ return u.username === un; })[0]; }

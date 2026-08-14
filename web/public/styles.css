@@ -280,6 +280,34 @@
   [data-theme="dark"] .scope-otros{background:#1b2f47;color:#a7b6c8}
   .muted-cell{color:var(--text-2);padding:18px!important;text-align:center}
 
+  /* clientes */
+  .client-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:14px}
+  .client-list{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:7px;box-shadow:var(--shadow-sm);align-self:start}
+  .client-list-item{width:100%;border:0;background:transparent;border-radius:9px;padding:10px 11px;text-align:left;color:var(--text);display:grid;gap:2px}
+  .client-list-item strong{font-size:13px;line-height:1.25}
+  .client-list-item span{font-size:11.5px;color:var(--text-2)}
+  .client-list-item:hover,.client-list-item.active{background:var(--hover)}
+  .client-list-item.active{box-shadow:inset 3px 0 0 var(--turq)}
+  .client-detail{display:grid;gap:14px;min-width:0}
+  .client-top,.client-card,.client-nomenclador{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm)}
+  .client-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px}
+  .crumb{font-size:11.5px;color:var(--text-2);margin-bottom:3px}
+  .client-top h2{margin:0;font-size:19px;line-height:1.2}
+  .client-status{background:var(--success-bg);color:var(--success);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:750;white-space:nowrap}
+  .client-grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.35fr);gap:14px}
+  .client-card{padding:15px 16px}
+  .client-card h3,.client-nom-head h3{margin:0 0 10px;font-size:14.5px}
+  .info-list{display:grid;gap:9px;margin:0}
+  .info-list div{display:grid;gap:2px}
+  .info-list dt{font-size:10.5px;color:var(--text-2);text-transform:uppercase;font-weight:750;letter-spacing:.04em}
+  .info-list dd{margin:0;font-weight:650;font-size:13px}
+  .module-chip-list{display:flex;gap:7px;flex-wrap:wrap}
+  .module-chip{display:inline-flex;gap:6px;align-items:center;background:var(--celeste);color:#0f7f7c;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:650}
+  .client-nomenclador{overflow:hidden}
+  .client-nom-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:15px 16px;border-bottom:1px solid var(--border)}
+  .client-nom-head p{margin:0;color:var(--text-2);font-size:12px}
+  .client-nom-controls{display:grid;grid-template-columns:170px minmax(220px,320px);gap:10px}
+
   /* checkbox simple */
   .chk{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text);cursor:pointer;user-select:none;margin-top:2px}
   .chk input{width:17px;height:17px;accent-color:var(--turq);cursor:pointer}
@@ -302,5 +330,5 @@
   .modal-note b{color:var(--text)}
   .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;border-top:1px solid var(--border)}
 
-  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr} }
+  @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid{grid-template-columns:1fr}.client-nom-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr} }
   @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column} }

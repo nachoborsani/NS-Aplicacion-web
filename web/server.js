@@ -196,6 +196,22 @@ function publicUser(u) {
 
 // Perfiles validos y reglas de nombre de usuario
 const ROLES = new Set(["admin", "operador", "medico", "clinica"]);
+const CLIENTS = [
+  {
+    slug: "sala-millon",
+    name: "Sala Millon",
+    businessName: "SALA DE AUXILIO DE LOMAS DEL MILLON",
+    cuit: "30545942123",
+    activeModules: [
+      { code: "546", name: "TRAUMATOLOGIA" },
+      { code: "437", name: "OTORRINOLARINGOLOGIA" },
+      { code: "432", name: "PEDIATRIA" },
+      { code: "543", name: "CARDIOLOGIA" },
+      { code: "557", name: "NUTRICION" },
+      { code: "545", name: "UROLOGIA" },
+    ],
+  },
+];
 function validUsername(u) {
   return /^[a-z0-9._-]{3,20}$/.test(u);
 }
@@ -661,6 +677,13 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/logout" && req.method === "POST") {
     clearSessionCookie(res);
     return json(res, 200, { ok: true });
+  }
+
+  // ---- Clientes ----
+  if (p === "/api/clientes" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    return json(res, 200, { clients: CLIENTS });
   }
 
   // ---- Nomencladores ----

@@ -85,6 +85,7 @@
         <a class="active" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
         <a onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 16v-5M13 16V8M18 16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Reportes</a>
         <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
+        <a onclick="go('clientes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a2 2 0 012-2h9a2 2 0 012 2v16M8 7h5M8 11h5M8 15h5M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Clientes</a>
       </nav>
       <div class="side-foot">
         <div class="side-user">
@@ -150,6 +151,73 @@
               <thead><tr><th>Usuario</th><th>Perfil</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
               <tbody id="usersBody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <!-- CLIENTES -->
+        <section id="view-clientes" style="display:none">
+          <div class="page-head"><h1>Clientes</h1><p>Informacion operativa por cliente.</p></div>
+
+          <div class="client-layout">
+            <aside class="client-list" id="clientList"></aside>
+
+            <section class="client-detail">
+              <div class="client-top">
+                <div>
+                  <div class="crumb">Clientes / <span id="clientCrumbName">Sala Millon</span> / Informacion basica</div>
+                  <h2 id="clientName">Sala Millon</h2>
+                </div>
+                <span class="client-status">Activo</span>
+              </div>
+
+              <div class="client-grid">
+                <article class="client-card">
+                  <h3>Informacion basica</h3>
+                  <dl class="info-list">
+                    <div><dt>Razon social</dt><dd id="clientBusinessName">-</dd></div>
+                    <div><dt>CUIT</dt><dd id="clientCuit">-</dd></div>
+                  </dl>
+                </article>
+
+                <article class="client-card">
+                  <h3>Modulos activos</h3>
+                  <div class="module-chip-list" id="clientModules"></div>
+                </article>
+              </div>
+
+              <div class="client-nomenclador">
+                <div class="client-nom-head">
+                  <div>
+                    <h3>Nomenclador del cliente</h3>
+                    <p>Filtrado automaticamente por modulos activos.</p>
+                  </div>
+                  <div class="client-nom-controls">
+                    <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
+                    <input class="inp" id="clientNomQ" placeholder="Buscar prestacion o codigo..." oninput="queueClientNomencladorSearch()">
+                  </div>
+                </div>
+
+                <div class="tablecard nom-table">
+                  <div class="table-head">
+                    <div><b>Resultados</b><span id="clientNomMeta">Todavia no hay busqueda.</span></div>
+                  </div>
+                  <div class="table-scroll">
+                    <table class="nom-results-table">
+                      <colgroup>
+                        <col class="col-module">
+                        <col class="col-practice">
+                        <col class="col-type">
+                        <col class="col-scope">
+                        <col class="col-total">
+                        <col class="col-auth">
+                      </colgroup>
+                      <thead><tr><th>Modulo</th><th>Prestacion</th><th>Tipo</th><th>Ambito</th><th>Total</th><th>Autorizacion</th></tr></thead>
+                      <tbody id="clientNomBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </section>
 
