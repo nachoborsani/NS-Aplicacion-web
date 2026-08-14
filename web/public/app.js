@@ -100,6 +100,7 @@ async function renderUsers(){
 // ---------- nomencladores ----------
 var NOM_READY = false;
 var NOM_TIMER = null;
+var NOM_ACTIVE_PERIOD = '';
 function moneyFmt(n){
   var value = Number(n || 0);
   try { return value.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:2 }); }
@@ -118,15 +119,36 @@ function fillSelect(id, items){
   }).join('');
   if ([].slice.call(el.options).some(function(o){ return o.value === current; })) el.value = current;
 }
-async function loadNomencladorSummary(){
+function fillPeriodSelect(items, selected){
+  var el = document.getElementById('nomPeriod');
+  if (!el) return;
+  var options = (items || []).map(function(item){
+    var suffix = item.rowCount ? ' (' + item.rowCount + ')' : '';
+    return '<option value="' + esc(item.value) + '">' + esc(item.label + suffix) + '</option>';
+  }).join('');
+  el.innerHTML = options || '<option value="">Sin cargar</option>';
+  if (selected && [].slice.call(el.options).some(function(o){ return o.value === selected; })) el.value = selected;
+  else if (el.options.length) el.value = el.options[0].value;
+}
+function setDefaultUploadPeriod(){
+  var el = document.getElementById('nomUploadPeriod');
+  if (!el || el.value) return;
+  var d = new Date();
+  el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+async function loadNomencladorSummary(period){
   var st = document.getElementById('nomStatus');
   if (!st) return;
-  var res = await api('/api/nomencladores');
+  setDefaultUploadPeriod();
+  var selected = period || document.getElementById('nomPeriod').value || '';
+  var res = await api('/api/nomencladores' + (selected ? '?period=' + encodeURIComponent(selected) : ''));
   if (!res.ok){
     st.innerHTML = '<div><b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span></div>';
     return;
   }
   NOM_READY = !!res.data.loaded;
+  NOM_ACTIVE_PERIOD = res.data.activePeriod || '';
+  fillPeriodSelect(res.data.nomencladores || [], NOM_ACTIVE_PERIOD);
   if (!NOM_READY){
     st.innerHTML = '<div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>';
     document.getElementById('nomBody').innerHTML = '<tr><td colspan="6" class="muted-cell">No hay datos cargados.</td></tr>';
@@ -134,7 +156,7 @@ async function loadNomencladorSummary(){
     return;
   }
   var d = res.data;
-  st.innerHTML = '<div><b>' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span></div>'
+  st.innerHTML = '<div><b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span></div>'
     + '<div class="nom-cols">Valor: ' + esc(d.columns.total) + '</div>';
   fillSelect('nomModule', d.filters.modules);
   fillSelect('nomScope', d.filters.scopes);
@@ -145,8 +167,15 @@ async function uploadNomenclador(files){
   if (!files || !files[0]) return;
   var st = document.getElementById('nomStatus');
   var input = document.getElementById('nomFile');
+  var period = document.getElementById('nomUploadPeriod').value;
+  if (!period){
+    st.innerHTML = '<div><b>Falta el mes</b><span>Elegi a que mes corresponde el nomenclador antes de adjuntar el Excel.</span></div>';
+    if (input) input.value = '';
+    return;
+  }
   st.innerHTML = '<div><b>Procesando Excel...</b><span>Esto puede tardar unos segundos.</span></div>';
   var fd = new FormData();
+  fd.append('period', period);
   fd.append('file', files[0]);
   var r = await fetch('/api/nomencladores/upload', { method:'POST', body: fd });
   var data = {};
@@ -156,7 +185,7 @@ async function uploadNomenclador(files){
     st.innerHTML = '<div><b>No se pudo cargar</b><span>' + esc(data.error || 'Revisa el formato del archivo.') + '</span></div>';
     return;
   }
-  await loadNomencladorSummary();
+  await loadNomencladorSummary(data.activePeriod || period);
 }
 function queueNomencladorSearch(){
   clearTimeout(NOM_TIMER);
@@ -168,7 +197,8 @@ async function searchNomenclador(){
   var moduleValue = document.getElementById('nomModule').value;
   var scope = document.getElementById('nomScope').value;
   var type = document.getElementById('nomType').value;
-  var params = new URLSearchParams({ q:q, module:moduleValue, scope:scope, type:type, limit:'120' });
+  var period = document.getElementById('nomPeriod').value || NOM_ACTIVE_PERIOD;
+  var params = new URLSearchParams({ period:period, q:q, module:moduleValue, scope:scope, type:type, limit:'120' });
   var res = await api('/api/nomencladores/search?' + params.toString());
   var body = document.getElementById('nomBody');
   if (!res.ok){

@@ -157,11 +157,17 @@
         <section id="view-nomencladores" style="display:none">
           <div class="head-row">
             <div class="page-head" style="margin:0"><h1>Nomencladores</h1><p>Carga y busqueda interna de prestaciones PAMI.</p></div>
-            <label class="btn btn-primary file-btn">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Adjuntar Excel
-              <input id="nomFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadNomenclador(this.files)">
-            </label>
+            <div class="nom-upload">
+              <label class="month-field">
+                <span>Mes</span>
+                <input class="inp" id="nomUploadPeriod" type="month">
+              </label>
+              <label class="btn btn-primary file-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Adjuntar Excel
+                <input id="nomFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadNomenclador(this.files)">
+              </label>
+            </div>
           </div>
 
           <div class="nom-status card" id="nomStatus">
@@ -169,6 +175,10 @@
           </div>
 
           <div class="nom-filters card">
+            <div class="field">
+              <label>Nomenclador</label>
+              <select class="inp" id="nomPeriod" onchange="loadNomencladorSummary(this.value)"><option value="">Sin cargar</option></select>
+            </div>
             <div class="field nom-search">
               <label>Prestacion, codigo o modulo</label>
               <input class="inp" id="nomQ" placeholder="Ej: ecodoppler, 427110, internacion..." oninput="queueNomencladorSearch()">

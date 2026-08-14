@@ -10,7 +10,8 @@ const publicDir = path.join(__dirname, "public");
 // Persistencia: usa el volumen de Railway si esta montado; si no, ./data local.
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
-const nomencladorFile = path.join(dataDir, "nomenclador.json");
+const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
+const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -238,6 +239,51 @@ function inferScope(moduleDescription, type, practiceDescription) {
 function displayScope(scope) {
   return { ambulatorio: "Ambulatorio", internacion: "Internacion", otros: "Otros" }[scope] || scope;
 }
+function normalizePeriod(value) {
+  const raw = String(value || "").trim();
+  let match = raw.match(/^(\d{4})-(\d{1,2})$/);
+  if (match) {
+    const month = Number(match[2]);
+    if (month >= 1 && month <= 12) return `${match[1]}-${String(month).padStart(2, "0")}`;
+  }
+  match = raw.match(/^(\d{1,2})[/-](\d{4})$/);
+  if (match) {
+    const month = Number(match[1]);
+    if (month >= 1 && month <= 12) return `${match[2]}-${String(month).padStart(2, "0")}`;
+  }
+  match = raw.match(/^(\d{4})(\d{2})$/);
+  if (match) {
+    const month = Number(match[2]);
+    if (month >= 1 && month <= 12) return `${match[1]}-${match[2]}`;
+  }
+  return "";
+}
+function inferPeriodFromText(...values) {
+  const text = values.map((v) => String(v || "")).join(" ");
+  let match = text.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (match) return normalizePeriod(`${match[2]}/${match[3]}`);
+  match = text.match(/(20\d{2})[-_ ]?(\d{2})/);
+  if (match) return normalizePeriod(`${match[1]}-${match[2]}`);
+  const months = {
+    enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
+    julio: "07", agosto: "08", septiembre: "09", setiembre: "09", octubre: "10", noviembre: "11", diciembre: "12",
+  };
+  const normalized = normalizeText(text).toLowerCase();
+  for (const [name, month] of Object.entries(months)) {
+    if (normalized.includes(name)) {
+      const year = normalized.match(/20\d{2}/);
+      if (year) return `${year[0]}-${month}`;
+    }
+  }
+  return "";
+}
+function periodLabel(period) {
+  const normalized = normalizePeriod(period);
+  if (!normalized) return "Sin periodo";
+  const [year, month] = normalized.split("-");
+  const labels = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  return `${labels[Number(month)] || month} ${year}`;
+}
 function getHeaderIndexMap(headerRow) {
   const map = {};
   headerRow.forEach((header, index) => {
@@ -256,16 +302,49 @@ function getHeaderIndexMap(headerRow) {
   });
   return map;
 }
-function loadNomenclador() {
-  try {
-    return JSON.parse(fs.readFileSync(nomencladorFile, "utf8"));
-  } catch {
-    return null;
-  }
+function createNomencladorStore() {
+  return { activePeriod: "", items: {} };
 }
-function saveNomenclador(payload) {
+function loadNomencladorStore() {
+  try {
+    const store = JSON.parse(fs.readFileSync(nomencladoresFile, "utf8"));
+    if (store && store.items && typeof store.items === "object") return store;
+  } catch {}
+
+  try {
+    const legacy = JSON.parse(fs.readFileSync(legacyNomencladorFile, "utf8"));
+    if (legacy && Array.isArray(legacy.rows)) {
+      const period = normalizePeriod(legacy.period) || inferPeriodFromText(legacy.vigencia, legacy.filename, legacy.uploadedAt) || "legacy";
+      legacy.period = period;
+      legacy.label = legacy.label || periodLabel(period);
+      return { activePeriod: period, items: { [period]: legacy } };
+    }
+  } catch {}
+
+  return createNomencladorStore();
+}
+function saveNomencladorStore(store) {
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(nomencladorFile, JSON.stringify(payload, null, 2));
+  fs.writeFileSync(nomencladoresFile, JSON.stringify(store, null, 2));
+}
+function getNomencladorByPeriod(store, period) {
+  const selected = normalizePeriod(period) || String(period || "").trim();
+  if (selected && store.items[selected]) return store.items[selected];
+  if (store.activePeriod && store.items[store.activePeriod]) return store.items[store.activePeriod];
+  const first = Object.keys(store.items).sort().reverse()[0];
+  return first ? store.items[first] : null;
+}
+function listNomencladores(store) {
+  return Object.values(store.items || {})
+    .map((item) => ({
+      value: item.period,
+      label: item.label || periodLabel(item.period),
+      filename: item.filename,
+      rowCount: item.rowCount,
+      uploadedAt: item.uploadedAt,
+      vigencia: item.vigencia,
+    }))
+    .sort((a, b) => String(b.value).localeCompare(String(a.value)));
 }
 function buildNomencladorFilters(rows) {
   const moduleMap = new Map();
@@ -285,7 +364,7 @@ function buildNomencladorFilters(rows) {
     scopes: Array.from(scopeMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
   };
 }
-function parseNomencladorWorkbook(buffer, filename) {
+function parseNomencladorWorkbook(buffer, filename, periodInput) {
   const wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName = wb.SheetNames.find((name) => normalizeText(name).includes("NOMENCLADOR")) || wb.SheetNames[0];
   if (!sheetName) throw new Error("El Excel no tiene hojas.");
@@ -334,7 +413,12 @@ function parseNomencladorWorkbook(buffer, filename) {
     });
   }
 
+  const period = normalizePeriod(periodInput) || inferPeriodFromText(vigencia, filename);
+  if (!period) throw new Error("Indica el mes del nomenclador antes de cargarlo.");
+
   const payload = {
+    period,
+    label: periodLabel(period),
     filename,
     sheetName,
     vigencia,
@@ -358,10 +442,14 @@ function parseNomencladorWorkbook(buffer, filename) {
   };
   return payload;
 }
-function nomencladorSummary(payload) {
-  if (!payload) return { loaded: false };
+function nomencladorSummary(store, payload) {
+  const items = listNomencladores(store);
+  if (!payload) return { loaded: false, activePeriod: store.activePeriod || "", nomencladores: items };
   return {
     loaded: true,
+    activePeriod: payload.period,
+    label: payload.label || periodLabel(payload.period),
+    nomencladores: items,
     filename: payload.filename,
     sheetName: payload.sheetName,
     vigencia: payload.vigencia,
@@ -388,25 +476,30 @@ function readBuffer(req, limit = 25 * 1024 * 1024) {
     req.on("error", reject);
   });
 }
-function extractMultipartFile(buffer, contentType) {
+function extractMultipart(buffer, contentType) {
   const match = String(contentType || "").match(/boundary=(?:"([^"]+)"|([^;]+))/i);
   if (!match) throw new Error("No se recibio un archivo valido.");
   const boundary = Buffer.from(`--${match[1] || match[2]}`);
+  const result = { fields: {}, file: null };
   let cursor = buffer.indexOf(boundary);
   while (cursor >= 0) {
     const headerStart = cursor + boundary.length + 2;
     const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), headerStart);
     if (headerEnd < 0) break;
     const headers = buffer.slice(headerStart, headerEnd).toString("latin1");
+    const fieldNameMatch = headers.match(/name="([^"]+)"/i);
     const fileNameMatch = headers.match(/filename="([^"]+)"/i);
     const dataStart = headerEnd + 4;
     const dataEnd = buffer.indexOf(Buffer.from(`\r\n--${match[1] || match[2]}`), dataStart);
-    if (fileNameMatch && dataEnd >= 0) {
-      return { filename: path.basename(fileNameMatch[1]), data: buffer.slice(dataStart, dataEnd) };
+    if (dataEnd >= 0 && fieldNameMatch) {
+      const data = buffer.slice(dataStart, dataEnd);
+      if (fileNameMatch) result.file = { filename: path.basename(fileNameMatch[1]), data };
+      else result.fields[fieldNameMatch[1]] = data.toString("utf8").trim();
     }
     cursor = buffer.indexOf(boundary, headerEnd + 4);
   }
-  throw new Error("No encontre ningun archivo en la carga.");
+  if (!result.file) throw new Error("No encontre ningun archivo en la carga.");
+  return result;
 }
 function sendFile(res, filePath) {
   fs.readFile(filePath, (error, data) => {
@@ -572,13 +665,16 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/nomencladores" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    return json(res, 200, nomencladorSummary(loadNomenclador()));
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    return json(res, 200, nomencladorSummary(store, payload));
   }
 
   if (p === "/api/nomencladores/search" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    const payload = loadNomenclador();
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
 
     const query = normalizeText(url.searchParams.get("q") || "");
@@ -605,14 +701,17 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede cargar nomencladores." });
     try {
       const raw = await readBuffer(req);
-      const file = extractMultipartFile(raw, req.headers["content-type"]);
-      const ext = path.extname(file.filename).toLowerCase();
+      const multipart = extractMultipart(raw, req.headers["content-type"]);
+      const ext = path.extname(multipart.file.filename).toLowerCase();
       if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
         return json(res, 400, { error: "Subi un archivo Excel .xls, .xlsx o .xlsm." });
       }
-      const payload = parseNomencladorWorkbook(file.data, file.filename);
-      saveNomenclador(payload);
-      return json(res, 200, nomencladorSummary(payload));
+      const payload = parseNomencladorWorkbook(multipart.file.data, multipart.file.filename, multipart.fields.period);
+      const store = loadNomencladorStore();
+      store.items[payload.period] = payload;
+      store.activePeriod = payload.period;
+      saveNomencladorStore(store);
+      return json(res, 200, nomencladorSummary(store, payload));
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el nomenclador." });
     }
