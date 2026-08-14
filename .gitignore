@@ -68,3 +68,7 @@ Thumbs.db
 node_modules/
 *.log
 web/data/
+
+# Conexion NS desde la app de escritorio (config con credenciales + cache local)
+ns_conexion.json
+ns_nomencladores/

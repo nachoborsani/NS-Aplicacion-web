@@ -708,7 +708,10 @@ const server = http.createServer(async (req, res) => {
     const store = loadNomencladorStore();
     const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
-    return json(res, 200, {
+    // Respondemos con Content-Length explicito (no el chunked del helper json):
+    // en respuestas grandes, sin Content-Length el cliente hace un recv de mas
+    // tras los datos y en Windows eso termina en un reset (ECONNRESET 10054).
+    const bodyStr = JSON.stringify({
       period: payload.period,
       label: payload.label || periodLabel(payload.period),
       vigencia: payload.vigencia || "",
@@ -717,6 +720,13 @@ const server = http.createServer(async (req, res) => {
       columns: payload.columns,
       rows: (payload.rows || []).map(({ search, ...row }) => row),
     });
+    res.writeHead(200, {
+      "content-type": "application/json; charset=utf-8",
+      "content-length": Buffer.byteLength(bodyStr),
+      "cache-control": "no-store",
+    });
+    res.end(bodyStr);
+    return;
   }
 
   if (p === "/api/nomencladores/upload" && req.method === "POST") {
