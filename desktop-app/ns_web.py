@@ -175,6 +175,29 @@ class NSWebClient:
     def connected(self) -> bool:
         return bool(self._cookie)
 
+    # --- Clientes / bandeja -------------------------------------------------
+    def list_clients(self) -> list[dict]:
+        return self._request("GET", "/api/clientes").get("clients", [])
+
+    def client_pami(self, slug: str) -> dict:
+        """Usuario + clave PAMI del cliente (desencriptada). Requiere sesión admin."""
+        return self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/pami/credenciales")
+
+    def upload_bandeja(self, slug: str, month: str, rows: list[dict],
+                       columns: list[str] | None = None, month_label: str = "",
+                       generated_at: str = "") -> dict:
+        """Sube la bandeja parseada del mes de un cliente a la web."""
+        return self._request(
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja",
+            body={
+                "month": month,
+                "monthLabel": month_label,
+                "generatedAt": generated_at,
+                "columns": columns or [],
+                "rows": rows,
+            },
+        )
+
     # --- Nomencladores ------------------------------------------------------
     def list_nomencladores(self) -> tuple[list[dict], str]:
         """Devuelve (lista de periodos disponibles, periodo activo).

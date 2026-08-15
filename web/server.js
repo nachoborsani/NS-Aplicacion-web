@@ -15,6 +15,7 @@ const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
 const clientCredsFile = path.join(dataDir, "client_credentials.json");
+const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
@@ -76,6 +77,19 @@ function loadClientCreds() {
 function saveClientCreds(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientCredsFile, JSON.stringify(store, null, 2));
+}
+// Bandeja del mes por cliente (la sube la app cada noche desde PAMI).
+function loadClientBandejas() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientBandejasFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function saveClientBandejas(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientBandejasFile, JSON.stringify(store, null, 2));
 }
 
 const contentTypes = {
@@ -1947,6 +1961,46 @@ const server = http.createServer(async (req, res) => {
     else store[slug] = cred;
     saveClientCreds(store);
     return json(res, 200, { ok: true, pamiUser, hasPassword: !!(store[slug] && store[slug].pamiPassEnc) });
+  }
+
+  // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
+  const clientBandejaMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja$/);
+  if (clientBandejaMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientBandejaMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadClientBandejas();
+    if (req.method === "GET") {
+      const bodyStr = JSON.stringify({ bandeja: store[slug] || null });
+      res.writeHead(200, {
+        "content-type": "application/json; charset=utf-8",
+        "content-length": Buffer.byteLength(bodyStr),
+        "cache-control": "no-store",
+      });
+      res.end(bodyStr);
+      return;
+    }
+    // POST: la app sube la bandeja parseada. Puede ser grande -> readBuffer.
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 20000) : [];
+    const columns = Array.isArray(body.columns) && body.columns.length
+      ? body.columns.map(String)
+      : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
+    store[slug] = {
+      month: String(body.month || "").trim(),
+      monthLabel: String(body.monthLabel || "").trim(),
+      generatedAt: String(body.generatedAt || "").trim(),
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: me.username,
+      count: rows.length,
+      columns,
+      rows,
+    };
+    saveClientBandejas(store);
+    return json(res, 200, { ok: true, count: rows.length });
   }
 
   const clientReportsMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes$/);

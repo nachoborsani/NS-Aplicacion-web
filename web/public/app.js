@@ -530,6 +530,29 @@ async function saveClientPami(){
   document.getElementById('clientPamiPass').placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
   msg.textContent = 'Acceso PAMI guardado.';
 }
+// Panel "Dashboard mes en curso": muestra la bandeja que subio la app.
+async function loadClientMesCurso(){
+  var box = document.getElementById('clientMesCurso');
+  if (!box || !ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/bandeja');
+  var b = (res.ok && res.data) ? res.data.bandeja : null;
+  if (!b){
+    box.innerHTML = '<div class="client-card" style="text-align:center;padding:46px 20px"><div class="empty" style="padding:0">'
+      + '<div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 16v-5M13 16V8M18 16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
+      + '<b>Sin bandeja todavía</b><span>Cuando la app suba la bandeja del mes de este cliente, la vas a ver acá.</span></div></div>';
+    return;
+  }
+  var cols = b.columns || [];
+  var head = cols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('');
+  var rowsHtml = (b.rows || []).slice(0, 500).map(function(r){
+    return '<tr>' + cols.map(function(c){ return '<td>' + esc(r[c] == null ? '' : String(r[c])) + '</td>'; }).join('') + '</tr>';
+  }).join('') || '<tr><td colspan="' + (cols.length || 1) + '" class="muted-cell">Bandeja vacía.</td></tr>';
+  box.innerHTML = '<div class="client-card">'
+    + '<div class="client-card-head"><div><h3>Bandeja ' + esc(b.monthLabel || b.month || 'del mes') + '</h3>'
+    + '<p>' + esc(numberFmt(b.count || 0)) + ' filas · actualizada ' + esc(dateFmt(b.uploadedAt)) + (b.count > 500 ? ' · mostrando 500' : '') + '</p></div></div>'
+    + '<div class="table-scroll"><table class="bandeja-table"><thead><tr>' + head + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
+    + '</div>';
+}
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
   if (!client) return;
@@ -538,6 +561,7 @@ async function renderActiveClient(){
   setClientSection(CLIENT_SECTION);
   renderClientNomencladorPanel();
   loadClientPami();
+  loadClientMesCurso();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientUgl').textContent = client.ugl || '-';
