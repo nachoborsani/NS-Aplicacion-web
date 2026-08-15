@@ -447,25 +447,19 @@
                 <option value="caballito-cardio-ecg">Centro Médico Caballito — Consulta Cardiología / ECG (570129)</option>
               </select>
             </div>
-            <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO"></div>
+            <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'')"></div>
             <div class="form-grid two">
-              <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" placeholder="Ej: 14023345500100"></div>
+              <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" inputmode="numeric" placeholder="Ej: 14023345500100" oninput="this.value=this.value.replace(/[^0-9-]/g,'')"></div>
               <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
             </div>
             <div class="field"><label>Documento <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label><input class="inp" id="infDoc" spellcheck="false" placeholder="Si lo dejás vacío, no aparece en el informe"></div>
             <div class="field">
               <label>Descripción del informe</label>
-              <select class="inp" id="infDescripcion">
-                <option value="">Normal — Ecg sin complicaciones, trazado sin valor patológico.</option>
-                <option value="Ritmo sinusal. Sin signos de isquemia aguda.">Ritmo sinusal, sin isquemia</option>
-              </select>
+              <select class="inp" id="infDescripcion"></select>
             </div>
             <div class="field">
               <label>Médico que firma</label>
-              <select class="inp" id="infMedico">
-                <option value="1">Dra. Naiara A. Jacinto</option>
-                <option value="0">Sin firma (deja el espacio "Firma Médico")</option>
-              </select>
+              <select class="inp" id="infMedico"></select>
             </div>
             <div class="msg err" id="infError"></div>
             <button class="btn btn-primary" id="infGenerar" onclick="generarInforme()">
@@ -473,14 +467,26 @@
               Generar y descargar PDF
             </button>
           </div>
-          <div class="card" id="infFirmaCard" style="max-width:640px;margin-top:16px;display:none">
-            <h3 style="margin:0 0 4px;font-size:15px">Firma de la médica <span style="font-weight:400;color:var(--text-2);font-size:12px">(admin)</span></h3>
-            <p style="margin:0 0 12px;color:var(--text-2);font-size:13px">Subí la firma en PNG (mejor con fondo transparente) para que los informes salgan firmados en el sitio en vivo. Queda guardada en el servidor, no en el repositorio.</p>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <input type="file" id="infFirmaFile" accept="image/png">
-              <button class="btn btn-ghost" onclick="subirFirma()">Subir firma</button>
-              <span class="msg ok" id="infFirmaMsg"></span>
+          <div class="card" id="infConfigCard" style="max-width:640px;margin-top:16px;display:none">
+            <h3 style="margin:0 0 2px;font-size:15px">Configuración <span style="font-weight:400;color:var(--text-2);font-size:12px">(admin)</span></h3>
+            <p style="margin:0 0 16px;color:var(--text-2);font-size:13px">Lo que cargues acá aparece en los desplegables de arriba. Las firmas quedan en el servidor, no en el repositorio.</p>
+            <div class="cfg-block">
+              <div class="cfg-head">Médicos y firmas</div>
+              <div id="infMedicosList" class="cfg-list"></div>
+              <div class="cfg-add">
+                <input class="inp" id="infMedicoNombre" placeholder="Nombre del médico (ej: Dr. Juan Pérez)" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ .,]/g,'')">
+                <button class="btn btn-ghost" onclick="addMedico()">Agregar</button>
+              </div>
             </div>
+            <div class="cfg-block">
+              <div class="cfg-head">Descripciones</div>
+              <div id="infDescripcionesList" class="cfg-list"></div>
+              <div class="cfg-add">
+                <input class="inp" id="infDescripcionTexto" placeholder="Texto del informe (ej: Ecg sin complicaciones…)">
+                <button class="btn btn-ghost" onclick="addDescripcion()">Agregar</button>
+              </div>
+            </div>
+            <div class="msg err" id="infConfigMsg"></div>
           </div>
         </section>
 

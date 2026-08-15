@@ -28,7 +28,7 @@ function go(v, el){
   if (v === 'users') renderUsers();
   if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
-  if (v === 'informes') showInformesAdmin();
+  if (v === 'informes') loadInformesConfig();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   var clientsGroup = document.getElementById('clientsNavGroup');
   if (clientsGroup) {
@@ -95,7 +95,7 @@ async function generarInforme(){
       modelo: document.getElementById('infModelo').value,
       paciente: { nombre: nombre, benef: benef, fecha: fecha, documento: document.getElementById('infDoc').value.trim() },
       textoInforme: document.getElementById('infDescripcion').value,
-      firmar: document.getElementById('infMedico').value === '1'
+      medicoId: document.getElementById('infMedico').value
     };
     var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
     if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el informe.'; return; }
@@ -108,19 +108,80 @@ async function generarInforme(){
     setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
   } finally { btn.disabled = false; }
 }
-function showInformesAdmin(){
-  var c = document.getElementById('infFirmaCard');
-  if (c) c.style.display = (ME && ME.role === 'admin') ? '' : 'none';
+// ---------- Informes: config (médicos + firmas + descripciones) ----------
+var INFORMES_CFG = { medicos: [], descripciones: [] };
+async function loadInformesConfig(){
+  var res = await api('/api/informes/config');
+  if (res.ok && res.data) INFORMES_CFG = res.data;
+  var desc = document.getElementById('infDescripcion');
+  if (desc){
+    desc.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
+      return '<option value="' + esc(d.texto) + '">' + esc(d.texto) + '</option>';
+    }).join('') || '<option value="">(cargá descripciones abajo)</option>';
+  }
+  var med = document.getElementById('infMedico');
+  if (med){
+    med.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
+      return '<option value="' + esc(m.id) + '">' + esc(m.nombre) + (m.hasFirma ? '' : ' (sin firma)') + '</option>';
+    }).join('') + '<option value="">Sin firma (deja el espacio)</option>';
+  }
+  renderInformesConfigLists();
 }
-async function subirFirma(){
-  var msg = document.getElementById('infFirmaMsg'); msg.className = 'msg ok'; msg.textContent = '';
-  var f = document.getElementById('infFirmaFile').files[0];
-  if (!f){ msg.className = 'msg err'; msg.textContent = 'Elegí un archivo PNG.'; return; }
+function renderInformesConfigLists(){
+  var card = document.getElementById('infConfigCard');
+  var isAdmin = ME && ME.role === 'admin';
+  if (card) card.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin) return;
+  var ml = document.getElementById('infMedicosList');
+  if (ml){
+    ml.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
+      var tag = m.hasFirma ? '<span class="cfg-tag on">firma ✓</span>' : '<span class="cfg-tag off">sin firma</span>';
+      return '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
+        + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
+        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
+    }).join('') || '<div class="cfg-empty">Todavía no hay médicos.</div>';
+  }
+  var dl = document.getElementById('infDescripcionesList');
+  if (dl){
+    dl.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
+      return '<div class="cfg-row"><span class="cfg-name">' + esc(d.texto) + '</span>'
+        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
+    }).join('') || '<div class="cfg-empty">Todavía no hay descripciones.</div>';
+  }
+}
+async function addMedico(){
+  var msg = document.getElementById('infConfigMsg'); msg.textContent = '';
+  var inp = document.getElementById('infMedicoNombre'); var nombre = inp.value.trim();
+  if (!nombre){ msg.textContent = 'Escribí el nombre del médico.'; return; }
+  var r = await req('POST', '/api/informes/medicos', { nombre: nombre });
+  if (!r.ok){ msg.textContent = (r.data && r.data.error) || 'No se pudo agregar.'; return; }
+  inp.value = ''; await loadInformesConfig();
+}
+async function uploadFirmaMedico(id, fileInput){
+  var msg = document.getElementById('infConfigMsg'); msg.textContent = '';
+  var f = fileInput.files[0]; if (!f) return;
   var form = new FormData(); form.append('file', f);
-  var r = await fetch('/api/informes/firma', { method:'POST', body: form });
-  var d = {}; try { d = await r.json(); } catch (e) {}
-  if (!r.ok){ msg.className = 'msg err'; msg.textContent = (d && d.error) || 'No se pudo subir la firma.'; return; }
-  msg.textContent = 'Firma subida ✓ — los informes ya salen firmados.';
+  var r = await fetch('/api/informes/medicos/' + encodeURIComponent(id) + '/firma', { method:'POST', body: form });
+  if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} msg.textContent = (d && d.error) || 'No se pudo subir la firma.'; return; }
+  await loadInformesConfig();
+}
+async function deleteMedico(id){
+  if (!confirm('¿Eliminar este médico?')) return;
+  var r = await req('DELETE', '/api/informes/medicos/' + encodeURIComponent(id));
+  if (r.ok) await loadInformesConfig();
+}
+async function addDescripcion(){
+  var msg = document.getElementById('infConfigMsg'); msg.textContent = '';
+  var inp = document.getElementById('infDescripcionTexto'); var texto = inp.value.trim();
+  if (!texto){ msg.textContent = 'Escribí el texto de la descripción.'; return; }
+  var r = await req('POST', '/api/informes/descripciones', { texto: texto });
+  if (!r.ok){ msg.textContent = (r.data && r.data.error) || 'No se pudo agregar.'; return; }
+  inp.value = ''; await loadInformesConfig();
+}
+async function deleteDescripcion(id){
+  if (!confirm('¿Eliminar esta descripción?')) return;
+  var r = await req('DELETE', '/api/informes/descripciones/' + encodeURIComponent(id));
+  if (r.ok) await loadInformesConfig();
 }
 
 // ---------- ojo ver/ocultar ----------

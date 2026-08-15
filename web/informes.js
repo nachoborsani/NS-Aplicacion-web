@@ -67,7 +67,8 @@ async function buildInformePdf(modeloKey, input) {
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
-  const firmar = !(input && input.firmar === false);
+  // La firma la define el médico elegido (input.firmaArchivo). Sin archivo -> borrador.
+  const firmaArchivo = (input && input.firmaArchivo) || "";
 
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4 vertical
@@ -148,7 +149,7 @@ async function buildInformePdf(modeloKey, input) {
   T("FECHA:", LBLX, fy, { bold: true, size: 11 });
   T(p.fecha || "—", LBLX + 56, fy, { size: 11 });
   const firmaAreaW = 200, firmaAreaX = width - Mx - firmaAreaW;
-  const firmaBuf = firmar ? readAsset(modelo.firma) : null;
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
   if (firmaBuf) {
     const firma = await doc.embedPng(firmaBuf);
     const fw = 150, fh = (firma.height / firma.width) * fw;

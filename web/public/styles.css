@@ -386,6 +386,19 @@
   .bandeja-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:600px}
   .bandeja-table th{background:var(--surface-2);text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap}
   .bandeja-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+  .cfg-block{margin-bottom:18px}
+  .cfg-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin-bottom:8px}
+  .cfg-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+  .cfg-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
+  .cfg-row .cfg-name{font-weight:600;color:var(--text);font-size:13.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cfg-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .cfg-tag.on{background:var(--success-bg);color:var(--success)}
+  .cfg-tag.off{background:var(--error-bg);color:var(--error)}
+  .cfg-upload{font-size:12px;font-weight:600;color:var(--primary);cursor:pointer;white-space:nowrap}
+  .cfg-upload input{display:none}
+  .cfg-add{display:flex;gap:8px;align-items:center}
+  .cfg-add .inp{flex:1}
+  .cfg-empty{font-size:12.5px;color:var(--text-2);padding:2px}
   .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:9px 11px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-2)}
   .dashboard-compare b{color:var(--text);font-size:12.5px}
   .dashboard-compare .good{color:var(--success);font-weight:750}

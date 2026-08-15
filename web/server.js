@@ -92,6 +92,38 @@ function saveClientBandejas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasFile, JSON.stringify(store, null, 2));
 }
+// Config de Informes: médicos (con su firma) y descripciones. Se guarda en el
+// volumen; se siembra con los datos actuales (Naiara + descripciones base).
+const informesConfigFile = path.join(dataDir, "informes_config.json");
+function loadInformesConfig() {
+  let cfg = {};
+  try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
+  if (!cfg || typeof cfg !== "object") cfg = {};
+  if (!Array.isArray(cfg.medicos)) {
+    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png" }];
+  }
+  if (!Array.isArray(cfg.descripciones)) {
+    cfg.descripciones = [
+      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico." },
+      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda." },
+    ];
+  }
+  return cfg;
+}
+function saveInformesConfig(cfg) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(informesConfigFile, JSON.stringify(cfg, null, 2));
+}
+function slugId(text) {
+  return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+}
+function firmaExiste(name) {
+  if (!name) return false;
+  try { fs.accessSync(path.join(dataDir, "informes", name)); return true; } catch {}
+  try { fs.accessSync(path.join(__dirname, "assets", "informes", name)); return true; } catch {}
+  return false;
+}
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -2442,11 +2474,13 @@ const server = http.createServer(async (req, res) => {
     const modelo = String(body.modelo || "caballito-cardio-ecg");
     if (!informes.MODELOS[modelo]) return json(res, 400, { error: "Modelo de informe desconocido." });
     try {
+      const cfg = loadInformesConfig();
+      const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: body.paciente || {},
         textoInforme: body.textoInforme,
         solicitante: body.solicitante,
-        firmar: body.firmar,
+        firmaArchivo: medico ? medico.firma : "",
       });
       const filename = informes.informeFilename(modelo, body.paciente || {});
       const buf = Buffer.from(bytes);
@@ -2469,25 +2503,88 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ---- Informes: subir la firma de un medico (queda en el volumen, no en git) ----
-  if (p === "/api/informes/firma" && req.method === "POST") {
+  // ---- Informes: config (médicos con firma + descripciones) ----
+  if (p === "/api/informes/config" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede subir firmas." });
+    const cfg = loadInformesConfig();
+    return json(res, 200, {
+      medicos: (cfg.medicos || []).map((m) => ({ id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma) })),
+      descripciones: cfg.descripciones || [],
+    });
+  }
+  if (p === "/api/informes/medicos" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const { nombre } = await readBody(req);
+    const nm = String(nombre || "").trim();
+    if (!nm) return json(res, 400, { error: "Escribí el nombre del médico." });
+    const cfg = loadInformesConfig();
+    let id = slugId(nm) || ("m" + Object.keys(cfg.medicos).length);
+    while (cfg.medicos.some((m) => m.id === id)) id += "-1";
+    cfg.medicos.push({ id, nombre: nm, firma: "firma-" + id + ".png" });
+    saveInformesConfig(cfg);
+    return json(res, 201, { ok: true, id });
+  }
+  const medFirmaMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)\/firma$/);
+  if (medFirmaMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const cfg = loadInformesConfig();
+    const medico = cfg.medicos.find((m) => m.id === medFirmaMatch[1]);
+    if (!medico) return json(res, 404, { error: "Médico no encontrado." });
     try {
       const raw = await readBuffer(req);
       const mp = extractMultipart(raw, req.headers["content-type"]);
       if (path.extname(mp.file.filename).toLowerCase() !== ".png") {
         return json(res, 400, { error: "La firma tiene que ser un PNG (mejor con fondo transparente)." });
       }
-      const nombre = (String(url.searchParams.get("nombre") || "firma-naiara.png").replace(/[^a-z0-9._-]/gi, "")) || "firma-naiara.png";
+      const nombreArchivo = medico.firma || ("firma-" + medico.id + ".png");
       const dir = path.join(dataDir, "informes");
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, nombre), mp.file.data);
-      return json(res, 200, { ok: true, nombre });
+      fs.writeFileSync(path.join(dir, nombreArchivo), mp.file.data);
+      medico.firma = nombreArchivo;
+      saveInformesConfig(cfg);
+      return json(res, 200, { ok: true });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo subir la firma." });
     }
+  }
+  const medDelMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)$/);
+  if (medDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const cfg = loadInformesConfig();
+    cfg.medicos = cfg.medicos.filter((m) => m.id !== medDelMatch[1]);
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
+  }
+  if (p === "/api/informes/descripciones" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const { texto } = await readBody(req);
+    const tx = String(texto || "").replace(/\s+/g, " ").trim();
+    if (!tx) return json(res, 400, { error: "Escribí el texto de la descripción." });
+    const cfg = loadInformesConfig();
+    let id = slugId(tx) || ("d" + cfg.descripciones.length);
+    while (cfg.descripciones.some((d) => d.id === id)) id += "-1";
+    cfg.descripciones.push({ id, texto: tx });
+    saveInformesConfig(cfg);
+    return json(res, 201, { ok: true, id });
+  }
+  const descDelMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)$/);
+  if (descDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const cfg = loadInformesConfig();
+    cfg.descripciones = cfg.descripciones.filter((d) => d.id !== descDelMatch[1]);
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
   }
 
   // ---- Estatico ----
