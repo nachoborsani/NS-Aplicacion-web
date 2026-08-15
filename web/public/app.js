@@ -863,6 +863,26 @@ async function loadClientNomenclador(){
   }
   renderNomencladorRows(res.data.rows || [], 'clientNomBody', 'clientNomMeta', res.data.total || 0);
 }
+// Descarga el nomenclador del cliente (la vista resumida, filtrada por sus
+// módulos activos) en Excel o PDF, respetando el período y la búsqueda actual.
+async function exportClientNomenclador(format){
+  if (!ACTIVE_CLIENT) return;
+  var period = document.getElementById('clientNomPeriod').value || NOM_ACTIVE_PERIOD || '';
+  if (!period){ alert('Primero elegí un nomenclador (período) para este cliente.'); return; }
+  var q = document.getElementById('clientNomQ').value.trim();
+  var params = new URLSearchParams({ period: period, q: q, format: format });
+  var btn = document.getElementById(format === 'pdf' ? 'clientNomPdfBtn' : 'clientNomXlsxBtn');
+  if (btn) btn.disabled = true;
+  try {
+    var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/nomenclador/export?' + params.toString());
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar el archivo.'); return; }
+    var blob = await r.blob();
+    var cd = r.headers.get('content-disposition') || '';
+    var m = cd.match(/filename="([^"]+)"/);
+    bajarBlob(blob, m ? m[1] : ('nomenclador.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
+  } catch (e){ alert('No se pudo generar el archivo.'); }
+  finally { if (btn) btn.disabled = false; }
+}
 function moduleNameFromOption(option){
   var code = String(option.value || '').trim();
   var label = String(option.label || '').trim();

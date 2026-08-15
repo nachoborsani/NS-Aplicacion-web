@@ -263,7 +263,15 @@
                     <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
                     <input class="inp" id="clientNomQ" placeholder="Buscar prestacion o codigo..." oninput="queueClientNomencladorSearch()">
                   </div>
-                  <button class="btn btn-ghost client-nom-toggle" id="clientNomToggleBtn" onclick="toggleClientNomenclador()" type="button" aria-expanded="false">Mostrar</button>
+                  <div class="client-nom-actions">
+                    <button class="btn btn-ghost" id="clientNomXlsxBtn" onclick="exportClientNomenclador('xlsx')" type="button" title="Descargar en Excel">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Excel
+                    </button>
+                    <button class="btn btn-ghost" id="clientNomPdfBtn" onclick="exportClientNomenclador('pdf')" type="button" title="Descargar en PDF">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+                    </button>
+                    <button class="btn btn-ghost client-nom-toggle" id="clientNomToggleBtn" onclick="toggleClientNomenclador()" type="button" aria-expanded="false">Mostrar</button>
+                  </div>
                 </div>
 
                 <div class="tablecard nom-table client-nom-body">

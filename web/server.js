@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
 const informes = require("./informes");
+const nomExport = require("./nomenclador_export");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -2333,6 +2334,52 @@ const server = http.createServer(async (req, res) => {
     });
     res.end(bodyStr);
     return;
+  }
+
+  // Export del nomenclador YA FILTRADO por los módulos activos del cliente
+  // (la vista resumida que se ve en la web), en Excel o PDF para el cliente.
+  const nomClientExport = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/nomenclador\/export$/);
+  if (nomClientExport && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const client = loadClientsStore().find((c) => c.slug === nomClientExport[1]);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+    const moduleCodes = new Set((client.activeModules || []).map((m) => String(m.code)));
+    const query = normalizeText(url.searchParams.get("q") || "");
+    let rows = payload.rows || [];
+    if (moduleCodes.size) rows = rows.filter((r) => moduleCodes.has(String(r.moduleCode || r.moduleDescription)));
+    if (query) rows = rows.filter((r) => r.search.includes(query));
+    rows = rows.map(({ search, ...row }) => row);
+    const label = payload.label || periodLabel(payload.period);
+    const format = String(url.searchParams.get("format") || "xlsx").toLowerCase();
+    const base = downloadName("Nomenclador " + client.name + " " + label) || "nomenclador";
+    try {
+      if (format === "pdf") {
+        const bytes = await nomExport.buildPdf(client, label, rows);
+        const buf = Buffer.from(bytes);
+        res.writeHead(200, {
+          "content-type": "application/pdf",
+          "content-length": buf.length,
+          "content-disposition": `attachment; filename="${base}.pdf"`,
+          "cache-control": "no-store",
+        });
+        return res.end(buf);
+      }
+      const buf = nomExport.buildXlsx(client, label, rows);
+      res.writeHead(200, {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-length": buf.length,
+        "content-disposition": `attachment; filename="${base}.xlsx"`,
+        "cache-control": "no-store",
+      });
+      return res.end(buf);
+    } catch (error) {
+      console.log("[nom-export] error:", error && error.message);
+      return json(res, 500, { error: "No se pudo generar el archivo." });
+    }
   }
 
   // Aumento de un nomenclador vs el mes anterior (general, consultas, nivel 1).

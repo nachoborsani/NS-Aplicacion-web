@@ -470,6 +470,9 @@
   .client-nom-head h3{margin-bottom:2px}
   .client-nom-head p{margin:0;color:var(--text-2);font-size:12px}
   .client-nom-toggle{height:34px;border-radius:8px;font-size:12px;padding:0 12px;margin-left:auto}
+  .client-nom-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .client-nom-actions .btn{height:34px;border-radius:8px;font-size:12px;padding:0 12px;gap:6px}
+  .client-nom-actions .client-nom-toggle{margin-left:0}
   .client-nom-controls{display:grid;grid-template-columns:170px minmax(220px,320px);gap:10px}
   .report-model-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .report-model-grid div{border:1px solid var(--border);border-radius:10px;padding:11px;background:var(--surface-2)}
