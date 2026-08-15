@@ -36,7 +36,47 @@ function go(v, el){
   }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
+  pushHash(v);
 }
+
+// ---------- ruteo por URL (hash): que F5 recargue la misma sección ----------
+// Cada sección refleja su estado en la URL (#nomencladores, #clientes/<slug>).
+// Al recargar (F5) se restaura desde el hash, y el botón "atrás" vuelve a andar.
+var APPLYING_ROUTE = false;
+var SELF_HASH = false;
+function pushHash(h){
+  if (APPLYING_ROUTE) return;
+  if (('#' + h) !== location.hash){ SELF_HASH = true; try { location.hash = h; } catch (e) { SELF_HASH = false; } }
+}
+function navElFor(v){
+  try { return document.querySelector("[onclick*=\"go('" + v + "'\"]"); } catch (e) { return null; }
+}
+function applyRoute(){
+  var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
+  var v = parts[0] || 'dash';
+  if (['dash', 'users', 'clientes', 'nomencladores', 'soon'].indexOf(v) < 0) v = 'dash';
+  APPLYING_ROUTE = true;
+  go(v, navElFor(v));
+  APPLYING_ROUTE = false;
+  if (v === 'clientes' && parts[1]) selectClientWhenReady(parts[1], parts[2]);
+}
+function selectClientWhenReady(slug, section, tries){
+  tries = tries || 0;
+  if (typeof CLIENTS !== 'undefined' && CLIENTS && CLIENTS.length){
+    if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
+      APPLYING_ROUTE = true;
+      selectClient(slug);
+      if (section === 'reportes') setClientSection('reportes');
+      APPLYING_ROUTE = false;
+    }
+    return;
+  }
+  if (tries < 40) setTimeout(function(){ selectClientWhenReady(slug, section, tries + 1); }, 100);
+}
+window.addEventListener('hashchange', function(){
+  if (SELF_HASH){ SELF_HASH = false; return; }  // cambio que ya aplicamos nosotros
+  if (document.body.classList.contains('authed')) applyRoute();  // back/forward
+});
 
 function openDrawer(){ document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); }
 function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
@@ -375,6 +415,9 @@ function setClientSection(section){
   if (tabReportes) tabReportes.classList.toggle('active', CLIENT_SECTION === 'reportes');
   var crumb = document.getElementById('clientCrumbSection');
   if (crumb) crumb.textContent = CLIENT_SECTION === 'reportes' ? 'Reportes' : 'Informacion basica';
+  // El hash queda a nivel cliente (no la sub-pestaña): así F5 restaura el cliente
+  // correcto de forma confiable, sin pelear con las cargas async.
+  if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug);
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
@@ -1335,7 +1378,7 @@ function setUser(u){
   document.getElementById('topAvatar').textContent = ini;
   document.getElementById('dashHello').textContent = 'Buen día, ' + (u.name.split(' ')[0]) + ' 👋';
 }
-function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); loadClients({ detail:false }); }
+function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); loadClients({ detail:false }); applyRoute(); }
 function showChange(){ document.body.classList.remove('authed','booting'); document.body.classList.add('mustchange'); }
 function showLogin(){ document.body.classList.remove('authed','mustchange','booting','resetting'); }
 
