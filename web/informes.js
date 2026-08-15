@@ -72,86 +72,100 @@ async function buildInformePdf(modeloKey, input) {
   const { width, height } = page.getSize();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const titleFont = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
 
   const ink = rgb(0.12, 0.12, 0.12);
-  const soft = rgb(0.32, 0.32, 0.32);
-  const navy = rgb(0.043, 0.121, 0.227);
-  const petrol = rgb(0.055, 0.345, 0.333);
-  const boxBg = rgb(0.98, 0.98, 0.98);
-  const boxBorder = rgb(0.88, 0.88, 0.88);
-  const M = 64;
-  let y = height - 46;
+  const soft = rgb(0.3, 0.3, 0.3);
+  const border = rgb(0.13, 0.13, 0.13);
+  const Mx = 46;
+  const boxX = Mx;
+  const boxW = width - 2 * Mx;
+  const PADX = 14;
+  const LBLX = boxX + PADX;
+  const VALX = boxX + 128;
 
   const T = (t, x, yy, o = {}) =>
-    page.drawText(String(t), { x, y: yy, size: o.size || 10.5, font: o.bold ? bold : font, color: o.color || ink });
+    page.drawText(String(t), { x, y: yy, size: o.size || 10.5, font: o.font || (o.bold ? bold : font), color: o.color || ink });
   const centerT = (t, yy, o = {}) => {
-    const f = o.bold ? bold : font, s = o.size || 10.5;
+    const f = o.font || (o.bold ? bold : font), s = o.size || 10.5;
     T(t, (width - f.widthOfTextAtSize(String(t), s)) / 2, yy, o);
   };
-  const field = (label, value) => {
-    T(label, M, y, { bold: true });
-    T(value, M + bold.widthOfTextAtSize(label, 10.5) + 6, y);
-    y -= 15;
+  const centerIn = (t, x1, x2, yy, o = {}) => {
+    const f = o.font || (o.bold ? bold : font), s = o.size || 10.5;
+    T(t, x1 + (x2 - x1 - f.widthOfTextAtSize(String(t), s)) / 2, yy, o);
   };
+  const drawBox = (topY, h) => page.drawRectangle({ x: boxX, y: topY - h, width: boxW, height: h, borderColor: border, borderWidth: 1 });
 
-  // Logo centrado
+  // Borde de página
+  page.drawRectangle({ x: 28, y: 28, width: width - 56, height: height - 56, borderColor: border, borderWidth: 1 });
+
+  let y = height - 50;
+
+  // Logo centrado (fondo blanco)
   const logoBuf = readAsset(modelo.logo);
   if (logoBuf) {
     const logo = await doc.embedPng(logoBuf);
-    const lw = 92, lh = (logo.height / logo.width) * lw;
+    const lw = 84, lh = (logo.height / logo.width) * lw;
     page.drawImage(logo, { x: (width - lw) / 2, y: y - lh, width: lw, height: lh });
-    y -= lh + 14;
+    y -= lh + 6;
   }
 
-  centerT(modelo.servicio, y, { bold: true, size: 12.5, color: petrol });
-  y -= 26;
+  // Título (bold itálica)
+  const ts = 17;
+  centerT(modelo.servicio, y - ts, { font: titleFont, size: ts, color: border });
+  y -= ts + 22;
 
-  T("Datos de paciente", M, y, { bold: true, size: 9.5, color: soft });
-  y -= 16;
-  field("Nombre:", p.nombre || "—");
-  if ((p.documento || "").trim()) field("Documento:", p.documento.trim());
-  field("N° Benef.:", p.benef || "—");
-  y -= 6;
-  field("Médico Solicitante:", solicitante);
-  field("Estudio realizado:", modelo.estudio);
-  y -= 12;
+  // Caja: Datos de paciente
+  {
+    const hasDoc = (p.documento || "").trim();
+    const innerLines = 1 + 2 + (hasDoc ? 1 : 0);
+    const h = innerLines * 15 + 14;
+    drawBox(y, h);
+    let iy = y - 18;
+    T("Datos de paciente", LBLX, iy, { bold: true, size: 11 }); iy -= 16;
+    T("Nombre:", LBLX, iy, { bold: true }); T(p.nombre || "—", VALX, iy); iy -= 15;
+    if (hasDoc) { T("Documento:", LBLX, iy, { bold: true }); T(hasDoc, VALX, iy); iy -= 15; }
+    T("N° Benef.:", LBLX, iy, { bold: true }); T(p.benef || "—", VALX, iy);
+    y -= h + 12;
+  }
 
-  T("INFORME", M, y, { bold: true, size: 9.5, color: soft });
+  // Caja: Médico Solicitante
+  { const h = 34; drawBox(y, h); T("Médico Solicitante:", LBLX, y - 22, { bold: true }); T(solicitante, VALX + 30, y - 22); y -= h + 12; }
+
+  // Caja: Estudio realizado
+  { const h = 34; drawBox(y, h); T("Estudio realizado:", LBLX, y - 22, { bold: true }); T(modelo.estudio, VALX + 30, y - 22, { bold: true }); y -= h + 22; }
+
+  // INFORME (sin caja)
+  T("INFORME", LBLX, y, { bold: true, size: 10.5, color: soft });
   y -= 20;
-  const lines = wrapText(texto, font, 10.5, width - 2 * M);
-  for (const ln of lines) { T(ln, M, y); y -= 15; }
-  y -= 34;
+  const lines = wrapText(texto, font, 10.5, boxW - 2 * PADX);
+  for (const ln of lines) { T(ln, LBLX, y); y -= 15; }
 
-  // Fecha (izquierda) + Firma (derecha)
-  const firmaColW = 170;
-  const firmaColX = width - M - firmaColW;
+  // FECHA + Firma (posición fija)
+  const fy = 248;
+  T("FECHA:", LBLX, fy, { bold: true, size: 11 });
+  T(p.fecha || "—", LBLX + 56, fy, { size: 11 });
+  const firmaAreaW = 200, firmaAreaX = width - Mx - firmaAreaW;
   const firmaBuf = firmar ? readAsset(modelo.firma) : null;
   if (firmaBuf) {
     const firma = await doc.embedPng(firmaBuf);
     const fw = 150, fh = (firma.height / firma.width) * fw;
-    page.drawImage(firma, { x: firmaColX + (firmaColW - fw) / 2, y: y - fh, width: fw, height: fh });
-    T("FECHA:", M, y - fh + 16, { bold: true });
-    T(p.fecha || "—", M + 46, y - fh + 16);
+    page.drawImage(firma, { x: firmaAreaX + (firmaAreaW - fw) / 2, y: fy - 22, width: fw, height: fh });
   } else {
-    page.drawLine({ start: { x: firmaColX, y: y - 44 }, end: { x: width - M, y: y - 44 }, thickness: 0.8, color: ink });
-    centerT2("Firma Médico", firmaColX, width - M, y - 56, { size: 10, font, page });
-    T("FECHA:", M, y - 44, { bold: true });
-    T(p.fecha || "—", M + 46, y - 44);
+    centerIn("Firma Médico", firmaAreaX, width - Mx, fy, { bold: true, size: 11 });
+    page.drawLine({ start: { x: firmaAreaX + 12, y: fy - 34 }, end: { x: width - Mx - 12, y: fy - 34 }, thickness: 0.8, color: border });
   }
 
-  // Pie fijo abajo
-  const pieBottom = 66;
-  const lineY = pieBottom + modelo.pie.length * 13 + 6;
-  page.drawLine({ start: { x: M, y: lineY }, end: { x: width - M, y: lineY }, thickness: 1.5, color: navy });
-  let py = pieBottom + (modelo.pie.length - 1) * 13;
-  for (const line of modelo.pie) { centerT(line, py, { bold: true, size: 9.5, color: navy }); py -= 13; }
+  // Caja: pie del centro (abajo)
+  {
+    const top = 100, h = 52;
+    drawBox(top, h);
+    let py = top - 18;
+    centerT(modelo.pie[0], py, { bold: true, size: 12 }); py -= 15;
+    for (let i = 1; i < modelo.pie.length; i++) { centerT(modelo.pie[i], py, { bold: true, size: 10.5 }); py -= 14; }
+  }
 
   return await doc.save();
-
-  function centerT2(t, x1, x2, yy, o) {
-    const w = o.font.widthOfTextAtSize(String(t), o.size);
-    o.page.drawText(String(t), { x: x1 + (x2 - x1 - w) / 2, y: yy, size: o.size, font: o.font, color: ink });
-  }
 }
 
 module.exports = { MODELOS, buildInformePdf, informeFilename };
