@@ -1317,6 +1317,11 @@ async function loadNomencladorSummary(period){
     st.innerHTML = '<b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span>';
     return;
   }
+  // Al abrir sin nada elegido, mostrar siempre el ultimo mes cargado (el mas nuevo).
+  var lista = res.data.nomencladores || [];
+  if (!selected && lista.length && res.data.activePeriod !== lista[0].value){
+    return loadNomencladorSummary(lista[0].value);
+  }
   NOM_READY = !!res.data.loaded;
   var previousPeriod = NOM_ACTIVE_PERIOD;
   NOM_ACTIVE_PERIOD = res.data.activePeriod || '';
