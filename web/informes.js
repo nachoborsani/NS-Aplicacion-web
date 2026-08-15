@@ -11,19 +11,52 @@ const path = require("path");
 
 const ASSETS = path.join(__dirname, "assets", "informes");
 
+const PIE_CABALLITO = ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"];
 const MODELOS = {
-  "caballito-cardio-ecg": {
+  // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
+  "caballito-consulta-570129": {
+    label: "Caballito — Consulta cardiología c/ ECG (570129)",
     centro: "Centro Médico Caballito",
     logo: "cmc_logo.png",
+    logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
     codigoPractica: "570129",
+    estudio: "Consulta con especialista en cardiología (incluye ECG)",
+    estudioArchivo: "Consulta Cardiologia ECG",
+    solicitanteDefault: "Dra. Naiara, Jacinto",
+    textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
+    pie: PIE_CABALLITO,
+  },
+  "caballito-electro": {
+    label: "Caballito — Electrocardiograma simple",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE CARDIOLOGÍA",
+    codigoPractica: "",
     estudio: "Electrocardiograma",
     solicitanteDefault: "Dra. Naiara, Jacinto",
     textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
-    pie: ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"],
-    firma: "firma-naiara.png", // incluye nombre + matrícula en la imagen
+    pie: PIE_CABALLITO,
+  },
+  // --- CIMA (Innovación en Medicina): electro, firma Dr. Savia ---
+  "cima-electro": {
+    label: "CIMA — Electrocardiograma",
+    centro: "CIMA",
+    logo: "cima_logo.png",
+    logoW: 150,
+    servicio: "SERVICIO DE CARDIOLOGÍA",
+    codigoPractica: "",
+    estudio: "Electrocardiograma",
+    solicitanteDefault: "Gerardo Savia",
+    textoDefault: "Trazado sin valor patológico.",
+    pie: ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"],
   },
 };
+// Para el desplegable del front (una sola fuente de verdad).
+function listarModelos() {
+  return Object.keys(MODELOS).map((k) => ({ key: k, label: MODELOS[k].label || k }));
+}
 
 // Las firmas (dato sensible) viven en <datos>/informes/ (el volumen en producción,
 // o web/data en local) — ahí las sube el admin. El logo va en assets del repo.
@@ -53,17 +86,20 @@ function sanitizeFilename(value) {
     .trim() || "informe";
 }
 
+const DEFAULT_MODELO = "caballito-consulta-570129";
+
 function informeFilename(modeloKey, paciente) {
-  const modelo = MODELOS[modeloKey] || MODELOS["caballito-cardio-ecg"];
+  const modelo = MODELOS[modeloKey] || MODELOS[DEFAULT_MODELO];
   const nombre = sanitizeFilename(paciente && paciente.nombre) || "Paciente";
-  return `${nombre} - ${modelo.estudio}.pdf`;
+  const estudio = sanitizeFilename(modelo.estudioArchivo || modelo.estudio);
+  return `${nombre} - ${estudio}.pdf`;
 }
 
 async function buildInformePdf(modeloKey, input) {
   // pdf-lib va vendorizado en el repo (bundle auto-contenido) para no depender
   // del npm install de Railway (su cache no instalaba el paquete).
   const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
-  const modelo = MODELOS[modeloKey] || MODELOS["caballito-cardio-ecg"];
+  const modelo = MODELOS[modeloKey] || MODELOS[DEFAULT_MODELO];
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
@@ -108,7 +144,7 @@ async function buildInformePdf(modeloKey, input) {
   const logoBuf = readAsset(modelo.logo);
   if (logoBuf) {
     const logo = await doc.embedPng(logoBuf);
-    const lw = 84, lh = (logo.height / logo.width) * lw;
+    const lw = modelo.logoW || 84, lh = (logo.height / logo.width) * lw;
     page.drawImage(logo, { x: (width - lw) / 2, y: y - lh, width: lw, height: lh });
     y -= lh + 6;
   }
@@ -171,4 +207,4 @@ async function buildInformePdf(modeloKey, input) {
   return await doc.save();
 }
 
-module.exports = { MODELOS, buildInformePdf, informeFilename };
+module.exports = { MODELOS, buildInformePdf, informeFilename, listarModelos };

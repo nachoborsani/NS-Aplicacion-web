@@ -113,6 +113,14 @@ var INFORMES_CFG = { medicos: [], descripciones: [] };
 async function loadInformesConfig(){
   var res = await api('/api/informes/config');
   if (res.ok && res.data) INFORMES_CFG = res.data;
+  var mod = document.getElementById('infModelo');
+  if (mod){
+    var prev = mod.value;
+    mod.innerHTML = (INFORMES_CFG.modelos || []).map(function(m){
+      return '<option value="' + esc(m.key) + '">' + esc(m.label) + '</option>';
+    }).join('');
+    if (prev) mod.value = prev;
+  }
   var desc = document.getElementById('infDescripcion');
   if (desc){
     desc.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){

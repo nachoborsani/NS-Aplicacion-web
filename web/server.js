@@ -2509,6 +2509,7 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     const cfg = loadInformesConfig();
     return json(res, 200, {
+      modelos: informes.listarModelos(),
       medicos: (cfg.medicos || []).map((m) => ({ id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma) })),
       descripciones: cfg.descripciones || [],
     });
