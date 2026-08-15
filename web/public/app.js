@@ -635,35 +635,48 @@ function renderClientDashboard(data){
     var modules = current.modules || [];
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
-      var detailRows = rows.map(function(row){
-        var flags = [];
-        if (!row.matchFound && !row.valueEdited) flags.push('sin valor');
-        if (row.valueEdited) flags.push('editado');
-        return '<tr>'
-          + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
-          + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div><div class="nom-muted">' + esc(row.kind || '') + (flags.length ? ' - ' + esc(flags.join(', ')) : '') + '</div></td>'
-          + '<td>' + esc(row.status || '-') + '</td>'
-          + '<td class="nom-money"><b>' + esc(moneyFmt(row.net || 0)) + '</b><div class="nom-muted">Bruto ' + esc(moneyFmt(row.gross || 0)) + '</div></td>'
-          + '</tr>';
-      }).join('');
-      return '<tr class="dashboard-module-row" onclick="toggleDashboardModuleDetail(' + moduleIndex + ')">'
+      function renderDetailRows(detailRows, emptyText){
+        return detailRows.length ? detailRows.map(function(row){
+          var flags = [];
+          if (!row.matchFound && !row.valueEdited) flags.push('sin valor');
+          if (row.valueEdited) flags.push('editado');
+          return '<tr>'
+            + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
+            + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div><div class="nom-muted">' + esc(row.kind || '') + (flags.length ? ' - ' + esc(flags.join(', ')) : '') + '</div></td>'
+            + '<td>' + esc(row.status || '-') + '</td>'
+            + '<td class="nom-money"><b>' + esc(moneyFmt(row.net || 0)) + '</b><div class="nom-muted">Bruto ' + esc(moneyFmt(row.gross || 0)) + '</div></td>'
+            + '</tr>';
+        }).join('') : '<tr><td colspan="4" class="muted-cell">' + esc(emptyText) + '</td></tr>';
+      }
+      function detailRow(kind, label, detailRows){
+        return '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + kind + '" style="display:none"><td colspan="4">'
+          + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + '</div>'
+          + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Paciente</th><th>Prestacion</th><th>Estado</th><th>Neto</th></tr></thead><tbody>'
+          + renderDetailRows(detailRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
+          + '</tbody></table></div></td></tr>';
+      }
+      function countButton(kind, count){
+        var disabled = Number(count || 0) <= 0 ? ' disabled' : '';
+        return '<button class="dashboard-count-btn" type="button" onclick="toggleDashboardModuleDetail(' + moduleIndex + ',&quot;' + kind + '&quot;)"' + disabled + '>' + esc(numberFmt(count || 0)) + '</button>';
+      }
+      var consultationRows = rows.filter(function(row){ return row.kind === 'Consulta'; });
+      var practiceRows = rows.filter(function(row){ return row.kind === 'Practica'; });
+      return '<tr class="dashboard-module-row">'
         + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
-        + '<td class="tnum">' + esc(numberFmt(module.consultations || 0)) + '</td>'
-        + '<td class="tnum">' + esc(numberFmt(module.practices || 0)) + '</td>'
+        + '<td class="tnum">' + countButton('Consulta', module.consultations || consultationRows.length) + '</td>'
+        + '<td class="tnum">' + countButton('Practica', module.practices || practiceRows.length) + '</td>'
         + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b></td>'
-        + '<td><button class="btn btn-ghost dashboard-detail-btn" type="button">' + esc(rows.length) + ' filas</button></td>'
         + '</tr>'
-        + '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + '" style="display:none"><td colspan="5">'
-        + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Paciente</th><th>Prestacion</th><th>Estado</th><th>Neto</th></tr></thead><tbody>'
-        + (detailRows || '<tr><td colspan="4" class="muted-cell">Sin detalle para este modulo.</td></tr>')
-        + '</tbody></table></div></td>'
-        + '</tr>';
-    }).join('') : '<tr><td colspan="5" class="muted-cell">Sin datos para este mes.</td></tr>';
+        + detailRow('Consulta', 'Consultas', consultationRows)
+        + detailRow('Practica', 'Practicas', practiceRows);
+    }).join('') : '<tr><td colspan="4" class="muted-cell">Sin datos para este mes.</td></tr>';
   }
 }
-function toggleDashboardModuleDetail(index){
-  var row = document.getElementById('dashboardModuleDetail' + index);
+function toggleDashboardModuleDetail(index, kind){
+  var row = document.getElementById('dashboardModuleDetail' + index + kind);
+  var other = document.getElementById('dashboardModuleDetail' + index + (kind === 'Consulta' ? 'Practica' : 'Consulta'));
   if (!row) return;
+  if (other) other.style.display = 'none';
   row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
 }
 async function loadClientDashboard(){

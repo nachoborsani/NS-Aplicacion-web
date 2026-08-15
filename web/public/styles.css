@@ -343,13 +343,15 @@
   .dashboard-compare .good{color:var(--success);font-weight:750}
   .dashboard-compare .bad{color:var(--error);font-weight:750}
   .dashboard-module-wrap{margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:auto}
-  .dashboard-module-table{min-width:640px}
+  .dashboard-module-table{min-width:560px}
   .dashboard-module-table th{padding:7px 10px;font-size:9.5px}
   .dashboard-module-table td{padding:7px 10px;font-size:12px}
-  .dashboard-module-row{cursor:pointer}
   .dashboard-module-row:hover{background:var(--hover)}
-  .dashboard-detail-btn{height:28px;border-radius:8px;font-size:11.5px;padding:0 10px;pointer-events:none}
+  .dashboard-count-btn{height:28px;min-width:42px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-weight:800;cursor:pointer}
+  .dashboard-count-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+  .dashboard-count-btn:disabled{cursor:default;color:var(--text-2);background:transparent;border-color:transparent}
   .dashboard-module-detail td{background:var(--surface-2);padding:0}
+  .dashboard-detail-title{padding:9px 10px 6px;font-size:12px;font-weight:850;color:var(--text)}
   .dashboard-detail-scroll{max-height:280px;overflow:auto}
   .dashboard-detail-scroll table{min-width:860px}
   .dashboard-detail-scroll th{padding:7px 10px;font-size:9px}
