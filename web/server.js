@@ -2464,6 +2464,27 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ---- Informes: subir la firma de un medico (queda en el volumen, no en git) ----
+  if (p === "/api/informes/firma" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede subir firmas." });
+    try {
+      const raw = await readBuffer(req);
+      const mp = extractMultipart(raw, req.headers["content-type"]);
+      if (path.extname(mp.file.filename).toLowerCase() !== ".png") {
+        return json(res, 400, { error: "La firma tiene que ser un PNG (mejor con fondo transparente)." });
+      }
+      const nombre = (String(url.searchParams.get("nombre") || "firma-naiara.png").replace(/[^a-z0-9._-]/gi, "")) || "firma-naiara.png";
+      const dir = path.join(dataDir, "informes");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, nombre), mp.file.data);
+      return json(res, 200, { ok: true, nombre });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo subir la firma." });
+    }
+  }
+
   // ---- Estatico ----
   const cleanPath = p === "/" ? "/index.html" : p;
   const resolved = path.normalize(path.join(publicDir, cleanPath));

@@ -473,6 +473,15 @@
               Generar y descargar PDF
             </button>
           </div>
+          <div class="card" id="infFirmaCard" style="max-width:640px;margin-top:16px;display:none">
+            <h3 style="margin:0 0 4px;font-size:15px">Firma de la médica <span style="font-weight:400;color:var(--text-2);font-size:12px">(admin)</span></h3>
+            <p style="margin:0 0 12px;color:var(--text-2);font-size:13px">Subí la firma en PNG (mejor con fondo transparente) para que los informes salgan firmados en el sitio en vivo. Queda guardada en el servidor, no en el repositorio.</p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="infFirmaFile" accept="image/png">
+              <button class="btn btn-ghost" onclick="subirFirma()">Subir firma</button>
+              <span class="msg ok" id="infFirmaMsg"></span>
+            </div>
+          </div>
         </section>
 
         <section id="view-soon" style="display:none">

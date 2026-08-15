@@ -28,6 +28,7 @@ function go(v, el){
   if (v === 'users') renderUsers();
   if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
+  if (v === 'informes') showInformesAdmin();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   var clientsGroup = document.getElementById('clientsNavGroup');
   if (clientsGroup) {
@@ -106,6 +107,20 @@ async function generarInforme(){
     var a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
   } finally { btn.disabled = false; }
+}
+function showInformesAdmin(){
+  var c = document.getElementById('infFirmaCard');
+  if (c) c.style.display = (ME && ME.role === 'admin') ? '' : 'none';
+}
+async function subirFirma(){
+  var msg = document.getElementById('infFirmaMsg'); msg.className = 'msg ok'; msg.textContent = '';
+  var f = document.getElementById('infFirmaFile').files[0];
+  if (!f){ msg.className = 'msg err'; msg.textContent = 'Elegí un archivo PNG.'; return; }
+  var form = new FormData(); form.append('file', f);
+  var r = await fetch('/api/informes/firma', { method:'POST', body: form });
+  var d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok){ msg.className = 'msg err'; msg.textContent = (d && d.error) || 'No se pudo subir la firma.'; return; }
+  msg.textContent = 'Firma subida ✓ — los informes ya salen firmados.';
 }
 
 // ---------- ojo ver/ocultar ----------
