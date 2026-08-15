@@ -117,14 +117,10 @@ async function buildInformePdf(modeloKey, input) {
   y -= 12;
 
   T("INFORME", M, y, { bold: true, size: 9.5, color: soft });
-  y -= 8;
-  const boxW = width - 2 * M;
-  const lines = wrapText(texto, font, 10.5, boxW - 22);
-  const boxH = Math.max(50, lines.length * 15 + 18);
-  page.drawRectangle({ x: M, y: y - boxH, width: boxW, height: boxH, color: boxBg, borderColor: boxBorder, borderWidth: 1 });
-  let ty = y - 20;
-  for (const ln of lines) { T(ln, M + 11, ty); ty -= 15; }
-  y -= boxH + 30;
+  y -= 20;
+  const lines = wrapText(texto, font, 10.5, width - 2 * M);
+  for (const ln of lines) { T(ln, M, y); y -= 15; }
+  y -= 34;
 
   // Fecha (izquierda) + Firma (derecha)
   const firmaColW = 170;
