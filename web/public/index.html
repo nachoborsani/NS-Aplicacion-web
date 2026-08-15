@@ -212,6 +212,19 @@
                   <div class="module-chip-list" id="clientModules"></div>
                 </article>
               </div>
+
+              <article class="client-card client-pami-card" id="clientPamiCard" style="display:none">
+                <div class="client-card-head"><h3>Acceso PAMI</h3></div>
+                <p class="pami-help">Lo usa la app para bajar la bandeja de este cliente. La clave se guarda <b>encriptada</b> y solo la ve un administrador.</p>
+                <div class="pami-form">
+                  <label class="field"><span>Usuario PAMI</span><input class="inp" id="clientPamiUser" spellcheck="false" autocomplete="off"></label>
+                  <label class="field"><span>Clave PAMI</span><div class="pwd-wrap"><input class="inp" id="clientPamiPass" type="password" autocomplete="new-password" placeholder="(dejar vacío para no cambiarla)"><button type="button" class="pwd-eye" onclick="eyeToggle('clientPamiPass','clientPamiPassIco')" aria-label="Ver"><svg id="clientPamiPassIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button></div></label>
+                </div>
+                <div class="pami-actions">
+                  <button class="btn btn-primary" id="clientPamiSaveBtn" type="button" onclick="saveClientPami()">Guardar acceso</button>
+                  <span class="msg ok" id="clientPamiMsg"></span>
+                </div>
+              </article>
               </section>
 
               <section id="client-section-dashboard" class="client-section">

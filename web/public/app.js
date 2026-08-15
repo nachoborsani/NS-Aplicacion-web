@@ -488,6 +488,36 @@ function setClientSection(section){
   // correcto de forma confiable, sin pelear con las cargas async.
   if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug);
 }
+// Acceso PAMI del cliente (card en Informacion basica) — solo admin.
+async function loadClientPami(){
+  var card = document.getElementById('clientPamiCard');
+  if (!card) return;
+  if (!ME || ME.role !== 'admin' || !ACTIVE_CLIENT){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  var user = document.getElementById('clientPamiUser');
+  var pass = document.getElementById('clientPamiPass');
+  var msg = document.getElementById('clientPamiMsg');
+  user.value = ''; pass.value = ''; msg.textContent = '';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami');
+  if (res.ok && res.data){
+    user.value = res.data.pamiUser || '';
+    pass.placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
+  }
+}
+async function saveClientPami(){
+  if (!ACTIVE_CLIENT) return;
+  var msg = document.getElementById('clientPamiMsg'); msg.className = 'msg ok'; msg.textContent = '';
+  var btn = document.getElementById('clientPamiSaveBtn'); btn.disabled = true;
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami', {
+    pamiUser: document.getElementById('clientPamiUser').value.trim(),
+    pamiPassword: document.getElementById('clientPamiPass').value,
+  });
+  btn.disabled = false;
+  if (!res.ok){ msg.className = 'msg err'; msg.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  document.getElementById('clientPamiPass').value = '';
+  document.getElementById('clientPamiPass').placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
+  msg.textContent = 'Acceso PAMI guardado.';
+}
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
   if (!client) return;
@@ -495,6 +525,7 @@ async function renderActiveClient(){
   document.getElementById('clientName').textContent = client.name;
   setClientSection(CLIENT_SECTION);
   renderClientNomencladorPanel();
+  loadClientPami();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientUgl').textContent = client.ugl || '-';

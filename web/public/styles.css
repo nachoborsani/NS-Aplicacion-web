@@ -377,6 +377,12 @@
   .dashboard-nomnote.warn{background:var(--warning-bg);border:1px solid var(--warning);color:var(--text)}
   .dashboard-nomnote.flat{background:var(--success-bg);border:1px solid var(--success);color:var(--text)}
   .dashboard-module-detail .dashboard-detail-scroll table{min-width:360px}
+  .client-pami-card{max-width:640px;margin-top:16px}
+  .pami-help{margin:0 0 12px;font-size:12.5px;color:var(--text-2);line-height:1.45}
+  .pami-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .pami-form .field{margin:0}
+  .pami-actions{display:flex;align-items:center;gap:12px;margin-top:14px}
+  @media(max-width:560px){ .pami-form{grid-template-columns:1fr} }
   .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:9px 11px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-2)}
   .dashboard-compare b{color:var(--text);font-size:12.5px}
   .dashboard-compare .good{color:var(--success);font-weight:750}

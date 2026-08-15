@@ -14,6 +14,7 @@ const clientesFile = path.join(dataDir, "clientes.json");
 const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
+const clientCredsFile = path.join(dataDir, "client_credentials.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
@@ -28,6 +29,54 @@ function getSessionSecret() {
   return s;
 }
 const SESSION_SECRET = getSessionSecret();
+
+// ---------- Credenciales PAMI por cliente (encriptadas) ----------
+// La clave PAMI se guarda ENCRIPTADA (reversible, la app la necesita usable),
+// nunca en texto plano. Llave AES derivada de CREDENTIAL_KEY (env) o de una
+// guardada en el volumen. Los backups de la base asi no filtran las claves.
+function getCredentialKey() {
+  let hex = process.env.CREDENTIAL_KEY;
+  if (!hex) {
+    const f = path.join(dataDir, "credential_key");
+    try { hex = fs.readFileSync(f, "utf8").trim(); } catch {}
+    if (!hex) {
+      hex = crypto.randomBytes(32).toString("hex");
+      try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(f, hex); } catch {}
+    }
+  }
+  return crypto.createHash("sha256").update(String(hex)).digest();
+}
+const CREDENTIAL_KEY = getCredentialKey();
+function encryptSecret(plain) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIAL_KEY, iv);
+  const enc = Buffer.concat([cipher.update(String(plain || ""), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1:${iv.toString("hex")}:${tag.toString("hex")}:${enc.toString("hex")}`;
+}
+function decryptSecret(stored) {
+  const parts = String(stored || "").split(":");
+  if (parts[0] !== "v1" || parts.length !== 4) return "";
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", CREDENTIAL_KEY, Buffer.from(parts[1], "hex"));
+    decipher.setAuthTag(Buffer.from(parts[2], "hex"));
+    return Buffer.concat([decipher.update(Buffer.from(parts[3], "hex")), decipher.final()]).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+function loadClientCreds() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientCredsFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function saveClientCreds(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientCredsFile, JSON.stringify(store, null, 2));
+}
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -1860,6 +1909,44 @@ const server = http.createServer(async (req, res) => {
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
     return json(res, 200, buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare")));
+  }
+
+  // Acceso PAMI del cliente (usuario + clave encriptada) — solo admin.
+  // La app lee la clave desencriptada por /pami/credenciales para loguearse.
+  const clientPamiCredMatch = p.match(/^\/api\/clientes\/([^/]+)\/pami\/credenciales$/);
+  if (clientPamiCredMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const slug = decodeURIComponent(clientPamiCredMatch[1]);
+    const cred = loadClientCreds()[slug] || {};
+    return json(res, 200, { pamiUser: cred.pamiUser || "", pamiPassword: decryptSecret(cred.pamiPassEnc) });
+  }
+
+  const clientPamiMatch = p.match(/^\/api\/clientes\/([^/]+)\/pami$/);
+  if (clientPamiMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede ver o cambiar el acceso PAMI." });
+    const slug = decodeURIComponent(clientPamiMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadClientCreds();
+    if (req.method === "GET") {
+      const cred = store[slug] || {};
+      return json(res, 200, { pamiUser: cred.pamiUser || "", hasPassword: !!cred.pamiPassEnc });
+    }
+    const body = await readBody(req);
+    const pamiUser = String(body.pamiUser || "").trim();
+    const pamiPassword = body.pamiPassword;
+    const cred = store[slug] || {};
+    cred.pamiUser = pamiUser;
+    // Solo se re-encripta si mandaron una clave nueva; vacio = se deja la que estaba.
+    if (typeof pamiPassword === "string" && pamiPassword.length) cred.pamiPassEnc = encryptSecret(pamiPassword);
+    if (!pamiUser && !cred.pamiPassEnc) delete store[slug];
+    else store[slug] = cred;
+    saveClientCreds(store);
+    return json(res, 200, { ok: true, pamiUser, hasPassword: !!(store[slug] && store[slug].pamiPassEnc) });
   }
 
   const clientReportsMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes$/);
