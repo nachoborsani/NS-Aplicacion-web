@@ -214,6 +214,18 @@ function numberFmt(n){
   try { return value.toLocaleString('es-AR', { maximumFractionDigits:0 }); }
   catch (e) { return String(Math.round(value)); }
 }
+// Monto compacto para las barras de tendencia: $1,2M / $980k / $540
+function moneyCompact(n){
+  var v = Math.abs(Number(n || 0));
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(v >= 1e7 ? 0 : 1).replace('.', ',') + 'M';
+  if (v >= 1e3) return '$' + Math.round(v / 1e3) + 'k';
+  return '$' + Math.round(v);
+}
+function shortMonth(label){ return String(label || '').trim().slice(0, 3); }
+function pickDashPeriod(period){
+  var sel = document.getElementById('clientDashPeriod');
+  if (sel) { sel.value = period; loadClientDashboard(); }
+}
 function percentFmt(n){
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '-';
   try { return Number(n).toLocaleString('es-AR', { style:'percent', maximumFractionDigits:1 }); }
@@ -632,6 +644,28 @@ function renderClientDashboard(data){
         + deltaText('Consultas', data.deltas && data.deltas.consultations, false)
         + deltaText('Practicas', data.deltas && data.deltas.practices, false)
         + deltaText('Promedio', data.deltas && data.deltas.averageNet, true);
+    }
+  }
+  var trend = document.getElementById('clientDashboardTrend');
+  if (trend) {
+    var series = data.series || [];
+    if (series.length < 2) {
+      trend.style.display = 'none';
+      trend.innerHTML = '';
+    } else {
+      trend.style.display = '';
+      var maxSerie = series.reduce(function(mx, s){ return Math.max(mx, Math.abs(Number(s.net || 0))); }, 0) || 1;
+      trend.innerHTML = '<div class="dashboard-trend-title">Facturación neta — evolución</div>'
+        + '<div class="dashboard-trend-bars">'
+        + series.map(function(s){
+            var h = Math.max(4, Math.round(Math.abs(Number(s.net || 0)) / maxSerie * 100));
+            var hot = s.period === current.period ? ' hot' : '';
+            return '<button type="button" class="dtb' + hot + '" onclick="pickDashPeriod(&quot;' + esc(s.period) + '&quot;)" title="' + esc(s.label || s.period) + '">'
+              + '<span class="dtb-amt">' + esc(moneyCompact(s.net || 0)) + '</span>'
+              + '<span class="dtb-area"><span class="dtb-col" style="height:' + h + '%"></span></span>'
+              + '<span class="dtb-mo">' + esc(shortMonth(s.label || s.period)) + '</span></button>';
+          }).join('')
+        + '</div>';
     }
   }
   var body = document.getElementById('clientDashboardModules');

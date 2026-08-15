@@ -1014,6 +1014,11 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   const previous = periods.find((item) => item.period === comparePeriod) || emptyDashboardPeriod(comparePeriod);
   return {
     periods: periods.map((item) => ({ period: item.period, label: item.label, reportCount: item.reportCount })),
+    // serie para el mini-grafico de tendencia (ultimos 8 meses, ascendente)
+    series: periods
+      .slice(0, 8)
+      .map((item) => ({ period: item.period, label: item.label, net: item.net, consultations: item.consultations }))
+      .reverse(),
     current,
     compare: previous,
     deltas: {
