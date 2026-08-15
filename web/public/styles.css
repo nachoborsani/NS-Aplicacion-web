@@ -395,7 +395,7 @@
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
   .report-notes-field{grid-column:1/-1}
   .report-notes-field textarea.inp{height:68px;padding-top:9px;resize:vertical;line-height:1.35}
-  .report-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  .report-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
   .report-summary-grid div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
   .report-summary-grid b,.report-summary-grid span{display:block}
   .report-summary-grid b{font-size:17px}
@@ -471,4 +471,11 @@
   @media(max-width:980px){
     .client-detail{grid-template-columns:minmax(0,1fr)}
     .client-grid,.client-top,.client-card,.client-dashboard-card,.client-nomenclador,.dashboard-module-wrap{min-width:0}
+  }
+
+  /* Tablet en horizontal (barra lateral fija + ancho medio): los 6 filtros del
+     nomenclador no entran hasta ~1340px de viewport, asi que en esa franja van
+     en 3 columnas para evitar el scroll horizontal. */
+  @media(min-width:981px) and (max-width:1340px){
+    .nom-filters{grid-template-columns:repeat(3,minmax(0,1fr))}
   }
