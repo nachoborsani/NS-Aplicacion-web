@@ -771,6 +771,9 @@ function reportRowDebit(row) {
 function reportRowNet(row) {
   return Math.max(0, money(reportRowGross(row) - reportRowDebit(row)));
 }
+function reportRowNextPeriodCutoff(row) {
+  return row && row.outsideCutoff ? money(row.valueGross) : 0;
+}
 function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const valueGross = money(row.valueGross);
@@ -852,10 +855,11 @@ function summarizeReportRows(rows) {
     acc.gross += reportRowGross(row);
     acc.debit += reportRowDebit(row);
     acc.net += reportRowNet(row);
+    acc.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
     if (isConsultationRow(row)) acc.consultationNet += reportRowNet(row);
     else acc.practiceNet += reportRowNet(row);
     return acc;
-  }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0, consultationNet: 0, practiceNet: 0 });
+  }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0, nextPeriodCutoff: 0, consultationNet: 0, practiceNet: 0 });
 }
 function isConsultationRow(row) {
   const code = String(row && row.practiceCode || "");
@@ -1051,6 +1055,7 @@ function buildClientReportWorkbook(report) {
     ["Bruto facturable", money(summary.gross)],
     ["Debitos manuales", money(summary.debit)],
     ["Neto estimado", money(summary.net)],
+    ["Proximo periodo por corte", money(summary.nextPeriodCutoff)],
     ["Cantidad de consultas", summary.consultations || 0],
     ["Importe consultas", money(summary.consultationNet)],
     ["Cantidad de practicas / estudios", summary.practices || 0],
@@ -1145,12 +1150,14 @@ function professionalReportStatus(row) {
 }
 function buildProfessionalPdf(report, moduleCode) {
   const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
-  const allRows = reportRows(report).filter((row) => String(row.moduleCode || "") === String(moduleCode));
-  const rows = allRows.sort((a, b) =>
+  const moduleRows = reportRows(report).filter((row) => String(row.moduleCode || "") === String(moduleCode)).sort((a, b) =>
     String(a.practiceCode || "").localeCompare(String(b.practiceCode || ""))
     || String(a.patientName || "").localeCompare(String(b.patientName || ""))
   );
+  const rows = moduleRows.filter((row) => !row.outsideCutoff);
+  const cutoffRows = moduleRows.filter((row) => row.outsideCutoff);
   const summary = summarizeReportRows(rows);
+  const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
   const pageStreams = [];
   const width = 842;
   const height = 595;
@@ -1158,16 +1165,7 @@ function buildProfessionalPdf(report, moduleCode) {
   const cols = { ome: 28, benef: 105, nombre: 208, practica: 330, turno: 610, estado: 690, neto: 760 };
   let y = 0;
   let commands = [];
-  function newPage() {
-    if (commands.length) pageStreams.push(commands.join("\n"));
-    commands = [];
-    y = height - 30;
-    commands.push(pdfTextCommand(margin, y, `SALA MILLON - INFORME ${moduleLabel}`, 13, "F2"));
-    commands.push(pdfTextCommand(610, y, `Total: ${pdfMoney(summary.net)}`, 12, "F2"));
-    y -= 16;
-    commands.push(pdfTextCommand(margin, y, report.title || "Reporte", 8, "F1"));
-    commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
-    y -= 18;
+  function drawTableHeader() {
     commands.push(pdfLineCommand(margin, y + 8, width - margin, y + 8));
     commands.push(pdfTextCommand(cols.ome, y, "OME", 7, "F2"));
     commands.push(pdfTextCommand(cols.benef, y, "BENEF", 7, "F2"));
@@ -1179,8 +1177,7 @@ function buildProfessionalPdf(report, moduleCode) {
     commands.push(pdfLineCommand(margin, y - 5, width - margin, y - 5));
     y -= 18;
   }
-  newPage();
-  for (const row of rows) {
+  function drawProfessionalRow(row, statusText, amount) {
     const practiceLines = wrapPdfText(`${row.practiceCode || ""} - ${row.practiceDescription || row.practiceText || ""}`, 42).slice(0, 3);
     const nameLines = wrapPdfText(row.patientName || "-", 25).slice(0, 2);
     const lineCount = Math.max(practiceLines.length, nameLines.length, 1);
@@ -1191,16 +1188,43 @@ function buildProfessionalPdf(report, moduleCode) {
     nameLines.forEach((line, i) => commands.push(pdfTextCommand(cols.nombre, y - i * 8, line, 6.5)));
     practiceLines.forEach((line, i) => commands.push(pdfTextCommand(cols.practica, y - i * 8, line, 6.5)));
     commands.push(pdfTextCommand(cols.turno, y, row.appointmentLabel || "-", 6.5));
-    commands.push(pdfTextCommand(cols.estado, y, professionalReportStatus(row), 6.5));
-    commands.push(pdfTextCommand(cols.neto, y, pdfMoney(reportRowNet(row)), 6.5, "F2"));
+    commands.push(pdfTextCommand(cols.estado, y, statusText, 6.5));
+    commands.push(pdfTextCommand(cols.neto, y, pdfMoney(amount), 6.5, "F2"));
     y -= rowHeight + 4;
   }
-  if (!rows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
+  function newPage(withTableHeader = true) {
+    if (commands.length) pageStreams.push(commands.join("\n"));
+    commands = [];
+    y = height - 30;
+    commands.push(pdfTextCommand(margin, y, `SALA MILLON - INFORME ${moduleLabel}`, 13, "F2"));
+    commands.push(pdfTextCommand(610, y, `Total: ${pdfMoney(summary.net)}`, 12, "F2"));
+    y -= 16;
+    commands.push(pdfTextCommand(margin, y, report.title || "Reporte", 8, "F1"));
+    commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
+    y -= 11;
+    commands.push(pdfTextCommand(610, y, `Prox. periodo por corte: ${pdfMoney(cutoffTotal)}`, 8, cutoffTotal ? "F2" : "F1"));
+    y -= 18;
+    if (withTableHeader) drawTableHeader();
+  }
+  newPage();
+  for (const row of rows) {
+    drawProfessionalRow(row, professionalReportStatus(row), reportRowNet(row));
+  }
+  if (!rows.length && !cutoffRows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
+  if (cutoffRows.length) {
+    y -= 16;
+    if (y < 70) newPage(false);
+    commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
+    commands.push(pdfTextCommand(margin, y - 4, `A cobrar proximo mes por corte - ${cutoffRows.length} prestaciones - ${pdfMoney(cutoffTotal)}`, 9, "F2"));
+    y -= 22;
+    drawTableHeader();
+    cutoffRows.forEach((row) => drawProfessionalRow(row, "Proximo mes", reportRowNextPeriodCutoff(row)));
+  }
   y -= 10;
   if (y < 45) newPage();
   commands.push(pdfLineCommand(margin, y, width - margin, y));
   y -= 14;
-  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)}`, 8, "F2"));
+  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)} - prox. periodo ${pdfMoney(cutoffTotal)}`, 8, "F2"));
   pageStreams.push(commands.join("\n"));
   return buildPdfBuffer(pageStreams, width, height);
 }

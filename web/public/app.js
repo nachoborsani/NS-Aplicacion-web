@@ -625,6 +625,9 @@ function reportDebitAmount(row){
 function reportNetAmount(row){
   return Math.max(0, reportBaseGross(row) - reportDebitAmount(row));
 }
+function reportCutoffNextAmount(row){
+  return row && row.outsideCutoff ? Number(row.valueGross || 0) : 0;
+}
 function updateExpectedAmountStatus(net){
   var status = document.getElementById('clientReportExpectedStatus');
   if (!status) return;
@@ -715,11 +718,12 @@ function getClientReportVisibleRows(){
 function updateClientReportSummary(){
   var visible = getClientReportVisibleRows();
   var rows = visible.map(function(item){ return item.row; });
-  var gross = 0, debit = 0, net = 0, absent = 0, outside = 0, unmatched = 0;
+  var gross = 0, debit = 0, net = 0, cutoffNext = 0, absent = 0, outside = 0, unmatched = 0;
   rows.forEach(function(row){
     gross += reportBaseGross(row);
     debit += reportDebitAmount(row);
     net += reportNetAmount(row);
+    cutoffNext += reportCutoffNextAmount(row);
     if (row.absent) absent += 1;
     if (row.outsideCutoff) outside += 1;
     if (!row.matchFound && !row.valueEdited) unmatched += 1;
@@ -729,6 +733,7 @@ function updateClientReportSummary(){
   if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
+  if (cards[4]) cards[4].querySelector('b').textContent = moneyFmt(cutoffNext);
   updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
