@@ -83,12 +83,17 @@ function openDrawer(){ document.getElementById('drawer').classList.add('show'); 
 function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
 
 // ---------- Informes: generar PDF de un paciente y descargarlo ----------
+var INF_BLOB = null; // { url, filename } del último informe generado
 async function generarInforme(){
   var err = document.getElementById('infError'); err.textContent = '';
   var nombre = document.getElementById('infNombre').value.trim();
   var benef = document.getElementById('infBenef').value.trim();
   var fecha = document.getElementById('infFecha').value.trim();
-  if (!nombre || !benef || !fecha){ err.textContent = 'Completá nombre, beneficiario y fecha.'; return; }
+  var faltan = [];
+  if (!nombre) faltan.push('el nombre');
+  if (!benef) faltan.push('el N° de beneficiario');
+  if (!fecha) faltan.push('la fecha');
+  if (faltan.length){ err.textContent = 'Falta completar ' + faltan.join(', ') + '.'; return; }
   var btn = document.getElementById('infGenerar'); btn.disabled = true;
   try {
     var payload = {
@@ -103,10 +108,29 @@ async function generarInforme(){
     var cd = r.headers.get('content-disposition') || '';
     var m = cd.match(/filename="([^"]+)"/);
     var fname = m ? m[1] : 'informe.pdf';
+    if (INF_BLOB && INF_BLOB.url) URL.revokeObjectURL(INF_BLOB.url);
     var url = URL.createObjectURL(blob);
-    var a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    INF_BLOB = { url: url, filename: fname };
+    document.getElementById('infPreviewFrame').src = url;
+    var card = document.getElementById('infPreviewCard');
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    err.textContent = 'No se pudo generar el informe (error de conexión).';
   } finally { btn.disabled = false; }
+}
+function descargarInforme(){
+  if (!INF_BLOB || !INF_BLOB.url) return;
+  var a = document.createElement('a'); a.href = INF_BLOB.url; a.download = INF_BLOB.filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function invalidarPreview(){
+  // Si cambian un dato después de previsualizar, la vista previa queda vieja: la ocultamos.
+  var card = document.getElementById('infPreviewCard');
+  if (card && card.style.display !== 'none'){
+    card.style.display = 'none';
+    var fr = document.getElementById('infPreviewFrame'); if (fr) fr.removeAttribute('src');
+  }
 }
 // ---------- Informes: config (médicos + firmas + descripciones) ----------
 var INFORMES_CFG = { medicos: [], descripciones: [] };

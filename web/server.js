@@ -2471,8 +2471,14 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     const body = await readBody(req);
-    const modelo = String(body.modelo || "caballito-cardio-ecg");
-    if (!informes.MODELOS[modelo]) return json(res, 400, { error: "Modelo de informe desconocido." });
+    const modelo = String(body.modelo || "caballito-consulta-570129");
+    if (!informes.MODELOS[modelo]) return json(res, 400, { error: "No se encontró la plantilla del modelo seleccionado." });
+    const pac = body.paciente || {};
+    const faltan = [];
+    if (!String(pac.nombre || "").trim()) faltan.push("el nombre");
+    if (!String(pac.benef || "").trim()) faltan.push("el N° de beneficiario");
+    if (!String(pac.fecha || "").trim()) faltan.push("la fecha");
+    if (faltan.length) return json(res, 400, { error: "Falta completar " + faltan.join(", ") + "." });
     try {
       const cfg = loadInformesConfig();
       const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
@@ -2498,7 +2504,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 500, {
         error: falta
           ? "Falta instalar pdf-lib en el servidor. Hacé un Redeploy (build limpio) en Railway."
-          : "No se pudo generar el informe.",
+          : "Error al generar el PDF del informe.",
       });
     }
   }
