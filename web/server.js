@@ -932,6 +932,7 @@ function emptyDashboardPeriod(period) {
     billable: 0,
     absent: 0,
     outsideCutoff: 0,
+    nextPeriodCutoff: 0,
     unmatched: 0,
     gross: 0,
     debit: 0,
@@ -954,6 +955,7 @@ function addRowToDashboardPeriod(target, row) {
   if (row.billable) target.billable += 1;
   if (row.absent) target.absent += 1;
   if (row.outsideCutoff) target.outsideCutoff += 1;
+  target.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
   if (!row.matchFound && !row.valueEdited) target.unmatched += 1;
   const gross = reportRowGross(row);
   const debit = reportRowDebit(row);

@@ -329,8 +329,9 @@
   .client-dashboard-controls .field{margin:0}
   .client-dashboard-controls .field span{display:block;font-size:11px;font-weight:750;color:var(--text-2);margin-bottom:4px}
   .client-dashboard-controls .inp{height:36px;border-radius:9px;font-size:12.5px}
-  .dashboard-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+  .dashboard-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}
   .dashboard-kpis div{border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:10px 11px}
+  @media(min-width:981px) and (max-width:1200px){ .dashboard-kpis{grid-template-columns:repeat(3,minmax(0,1fr))} }
   .dashboard-kpis b,.dashboard-kpis span,.dashboard-kpis small{display:block}
   .dashboard-kpis b{font-size:16px;line-height:1.2}
   .dashboard-kpis span{font-size:11px;color:var(--text-2);margin-top:2px}

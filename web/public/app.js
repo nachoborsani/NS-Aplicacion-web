@@ -677,7 +677,8 @@ function renderClientDashboard(data){
       + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + dashboardDelta(deltas.consultations, false) + '</div>'
       + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + dashboardDelta(deltas.practices, false) + '</div>'
       + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small>' + dashboardDelta(deltas.absent, false, true) + '</div>';
+      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + dashboardDelta(deltas.absent, false, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
   }
   var compareBox = document.getElementById('clientDashboardCompare');
   if (compareBox) {
