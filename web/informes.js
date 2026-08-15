@@ -12,6 +12,7 @@ const path = require("path");
 const ASSETS = path.join(__dirname, "assets", "informes");
 
 const PIE_CABALLITO = ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"];
+const PIE_CIMA = ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
@@ -59,7 +60,23 @@ const MODELOS = {
     estudio: "Electrocardiograma",
     solicitanteDefault: "Gerardo Savia",
     textoDefault: "Trazado sin valor patológico.",
-    pie: ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"],
+    pie: PIE_CIMA,
+  },
+  "cima-consulta-570129": {
+    label: "CIMA — Consulta cardiología c/ ECG (570129)",
+    short: "CIMA · Consulta ECG",
+    practica: "Consulta cardiológica c/ ECG — 570129",
+    centro: "CIMA",
+    logo: "cima_logo.png",
+    logoW: 150,
+    servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
+    codigoPractica: "570129",
+    estudio: "Consulta con especialista en cardiología (incluye ECG)",
+    estudioArchivo: "Consulta Cardiologia ECG",
+    solicitanteDefault: "Gerardo Savia",
+    textoDefault: "Trazado sin valor patológico.",
+    pie: PIE_CIMA,
   },
 };
 // Para el desplegable del front (una sola fuente de verdad).

@@ -104,8 +104,8 @@ function loadInformesConfig() {
   }
   if (!Array.isArray(cfg.descripciones)) {
     cfg.descripciones = [
-      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro"] },
-      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro"] },
+      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
+      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
     ];
   }
   return cfg;
