@@ -320,8 +320,9 @@
   .client-tabs button:hover{background:var(--hover);color:var(--text)}
   .client-tabs button.active{color:var(--turq);box-shadow:inset 0 -2px 0 var(--turq)}
   .client-section{display:block}
-  .client-grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.35fr);gap:14px}
+  .client-grid{display:grid;grid-template-columns:minmax(320px,.62fr) minmax(0,1.55fr);gap:14px}
   .client-card{padding:15px 16px}
+  .client-info-card{padding:13px 16px}
   .client-card h3,.client-nom-head h3{margin:0 0 10px;font-size:14.5px}
   .client-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
   .client-card-head h3{margin:0}
@@ -396,8 +397,9 @@
   .dashboard-detail-scroll td{padding:7px 10px;font-size:11.5px;background:var(--surface)}
   .icon-btn.mini{width:32px;height:32px;border-radius:8px}
   .icon-btn.mini svg{width:16px;height:16px}
-  .info-list{display:grid;gap:9px;margin:0}
+  .info-list{display:grid;gap:10px;margin:0}
   .info-list div{display:grid;gap:2px}
+  .info-list .client-info-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
   .info-list dt{font-size:10.5px;color:var(--text-2);text-transform:uppercase;font-weight:750;letter-spacing:.04em}
   .info-list dd{margin:0;font-weight:650;font-size:13px}
   .module-chip-list{display:flex;gap:7px;flex-wrap:wrap}
