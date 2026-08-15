@@ -874,6 +874,12 @@ function isConsultationRow(row) {
   const text = normalizeText([row && row.practiceDescription, row && row.practiceText].join(" "));
   return code.startsWith("820") || text.includes("CONSULTA");
 }
+// Módulo de nivel 1 del nomenclador PAMI (ej. "RADIOLOGIA AMBULATORIA DE NIVEL 1").
+// Acepta "NIVEL 1" y "NIVEL I", sin confundir con NIVEL 2/3 ni II/III.
+function isNivel1Module(moduleDescription) {
+  const s = normalizeText(String(moduleDescription || ""));
+  return /\bNIVEL\s*1\b/.test(s) || /\bNIVEL\s*I\b/.test(s);
+}
 function reportDashboardPeriod(report) {
   const counts = new Map();
   for (const row of report.rows || []) {
@@ -1868,6 +1874,50 @@ const server = http.createServer(async (req, res) => {
     });
     res.end(bodyStr);
     return;
+  }
+
+  // Aumento de un nomenclador vs el mes anterior (general, consultas, nivel 1).
+  if (p === "/api/nomencladores/comparar" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const store = loadNomencladorStore();
+    const current = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    if (!current) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+    const periodsAsc = Object.keys(store.items || {}).sort();
+    const idx = periodsAsc.indexOf(current.period);
+    const prevPeriod = idx > 0 ? periodsAsc[idx - 1] : "";
+    const previous = prevPeriod ? store.items[prevPeriod] : null;
+    if (!previous) {
+      return json(res, 200, { hasPrevious: false, period: current.period, label: current.label || periodLabel(current.period) });
+    }
+    const prevTotal = new Map();
+    for (const row of previous.rows || []) {
+      const code = String(row.practiceCode || "").trim();
+      if (code && !prevTotal.has(code)) prevTotal.set(code, money(row.total));
+    }
+    const general = [], consultas = [], nivel1 = [];
+    for (const row of current.rows || []) {
+      const code = String(row.practiceCode || "").trim();
+      if (!code || !prevTotal.has(code)) continue;
+      const before = prevTotal.get(code);
+      if (!(before > 0)) continue;
+      const pct = (money(row.total) - before) / before;
+      general.push(pct);
+      if (isConsultationRow(row)) consultas.push(pct);
+      if (isNivel1Module(row.moduleDescription)) nivel1.push(pct);
+    }
+    const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+    return json(res, 200, {
+      hasPrevious: true,
+      period: current.period,
+      label: current.label || periodLabel(current.period),
+      previousPeriod: prevPeriod,
+      previousLabel: previous.label || periodLabel(prevPeriod),
+      matched: general.length,
+      general: { avgPct: avg(general), count: general.length },
+      consultas: { avgPct: avg(consultas), count: consultas.length },
+      nivel1: { avgPct: avg(nivel1), count: nivel1.length },
+    });
   }
 
   if (p === "/api/nomencladores/upload" && req.method === "POST") {

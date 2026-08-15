@@ -1272,10 +1272,32 @@ async function loadNomencladorSummary(period){
   var d = res.data;
   st.innerHTML = '<b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span>'
     + '<span class="nom-cols">Valor: ' + esc(d.columns.total) + '</span>';
+  loadNomencladorIncrease(NOM_ACTIVE_PERIOD);
   renderModuleOptions(d.filters.modules);
   fillSelect('nomScope', d.filters.scopes);
   fillSelect('nomType', d.filters.types);
   await searchNomenclador();
+}
+// Banner de aumento del nomenclador vs el mes anterior (general/consultas/nivel 1).
+async function loadNomencladorIncrease(period){
+  var box = document.getElementById('nomIncrease');
+  if (!box) return;
+  var res = await api('/api/nomencladores/comparar' + (period ? '?period=' + encodeURIComponent(period) : ''));
+  if (!res.ok || !res.data || !res.data.hasPrevious){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var d = res.data;
+  function chip(obj, label){
+    if (!obj || obj.avgPct === null || obj.avgPct === undefined) return '';
+    var up = obj.avgPct >= 0;
+    var arrow = up ? '▲' : '▼';
+    return '<span class="nom-inc-chip ' + (up ? 'up' : 'down') + '"><b>' + arrow + ' ' + esc(percentFmt(Math.abs(obj.avgPct))) + '</b> ' + esc(label) + '</span>';
+  }
+  var chips = chip(d.general, 'general') + chip(d.consultas, 'consultas') + chip(d.nivel1, 'módulos nivel 1');
+  if (!chips){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="nom-inc-ic">📈</div>'
+    + '<div class="nom-inc-txt">'
+    + '<div class="nom-inc-lead">Aumento vs <b>' + esc(d.previousLabel || d.previousPeriod) + '</b> — promedio de las prácticas que están en los dos meses</div>'
+    + '<div class="nom-inc-chips">' + chips + '</div></div>';
 }
 async function uploadNomenclador(files){
   if (!files || !files[0]) return;
