@@ -84,7 +84,8 @@ function closeDrawer(){ document.getElementById('drawer').classList.remove('show
 
 // ---------- Informes: generar PDF de un paciente y descargarlo ----------
 var INF_BLOB = null; // { url, filename } del último informe generado
-async function generarInforme(){
+// Núcleo compartido: valida, pide el PDF y devuelve { blob, fname } o null.
+async function pedirInformePdf(){
   var err = document.getElementById('infError'); err.textContent = '';
   var nombre = document.getElementById('infNombre').value.trim();
   var benef = document.getElementById('infBenef').value.trim();
@@ -93,8 +94,9 @@ async function generarInforme(){
   if (!nombre) faltan.push('el nombre');
   if (!benef) faltan.push('el N° de beneficiario');
   if (!fecha) faltan.push('la fecha');
-  if (faltan.length){ err.textContent = 'Falta completar ' + faltan.join(', ') + '.'; return; }
-  var btn = document.getElementById('infGenerar'); btn.disabled = true;
+  if (faltan.length){ err.textContent = 'Falta completar ' + faltan.join(', ') + '.'; return null; }
+  var b1 = document.getElementById('infGenerar'), b2 = document.getElementById('infDescargarDirecto');
+  if (b1) b1.disabled = true; if (b2) b2.disabled = true;
   try {
     var payload = {
       modelo: document.getElementById('infModelo').value,
@@ -103,21 +105,37 @@ async function generarInforme(){
       medicoId: document.getElementById('infMedico').value
     };
     var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
-    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el informe.'; return; }
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el informe.'; return null; }
     var blob = await r.blob();
     var cd = r.headers.get('content-disposition') || '';
     var m = cd.match(/filename="([^"]+)"/);
-    var fname = m ? m[1] : 'informe.pdf';
-    if (INF_BLOB && INF_BLOB.url) URL.revokeObjectURL(INF_BLOB.url);
-    var url = URL.createObjectURL(blob);
-    INF_BLOB = { url: url, filename: fname };
-    document.getElementById('infPreviewFrame').src = url;
-    var card = document.getElementById('infPreviewCard');
-    card.style.display = '';
-    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return { blob: blob, fname: m ? m[1] : 'informe.pdf' };
   } catch (e) {
     err.textContent = 'No se pudo generar el informe (error de conexión).';
-  } finally { btn.disabled = false; }
+    return null;
+  } finally { if (b1) b1.disabled = false; if (b2) b2.disabled = false; }
+}
+function bajarBlob(blob, fname){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+// "Generar vista previa": muestra el PDF y deja el botón Descargar.
+async function generarInforme(){
+  var r = await pedirInformePdf(); if (!r) return;
+  if (INF_BLOB && INF_BLOB.url) URL.revokeObjectURL(INF_BLOB.url);
+  var url = URL.createObjectURL(r.blob);
+  INF_BLOB = { url: url, filename: r.fname };
+  document.getElementById('infPreviewFrame').src = url;
+  var card = document.getElementById('infPreviewCard');
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+// "Descargar PDF" directo: genera y baja sin previsualizar.
+async function descargarInformeDirecto(){
+  var r = await pedirInformePdf(); if (!r) return;
+  bajarBlob(r.blob, r.fname);
 }
 function descargarInforme(){
   if (!INF_BLOB || !INF_BLOB.url) return;
