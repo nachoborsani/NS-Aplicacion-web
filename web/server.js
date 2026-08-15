@@ -1140,6 +1140,7 @@ function buildPdfBuffer(pageStreams, width = 842, height = 595) {
 }
 function professionalReportStatus(row) {
   const status = String(row && row.status || "").trim();
+  if (reportRowDebit(row) > 0 && reportRowNet(row) <= 0.01) return "Debito";
   return normalizeText(status) === "FACTURABLE" ? "Cobrado" : (status || "-");
 }
 function buildProfessionalPdf(report, moduleCode) {
