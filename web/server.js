@@ -1176,7 +1176,14 @@ function sortPdfRows(rows) {
   );
 }
 function buildRowsPdf(options) {
-  const rows = sortPdfRows(options.rows || []);
+  const sections = (options.sections || [{
+    title: "",
+    rows: options.rows || [],
+    statusForRow: options.statusForRow,
+    amountForRow: options.amountForRow,
+    emptyText: options.emptyText,
+  }]).map((section) => ({ ...section, rows: sortPdfRows(section.rows || []) }));
+  const rows = sections.flatMap((section) => section.rows);
   const total = money(options.total || 0);
   const pageStreams = [];
   const width = 842;
@@ -1224,11 +1231,24 @@ function buildRowsPdf(options) {
     y -= 18;
     if (withTableHeader) drawTableHeader();
   }
-  newPage();
-  for (const row of rows) {
-    drawProfessionalRow(row, options.statusForRow(row), options.amountForRow(row));
-  }
-  if (!rows.length) commands.push(pdfTextCommand(margin, y, options.emptyText || "No hay practicas para este reporte.", 9, "F1"));
+  newPage(!options.sections);
+  sections.forEach((section, index) => {
+    if (options.sections || section.title) {
+      if (index > 0) y -= 10;
+      if (y < 70) newPage(false);
+      commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
+      commands.push(pdfTextCommand(margin, y - 4, section.title || "Detalle", 9, "F2"));
+      y -= 22;
+      drawTableHeader();
+    }
+    if (!section.rows.length) {
+      commands.push(pdfTextCommand(margin, y, section.emptyText || "Sin practicas para esta seccion.", 8, "F1"));
+      y -= 14;
+      return;
+    }
+    section.rows.forEach((row) => drawProfessionalRow(row, section.statusForRow(row), section.amountForRow(row)));
+  });
+  if (!rows.length && !options.sections) commands.push(pdfTextCommand(margin, y, options.emptyText || "No hay practicas para este reporte.", 9, "F1"));
   y -= 10;
   if (y < 45) newPage();
   commands.push(pdfLineCommand(margin, y, width - margin, y));
@@ -1288,6 +1308,56 @@ function buildSpecialReportPdf(report, section) {
     amountForRow: reportRowMissingInformeAmount,
     emptyText: "No hay practicas con falta de informe.",
     summaryText: `Resumen: prestaciones ${rows.length} - valor recuperable ${pdfMoney(total)}`,
+  });
+}
+function buildGeneralReportPdf(report) {
+  const allRows = reportRows(report);
+  const cardioRows = allRows.filter((row) => String(row.moduleCode || "") === "543" && !row.outsideCutoff && !reportRowMissingInforme(row));
+  const traumatoRows = allRows.filter((row) => String(row.moduleCode || "") === "546" && !row.outsideCutoff && !reportRowMissingInforme(row));
+  const cutoffRows = allRows.filter((row) => row.outsideCutoff);
+  const missingInformeRows = allRows.filter((row) => reportRowMissingInforme(row));
+  const cardioSummary = summarizeReportRows(cardioRows);
+  const traumatoSummary = summarizeReportRows(traumatoRows);
+  const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
+  const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
+  const total = cardioSummary.net + traumatoSummary.net + cutoffTotal + missingInformeTotal;
+  return buildRowsPdf({
+    heading: "SALA MILLON - INFORME GENERAL",
+    title: report.title || "Reporte",
+    total,
+    totalLabel: "Total general",
+    detailText: `Cardio + traumato + proximo periodo + falta informe`,
+    sections: [
+      {
+        title: `CARDIOLOGIA - ${pdfMoney(cardioSummary.net)}`,
+        rows: cardioRows,
+        statusForRow: professionalReportStatus,
+        amountForRow: reportRowNet,
+        emptyText: "Sin practicas cobradas de cardiologia.",
+      },
+      {
+        title: `TRAUMATOLOGIA - ${pdfMoney(traumatoSummary.net)}`,
+        rows: traumatoRows,
+        statusForRow: professionalReportStatus,
+        amountForRow: reportRowNet,
+        emptyText: "Sin practicas cobradas de traumatologia.",
+      },
+      {
+        title: `PROXIMO PERIODO - a cobrar - ${pdfMoney(cutoffTotal)}`,
+        rows: cutoffRows,
+        statusForRow: () => "Proximo mes",
+        amountForRow: reportRowNextPeriodCutoff,
+        emptyText: "Sin practicas fuera de corte para el proximo periodo.",
+      },
+      {
+        title: `FALTA INFORME NO COBRADO - valor recuperable - ${pdfMoney(missingInformeTotal)}`,
+        rows: missingInformeRows,
+        statusForRow: () => "A recuperar",
+        amountForRow: reportRowMissingInformeAmount,
+        emptyText: "Sin practicas con falta de informe.",
+      },
+    ],
+    summaryText: `Resumen: cardio ${pdfMoney(cardioSummary.net)} - traumato ${pdfMoney(traumatoSummary.net)} - proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)} - total ${pdfMoney(total)}`,
   });
 }
 function readBuffer(req, limit = 25 * 1024 * 1024) {
@@ -1629,6 +1699,24 @@ const server = http.createServer(async (req, res) => {
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
     const buffer = buildSpecialReportPdf(report, section);
     const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(sectionConfig.filename)}.pdf`;
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
+    });
+    return res.end(buffer);
+  }
+
+  const clientGeneralPdfMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/general-pdf$/);
+  if (clientGeneralPdfMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientGeneralPdfMatch[1]);
+    const id = decodeURIComponent(clientGeneralPdfMatch[2]);
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const buffer = buildGeneralReportPdf(report);
+    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-GENERAL.pdf`;
     res.writeHead(200, {
       "content-type": "application/pdf",
       "content-disposition": `attachment; filename="${filename}"`,

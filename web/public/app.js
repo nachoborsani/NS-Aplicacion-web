@@ -488,6 +488,7 @@ function renderSavedClientReports(){
     var viewing = CLIENT_REPORT_MODE === 'closed' && CLIENT_REPORT_ID === report.id;
     var actions = '<button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Excel</button>'
+      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadGeneralReportPdf(&quot;' + esc(report.id) + '&quot;)">PDF general</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;543&quot;)">PDF cardio</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;546&quot;)">PDF traumato</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadSpecialReportPdf(&quot;' + esc(report.id) + '&quot;,&quot;cutoff&quot;)">PDF proximo periodo</button>'
@@ -505,6 +506,10 @@ function renderSavedClientReports(){
 function downloadClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;
   window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/download';
+}
+function downloadGeneralReportPdf(id){
+  if (!ACTIVE_CLIENT || !id) return;
+  window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/general-pdf';
 }
 function downloadProfessionalReport(id, moduleCode){
   if (!ACTIVE_CLIENT || !id || !moduleCode) return;
