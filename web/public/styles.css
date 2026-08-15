@@ -465,3 +465,10 @@
 
   @media(max-width:980px){ .nom-filters{grid-template-columns:1fr 1fr}.client-layout,.client-grid,.report-model-grid,.report-summary-grid,.client-report-controls,.client-dashboard-controls{grid-template-columns:1fr}.dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.client-nom-head,.nom-table .table-head,.dashboard-head{align-items:stretch;flex-direction:column}.client-nom-controls{grid-template-columns:1fr}.report-search{width:100%}.report-filter-bar{grid-template-columns:1fr 1fr} }
   @media(max-width:520px){ .tiles{grid-template-columns:1fr}.nom-filters{grid-template-columns:1fr}.nom-status{align-items:flex-start;flex-direction:column}.module-edit-list{grid-template-columns:1fr}.report-filter-bar,.dashboard-kpis{grid-template-columns:1fr} }
+
+  /* Clientes en celular: que las tablas anchas (min-width) scrolleen adentro de
+     su tarjeta en vez de estirar el ancho de toda la pagina (scroll horizontal). */
+  @media(max-width:980px){
+    .client-detail{grid-template-columns:minmax(0,1fr)}
+    .client-grid,.client-top,.client-card,.client-dashboard-card,.client-nomenclador,.dashboard-module-wrap{min-width:0}
+  }
