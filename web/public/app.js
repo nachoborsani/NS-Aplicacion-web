@@ -66,7 +66,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section === 'reportes') setClientSection('reportes');
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -484,9 +484,8 @@ function setClientSection(section){
   });
   var crumb = document.getElementById('clientCrumbSection');
   if (crumb) crumb.textContent = found.crumb;
-  // El hash queda a nivel cliente (no la sub-pestaña): así F5 restaura el cliente
-  // correcto de forma confiable, sin pelear con las cargas async.
-  if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug);
+  // El hash guarda cliente + sub-solapa, así F5 restaura la solapa exacta.
+  if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug + '/' + CLIENT_SECTION);
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
 async function loadClientPami(){
