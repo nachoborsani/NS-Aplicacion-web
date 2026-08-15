@@ -473,17 +473,35 @@ function findPamiExclusionRule(rowA, rowB) {
   }
   return null;
 }
+const automaticDebitRules = [
+  {
+    debitCodes: ["570124", "170157", "177157"],
+    dominantCodes: ["570121", "170145", "177145"],
+    debitLabel: "570124",
+    dominantLabel: "570121",
+    description: "Ergometria debitada por Holter en el mismo periodo",
+  },
+];
+function rowMatchesAnyPracticeCode(row, codes) {
+  const expanded = expandedPamiExclusionCodes(row);
+  return codes.some((code) => expanded.includes(code));
+}
+function findAutomaticDebitRule(rowA, rowB) {
+  for (const rule of automaticDebitRules) {
+    const aIsDebit = rowMatchesAnyPracticeCode(rowA, rule.debitCodes);
+    const bIsDebit = rowMatchesAnyPracticeCode(rowB, rule.debitCodes);
+    const aIsDominant = rowMatchesAnyPracticeCode(rowA, rule.dominantCodes);
+    const bIsDominant = rowMatchesAnyPracticeCode(rowB, rule.dominantCodes);
+    if (aIsDebit && bIsDominant) return { rule, target: rowA, other: rowB };
+    if (bIsDebit && aIsDominant) return { rule, target: rowB, other: rowA };
+  }
+  return null;
+}
 function reportRowExclusionGroupKey(row) {
   const benefit = cleanIdentifier(row && row.benefit);
   if (!benefit) return "";
   const period = normalizePeriod(row && row.period) || String(row && row.appointmentAt || "").slice(0, 7);
   return period ? `${benefit}|${period}` : "";
-}
-function chooseExclusionDebitRow(a, b) {
-  const grossA = reportRowGross(a);
-  const grossB = reportRowGross(b);
-  if (grossA !== grossB) return grossA <= grossB ? a : b;
-  return String(a.practiceCode || "").localeCompare(String(b.practiceCode || "")) >= 0 ? a : b;
 }
 function applyAutomaticExclusionDebits(rows) {
   const groups = new Map();
@@ -502,18 +520,17 @@ function applyAutomaticExclusionDebits(rows) {
   for (const groupRows of groups.values()) {
     for (let i = 0; i < groupRows.length; i += 1) {
       for (let j = i + 1; j < groupRows.length; j += 1) {
-        const rule = findPamiExclusionRule(groupRows[i], groupRows[j]);
-        if (!rule) continue;
-        const target = chooseExclusionDebitRow(groupRows[i], groupRows[j]);
-        const other = target === groupRows[i] ? groupRows[j] : groupRows[i];
+        const match = findAutomaticDebitRule(groupRows[i], groupRows[j]);
+        if (!match) continue;
+        const { rule, target, other } = match;
         target.manualDebit = true;
         target.debitType = "total";
         target.debitAmount = 0;
         target.autoDebit = true;
         target.autoDebitPairCode = other.practiceCode || "";
-        target.autoDebitRulePage = rule.page || "";
-        target.autoDebitRuleCodes = Array.isArray(rule.codes) ? rule.codes.join(" / ") : "";
-        target.autoDebitReason = `Practica excluyente con ${other.practiceCode || "otra practica"} en el mismo periodo (PDF pag. ${rule.page || "-"})`;
+        target.autoDebitRulePage = "";
+        target.autoDebitRuleCodes = `${rule.debitLabel} / ${rule.dominantLabel}`;
+        target.autoDebitReason = `${rule.description}: ${target.practiceCode || rule.debitLabel} contra ${other.practiceCode || rule.dominantLabel}`;
       }
     }
   }
