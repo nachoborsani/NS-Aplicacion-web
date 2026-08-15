@@ -2460,7 +2460,12 @@ const server = http.createServer(async (req, res) => {
       return;
     } catch (error) {
       console.log("[informes] error:", error && error.message);
-      return json(res, 500, { error: "No se pudo generar el informe." });
+      const falta = error && error.code === "MODULE_NOT_FOUND" && /pdf-lib/.test(String(error.message));
+      return json(res, 500, {
+        error: falta
+          ? "Falta instalar pdf-lib en el servidor. Hacé un Redeploy (build limpio) en Railway."
+          : "No se pudo generar el informe.",
+      });
     }
   }
 
