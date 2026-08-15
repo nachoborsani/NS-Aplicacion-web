@@ -60,7 +60,9 @@ function informeFilename(modeloKey, paciente) {
 }
 
 async function buildInformePdf(modeloKey, input) {
-  const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+  // pdf-lib va vendorizado en el repo (bundle auto-contenido) para no depender
+  // del npm install de Railway (su cache no instalaba el paquete).
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
   const modelo = MODELOS[modeloKey] || MODELOS["caballito-cardio-ecg"];
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;

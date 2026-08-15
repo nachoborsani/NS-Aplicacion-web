@@ -6,11 +6,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "npm install --omit=dev --no-audit --no-fund; node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "nodemailer": "^6.9.14",
-    "pdf-lib": "^1.17.1",
     "xlsx": "^0.18.5"
   }
 }
