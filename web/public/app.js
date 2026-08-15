@@ -586,19 +586,23 @@ function fillClientDashboardSelects(periods, currentPeriod, comparePeriod){
 }
 function deltaText(label, delta, money){
   if (!delta) return '';
-  var value = money ? moneyFmt(delta.value || 0) : numberFmt(delta.value || 0);
-  var signClass = Number(delta.value || 0) >= 0 ? 'good' : 'bad';
-  var pct = delta.percent === null ? '' : ' (' + percentFmt(delta.percent) + ')';
-  return '<span class="' + signClass + '">' + esc(label) + ': ' + esc(value + pct) + '</span>';
+  var raw = Number(delta.value || 0);
+  var value = money ? moneyFmt(Math.abs(raw)) : numberFmt(Math.abs(raw));
+  var signClass = raw >= 0 ? 'good' : 'bad';
+  var arrow = raw > 0 ? '▲ ' : (raw < 0 ? '▼ ' : '');
+  var pct = delta.percent === null ? '' : ' (' + percentFmt(Math.abs(delta.percent)) + ')';
+  return '<span class="' + signClass + '">' + esc(label) + ': ' + arrow + esc(value + pct) + '</span>';
 }
-function dashboardDelta(delta, money){
+// invert=true para métricas donde BAJAR es bueno (débitos, ausentes).
+function dashboardDelta(delta, money, invert){
   if (!delta) return '';
   var raw = Number(delta.value || 0);
-  var signClass = raw >= 0 ? 'good' : 'bad';
-  var sign = raw > 0 ? '+ ' : '';
-  var value = money ? moneyFmt(raw) : numberFmt(raw);
-  var pct = delta.percent === null ? '' : ' (' + percentFmt(delta.percent) + ')';
-  return '<small class="dashboard-delta ' + signClass + '">' + esc(sign + value + ' vs mes comparado' + pct) + '</small>';
+  var good = invert ? raw <= 0 : raw >= 0;
+  var signClass = good ? 'good' : 'bad';
+  var arrow = raw > 0 ? '▲' : (raw < 0 ? '▼' : '–');
+  var value = money ? moneyFmt(Math.abs(raw)) : numberFmt(Math.abs(raw));
+  var pct = delta.percent === null ? '' : '<span class="dashboard-delta-pct">' + esc(percentFmt(Math.abs(delta.percent))) + '</span>';
+  return '<small class="dashboard-delta ' + signClass + '"><span class="dashboard-delta-arrow">' + arrow + '</span>' + esc(value) + pct + '</small>';
 }
 function renderClientDashboard(data){
   data = data || {};
@@ -612,8 +616,8 @@ function renderClientDashboard(data){
       + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + dashboardDelta(deltas.net, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + dashboardDelta(deltas.consultations, false) + '</div>'
       + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + dashboardDelta(deltas.practices, false) + '</div>'
-      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small>' + dashboardDelta(deltas.absent, false) + '</div>';
+      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small>' + dashboardDelta(deltas.absent, false, true) + '</div>';
   }
   var compareBox = document.getElementById('clientDashboardCompare');
   if (compareBox) {
@@ -633,6 +637,8 @@ function renderClientDashboard(data){
   var body = document.getElementById('clientDashboardModules');
   if (body) {
     var modules = current.modules || [];
+    var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
+    var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
       function renderDetailRows(detailRows, emptyText){
@@ -661,11 +667,15 @@ function renderClientDashboard(data){
       }
       var consultationRows = rows.filter(function(row){ return row.kind === 'Consulta'; });
       var practiceRows = rows.filter(function(row){ return row.kind === 'Practica'; });
+      var netAbs = Math.abs(Number(module.net || 0));
+      var barW = Math.round(netAbs / maxNet * 100);
+      var share = totalNet ? Math.round(netAbs / totalNet * 100) : 0;
       return '<tr class="dashboard-module-row">'
         + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
         + '<td class="tnum">' + countButton('Consulta', module.consultations || consultationRows.length) + '</td>'
         + '<td class="tnum">' + countButton('Practica', module.practices || practiceRows.length) + '</td>'
-        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b></td>'
+        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
+        + '<div class="mod-share-row"><div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows)
         + detailRow('Practica', 'Practicas', practiceRows);
