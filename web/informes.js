@@ -16,6 +16,8 @@ const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
     label: "Caballito — Consulta cardiología c/ ECG (570129)",
+    short: "Caballito · Consulta ECG",
+    practica: "Consulta cardiológica c/ ECG — 570129",
     centro: "Centro Médico Caballito",
     logo: "cmc_logo.png",
     logoW: 84,
@@ -30,6 +32,8 @@ const MODELOS = {
   },
   "caballito-electro": {
     label: "Caballito — Electrocardiograma simple",
+    short: "Caballito · ECG",
+    practica: "ECG simple",
     centro: "Centro Médico Caballito",
     logo: "cmc_logo.png",
     logoW: 84,
@@ -44,6 +48,8 @@ const MODELOS = {
   // --- CIMA (Innovación en Medicina): electro, firma Dr. Savia ---
   "cima-electro": {
     label: "CIMA — Electrocardiograma",
+    short: "CIMA · ECG",
+    practica: "Electrocardiograma",
     centro: "CIMA",
     logo: "cima_logo.png",
     logoW: 150,
@@ -61,6 +67,8 @@ function listarModelos() {
   return Object.keys(MODELOS).map((k) => ({
     key: k,
     label: MODELOS[k].label || k,
+    short: MODELOS[k].short || MODELOS[k].label || k,
+    practica: MODELOS[k].practica || MODELOS[k].estudio || k,
     centro: MODELOS[k].centro || "",
     especialidad: MODELOS[k].especialidad || "",
   }));

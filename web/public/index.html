@@ -446,9 +446,19 @@
           </div>
           <section id="inf-tab-generar" class="inf-section">
           <div class="card" id="infFormCard" style="max-width:640px" oninput="invalidarPreview()" onchange="invalidarPreview()">
+            <div class="form-grid two">
+              <div class="field">
+                <label>Centro</label>
+                <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
+              </div>
+              <div class="field">
+                <label>Especialidad</label>
+                <select class="inp" id="infEspecialidad" onchange="onEspecialidadChange()"></select>
+              </div>
+            </div>
             <div class="field">
-              <label>Modelo</label>
-              <select class="inp" id="infModelo" onchange="filtrarPorModelo()"></select>
+              <label>Práctica</label>
+              <select class="inp" id="infPractica" onchange="filtrarPorModelo()"></select>
             </div>
             <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'')"></div>
             <div class="form-grid two">
