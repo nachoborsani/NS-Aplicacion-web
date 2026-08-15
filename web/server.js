@@ -880,6 +880,33 @@ function isNivel1Module(moduleDescription) {
   const s = normalizeText(String(moduleDescription || ""));
   return /\bNIVEL\s*1\b/.test(s) || /\bNIVEL\s*I\b/.test(s);
 }
+// Promedio de aumento (por practica presente en ambos meses) para general,
+// consultas y modulos de nivel 1. Reusado por /comparar y /variaciones.
+function computeNomencladorDelta(previous, current) {
+  const prevTotal = new Map();
+  for (const row of previous.rows || []) {
+    const code = String(row.practiceCode || "").trim();
+    if (code && !prevTotal.has(code)) prevTotal.set(code, money(row.total));
+  }
+  const general = [], consultas = [], nivel1 = [];
+  for (const row of current.rows || []) {
+    const code = String(row.practiceCode || "").trim();
+    if (!code || !prevTotal.has(code)) continue;
+    const before = prevTotal.get(code);
+    if (!(before > 0)) continue;
+    const pct = (money(row.total) - before) / before;
+    general.push(pct);
+    if (isConsultationRow(row)) consultas.push(pct);
+    if (isNivel1Module(row.moduleDescription)) nivel1.push(pct);
+  }
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+  return {
+    matched: general.length,
+    general: { avgPct: avg(general), count: general.length },
+    consultas: { avgPct: avg(consultas), count: consultas.length },
+    nivel1: { avgPct: avg(nivel1), count: nivel1.length },
+  };
+}
 function reportDashboardPeriod(report) {
   const counts = new Map();
   for (const row of report.rows || []) {
@@ -1883,41 +1910,50 @@ const server = http.createServer(async (req, res) => {
     const store = loadNomencladorStore();
     const current = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!current) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
-    const periodsAsc = Object.keys(store.items || {}).sort();
-    const idx = periodsAsc.indexOf(current.period);
-    const prevPeriod = idx > 0 ? periodsAsc[idx - 1] : "";
-    const previous = prevPeriod ? store.items[prevPeriod] : null;
+    // "against" = comparar contra un mes concreto (ej. el mes que se compara en
+    // el dashboard); si no viene, se usa el mes anterior adyacente.
+    const againstParam = normalizePeriod(url.searchParams.get("against")) || String(url.searchParams.get("against") || "").trim();
+    let prevPeriod = "";
+    let previous = null;
+    if (againstParam && store.items[againstParam] && againstParam !== current.period) {
+      prevPeriod = againstParam;
+      previous = store.items[againstParam];
+    } else {
+      const periodsAsc = Object.keys(store.items || {}).sort();
+      const idx = periodsAsc.indexOf(current.period);
+      prevPeriod = idx > 0 ? periodsAsc[idx - 1] : "";
+      previous = prevPeriod ? store.items[prevPeriod] : null;
+    }
     if (!previous) {
       return json(res, 200, { hasPrevious: false, period: current.period, label: current.label || periodLabel(current.period) });
     }
-    const prevTotal = new Map();
-    for (const row of previous.rows || []) {
-      const code = String(row.practiceCode || "").trim();
-      if (code && !prevTotal.has(code)) prevTotal.set(code, money(row.total));
-    }
-    const general = [], consultas = [], nivel1 = [];
-    for (const row of current.rows || []) {
-      const code = String(row.practiceCode || "").trim();
-      if (!code || !prevTotal.has(code)) continue;
-      const before = prevTotal.get(code);
-      if (!(before > 0)) continue;
-      const pct = (money(row.total) - before) / before;
-      general.push(pct);
-      if (isConsultationRow(row)) consultas.push(pct);
-      if (isNivel1Module(row.moduleDescription)) nivel1.push(pct);
-    }
-    const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
-    return json(res, 200, {
+    return json(res, 200, Object.assign({
       hasPrevious: true,
       period: current.period,
       label: current.label || periodLabel(current.period),
       previousPeriod: prevPeriod,
       previousLabel: previous.label || periodLabel(prevPeriod),
-      matched: general.length,
-      general: { avgPct: avg(general), count: general.length },
-      consultas: { avgPct: avg(consultas), count: consultas.length },
-      nivel1: { avgPct: avg(nivel1), count: nivel1.length },
-    });
+    }, computeNomencladorDelta(previous, current)));
+  }
+
+  // Variaciones entre cada par de meses consecutivos (para las banderas de la tendencia).
+  if (p === "/api/nomencladores/variaciones" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const store = loadNomencladorStore();
+    const periods = Object.keys(store.items || {}).sort();
+    const variaciones = [];
+    for (let i = 1; i < periods.length; i += 1) {
+      const d = computeNomencladorDelta(store.items[periods[i - 1]], store.items[periods[i]]);
+      variaciones.push({
+        from: periods[i - 1],
+        to: periods[i],
+        general: d.general.avgPct,
+        consultas: d.consultas.avgPct,
+        nivel1: d.nivel1.avgPct,
+      });
+    }
+    return json(res, 200, { variaciones });
   }
 
   if (p === "/api/nomencladores/upload" && req.method === "POST") {

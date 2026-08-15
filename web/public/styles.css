@@ -347,7 +347,8 @@
   .dashboard-trend{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:12px 14px}
   .dashboard-trend-title{font-size:10.5px;font-weight:750;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
   .dashboard-trend-bars{display:flex;align-items:flex-end;gap:8px;height:118px}
-  .dtb{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;background:transparent;border:0;cursor:pointer;padding:0;border-radius:7px}
+  .dtb{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;background:transparent;border:0;cursor:pointer;padding:0;border-radius:7px}
+  .dtb-flag{position:absolute;top:16px;left:-4px;font-size:12px;line-height:1;cursor:help;z-index:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
   .dtb:hover{background:var(--hover)}
   .dtb-area{flex:1;width:100%;min-height:0;display:flex;align-items:flex-end;justify-content:center}
   .dtb-col{display:block;width:100%;max-width:44px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#9bb6cd,#7593b0)}
@@ -366,6 +367,12 @@
   .nom-inc-chip.up b{color:var(--success)}
   .nom-inc-chip.down{border-color:var(--error);background:var(--error-bg)}
   .nom-inc-chip.down b{color:var(--error)}
+  .dashboard-nomnote{margin-top:8px;border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.45;display:flex;gap:8px;align-items:flex-start}
+  .dashboard-nomnote .nn-ic{flex:0 0 auto}
+  .dashboard-nomnote b{color:var(--text)}
+  .dashboard-nomnote.warn{background:var(--warning-bg);border:1px solid var(--warning);color:var(--text)}
+  .dashboard-nomnote.flat{background:var(--success-bg);border:1px solid var(--success);color:var(--text)}
+  .dashboard-module-detail .dashboard-detail-scroll table{min-width:360px}
   .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:9px 11px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-2)}
   .dashboard-compare b{color:var(--text);font-size:12.5px}
   .dashboard-compare .good{color:var(--success);font-weight:750}

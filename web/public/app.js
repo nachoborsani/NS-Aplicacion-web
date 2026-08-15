@@ -226,6 +226,54 @@ function pickDashPeriod(period){
   var sel = document.getElementById('clientDashPeriod');
   if (sel) { sel.value = period; loadClientDashboard(); }
 }
+function pctArrow(p){ var up = Number(p) >= 0; return (up ? '▲' : '▼') + ' ' + percentFmt(Math.abs(Number(p || 0))); }
+// #1 Observacion: si el nomenclador vario entre los dos meses comparados, avisar
+// que parte de la variacion de facturacion es por precio y no por volumen.
+async function loadDashboardNomNote(period, against){
+  var box = document.getElementById('clientDashboardNomNote');
+  if (!box) return;
+  if (!period || !against){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var res = await api('/api/nomencladores/comparar?period=' + encodeURIComponent(period) + '&against=' + encodeURIComponent(against));
+  if (!res.ok || !res.data || !res.data.hasPrevious){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var d = res.data, g = d.general && d.general.avgPct;
+  if (g === null || g === undefined){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  if (Math.abs(g) < 0.005){
+    box.className = 'dashboard-nomnote flat';
+    box.innerHTML = '<span class="nn-ic">✓</span><span>El nomenclador no varió entre ' + esc(d.previousLabel) + ' y ' + esc(d.label) + ': el cambio de facturación es por volumen (más/menos prácticas), no por precios.</span>';
+  } else {
+    var parts = [];
+    if (d.general && d.general.avgPct != null) parts.push('general ' + pctArrow(d.general.avgPct));
+    if (d.consultas && d.consultas.avgPct != null) parts.push('consultas ' + pctArrow(d.consultas.avgPct));
+    if (d.nivel1 && d.nivel1.avgPct != null) parts.push('nivel 1 ' + pctArrow(d.nivel1.avgPct));
+    box.className = 'dashboard-nomnote warn';
+    box.innerHTML = '<span class="nn-ic">⚠️</span><span>El nomenclador cambió entre <b>' + esc(d.previousLabel) + '</b> y <b>' + esc(d.label) + '</b> (' + esc(parts.join(', ')) + '). Parte de la variación de facturación es por <b>precio</b>, no por volumen.</span>';
+  }
+}
+// #3 Banderas: entre barra y barra, marcar si PAMI aumento en ese mes (tooltip).
+async function loadTrendFlags(series){
+  if (!series || series.length < 2) return;
+  var res = await api('/api/nomencladores/variaciones');
+  if (!res.ok || !res.data) return;
+  var map = {};
+  (res.data.variaciones || []).forEach(function(v){ map[v.from + '|' + v.to] = v; });
+  var bars = document.querySelectorAll('#clientDashboardTrend .dtb');
+  for (var i = 1; i < series.length; i++){
+    var v = map[series[i - 1].period + '|' + series[i].period];
+    if (!v || v.general === null || v.general === undefined || Math.abs(v.general) < 0.005) continue;
+    var bar = bars[i];
+    if (!bar) continue;
+    var parts = [];
+    if (v.consultas != null) parts.push('consultas ' + pctArrow(v.consultas));
+    if (v.nivel1 != null) parts.push('nivel 1 ' + pctArrow(v.nivel1));
+    if (v.general != null) parts.push('general ' + pctArrow(v.general));
+    var flag = document.createElement('span');
+    flag.className = 'dtb-flag';
+    flag.textContent = '🚩';
+    flag.title = 'PAMI ' + (v.general >= 0 ? 'aumentó' : 'bajó') + ' entre ' + shortMonth(series[i - 1].label || series[i - 1].period) + ' y ' + shortMonth(series[i].label || series[i].period) + ': ' + parts.join(', ');
+    bar.appendChild(flag);
+  }
+}
 function percentFmt(n){
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return '-';
   try { return Number(n).toLocaleString('es-AR', { style:'percent', maximumFractionDigits:1 }); }
@@ -646,6 +694,7 @@ function renderClientDashboard(data){
         + deltaText('Promedio', data.deltas && data.deltas.averageNet, true);
     }
   }
+  loadDashboardNomNote(current.period || '', compare.period || '');
   var trend = document.getElementById('clientDashboardTrend');
   if (trend) {
     var series = data.series || [];
@@ -666,6 +715,7 @@ function renderClientDashboard(data){
               + '<span class="dtb-mo">' + esc(shortMonth(s.label || s.period)) + '</span></button>';
           }).join('')
         + '</div>';
+      loadTrendFlags(series);
     }
   }
   var body = document.getElementById('clientDashboardModules');
@@ -675,23 +725,31 @@ function renderClientDashboard(data){
     var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
+      // Agrupado por prestacion (codigo): cuantas de cada una y el neto sumado.
       function renderDetailRows(detailRows, emptyText){
-        return detailRows.length ? detailRows.map(function(row){
-          var flags = [];
-          if (!row.matchFound && !row.valueEdited) flags.push('sin valor');
-          if (row.valueEdited) flags.push('editado');
-          return '<tr>'
-            + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
-            + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || '') + '</span></div><div class="nom-muted">' + esc(row.kind || '') + (flags.length ? ' - ' + esc(flags.join(', ')) : '') + '</div></td>'
-            + '<td>' + esc(row.status || '-') + '</td>'
-            + '<td class="nom-money"><b>' + esc(moneyFmt(row.net || 0)) + '</b><div class="nom-muted">Bruto ' + esc(moneyFmt(row.gross || 0)) + '</div></td>'
-            + '</tr>';
-        }).join('') : '<tr><td colspan="4" class="muted-cell">' + esc(emptyText) + '</td></tr>';
+        if (!detailRows.length) return '<tr><td colspan="3" class="muted-cell">' + esc(emptyText) + '</td></tr>';
+        var groups = {};
+        detailRows.forEach(function(row){
+          var code = row.practiceCode || '-';
+          var key = code + '|' + (row.practiceDescription || '');
+          if (!groups[key]) groups[key] = { code: code, desc: row.practiceDescription || '', count: 0, net: 0 };
+          groups[key].count += 1;
+          groups[key].net += Number(row.net || 0);
+        });
+        return Object.keys(groups).map(function(k){ return groups[k]; })
+          .sort(function(a, b){ return b.count - a.count || b.net - a.net; })
+          .map(function(g){
+            return '<tr>'
+              + '<td><span class="nom-code">' + esc(g.code) + '</span> ' + esc(g.desc || '-') + '</td>'
+              + '<td class="tnum"><b>' + esc(numberFmt(g.count)) + '</b></td>'
+              + '<td class="nom-money"><b>' + esc(moneyFmt(g.net)) + '</b></td>'
+              + '</tr>';
+          }).join('');
       }
       function detailRow(kind, label, detailRows){
         return '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + kind + '" style="display:none"><td colspan="4">'
           + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + '</div>'
-          + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Paciente</th><th>Prestacion</th><th>Estado</th><th>Neto</th></tr></thead><tbody>'
+          + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Prestacion</th><th>Cantidad</th><th>Neto</th></tr></thead><tbody>'
           + renderDetailRows(detailRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
           + '</tbody></table></div></td></tr>';
       }
