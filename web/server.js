@@ -1106,6 +1106,16 @@ const professionalReportModules = {
   "543": "CARDIOLOGIA",
   "546": "TRAUMATOLOGIA",
 };
+const reportSpecialPdfSections = {
+  cutoff: {
+    label: "PROXIMO PERIODO",
+    filename: "PROXIMO-PERIODO",
+  },
+  missingInforme: {
+    label: "FALTA INFORME",
+    filename: "FALTA-INFORME",
+  },
+};
 function wrapPdfText(text, maxChars) {
   const words = asciiText(text).split(" ").filter(Boolean);
   const lines = [];
@@ -1159,18 +1169,15 @@ function professionalReportStatus(row) {
   if (reportRowMissingInforme(row)) return "Falta informe";
   return normalizeText(status) === "FACTURABLE" ? "Cobrado" : (status || "-");
 }
-function buildProfessionalPdf(report, moduleCode) {
-  const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
-  const moduleRows = reportRows(report).filter((row) => String(row.moduleCode || "") === String(moduleCode)).sort((a, b) =>
+function sortPdfRows(rows) {
+  return (rows || []).slice().sort((a, b) =>
     String(a.practiceCode || "").localeCompare(String(b.practiceCode || ""))
     || String(a.patientName || "").localeCompare(String(b.patientName || ""))
   );
-  const rows = moduleRows.filter((row) => !row.outsideCutoff && !reportRowMissingInforme(row));
-  const cutoffRows = moduleRows.filter((row) => row.outsideCutoff);
-  const missingInformeRows = moduleRows.filter((row) => reportRowMissingInforme(row));
-  const summary = summarizeReportRows(rows);
-  const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
-  const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
+}
+function buildRowsPdf(options) {
+  const rows = sortPdfRows(options.rows || []);
+  const total = money(options.total || 0);
   const pageStreams = [];
   const width = 842;
   const height = 595;
@@ -1209,48 +1216,79 @@ function buildProfessionalPdf(report, moduleCode) {
     if (commands.length) pageStreams.push(commands.join("\n"));
     commands = [];
     y = height - 30;
-    commands.push(pdfTextCommand(margin, y, `SALA MILLON - INFORME ${moduleLabel}`, 13, "F2"));
-    commands.push(pdfTextCommand(610, y, `Total: ${pdfMoney(summary.net)}`, 12, "F2"));
+    commands.push(pdfTextCommand(margin, y, options.heading || "SALA MILLON - INFORME", 13, "F2"));
+    commands.push(pdfTextCommand(610, y, `${options.totalLabel || "Total"}: ${pdfMoney(total)}`, 12, "F2"));
     y -= 16;
-    commands.push(pdfTextCommand(margin, y, report.title || "Reporte", 8, "F1"));
-    commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
-    y -= 11;
-    commands.push(pdfTextCommand(610, y, `Prox. periodo por corte: ${pdfMoney(cutoffTotal)}`, 8, cutoffTotal ? "F2" : "F1"));
-    y -= 11;
-    commands.push(pdfTextCommand(610, y, `Falta informe: ${pdfMoney(missingInformeTotal)}`, 8, missingInformeTotal ? "F2" : "F1"));
+    commands.push(pdfTextCommand(margin, y, options.title || "Reporte", 8, "F1"));
+    commands.push(pdfTextCommand(610, y, options.detailText || `Prestaciones: ${rows.length}`, 8, "F1"));
     y -= 18;
     if (withTableHeader) drawTableHeader();
   }
   newPage();
   for (const row of rows) {
-    drawProfessionalRow(row, professionalReportStatus(row), reportRowNet(row));
+    drawProfessionalRow(row, options.statusForRow(row), options.amountForRow(row));
   }
-  if (!rows.length && !cutoffRows.length && !missingInformeRows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
-  if (missingInformeRows.length) {
-    y -= 16;
-    if (y < 70) newPage(false);
-    commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
-    commands.push(pdfTextCommand(margin, y - 4, `Falta informe / pendiente de transmision - ${missingInformeRows.length} prestaciones - ${pdfMoney(missingInformeTotal)}`, 9, "F2"));
-    y -= 22;
-    drawTableHeader();
-    missingInformeRows.forEach((row) => drawProfessionalRow(row, "Falta informe", reportRowMissingInformeAmount(row)));
-  }
-  if (cutoffRows.length) {
-    y -= 16;
-    if (y < 70) newPage(false);
-    commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
-    commands.push(pdfTextCommand(margin, y - 4, `A cobrar proximo mes por corte - ${cutoffRows.length} prestaciones - ${pdfMoney(cutoffTotal)}`, 9, "F2"));
-    y -= 22;
-    drawTableHeader();
-    cutoffRows.forEach((row) => drawProfessionalRow(row, "Proximo mes", reportRowNextPeriodCutoff(row)));
-  }
+  if (!rows.length) commands.push(pdfTextCommand(margin, y, options.emptyText || "No hay practicas para este reporte.", 9, "F1"));
   y -= 10;
   if (y < 45) newPage();
   commands.push(pdfLineCommand(margin, y, width - margin, y));
   y -= 14;
-  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)} - falta informe ${pdfMoney(missingInformeTotal)} - prox. periodo ${pdfMoney(cutoffTotal)}`, 8, "F2"));
+  commands.push(pdfTextCommand(margin, y, options.summaryText || `Resumen: prestaciones ${rows.length} - total ${pdfMoney(total)}`, 8, "F2"));
   pageStreams.push(commands.join("\n"));
   return buildPdfBuffer(pageStreams, width, height);
+}
+function buildProfessionalPdf(report, moduleCode) {
+  const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
+  const rows = reportRows(report).filter((row) =>
+    String(row.moduleCode || "") === String(moduleCode)
+    && !row.outsideCutoff
+    && !reportRowMissingInforme(row)
+  );
+  const summary = summarizeReportRows(rows);
+  return buildRowsPdf({
+    heading: `SALA MILLON - INFORME ${moduleLabel}`,
+    title: report.title || "Reporte",
+    rows,
+    total: summary.net,
+    totalLabel: "Total",
+    detailText: `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`,
+    statusForRow: professionalReportStatus,
+    amountForRow: reportRowNet,
+    emptyText: "No hay practicas cobradas para este modulo en el reporte seleccionado.",
+    summaryText: `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)}`,
+  });
+}
+function buildSpecialReportPdf(report, section) {
+  if (section === "cutoff") {
+    const rows = reportRows(report).filter((row) => row.outsideCutoff);
+    const total = rows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
+    return buildRowsPdf({
+      heading: "SALA MILLON - PROXIMO PERIODO",
+      title: report.title || "Reporte",
+      rows,
+      total,
+      totalLabel: "A cobrar",
+      detailText: `Para cobrar con el proximo periodo - Prestaciones: ${rows.length}`,
+      statusForRow: () => "Proximo mes",
+      amountForRow: reportRowNextPeriodCutoff,
+      emptyText: "No hay practicas fuera de corte para el proximo periodo.",
+      summaryText: `Resumen: prestaciones ${rows.length} - a cobrar proximo periodo ${pdfMoney(total)}`,
+    });
+  }
+  const rows = reportRows(report).filter((row) => reportRowMissingInforme(row));
+  const total = rows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
+  return buildRowsPdf({
+    heading: "SALA MILLON - FALTA INFORME",
+    title: report.title || "Reporte",
+    rows,
+    total,
+    totalLabel: "Valor recuperable",
+    detailText: `Pendiente de informe / transmision - Prestaciones: ${rows.length}`,
+    statusForRow: () => "A recuperar",
+    amountForRow: reportRowMissingInformeAmount,
+    emptyText: "No hay practicas con falta de informe.",
+    summaryText: `Resumen: prestaciones ${rows.length} - valor recuperable ${pdfMoney(total)}`,
+  });
 }
 function readBuffer(req, limit = 25 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
@@ -1570,6 +1608,27 @@ const server = http.createServer(async (req, res) => {
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
     const buffer = buildProfessionalPdf(report, moduleCode);
     const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(moduleLabel)}.pdf`;
+    res.writeHead(200, {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
+    });
+    return res.end(buffer);
+  }
+
+  const clientSpecialPdfMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/special-pdf\/([^/]+)$/);
+  if (clientSpecialPdfMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientSpecialPdfMatch[1]);
+    const id = decodeURIComponent(clientSpecialPdfMatch[2]);
+    const section = decodeURIComponent(clientSpecialPdfMatch[3]);
+    const sectionConfig = reportSpecialPdfSections[section];
+    if (!sectionConfig) return json(res, 400, { error: "Informe PDF no configurado." });
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const buffer = buildSpecialReportPdf(report, section);
+    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(sectionConfig.filename)}.pdf`;
     res.writeHead(200, {
       "content-type": "application/pdf",
       "content-disposition": `attachment; filename="${filename}"`,

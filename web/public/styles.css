@@ -380,14 +380,14 @@
   .date-filter{display:grid;gap:3px;margin:0}
   .date-filter span{font-size:10.5px;font-weight:750;color:var(--text-2)}
   .report-list-card{overflow:hidden}
-  .saved-report-table{min-width:1020px;table-layout:fixed}
+  .saved-report-table{min-width:1230px;table-layout:fixed}
   .saved-report-table th{padding:8px 10px;font-size:9.5px;background:#f7f9fc}
   .saved-report-table td{padding:8px 10px;font-size:12px}
   .saved-report-table th:nth-child(1){width:330px}
   .saved-report-table th:nth-child(2){width:160px}
   .saved-report-table th:nth-child(3){width:90px}
   .saved-report-table th:nth-child(4){width:135px}
-  .saved-report-table th:nth-child(5){width:320px}
+  .saved-report-table th:nth-child(5){width:520px}
   .report-open-btn{height:32px;border-radius:8px;font-size:12px;padding:0 10px}
   .report-row-actions{display:flex;gap:6px;flex-wrap:wrap}
   .client-report-controls{display:grid;grid-template-columns:minmax(240px,360px) 220px minmax(0,1fr);gap:12px;align-items:end}

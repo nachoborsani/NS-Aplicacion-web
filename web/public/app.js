@@ -489,7 +489,9 @@ function renderSavedClientReports(){
     var actions = '<button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Excel</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;543&quot;)">PDF cardio</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;546&quot;)">PDF trauma</button>'
+      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;546&quot;)">PDF traumato</button>'
+      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadSpecialReportPdf(&quot;' + esc(report.id) + '&quot;,&quot;cutoff&quot;)">PDF proximo periodo</button>'
+      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadSpecialReportPdf(&quot;' + esc(report.id) + '&quot;,&quot;missingInforme&quot;)">PDF falta informe</button>'
       + (viewing ? '<button class="btn btn-ghost report-open-btn" type="button" onclick="closeClientReportView()">Cerrar</button>' : '');
     return '<tr>'
       + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
@@ -507,6 +509,10 @@ function downloadClientReport(id){
 function downloadProfessionalReport(id, moduleCode){
   if (!ACTIVE_CLIENT || !id || !moduleCode) return;
   window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/professional-pdf/' + encodeURIComponent(moduleCode);
+}
+function downloadSpecialReportPdf(id, section){
+  if (!ACTIVE_CLIENT || !id || !section) return;
+  window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/special-pdf/' + encodeURIComponent(section);
 }
 async function loadClientReports(){
   if (!ACTIVE_CLIENT) return;
