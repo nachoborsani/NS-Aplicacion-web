@@ -1138,6 +1138,10 @@ function buildPdfBuffer(pageStreams, width = 842, height = 595) {
   out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(out, "latin1");
 }
+function professionalReportStatus(row) {
+  const status = String(row && row.status || "").trim();
+  return normalizeText(status) === "FACTURABLE" ? "Cobrado" : (status || "-");
+}
 function buildProfessionalPdf(report, moduleCode) {
   const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
   const allRows = reportRows(report).filter((row) => String(row.moduleCode || "") === String(moduleCode));
@@ -1150,7 +1154,7 @@ function buildProfessionalPdf(report, moduleCode) {
   const width = 842;
   const height = 595;
   const margin = 28;
-  const cols = { ome: 28, benef: 105, nombre: 198, practica: 330, turno: 548, trans: 615, estado: 685, neto: 760 };
+  const cols = { ome: 28, benef: 105, nombre: 208, practica: 330, turno: 610, estado: 690, neto: 760 };
   let y = 0;
   let commands = [];
   function newPage() {
@@ -1169,11 +1173,10 @@ function buildProfessionalPdf(report, moduleCode) {
     commands.push(pdfTextCommand(cols.nombre, y, "NOMBRE", 7, "F2"));
     commands.push(pdfTextCommand(cols.practica, y, "PRACTICA", 7, "F2"));
     commands.push(pdfTextCommand(cols.turno, y, "TURNO", 7, "F2"));
-    commands.push(pdfTextCommand(cols.trans, y, "TRANSM.", 7, "F2"));
     commands.push(pdfTextCommand(cols.estado, y, "ESTADO", 7, "F2"));
     commands.push(pdfTextCommand(cols.neto, y, "NETO", 7, "F2"));
-    y -= 10;
-    commands.push(pdfLineCommand(margin, y + 5, width - margin, y + 5));
+    commands.push(pdfLineCommand(margin, y - 5, width - margin, y - 5));
+    y -= 18;
   }
   newPage();
   for (const row of rows) {
@@ -1187,8 +1190,7 @@ function buildProfessionalPdf(report, moduleCode) {
     nameLines.forEach((line, i) => commands.push(pdfTextCommand(cols.nombre, y - i * 8, line, 6.5)));
     practiceLines.forEach((line, i) => commands.push(pdfTextCommand(cols.practica, y - i * 8, line, 6.5)));
     commands.push(pdfTextCommand(cols.turno, y, row.appointmentLabel || "-", 6.5));
-    commands.push(pdfTextCommand(cols.trans, y, row.transmittedLabel || "-", 6.5));
-    commands.push(pdfTextCommand(cols.estado, y, row.status || "-", 6.5));
+    commands.push(pdfTextCommand(cols.estado, y, professionalReportStatus(row), 6.5));
     commands.push(pdfTextCommand(cols.neto, y, pdfMoney(reportRowNet(row)), 6.5, "F2"));
     y -= rowHeight + 4;
   }
