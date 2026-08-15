@@ -431,24 +431,53 @@ const pamiExclusionCodeAliases = {
 };
 const pamiExclusionPairs = loadPamiExclusionPairs();
 const pamiExclusionPairMap = new Map(pamiExclusionPairs.map((rule) => [pairKey(rule.codes && rule.codes[0], rule.codes && rule.codes[1]), rule]));
-function expandedPamiExclusionCodes(code) {
-  const clean = cleanIdentifier(code);
-  return Array.from(new Set([clean, ...(pamiExclusionCodeAliases[clean] || [])].filter(Boolean)));
+const pamiExclusionDescriptionCodes = new Map();
+pamiExclusionPairs.forEach((rule) => {
+  [
+    [rule.codes && rule.codes[0], rule.descriptionA],
+    [rule.codes && rule.codes[1], rule.descriptionB],
+  ].forEach(([code, description]) => {
+    const text = normalizeText(description);
+    if (!code || text.length < 8) return;
+    if (!pamiExclusionDescriptionCodes.has(text)) pamiExclusionDescriptionCodes.set(text, new Set());
+    pamiExclusionDescriptionCodes.get(text).add(code);
+  });
+});
+const pamiExclusionDescriptionCodeCache = new Map();
+function pamiExclusionCodesByDescription(description) {
+  const text = normalizeText(description);
+  if (text.length < 8) return [];
+  if (pamiExclusionDescriptionCodeCache.has(text)) return pamiExclusionDescriptionCodeCache.get(text);
+  const found = new Set();
+  for (const [pdfDescription, codes] of pamiExclusionDescriptionCodes.entries()) {
+    if (pdfDescription === text || pdfDescription.includes(text) || text.includes(pdfDescription)) {
+      codes.forEach((code) => found.add(code));
+    }
+  }
+  const result = Array.from(found);
+  pamiExclusionDescriptionCodeCache.set(text, result);
+  return result;
 }
-function findPamiExclusionRule(codeA, codeB) {
-  for (const a of expandedPamiExclusionCodes(codeA)) {
-    for (const b of expandedPamiExclusionCodes(codeB)) {
+function expandedPamiExclusionCodes(rowOrCode) {
+  const row = typeof rowOrCode === "object" && rowOrCode ? rowOrCode : null;
+  const clean = cleanIdentifier(row ? row.practiceCode : rowOrCode);
+  const descriptionCodes = row ? pamiExclusionCodesByDescription(`${row.practiceDescription || ""} ${row.practiceText || ""}`) : [];
+  return Array.from(new Set([clean, ...(pamiExclusionCodeAliases[clean] || []), ...descriptionCodes].filter(Boolean)));
+}
+function findPamiExclusionRule(rowA, rowB) {
+  for (const a of expandedPamiExclusionCodes(rowA)) {
+    for (const b of expandedPamiExclusionCodes(rowB)) {
       const rule = pamiExclusionPairMap.get(pairKey(a, b));
       if (rule) return { ...rule, matchedCodes: [a, b] };
     }
   }
   return null;
 }
-function reportRowEpisodeKey(row) {
+function reportRowExclusionGroupKey(row) {
   const benefit = cleanIdentifier(row && row.benefit);
   if (!benefit) return "";
-  const day = String(row && row.appointmentAt || "").slice(0, 10) || String(row && row.period || "");
-  return day ? `${benefit}|${day}` : "";
+  const period = normalizePeriod(row && row.period) || String(row && row.appointmentAt || "").slice(0, 7);
+  return period ? `${benefit}|${period}` : "";
 }
 function chooseExclusionDebitRow(a, b) {
   const grossA = reportRowGross(a);
@@ -465,7 +494,7 @@ function applyAutomaticExclusionDebits(rows) {
     row.autoDebitRulePage = "";
     row.autoDebitRuleCodes = "";
     if (!row.billable || !row.practiceCode || reportRowGross(row) <= 0) return;
-    const key = reportRowEpisodeKey(row);
+    const key = reportRowExclusionGroupKey(row);
     if (!key) return;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
@@ -473,7 +502,7 @@ function applyAutomaticExclusionDebits(rows) {
   for (const groupRows of groups.values()) {
     for (let i = 0; i < groupRows.length; i += 1) {
       for (let j = i + 1; j < groupRows.length; j += 1) {
-        const rule = findPamiExclusionRule(groupRows[i].practiceCode, groupRows[j].practiceCode);
+        const rule = findPamiExclusionRule(groupRows[i], groupRows[j]);
         if (!rule) continue;
         const target = chooseExclusionDebitRow(groupRows[i], groupRows[j]);
         const other = target === groupRows[i] ? groupRows[j] : groupRows[i];
@@ -484,7 +513,7 @@ function applyAutomaticExclusionDebits(rows) {
         target.autoDebitPairCode = other.practiceCode || "";
         target.autoDebitRulePage = rule.page || "";
         target.autoDebitRuleCodes = Array.isArray(rule.codes) ? rule.codes.join(" / ") : "";
-        target.autoDebitReason = `Practica excluyente con ${other.practiceCode || "otra practica"} (PDF pag. ${rule.page || "-"})`;
+        target.autoDebitReason = `Practica excluyente con ${other.practiceCode || "otra practica"} en el mismo periodo (PDF pag. ${rule.page || "-"})`;
       }
     }
   }
