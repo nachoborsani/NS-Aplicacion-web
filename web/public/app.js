@@ -122,6 +122,7 @@ var CLIENT_REPORT_PRACTICE_QUERY = '';
 var CLIENT_REPORT_MODULE = '';
 var CLIENT_REPORT_TRANS_FROM = '';
 var CLIENT_REPORT_TRANS_TO = '';
+var CLIENT_REPORT_QUICK_FILTER = '';
 var CLIENT_REPORT_EXPECTED_AMOUNT = '';
 var CLIENT_REPORT_SORT = '';
 var CLIENT_REPORT_MODE = '';
@@ -712,6 +713,8 @@ function getClientReportVisibleRows(){
     var transDate = String(item.row.transmittedAt || '').slice(0, 10);
     if (transFrom && (!transDate || transDate < transFrom)) return false;
     if (transTo && (!transDate || transDate > transTo)) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'cutoff' && !item.row.outsideCutoff) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'missingInforme' && !reportMissingInforme(item.row)) return false;
     return true;
   });
   if (CLIENT_REPORT_SORT === 'practice-asc' || CLIENT_REPORT_SORT === 'practice-desc') {
@@ -739,13 +742,17 @@ function updateClientReportSummary(){
     if (reportMissingInforme(row)) missingInforme += 1;
     if (!row.matchFound && !row.valueEdited) unmatched += 1;
   });
-  var cards = document.querySelectorAll('#clientReportSummary div');
+  var cards = document.querySelectorAll('#clientReportSummary > div');
   if (cards[0]) cards[0].querySelector('b').textContent = moneyFmt(gross);
   if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
   if (cards[4]) cards[4].querySelector('b').textContent = moneyFmt(cutoffNext);
   if (cards[5]) cards[5].querySelector('b').textContent = moneyFmt(missingInformeAmount);
+  var cutoffCard = document.getElementById('clientReportCutoffCard');
+  var missingCard = document.getElementById('clientReportMissingInformeCard');
+  if (cutoffCard) cutoffCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'cutoff');
+  if (missingCard) missingCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'missingInforme');
   updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
@@ -840,6 +847,15 @@ function setClientReportTransmissionFilter(){
   CLIENT_REPORT_TRANS_TO = to ? to.value : '';
   renderClientReportRows();
 }
+function setClientReportQuickFilter(value){
+  CLIENT_REPORT_QUICK_FILTER = CLIENT_REPORT_QUICK_FILTER === value ? '' : value;
+  renderClientReportRows();
+}
+function handleReportSummaryCardKey(event, value){
+  if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  setClientReportQuickFilter(value);
+}
 function setClientReportExpectedAmount(value){
   CLIENT_REPORT_EXPECTED_AMOUNT = value || '';
   updateClientReportSummary();
@@ -851,6 +867,7 @@ function resetClientReportFilters(){
   CLIENT_REPORT_MODULE = '';
   CLIENT_REPORT_TRANS_FROM = '';
   CLIENT_REPORT_TRANS_TO = '';
+  CLIENT_REPORT_QUICK_FILTER = '';
   var search = document.getElementById('clientReportSearch');
   if (search) search.value = '';
   var practice = document.getElementById('clientReportPracticeFilter');

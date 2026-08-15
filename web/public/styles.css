@@ -400,6 +400,9 @@
   .report-summary-grid b,.report-summary-grid span{display:block}
   .report-summary-grid b{font-size:17px}
   .report-summary-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
+  .report-summary-card.filterable{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+  .report-summary-card.filterable:hover,.report-summary-card.filterable.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(18,184,177,.16)}
+  .report-summary-card.filterable.active{background:#effefd}
   .report-expected-card{display:grid;gap:7px}
   .report-expected-card label{display:grid;gap:5px}
   .report-expected-card .inp{height:34px;border-radius:8px;font-size:13px}
