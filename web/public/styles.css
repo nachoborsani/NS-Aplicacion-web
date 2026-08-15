@@ -395,7 +395,7 @@
   .client-report-controls .field span{display:block;font-size:11.5px;font-weight:700;color:var(--text-2);margin-bottom:5px}
   .report-notes-field{grid-column:1/-1}
   .report-notes-field textarea.inp{height:68px;padding-top:9px;resize:vertical;line-height:1.35}
-  .report-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .report-summary-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
   .report-summary-grid div{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:var(--shadow-sm)}
   .report-summary-grid b,.report-summary-grid span{display:block}
   .report-summary-grid b{font-size:17px}

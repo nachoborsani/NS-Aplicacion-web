@@ -774,6 +774,12 @@ function reportRowNet(row) {
 function reportRowNextPeriodCutoff(row) {
   return row && row.outsideCutoff ? money(row.valueGross) : 0;
 }
+function reportRowMissingInforme(row) {
+  return !!(row && row.validated && !row.transmitted && !row.absent);
+}
+function reportRowMissingInformeAmount(row) {
+  return reportRowMissingInforme(row) ? money(row.valueGross) : 0;
+}
 function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const valueGross = money(row.valueGross);
@@ -851,15 +857,17 @@ function summarizeReportRows(rows) {
     if (row.billable) acc.billable += 1;
     if (row.absent) acc.absent += 1;
     if (row.outsideCutoff) acc.outsideCutoff += 1;
+    if (reportRowMissingInforme(row)) acc.missingInforme += 1;
     if (!row.matchFound && !row.valueEdited) acc.unmatched += 1;
     acc.gross += reportRowGross(row);
     acc.debit += reportRowDebit(row);
     acc.net += reportRowNet(row);
     acc.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
+    acc.missingInformeAmount += reportRowMissingInformeAmount(row);
     if (isConsultationRow(row)) acc.consultationNet += reportRowNet(row);
     else acc.practiceNet += reportRowNet(row);
     return acc;
-  }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, unmatched: 0, gross: 0, debit: 0, net: 0, nextPeriodCutoff: 0, consultationNet: 0, practiceNet: 0 });
+  }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, missingInforme: 0, unmatched: 0, gross: 0, debit: 0, net: 0, nextPeriodCutoff: 0, missingInformeAmount: 0, consultationNet: 0, practiceNet: 0 });
 }
 function isConsultationRow(row) {
   const code = String(row && row.practiceCode || "");
@@ -1056,6 +1064,8 @@ function buildClientReportWorkbook(report) {
     ["Debitos manuales", money(summary.debit)],
     ["Neto estimado", money(summary.net)],
     ["Proximo periodo por corte", money(summary.nextPeriodCutoff)],
+    ["Falta informe", money(summary.missingInformeAmount)],
+    ["Cantidad falta informe", summary.missingInforme || 0],
     ["Cantidad de consultas", summary.consultations || 0],
     ["Importe consultas", money(summary.consultationNet)],
     ["Cantidad de practicas / estudios", summary.practices || 0],
@@ -1146,6 +1156,7 @@ function buildPdfBuffer(pageStreams, width = 842, height = 595) {
 function professionalReportStatus(row) {
   const status = String(row && row.status || "").trim();
   if (reportRowDebit(row) > 0 && reportRowNet(row) <= 0.01) return "Debito";
+  if (reportRowMissingInforme(row)) return "Falta informe";
   return normalizeText(status) === "FACTURABLE" ? "Cobrado" : (status || "-");
 }
 function buildProfessionalPdf(report, moduleCode) {
@@ -1154,10 +1165,12 @@ function buildProfessionalPdf(report, moduleCode) {
     String(a.practiceCode || "").localeCompare(String(b.practiceCode || ""))
     || String(a.patientName || "").localeCompare(String(b.patientName || ""))
   );
-  const rows = moduleRows.filter((row) => !row.outsideCutoff);
+  const rows = moduleRows.filter((row) => !row.outsideCutoff && !reportRowMissingInforme(row));
   const cutoffRows = moduleRows.filter((row) => row.outsideCutoff);
+  const missingInformeRows = moduleRows.filter((row) => reportRowMissingInforme(row));
   const summary = summarizeReportRows(rows);
   const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
+  const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
   const pageStreams = [];
   const width = 842;
   const height = 595;
@@ -1203,6 +1216,8 @@ function buildProfessionalPdf(report, moduleCode) {
     commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
     y -= 11;
     commands.push(pdfTextCommand(610, y, `Prox. periodo por corte: ${pdfMoney(cutoffTotal)}`, 8, cutoffTotal ? "F2" : "F1"));
+    y -= 11;
+    commands.push(pdfTextCommand(610, y, `Falta informe: ${pdfMoney(missingInformeTotal)}`, 8, missingInformeTotal ? "F2" : "F1"));
     y -= 18;
     if (withTableHeader) drawTableHeader();
   }
@@ -1210,7 +1225,16 @@ function buildProfessionalPdf(report, moduleCode) {
   for (const row of rows) {
     drawProfessionalRow(row, professionalReportStatus(row), reportRowNet(row));
   }
-  if (!rows.length && !cutoffRows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
+  if (!rows.length && !cutoffRows.length && !missingInformeRows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
+  if (missingInformeRows.length) {
+    y -= 16;
+    if (y < 70) newPage(false);
+    commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
+    commands.push(pdfTextCommand(margin, y - 4, `Falta informe / pendiente de transmision - ${missingInformeRows.length} prestaciones - ${pdfMoney(missingInformeTotal)}`, 9, "F2"));
+    y -= 22;
+    drawTableHeader();
+    missingInformeRows.forEach((row) => drawProfessionalRow(row, "Falta informe", reportRowMissingInformeAmount(row)));
+  }
   if (cutoffRows.length) {
     y -= 16;
     if (y < 70) newPage(false);
@@ -1224,7 +1248,7 @@ function buildProfessionalPdf(report, moduleCode) {
   if (y < 45) newPage();
   commands.push(pdfLineCommand(margin, y, width - margin, y));
   y -= 14;
-  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)} - prox. periodo ${pdfMoney(cutoffTotal)}`, 8, "F2"));
+  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)} - falta informe ${pdfMoney(missingInformeTotal)} - prox. periodo ${pdfMoney(cutoffTotal)}`, 8, "F2"));
   pageStreams.push(commands.join("\n"));
   return buildPdfBuffer(pageStreams, width, height);
 }

@@ -628,6 +628,15 @@ function reportNetAmount(row){
 function reportCutoffNextAmount(row){
   return row && row.outsideCutoff ? Number(row.valueGross || 0) : 0;
 }
+function reportMissingInforme(row){
+  return !!(row && row.validated && !row.transmitted && !row.absent);
+}
+function reportMissingInformeAmount(row){
+  return reportMissingInforme(row) ? Number(row.valueGross || 0) : 0;
+}
+function reportDisplayStatus(row){
+  return reportMissingInforme(row) ? 'Falta informe' : (row.status || '-');
+}
 function updateExpectedAmountStatus(net){
   var status = document.getElementById('clientReportExpectedStatus');
   if (!status) return;
@@ -718,14 +727,16 @@ function getClientReportVisibleRows(){
 function updateClientReportSummary(){
   var visible = getClientReportVisibleRows();
   var rows = visible.map(function(item){ return item.row; });
-  var gross = 0, debit = 0, net = 0, cutoffNext = 0, absent = 0, outside = 0, unmatched = 0;
+  var gross = 0, debit = 0, net = 0, cutoffNext = 0, missingInformeAmount = 0, absent = 0, outside = 0, missingInforme = 0, unmatched = 0;
   rows.forEach(function(row){
     gross += reportBaseGross(row);
     debit += reportDebitAmount(row);
     net += reportNetAmount(row);
     cutoffNext += reportCutoffNextAmount(row);
+    missingInformeAmount += reportMissingInformeAmount(row);
     if (row.absent) absent += 1;
     if (row.outsideCutoff) outside += 1;
+    if (reportMissingInforme(row)) missingInforme += 1;
     if (!row.matchFound && !row.valueEdited) unmatched += 1;
   });
   var cards = document.querySelectorAll('#clientReportSummary div');
@@ -734,10 +745,12 @@ function updateClientReportSummary(){
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
   if (cards[4]) cards[4].querySelector('b').textContent = moneyFmt(cutoffNext);
+  if (cards[5]) cards[5].querySelector('b').textContent = moneyFmt(missingInformeAmount);
   updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
+  if (missingInforme) meta += ' - ' + missingInforme + ' falta informe';
   if (unmatched) meta += ' - ' + unmatched + ' sin valor';
   document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
@@ -768,7 +781,7 @@ function renderClientReportRows(){
     var checked = row.manualDebit ? ' checked' : '';
     var type = row.debitType || 'total';
     if (type === 'partial') type = reportNetAmount(row) >= reportBaseGross(row) * 0.5 ? 'pay60' : 'pay40';
-    var badgeClass = row.billable ? 'ok' : (row.absent ? 'warn' : 'muted');
+    var badgeClass = row.billable ? 'ok' : (row.absent || reportMissingInforme(row) ? 'warn' : 'muted');
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
     var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
@@ -776,7 +789,7 @@ function renderClientReportRows(){
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
       + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
-      + '<td><span class="report-status ' + badgeClass + '">' + esc(row.status || '-') + '</span></td>'
+      + '<td><span class="report-status ' + badgeClass + '">' + esc(reportDisplayStatus(row)) + '</span></td>'
       + '<td class="nom-money report-value-cell"' + valueDblClick + '><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b>' + valueNote + '</td>'
       + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option></select></div></td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
