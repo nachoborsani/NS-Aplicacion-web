@@ -497,12 +497,25 @@ async function loadClientPami(){
   var user = document.getElementById('clientPamiUser');
   var pass = document.getElementById('clientPamiPass');
   var msg = document.getElementById('clientPamiMsg');
-  user.value = ''; pass.value = ''; msg.textContent = '';
+  var revealBtn = document.getElementById('clientPamiRevealBtn');
+  user.value = ''; pass.value = ''; pass.type = 'password'; msg.textContent = '';
+  document.getElementById('clientPamiPassIco').innerHTML = EYE_ON;
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami');
   if (res.ok && res.data){
     user.value = res.data.pamiUser || '';
     pass.placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
+    if (revealBtn) revealBtn.style.display = res.data.hasPassword ? '' : 'none';
   }
+}
+// Ver la clave guardada (admin): la trae desencriptada y la muestra en el campo.
+async function revealClientPami(){
+  if (!ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami/credenciales');
+  if (!res.ok || !res.data) return;
+  var pass = document.getElementById('clientPamiPass');
+  pass.value = res.data.pamiPassword || '';
+  pass.type = 'text';
+  document.getElementById('clientPamiPassIco').innerHTML = EYE_OFF;
 }
 async function saveClientPami(){
   if (!ACTIVE_CLIENT) return;
