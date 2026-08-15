@@ -14,6 +14,7 @@ const clientesFile = path.join(dataDir, "clientes.json");
 const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
+const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -410,6 +411,85 @@ function cleanIdentifier(value) {
   if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
   return String(value || "").replace(/\.0$/, "").trim();
 }
+function pairKey(a, b) {
+  return [String(a || ""), String(b || "")].sort().join("|");
+}
+function loadPamiExclusionPairs() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(pamiExclusionPairsFile, "utf8"));
+    return Array.isArray(parsed.pairs) ? parsed.pairs : [];
+  } catch {
+    return [];
+  }
+}
+const pamiExclusionCodeAliases = {
+  // Equivalencias entre codigos historicos del PDF y codigos actuales que aparecen en bandejas/nomencladores.
+  "570121": ["170145", "177145"],
+  "570124": ["170157", "177157"],
+  "570126": ["170141", "177141"],
+  "180114": ["187114"],
+};
+const pamiExclusionPairs = loadPamiExclusionPairs();
+const pamiExclusionPairMap = new Map(pamiExclusionPairs.map((rule) => [pairKey(rule.codes && rule.codes[0], rule.codes && rule.codes[1]), rule]));
+function expandedPamiExclusionCodes(code) {
+  const clean = cleanIdentifier(code);
+  return Array.from(new Set([clean, ...(pamiExclusionCodeAliases[clean] || [])].filter(Boolean)));
+}
+function findPamiExclusionRule(codeA, codeB) {
+  for (const a of expandedPamiExclusionCodes(codeA)) {
+    for (const b of expandedPamiExclusionCodes(codeB)) {
+      const rule = pamiExclusionPairMap.get(pairKey(a, b));
+      if (rule) return { ...rule, matchedCodes: [a, b] };
+    }
+  }
+  return null;
+}
+function reportRowEpisodeKey(row) {
+  const benefit = cleanIdentifier(row && row.benefit);
+  if (!benefit) return "";
+  const day = String(row && row.appointmentAt || "").slice(0, 10) || String(row && row.period || "");
+  return day ? `${benefit}|${day}` : "";
+}
+function chooseExclusionDebitRow(a, b) {
+  const grossA = reportRowGross(a);
+  const grossB = reportRowGross(b);
+  if (grossA !== grossB) return grossA <= grossB ? a : b;
+  return String(a.practiceCode || "").localeCompare(String(b.practiceCode || "")) >= 0 ? a : b;
+}
+function applyAutomaticExclusionDebits(rows) {
+  const groups = new Map();
+  (rows || []).forEach((row) => {
+    row.autoDebit = false;
+    row.autoDebitReason = "";
+    row.autoDebitPairCode = "";
+    row.autoDebitRulePage = "";
+    row.autoDebitRuleCodes = "";
+    if (!row.billable || !row.practiceCode || reportRowGross(row) <= 0) return;
+    const key = reportRowEpisodeKey(row);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  });
+  for (const groupRows of groups.values()) {
+    for (let i = 0; i < groupRows.length; i += 1) {
+      for (let j = i + 1; j < groupRows.length; j += 1) {
+        const rule = findPamiExclusionRule(groupRows[i].practiceCode, groupRows[j].practiceCode);
+        if (!rule) continue;
+        const target = chooseExclusionDebitRow(groupRows[i], groupRows[j]);
+        const other = target === groupRows[i] ? groupRows[j] : groupRows[i];
+        target.manualDebit = true;
+        target.debitType = "total";
+        target.debitAmount = 0;
+        target.autoDebit = true;
+        target.autoDebitPairCode = other.practiceCode || "";
+        target.autoDebitRulePage = rule.page || "";
+        target.autoDebitRuleCodes = Array.isArray(rule.codes) ? rule.codes.join(" / ") : "";
+        target.autoDebitReason = `Practica excluyente con ${other.practiceCode || "otra practica"} (PDF pag. ${rule.page || "-"})`;
+      }
+    }
+  }
+  return rows || [];
+}
 function getRowValue(row, aliases) {
   for (const [key, value] of Object.entries(row || {})) {
     const normalized = normalizeText(key);
@@ -743,7 +823,7 @@ function parseTransmisionWorkbook(buffer, filename, payload, client) {
   const sourceRows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
   if (!sourceRows.length) throw new Error("El archivo no tiene filas para procesar.");
 
-  const rows = sourceRows.map((source, index) => {
+  let rows = sourceRows.map((source, index) => {
     const practice = splitPractice(getRowValue(source, ["PRACTICA"]));
     const appointmentAt = parseDateTime(getRowValue(source, ["TURNO"]));
     const transmittedAt = parseDateTime(getRowValue(source, ["F TRANSMITIDA"]), { preferDayMonth: true });
@@ -793,6 +873,8 @@ function parseTransmisionWorkbook(buffer, filename, payload, client) {
       matchFound: !!match,
     };
   }).filter((row) => row.order || row.practiceText || row.patientName);
+
+  rows = applyAutomaticExclusionDebits(rows);
 
   const summary = rows.reduce((acc, row) => {
     acc.totalRows += 1;
@@ -873,6 +955,11 @@ function sanitizeReportRows(rows) {
       manualDebit,
       debitType,
       debitAmount: debitType === "partial" ? clampMoney(row.debitAmount, 0, Math.max(0, valueGross)) : 0,
+      autoDebit: !!row.autoDebit,
+      autoDebitReason: String(row.autoDebitReason || "").trim(),
+      autoDebitPairCode: cleanIdentifier(row.autoDebitPairCode),
+      autoDebitRulePage: cleanIdentifier(row.autoDebitRulePage),
+      autoDebitRuleCodes: String(row.autoDebitRuleCodes || "").trim(),
       valueEdited: !!row.valueEdited,
       moduleCode: cleanIdentifier(row.moduleCode),
       moduleDescription: String(row.moduleDescription || "").trim(),
@@ -1164,7 +1251,7 @@ function buildClientReportWorkbook(report) {
     ["Actualizado por", report.updatedBy || ""],
     ["Monto esperado", money(report.expectedAmount)],
     ["Bruto facturable", money(summary.gross)],
-    ["Debitos manuales", money(summary.debit)],
+    ["Debitos", money(summary.debit)],
     ["Neto estimado", money(summary.net)],
     ["Proximo periodo por corte", money(summary.nextPeriodCutoff)],
     ["Falta informe", money(summary.missingInformeAmount)],
@@ -1197,6 +1284,11 @@ function buildClientReportWorkbook(report) {
     Debito: reportRowDebit(row),
     Neto: reportRowNet(row),
     "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : "Total") : "",
+    "Debito automatico": row.autoDebit ? "Si" : "",
+    "Motivo debito automatico": row.autoDebitReason || "",
+    "Codigo excluyente": row.autoDebitPairCode || "",
+    "Regla PDF": row.autoDebitRulePage ? `Pagina ${row.autoDebitRulePage}` : "",
+    "Codigos regla": row.autoDebitRuleCodes || "",
     "Valor fuente": row.valueSourceCode || "",
     "Valor editado": row.valueEdited ? "Si" : "",
     "Sin valor": (!row.matchFound && !row.valueEdited) ? "Si" : "",

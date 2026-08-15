@@ -1018,13 +1018,14 @@ function renderClientReportRows(){
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
     var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
+    var autoDebitNote = row.autoDebit ? '<div class="nom-muted auto-debit-note">Auto: excluyente con ' + esc(row.autoDebitPairCode || '-') + '</div>' : '';
     return '<tr data-report-row="' + idx + '">'
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
       + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
       + '<td><span class="report-status ' + badgeClass + '">' + esc(reportDisplayStatus(row)) + '</span></td>'
       + '<td class="nom-money report-value-cell"' + valueDblClick + '><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b>' + valueNote + '</td>'
-      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option></select></div></td>'
+      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option></select></div>' + autoDebitNote + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
       + '</tr>';
   }).join('');
@@ -1196,6 +1197,13 @@ function toggleReportDebit(index, checked){
   if (!row) return;
   row.manualDebit = checked;
   if (checked && !row.debitType) row.debitType = 'total';
+  if (!checked) {
+    row.autoDebit = false;
+    row.autoDebitReason = '';
+    row.autoDebitPairCode = '';
+    row.autoDebitRulePage = '';
+    row.autoDebitRuleCodes = '';
+  }
   renderClientReportRows();
   saveClientReportDraft();
 }
@@ -1316,9 +1324,16 @@ async function uploadClientReport(files){
   (CLIENT_REPORT_ROWS || []).forEach(function(row){ previousById[row.id] = row; });
   CLIENT_REPORT_ROWS = (data.rows || []).map(function(row){
     var prev = previousById[row.id];
-    row.manualDebit = prev ? !!prev.manualDebit : false;
-    row.debitType = prev ? (prev.debitType || 'total') : 'total';
+    row.manualDebit = prev ? !!prev.manualDebit : !!row.manualDebit;
+    row.debitType = prev ? (prev.debitType || 'total') : (row.debitType || 'total');
     row.debitAmount = prev ? (prev.debitAmount || 0) : '';
+    if (prev) {
+      row.autoDebit = !!prev.autoDebit;
+      row.autoDebitReason = prev.autoDebitReason || '';
+      row.autoDebitPairCode = prev.autoDebitPairCode || '';
+      row.autoDebitRulePage = prev.autoDebitRulePage || '';
+      row.autoDebitRuleCodes = prev.autoDebitRuleCodes || '';
+    }
     if (prev && prev.valueEdited) {
       row.valueGross = prev.valueGross;
       row.valueBillable = row.billable ? prev.valueGross : 0;
