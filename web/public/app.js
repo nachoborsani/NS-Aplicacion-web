@@ -455,6 +455,8 @@ function renderClientList(){
       selectClient(button.getAttribute('data-client-slug'));
     });
   });
+  var createBtn = document.getElementById('clientNewBtn');
+  if (createBtn) createBtn.style.display = ME && ME.role === 'admin' ? 'flex' : 'none';
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
@@ -529,40 +531,80 @@ function moduleNameFromOption(option){
   var prefix = code ? code + ' - ' : '';
   return label.indexOf(prefix) === 0 ? label.slice(prefix.length).trim() : label;
 }
-async function openClientModulesModal(){
-  if (!ACTIVE_CLIENT) return;
-  var err = document.getElementById('clientModulesError');
-  err.textContent = '';
-  var box = document.getElementById('clientModulesOptions');
+async function renderClientModuleOptions(boxId, selectedModules){
+  var box = document.getElementById(boxId);
+  if (!box) return false;
   box.innerHTML = '<div class="muted-cell">Cargando modulos...</div>';
-  showModal('clientModulesModal','cmScrim');
   var period = document.getElementById('clientNomPeriod').value || '';
   var summary = await api('/api/nomencladores' + (period ? '?period=' + encodeURIComponent(period) : ''));
   if (!summary.ok || !summary.data.loaded){
     box.innerHTML = '<div class="muted-cell">Primero carga un nomenclador.</div>';
-    return;
+    return false;
   }
   var activeByCode = {};
-  ACTIVE_CLIENT.activeModules.forEach(function(module){ activeByCode[String(module.code)] = module; });
+  (selectedModules || []).forEach(function(module){ activeByCode[String(module.code)] = module; });
   var options = ((summary.data.filters || {}).modules || []).map(function(option){
     return { code:String(option.value || '').trim(), name:moduleNameFromOption(option) };
   }).filter(function(option){ return option.code; });
-  ACTIVE_CLIENT.activeModules.forEach(function(module){
+  (selectedModules || []).forEach(function(module){
     if (!options.some(function(option){ return option.code === module.code; })) options.push(module);
   });
   box.innerHTML = options.map(function(option){
     var checked = activeByCode[option.code] ? ' checked' : '';
     return '<label class="module-edit-option"><input type="checkbox" value="' + esc(option.code) + '" data-name="' + esc(option.name) + '"' + checked + '><span><b>' + esc(option.code) + '</b> ' + esc(option.name) + '</span></label>';
   }).join('') || '<div class="muted-cell">No hay modulos disponibles en este nomenclador.</div>';
+  return options.length > 0;
+}
+function selectedClientModulesFrom(boxId){
+  return [].slice.call(document.querySelectorAll('#' + boxId + ' input:checked')).map(function(input){
+    return { code:input.value, name:input.getAttribute('data-name') || '' };
+  });
+}
+async function openClientCreateModal(){
+  var err = document.getElementById('clientCreateError');
+  if (err) err.textContent = '';
+  ['clientCreateName','clientCreateBusinessName','clientCreateCuit'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  showModal('clientCreateModal','ccScrim');
+  await renderClientModuleOptions('clientCreateModulesOptions', []);
+}
+function closeClientCreateModal(){ hideModal('clientCreateModal','ccScrim'); }
+async function saveClientCreate(){
+  var err = document.getElementById('clientCreateError');
+  if (err) err.textContent = '';
+  var selected = selectedClientModulesFrom('clientCreateModulesOptions');
+  if (!selected.length){ if (err) err.textContent = 'Selecciona al menos un modulo.'; return; }
+  var payload = {
+    name: (document.getElementById('clientCreateName') || {}).value || '',
+    businessName: (document.getElementById('clientCreateBusinessName') || {}).value || '',
+    cuit: (document.getElementById('clientCreateCuit') || {}).value || '',
+    activeModules: selected
+  };
+  var btn = document.getElementById('clientCreateSave');
+  if (btn) btn.disabled = true;
+  var res = await req('POST', '/api/clientes', payload);
+  if (btn) btn.disabled = false;
+  if (!res.ok){ if (err) err.textContent = res.data.error || 'No se pudo crear el cliente.'; return; }
+  CLIENTS = res.data.clients || CLIENTS;
+  closeClientCreateModal();
+  go('clientes', document.getElementById('clientsNavToggle'));
+  selectClient((res.data.client || {}).slug);
+}
+async function openClientModulesModal(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientModulesError');
+  err.textContent = '';
+  showModal('clientModulesModal','cmScrim');
+  await renderClientModuleOptions('clientModulesOptions', ACTIVE_CLIENT.activeModules);
 }
 function closeClientModulesModal(){ hideModal('clientModulesModal','cmScrim'); }
 async function saveClientModules(){
   if (!ACTIVE_CLIENT) return;
   var err = document.getElementById('clientModulesError');
   err.textContent = '';
-  var selected = [].slice.call(document.querySelectorAll('#clientModulesOptions input:checked')).map(function(input){
-    return { code:input.value, name:input.getAttribute('data-name') || '' };
-  });
+  var selected = selectedClientModulesFrom('clientModulesOptions');
   if (!selected.length){ err.textContent = 'Selecciona al menos un modulo.'; return; }
   var btn = document.getElementById('clientModulesSave');
   btn.disabled = true;

@@ -228,6 +228,7 @@ const DEFAULT_CLIENTS = [
     name: "Sala Millon",
     businessName: "SALA DE AUXILIO DE LOMAS DEL MILLON",
     cuit: "30545942123",
+    status: "Activo",
     activeModules: [
       { code: "546", name: "TRAUMATOLOGIA" },
       { code: "437", name: "OTORRINOLARINGOLOGIA" },
@@ -252,6 +253,27 @@ function normalizeClientModules(modules) {
   }
   return result;
 }
+function clientSlugFromName(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+function normalizeCuit(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+function validCuit(value) {
+  const cuit = normalizeCuit(value);
+  if (!/^\d{11}$/.test(cuit)) return false;
+  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const sum = weights.reduce((acc, weight, index) => acc + Number(cuit[index]) * weight, 0);
+  let digit = 11 - (sum % 11);
+  if (digit === 11) digit = 0;
+  if (digit === 10) digit = 9;
+  return digit === Number(cuit[10]);
+}
 function normalizeClient(client, fallback) {
   const base = fallback || {};
   const modules = normalizeClientModules(client.activeModules);
@@ -260,6 +282,7 @@ function normalizeClient(client, fallback) {
     name: String(client.name || base.name || "").trim(),
     businessName: String(client.businessName || base.businessName || "").trim(),
     cuit: String(client.cuit || base.cuit || "").trim(),
+    status: String(client.status || base.status || "Activo").trim() || "Activo",
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
   };
 }
@@ -1609,6 +1632,29 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     return json(res, 200, { clients: loadClientsStore() });
+  }
+
+  if (p === "/api/clientes" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede crear clientes." });
+    const body = await readBody(req);
+    const name = String(body.name || "").replace(/\s+/g, " ").trim();
+    const businessName = String(body.businessName || "").replace(/\s+/g, " ").trim();
+    const cuit = normalizeCuit(body.cuit);
+    const slug = clientSlugFromName(name);
+    const modules = normalizeClientModules(body.activeModules);
+    if (!name) return json(res, 400, { error: "Ingresa el nombre del cliente." });
+    if (!businessName) return json(res, 400, { error: "Ingresa la razon social." });
+    if (!validCuit(cuit)) return json(res, 400, { error: "Ingresa un CUIT valido." });
+    if (!slug) return json(res, 400, { error: "El nombre no permite generar un slug valido." });
+    if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
+    const clients = loadClientsStore();
+    if (clients.some((client) => client.slug === slug)) return json(res, 409, { error: "Ya existe un cliente con ese nombre." });
+    const client = normalizeClient({ slug, name, businessName, cuit, status: "Activo", activeModules: modules });
+    clients.push(client);
+    saveClientsStore(clients);
+    return json(res, 201, { client, clients });
   }
 
   const clientModulesMatch = p.match(/^\/api\/clientes\/([^/]+)\/modules$/);

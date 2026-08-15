@@ -92,6 +92,7 @@
             <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="nav-sub" id="clientNavList"></div>
+          <button class="client-new-btn" id="clientNewBtn" type="button" onclick="openClientCreateModal()">+ Nuevo cliente</button>
         </div>
       </nav>
       <div class="side-foot">
@@ -492,6 +493,26 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeDelModal()">Cancelar</button>
         <button class="btn btn-danger" id="delSave" onclick="saveDelete()">Sí, eliminar</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: nuevo cliente ===== -->
+    <div class="scrim" id="ccScrim" onclick="closeClientCreateModal()"></div>
+    <div class="modal wide" id="clientCreateModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Nuevo cliente</h3><button class="x" onclick="closeClientCreateModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <div class="form-grid two">
+          <label>Nombre<input class="inp" id="clientCreateName" placeholder="Ej: Sala Millon"></label>
+          <label>CUIT<input class="inp" id="clientCreateCuit" placeholder="Ej: 30545942123"></label>
+          <label class="span-2">Razon social<input class="inp" id="clientCreateBusinessName" placeholder="Ej: SALA DE AUXILIO DE LOMAS DEL MILLON"></label>
+        </div>
+        <p class="modal-note">Modulos activos</p>
+        <div class="module-edit-list" id="clientCreateModulesOptions"></div>
+        <div class="msg err" id="clientCreateError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeClientCreateModal()">Cancelar</button>
+        <button class="btn btn-primary" id="clientCreateSave" onclick="saveClientCreate()">Crear cliente</button>
       </div>
     </div>
 
