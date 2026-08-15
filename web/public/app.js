@@ -19,6 +19,25 @@ function toggleTheme(){
   applyThemeIcon();
 })();
 
+// --- Menú colapsable (solo íconos), recordado en el navegador ---
+function setSidebarCollapseIcon(){
+  var b = document.getElementById('sideCollapseBtn');
+  if (b) b.textContent = document.body.classList.contains('sidebar-collapsed') ? '›' : '‹';
+}
+function toggleSidebar(){
+  var collapsed = document.body.classList.toggle('sidebar-collapsed');
+  try { localStorage.setItem('ns-sidebar-collapsed', collapsed ? '1' : '0'); } catch (e) {}
+  setSidebarCollapseIcon();
+}
+(function(){
+  try { if (localStorage.getItem('ns-sidebar-collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
+  // Tooltips nativos para cuando está colapsado (los labels quedan ocultos).
+  document.querySelectorAll('.nav a, .nav-parent, .side-config a').forEach(function(el){
+    if (!el.getAttribute('title')){ var t = (el.textContent || '').trim(); if (t) el.setAttribute('title', t); }
+  });
+  setSidebarCollapseIcon();
+})();
+
 var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', soon:'Configuracion general' };
 function go(v, el){
   ['dash','users','clientes','nomencladores','informes','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });

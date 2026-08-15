@@ -80,14 +80,15 @@
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
+      <button id="sideCollapseBtn" class="side-collapse" type="button" onclick="toggleSidebar()" title="Ocultar / mostrar menú" aria-label="Ocultar o mostrar el menú">‹</button>
       <div class="brand sm"><img class="logo-side" src="/logo.png" alt="NS"></div>
       <nav class="nav">
         <a class="active" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
-        <a onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
-        <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
+        <a onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V4a1 1 0 011-1zM7.5 14H10l1.5-3 2 5 1.5-2h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
+        <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2zM9 7h7M9 11h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
         <div class="nav-group" id="clientsNavGroup">
           <button class="nav-parent" id="clientsNavToggle" type="button" onclick="go('clientes',this)">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5a2 2 0 012-2h9a2 2 0 012 2v16M8 7h5M8 11h5M8 15h5M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2zM9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M2 13h20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span>Clientes</span>
             <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>

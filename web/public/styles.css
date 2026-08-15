@@ -11,6 +11,7 @@
     --shadow:0 1px 2px rgba(11,31,58,.06), 0 8px 24px rgba(11,31,58,.08);
     --shadow-sm:0 1px 2px rgba(11,31,58,.07);
     --sidebar-w:248px;
+    --sidebar-wc:66px;
   }
   [data-theme="dark"]{
     --bg:#0A1522; --surface:#0F2135; --surface-2:#132840; --border:#22374f; --hover:#16273e;
@@ -132,7 +133,30 @@
   .side-config a.logout{color:#d99a9a}
   .side-config a.logout:hover{background:rgba(201,74,74,.16);color:#f0b6b6}
 
-  .main{margin-left:var(--sidebar-w);min-height:100vh;display:flex;flex-direction:column}
+  .main{margin-left:var(--sidebar-w);min-height:100vh;display:flex;flex-direction:column;transition:margin-left .18s ease}
+  .sidebar{transition:width .18s ease}
+  /* --- Menú colapsable (desktop, solo íconos) --- */
+  .side-collapse{position:absolute;top:14px;right:8px;width:24px;height:24px;border:0;border-radius:7px;background:rgba(255,255,255,.1);color:#c4d2e2;cursor:pointer;display:grid;place-items:center;font-size:16px;line-height:1;padding:0;z-index:3}
+  .side-collapse:hover{background:rgba(255,255,255,.22);color:#fff}
+  body.sidebar-collapsed .sidebar{width:var(--sidebar-wc)}
+  body.sidebar-collapsed .main{margin-left:var(--sidebar-wc)}
+  body.sidebar-collapsed .sidebar .brand{padding:6px 6px 14px}
+  body.sidebar-collapsed .logo-side{width:42px}
+  body.sidebar-collapsed .side-collapse{right:0;left:0;margin:0 auto}
+  body.sidebar-collapsed .nav a,
+  body.sidebar-collapsed .nav-parent,
+  body.sidebar-collapsed .side-config a{justify-content:center;gap:0;padding-left:0;padding-right:0;font-size:0}
+  body.sidebar-collapsed .nav a svg,
+  body.sidebar-collapsed .nav-parent svg,
+  body.sidebar-collapsed .side-config a svg{opacity:.9}
+  body.sidebar-collapsed .nav-parent span,
+  body.sidebar-collapsed .nav-caret,
+  body.sidebar-collapsed .nav-sub,
+  body.sidebar-collapsed .client-new-btn,
+  body.sidebar-collapsed .nav a .chip,
+  body.sidebar-collapsed .side-config a .chip,
+  body.sidebar-collapsed .side-user .who{display:none}
+  body.sidebar-collapsed .side-user{justify-content:center;padding:8px}
   .topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:30}
   .hamb{display:none;background:transparent;border:0;color:var(--text);padding:6px}
   .topbar h2{font-size:16px;margin:0;font-weight:700}
@@ -226,6 +250,10 @@
     .main{margin-left:0}
     .hamb{display:grid;place-items:center}
     .em-hide{display:none}
+    /* En mobile manda el drawer (hamburguesa), no el modo colapsado */
+    .side-collapse{display:none}
+    body.sidebar-collapsed .sidebar{width:var(--sidebar-w)}
+    body.sidebar-collapsed .main{margin-left:0}
   }
   /* fila de encabezado con acción a la derecha */
   .head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
