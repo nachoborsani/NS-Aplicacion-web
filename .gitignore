@@ -72,3 +72,7 @@ web/data/
 # Conexion NS desde la app de escritorio (config con credenciales + cache local)
 ns_conexion.json
 ns_nomencladores/
+
+# Firmas de medicos (dato sensible) — NO van al repo (publico). Van al volumen.
+web/assets/informes/firma-*.png
+web/assets/informes/firma-*.jpg
