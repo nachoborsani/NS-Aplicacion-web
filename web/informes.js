@@ -5,7 +5,9 @@
 
 const fs = require("fs");
 const path = require("path");
-const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+// pdf-lib se carga de forma perezosa dentro de buildInformePdf: si por algún
+// motivo no está instalado, el server igual arranca (solo falla generar el PDF),
+// en vez de tumbar toda la web al importar este módulo.
 
 const ASSETS = path.join(__dirname, "assets", "informes");
 
@@ -58,6 +60,7 @@ function informeFilename(modeloKey, paciente) {
 }
 
 async function buildInformePdf(modeloKey, input) {
+  const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
   const modelo = MODELOS[modeloKey] || MODELOS["caballito-cardio-ecg"];
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
