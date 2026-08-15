@@ -486,6 +486,9 @@ function setClientSection(section){
   if (crumb) crumb.textContent = found.crumb;
   // El hash guarda cliente + sub-solapa, así F5 restaura la solapa exacta.
   if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug + '/' + CLIENT_SECTION);
+  // La bandeja (puede ser grande) se carga recién al abrir su solapa, no en cada
+  // cambio de cliente.
+  if (CLIENT_SECTION === 'mescurso') loadClientMesCurso();
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
 async function loadClientPami(){
@@ -561,7 +564,6 @@ async function renderActiveClient(){
   setClientSection(CLIENT_SECTION);
   renderClientNomencladorPanel();
   loadClientPami();
-  loadClientMesCurso();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientUgl').textContent = client.ugl || '-';
@@ -577,10 +579,9 @@ async function renderActiveClient(){
     fillClientPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
     fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
   }
-  await loadClientReports();
-  await loadClientDashboard();
+  // Independientes -> en paralelo (antes iban en serie, uno esperando al otro).
+  await Promise.all([loadClientReports(), loadClientDashboard(), loadClientNomenclador()]);
   restoreClientReportDraft();
-  await loadClientNomenclador();
 }
 function queueClientNomencladorSearch(){
   clearTimeout(CLIENT_NOM_TIMER);
