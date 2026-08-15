@@ -333,7 +333,8 @@
 
         <!-- NOMENCLADORES -->
         <section id="view-nomencladores" style="display:none">
-          <div class="head-row nom-upload-row">
+          <div class="nom-status card" id="nomStatus">
+            <div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>
             <div class="nom-upload">
               <label class="month-field">
                 <span>Mes opcional</span>
@@ -345,10 +346,6 @@
                 <input id="nomFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadNomenclador(this.files)">
               </label>
             </div>
-          </div>
-
-          <div class="nom-status card" id="nomStatus">
-            <div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>
           </div>
 
           <div class="nom-filters card">
