@@ -591,19 +591,29 @@ function deltaText(label, delta, money){
   var pct = delta.percent === null ? '' : ' (' + percentFmt(delta.percent) + ')';
   return '<span class="' + signClass + '">' + esc(label) + ': ' + esc(value + pct) + '</span>';
 }
+function dashboardDelta(delta, money){
+  if (!delta) return '';
+  var raw = Number(delta.value || 0);
+  var signClass = raw >= 0 ? 'good' : 'bad';
+  var sign = raw > 0 ? '+ ' : '';
+  var value = money ? moneyFmt(raw) : numberFmt(raw);
+  var pct = delta.percent === null ? '' : ' (' + percentFmt(delta.percent) + ')';
+  return '<small class="dashboard-delta ' + signClass + '">' + esc(sign + value + ' vs mes comparado' + pct) + '</small>';
+}
 function renderClientDashboard(data){
   data = data || {};
   var current = data.current || {};
   var compare = data.compare || {};
+  var deltas = compare.period ? (data.deltas || {}) : {};
   fillClientDashboardSelects(data.periods || [], current.period || '', compare.period || '');
   var kpis = document.getElementById('clientDashboardKpis');
   if (kpis) {
     kpis.innerHTML = ''
-      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span></div>'
-      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small></div>'
-      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small></div>'
-      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span></div>'
-      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small></div>';
+      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + dashboardDelta(deltas.net, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + dashboardDelta(deltas.consultations, false) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + dashboardDelta(deltas.practices, false) + '</div>'
+      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span><small>' + esc(numberFmt(current.outsideCutoff || 0)) + ' fuera de corte</small>' + dashboardDelta(deltas.absent, false) + '</div>';
   }
   var compareBox = document.getElementById('clientDashboardCompare');
   if (compareBox) {

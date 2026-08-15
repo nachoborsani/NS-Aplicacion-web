@@ -1020,6 +1020,8 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
       totalRows: metricDelta(current, previous, "totalRows"),
       consultations: metricDelta(current, previous, "consultations"),
       practices: metricDelta(current, previous, "practices"),
+      absent: metricDelta(current, previous, "absent"),
+      outsideCutoff: metricDelta(current, previous, "outsideCutoff"),
       gross: metricDelta(current, previous, "gross"),
       debit: metricDelta(current, previous, "debit"),
       net: metricDelta(current, previous, "net"),
