@@ -489,13 +489,17 @@ function renderSavedClientReports(){
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
       + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0)) + '</div></td>'
-      + '<td><div class="report-row-actions"><button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button><button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Descargar</button></div></td>'
+      + '<td><div class="report-row-actions"><button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button><button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Excel</button><button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;543&quot;)">PDF cardio</button><button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;546&quot;)">PDF trauma</button></div></td>'
       + '</tr>';
   }).join('');
 }
 function downloadClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;
   window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/download';
+}
+function downloadProfessionalReport(id, moduleCode){
+  if (!ACTIVE_CLIENT || !id || !moduleCode) return;
+  window.location.href = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/professional-pdf/' + encodeURIComponent(moduleCode);
 }
 function downloadActiveClientReport(){
   if (!CLIENT_REPORT_ID) return;

@@ -188,6 +188,22 @@ function downloadName(value) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 90) || "reporte";
 }
+function asciiText(value) {
+  return String(value == null ? "" : value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, function(ch) {
+      return ({ "Ñ": "N", "ñ": "n", "°": "o", "$": "$" })[ch] || " ";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function pdfLiteral(value) {
+  return `(${asciiText(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)")})`;
+}
+function pdfMoney(value) {
+  return "$ " + money(value).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function readBody(req) {
   return new Promise((resolve) => {
     let d = "";
@@ -1071,6 +1087,120 @@ function buildClientReportWorkbook(report) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Practicas");
   return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
 }
+const professionalReportModules = {
+  "543": "CARDIOLOGIA",
+  "546": "TRAUMATOLOGIA",
+};
+function wrapPdfText(text, maxChars) {
+  const words = asciiText(text).split(" ").filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+function pdfTextCommand(x, y, text, size = 8, font = "F1") {
+  return `BT /${font} ${size} Tf ${x.toFixed(2)} ${y.toFixed(2)} Td ${pdfLiteral(text)} Tj ET`;
+}
+function pdfLineCommand(x1, y1, x2, y2, width = 0.5) {
+  return `${width} w ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`;
+}
+function buildPdfBuffer(pageStreams, width = 842, height = 595) {
+  const objects = [];
+  objects.push("<< /Type /Catalog /Pages 2 0 R >>");
+  const pageIds = pageStreams.map((_, i) => 5 + i * 2);
+  objects.push(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`);
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+  pageStreams.forEach((stream, i) => {
+    const pageObj = 5 + i * 2;
+    const contentObj = pageObj + 1;
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObj} 0 R >>`);
+    objects.push(`<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`);
+  });
+  let out = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((obj, index) => {
+    offsets.push(Buffer.byteLength(out, "latin1"));
+    out += `${index + 1} 0 obj\n${obj}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(out, "latin1");
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) out += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(out, "latin1");
+}
+function buildProfessionalPdf(report, moduleCode) {
+  const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
+  const allRows = reportRows(report).filter((row) => String(row.moduleCode || "") === String(moduleCode));
+  const rows = allRows.sort((a, b) =>
+    String(a.practiceCode || "").localeCompare(String(b.practiceCode || ""))
+    || String(a.patientName || "").localeCompare(String(b.patientName || ""))
+  );
+  const summary = summarizeReportRows(rows);
+  const pageStreams = [];
+  const width = 842;
+  const height = 595;
+  const margin = 28;
+  const cols = { ome: 28, benef: 105, nombre: 198, practica: 330, turno: 548, trans: 615, estado: 685, neto: 760 };
+  let y = 0;
+  let commands = [];
+  function newPage() {
+    if (commands.length) pageStreams.push(commands.join("\n"));
+    commands = [];
+    y = height - 30;
+    commands.push(pdfTextCommand(margin, y, `SALA MILLON - INFORME ${moduleLabel}`, 13, "F2"));
+    commands.push(pdfTextCommand(610, y, `Total: ${pdfMoney(summary.net)}`, 12, "F2"));
+    y -= 16;
+    commands.push(pdfTextCommand(margin, y, `${report.title || "Reporte"} - ${report.nomencladorLabel || ""}`, 8, "F1"));
+    commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
+    y -= 18;
+    commands.push(pdfLineCommand(margin, y + 8, width - margin, y + 8));
+    commands.push(pdfTextCommand(cols.ome, y, "OME", 7, "F2"));
+    commands.push(pdfTextCommand(cols.benef, y, "BENEF", 7, "F2"));
+    commands.push(pdfTextCommand(cols.nombre, y, "NOMBRE", 7, "F2"));
+    commands.push(pdfTextCommand(cols.practica, y, "PRACTICA", 7, "F2"));
+    commands.push(pdfTextCommand(cols.turno, y, "TURNO", 7, "F2"));
+    commands.push(pdfTextCommand(cols.trans, y, "TRANSM.", 7, "F2"));
+    commands.push(pdfTextCommand(cols.estado, y, "ESTADO", 7, "F2"));
+    commands.push(pdfTextCommand(cols.neto, y, "NETO", 7, "F2"));
+    y -= 10;
+    commands.push(pdfLineCommand(margin, y + 5, width - margin, y + 5));
+  }
+  newPage();
+  for (const row of rows) {
+    const practiceLines = wrapPdfText(`${row.practiceCode || ""} - ${row.practiceDescription || row.practiceText || ""}`, 42).slice(0, 3);
+    const nameLines = wrapPdfText(row.patientName || "-", 25).slice(0, 2);
+    const lineCount = Math.max(practiceLines.length, nameLines.length, 1);
+    const rowHeight = 9 + (lineCount - 1) * 8;
+    if (y - rowHeight < 28) newPage();
+    commands.push(pdfTextCommand(cols.ome, y, row.order || "-", 6.5));
+    commands.push(pdfTextCommand(cols.benef, y, row.benefit || "-", 6.5));
+    nameLines.forEach((line, i) => commands.push(pdfTextCommand(cols.nombre, y - i * 8, line, 6.5)));
+    practiceLines.forEach((line, i) => commands.push(pdfTextCommand(cols.practica, y - i * 8, line, 6.5)));
+    commands.push(pdfTextCommand(cols.turno, y, row.appointmentLabel || "-", 6.5));
+    commands.push(pdfTextCommand(cols.trans, y, row.transmittedLabel || "-", 6.5));
+    commands.push(pdfTextCommand(cols.estado, y, row.status || "-", 6.5));
+    commands.push(pdfTextCommand(cols.neto, y, pdfMoney(reportRowNet(row)), 6.5, "F2"));
+    y -= rowHeight + 4;
+  }
+  if (!rows.length) commands.push(pdfTextCommand(margin, y, "No hay practicas para este modulo en el reporte seleccionado.", 9, "F1"));
+  y -= 10;
+  if (y < 45) newPage();
+  commands.push(pdfLineCommand(margin, y, width - margin, y));
+  y -= 14;
+  commands.push(pdfTextCommand(margin, y, `Resumen: consultas ${summary.consultations || 0} - practicas ${summary.practices || 0} - bruto ${pdfMoney(summary.gross)} - debitos ${pdfMoney(summary.debit)} - neto ${pdfMoney(summary.net)}`, 8, "F2"));
+  pageStreams.push(commands.join("\n"));
+  return buildPdfBuffer(pageStreams, width, height);
+}
 function readBuffer(req, limit = 25 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -1370,6 +1500,27 @@ const server = http.createServer(async (req, res) => {
     const filename = `${downloadName(report.title || report.sourceFilename || report.id)}.xlsx`;
     res.writeHead(200, {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
+    });
+    return res.end(buffer);
+  }
+
+  const clientProfessionalReportMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/professional-pdf\/([^/]+)$/);
+  if (clientProfessionalReportMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientProfessionalReportMatch[1]);
+    const id = decodeURIComponent(clientProfessionalReportMatch[2]);
+    const moduleCode = decodeURIComponent(clientProfessionalReportMatch[3]);
+    const moduleLabel = professionalReportModules[String(moduleCode)];
+    if (!moduleLabel) return json(res, 400, { error: "Modulo sin informe profesional configurado." });
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const buffer = buildProfessionalPdf(report, moduleCode);
+    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(moduleLabel)}.pdf`;
+    res.writeHead(200, {
+      "content-type": "application/pdf",
       "content-disposition": `attachment; filename="${filename}"`,
       "cache-control": "no-store",
     });
