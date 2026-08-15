@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "npm install --omit=dev --no-audit --no-fund; node server.js"
   },
   "dependencies": {
     "nodemailer": "^6.9.14",
