@@ -1192,13 +1192,13 @@ function setDefaultUploadPeriod(){
   el.value = '';
 }
 async function loadNomencladorSummary(period){
-  var st = document.getElementById('nomStatus');
+  var st = document.getElementById('nomStatusText');
   if (!st) return;
   setDefaultUploadPeriod();
   var selected = period || document.getElementById('nomPeriod').value || '';
   var res = await api('/api/nomencladores' + (selected ? '?period=' + encodeURIComponent(selected) : ''));
   if (!res.ok){
-    st.innerHTML = '<div><b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span></div>';
+    st.innerHTML = '<b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span>';
     return;
   }
   NOM_READY = !!res.data.loaded;
@@ -1207,14 +1207,14 @@ async function loadNomencladorSummary(period){
   if (previousPeriod && NOM_ACTIVE_PERIOD && previousPeriod !== NOM_ACTIVE_PERIOD) NOM_SELECTED_MODULES = [];
   fillPeriodSelect(res.data.nomencladores || [], NOM_ACTIVE_PERIOD);
   if (!NOM_READY){
-    st.innerHTML = '<div><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>';
+    st.innerHTML = '<b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span>';
     document.getElementById('nomBody').innerHTML = '<tr><td colspan="6" class="muted-cell">No hay datos cargados.</td></tr>';
     document.getElementById('nomResultMeta').textContent = 'Todavia no hay busqueda.';
     return;
   }
   var d = res.data;
-  st.innerHTML = '<div><b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span></div>'
-    + '<div class="nom-cols">Valor: ' + esc(d.columns.total) + '</div>';
+  st.innerHTML = '<b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span>'
+    + '<span class="nom-cols">Valor: ' + esc(d.columns.total) + '</span>';
   renderModuleOptions(d.filters.modules);
   fillSelect('nomScope', d.filters.scopes);
   fillSelect('nomType', d.filters.types);
@@ -1222,10 +1222,10 @@ async function loadNomencladorSummary(period){
 }
 async function uploadNomenclador(files){
   if (!files || !files[0]) return;
-  var st = document.getElementById('nomStatus');
+  var st = document.getElementById('nomStatusText');
   var input = document.getElementById('nomFile');
   var period = document.getElementById('nomUploadPeriod').value;
-  st.innerHTML = '<div><b>Procesando Excel...</b><span>Esto puede tardar unos segundos. Si no elegiste mes, se detecta desde el archivo.</span></div>';
+  st.innerHTML = '<b>Procesando Excel...</b><span>Esto puede tardar unos segundos. Si no elegiste mes, se detecta desde el archivo.</span>';
   var fd = new FormData();
   if (period) fd.append('period', period);
   fd.append('file', files[0]);
@@ -1234,7 +1234,7 @@ async function uploadNomenclador(files){
   try { data = await r.json(); } catch (e) {}
   if (input) input.value = '';
   if (!r.ok){
-    st.innerHTML = '<div><b>No se pudo cargar</b><span>' + esc(data.error || 'Revisa el formato del archivo.') + '</span></div>';
+    st.innerHTML = '<b>No se pudo cargar</b><span>' + esc(data.error || 'Revisa el formato del archivo.') + '</span>';
     return;
   }
   await loadNomencladorSummary(data.activePeriod || period);
@@ -1244,11 +1244,11 @@ async function deleteNomenclador(){
   if (!period || !NOM_READY) return;
   var label = document.getElementById('nomPeriod').selectedOptions[0] ? document.getElementById('nomPeriod').selectedOptions[0].textContent : period;
   if (!confirm('Eliminar nomenclador ' + label + '?')) return;
-  var st = document.getElementById('nomStatus');
-  st.innerHTML = '<div><b>Eliminando nomenclador...</b><span>' + esc(label) + '</span></div>';
+  var st = document.getElementById('nomStatusText');
+  st.innerHTML = '<b>Eliminando nomenclador...</b><span>' + esc(label) + '</span>';
   var res = await req('DELETE', '/api/nomencladores?period=' + encodeURIComponent(period));
   if (!res.ok){
-    st.innerHTML = '<div><b>No se pudo eliminar</b><span>' + esc(res.data.error || 'Revisa permisos o sesion.') + '</span></div>';
+    st.innerHTML = '<b>No se pudo eliminar</b><span>' + esc(res.data.error || 'Revisa permisos o sesion.') + '</span>';
     return;
   }
   NOM_READY = !!res.data.loaded;
