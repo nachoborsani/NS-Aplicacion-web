@@ -132,8 +132,8 @@ function invalidarPreview(){
     var fr = document.getElementById('infPreviewFrame'); if (fr) fr.removeAttribute('src');
   }
 }
-// ---------- Informes: config (médicos + firmas + descripciones) ----------
-var INFORMES_CFG = { medicos: [], descripciones: [] };
+// ---------- Informes: config (médicos + firmas + resultados, por centro/especialidad) ----------
+var INFORMES_CFG = { modelos: [], centros: [], especialidades: [], medicos: [], descripciones: [] };
 async function loadInformesConfig(){
   var res = await api('/api/informes/config');
   if (res.ok && res.data) INFORMES_CFG = res.data;
@@ -145,19 +145,37 @@ async function loadInformesConfig(){
     }).join('');
     if (prev) mod.value = prev;
   }
+  filtrarPorModelo();
+  renderInformesConfigLists();
+}
+function modeloActual(){
+  var mod = document.getElementById('infModelo');
+  var key = mod ? mod.value : '';
+  return (INFORMES_CFG.modelos || []).find(function(m){ return m.key === key; }) || null;
+}
+// Un scope vacío = disponible para cualquier modelo.
+function scopeAplica(arr, valor){
+  return !arr || arr.length === 0 || (valor && arr.indexOf(valor) >= 0);
+}
+function filtrarPorModelo(){
+  var mo = modeloActual();
+  var centro = mo ? mo.centro : '', esp = mo ? mo.especialidad : '';
   var desc = document.getElementById('infDescripcion');
   if (desc){
-    desc.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
-      return '<option value="' + esc(d.texto) + '">' + esc(d.texto) + '</option>';
-    }).join('') || '<option value="">(cargá resultados en Configuración)</option>';
+    var prevD = desc.value;
+    var rs = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.especialidades, esp); });
+    desc.innerHTML = rs.map(function(d){ return '<option value="' + esc(d.texto) + '">' + esc(d.texto) + '</option>'; }).join('')
+      || '<option value="">(sin resultados para esta especialidad)</option>';
+    if (prevD) desc.value = prevD;
   }
   var med = document.getElementById('infMedico');
   if (med){
-    med.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
-      return '<option value="' + esc(m.id) + '">' + esc(m.nombre) + (m.hasFirma ? '' : ' (sin firma)') + '</option>';
-    }).join('') + '<option value="">Sin firma (deja el espacio)</option>';
+    var prevM = med.value;
+    var ms = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.centros, centro) && scopeAplica(m.especialidades, esp); });
+    med.innerHTML = ms.map(function(m){ return '<option value="' + esc(m.id) + '">' + esc(m.nombre) + (m.hasFirma ? '' : ' (sin firma)') + '</option>'; }).join('')
+      + '<option value="">Sin firma (deja el espacio)</option>';
+    if (prevM) med.value = prevM;
   }
-  renderInformesConfigLists();
 }
 function setInformesTab(tab){
   var isConfig = tab === 'config';
@@ -173,22 +191,50 @@ function renderInformesConfigLists(){
   var tabBtn = document.getElementById('infTabConfig');
   if (tabBtn) tabBtn.style.display = isAdmin ? '' : 'none';
   if (!isAdmin){ setInformesTab('generar'); return; }
+  var centros = INFORMES_CFG.centros || [], esps = INFORMES_CFG.especialidades || [];
   var ml = document.getElementById('infMedicosList');
   if (ml){
     ml.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
       var tag = m.hasFirma ? '<span class="cfg-tag on">firma ✓</span>' : '<span class="cfg-tag off">sin firma</span>';
-      return '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
+      var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
         + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
+      var chipsC = centros.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Centros</span>' + scopeChips('medC', m.id, centros, m.centros) + '</div>' : '';
+      var chipsE = esps.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Especialidades</span>' + scopeChips('medE', m.id, esps, m.especialidades) + '</div>' : '';
+      return '<div class="cfg-item">' + fila + chipsC + chipsE + '</div>';
     }).join('') || '<div class="cfg-empty">Todavía no hay médicos.</div>';
   }
   var dl = document.getElementById('infDescripcionesList');
   if (dl){
     dl.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
-      return '<div class="cfg-row"><span class="cfg-name">' + esc(d.texto) + '</span>'
+      var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(d.texto) + '</span>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
-    }).join('') || '<div class="cfg-empty">Todavía no hay descripciones.</div>';
+      var chipsE = esps.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Especialidades</span>' + scopeChips('descE', d.id, esps, d.especialidades) + '</div>' : '';
+      return '<div class="cfg-item">' + fila + chipsE + '</div>';
+    }).join('') || '<div class="cfg-empty">Todavía no hay resultados.</div>';
   }
+}
+function scopeChips(kind, id, opciones, seleccionadas){
+  return (opciones || []).map(function(op){
+    var on = (seleccionadas || []).indexOf(op) >= 0;
+    return '<button type="button" class="scope-chip' + (on ? ' on' : '') + '" onclick="toggleScope(\'' + kind + '\',\'' + esc(id) + '\',\'' + esc(op).replace(/'/g, "\\'") + '\')">' + esc(op) + '</button>';
+  }).join('');
+}
+async function toggleScope(kind, id, valor){
+  function toggle(arr){ arr = (arr || []).slice(); var i = arr.indexOf(valor); if (i >= 0) arr.splice(i, 1); else arr.push(valor); return arr; }
+  var r;
+  if (kind === 'medC' || kind === 'medE'){
+    var m = (INFORMES_CFG.medicos || []).find(function(x){ return x.id === id; }); if (!m) return;
+    var body = {
+      centros: kind === 'medC' ? toggle(m.centros) : (m.centros || []),
+      especialidades: kind === 'medE' ? toggle(m.especialidades) : (m.especialidades || []),
+    };
+    r = await req('POST', '/api/informes/medicos/' + encodeURIComponent(id) + '/scope', body);
+  } else if (kind === 'descE'){
+    var d = (INFORMES_CFG.descripciones || []).find(function(x){ return x.id === id; }); if (!d) return;
+    r = await req('POST', '/api/informes/descripciones/' + encodeURIComponent(id) + '/scope', { especialidades: toggle(d.especialidades) });
+  }
+  if (r && r.ok) await loadInformesConfig();
 }
 async function addMedico(){
   var msg = document.getElementById('infConfigMsg'); msg.textContent = '';

@@ -399,6 +399,13 @@
   .cfg-add{display:flex;gap:8px;align-items:center}
   .cfg-add .inp{flex:1}
   .cfg-empty{font-size:12.5px;color:var(--text-2);padding:2px}
+  .cfg-item{border:1px solid var(--border);border-radius:9px;background:var(--surface-2);padding:8px 10px}
+  .cfg-item .cfg-row{border:0;background:transparent;padding:0}
+  .cfg-scope{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .cfg-scope-lbl{font-size:11px;font-weight:700;color:var(--text-2);min-width:92px}
+  .scope-chip{border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;cursor:pointer}
+  .scope-chip:hover{border-color:var(--turq);color:var(--text)}
+  .scope-chip.on{background:var(--turq);border-color:var(--turq);color:#fff}
   .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:9px 11px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-2)}
   .dashboard-compare b{color:var(--text);font-size:12.5px}
   .dashboard-compare .good{color:var(--success);font-weight:750}

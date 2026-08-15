@@ -448,7 +448,7 @@
           <div class="card" id="infFormCard" style="max-width:640px" oninput="invalidarPreview()" onchange="invalidarPreview()">
             <div class="field">
               <label>Modelo</label>
-              <select class="inp" id="infModelo"></select>
+              <select class="inp" id="infModelo" onchange="filtrarPorModelo()"></select>
             </div>
             <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'')"></div>
             <div class="form-grid two">

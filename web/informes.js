@@ -20,6 +20,7 @@ const MODELOS = {
     logo: "cmc_logo.png",
     logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
     codigoPractica: "570129",
     estudio: "Consulta con especialista en cardiología (incluye ECG)",
     estudioArchivo: "Consulta Cardiologia ECG",
@@ -33,6 +34,7 @@ const MODELOS = {
     logo: "cmc_logo.png",
     logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
     codigoPractica: "",
     estudio: "Electrocardiograma",
     solicitanteDefault: "Dra. Naiara, Jacinto",
@@ -46,6 +48,7 @@ const MODELOS = {
     logo: "cima_logo.png",
     logoW: 150,
     servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
     codigoPractica: "",
     estudio: "Electrocardiograma",
     solicitanteDefault: "Gerardo Savia",
@@ -55,7 +58,12 @@ const MODELOS = {
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
-  return Object.keys(MODELOS).map((k) => ({ key: k, label: MODELOS[k].label || k }));
+  return Object.keys(MODELOS).map((k) => ({
+    key: k,
+    label: MODELOS[k].label || k,
+    centro: MODELOS[k].centro || "",
+    especialidad: MODELOS[k].especialidad || "",
+  }));
 }
 
 // Las firmas (dato sensible) viven en <datos>/informes/ (el volumen en producción,

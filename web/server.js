@@ -100,12 +100,12 @@ function loadInformesConfig() {
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
   if (!cfg || typeof cfg !== "object") cfg = {};
   if (!Array.isArray(cfg.medicos)) {
-    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png" }];
+    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png", centros: ["Centro Médico Caballito"], especialidades: ["Cardiología"] }];
   }
   if (!Array.isArray(cfg.descripciones)) {
     cfg.descripciones = [
-      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico." },
-      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda." },
+      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", especialidades: ["Cardiología"] },
+      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", especialidades: ["Cardiología"] },
     ];
   }
   return cfg;
@@ -2514,10 +2514,20 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     const cfg = loadInformesConfig();
+    const modelos = informes.listarModelos();
+    const centros = [...new Set(modelos.map((m) => m.centro).filter(Boolean))];
+    const especialidades = [...new Set(modelos.map((m) => m.especialidad).filter(Boolean))];
     return json(res, 200, {
-      modelos: informes.listarModelos(),
-      medicos: (cfg.medicos || []).map((m) => ({ id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma) })),
-      descripciones: cfg.descripciones || [],
+      modelos,
+      centros,
+      especialidades,
+      medicos: (cfg.medicos || []).map((m) => ({
+        id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma),
+        centros: m.centros || [], especialidades: m.especialidades || [],
+      })),
+      descripciones: (cfg.descripciones || []).map((d) => ({
+        id: d.id, texto: d.texto, especialidades: d.especialidades || [],
+      })),
     });
   }
   if (p === "/api/informes/medicos" && req.method === "POST") {
@@ -2530,9 +2540,27 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadInformesConfig();
     let id = slugId(nm) || ("m" + Object.keys(cfg.medicos).length);
     while (cfg.medicos.some((m) => m.id === id)) id += "-1";
-    cfg.medicos.push({ id, nombre: nm, firma: "firma-" + id + ".png" });
+    cfg.medicos.push({ id, nombre: nm, firma: "firma-" + id + ".png", centros: [], especialidades: [] });
     saveInformesConfig(cfg);
     return json(res, 201, { ok: true, id });
+  }
+  // Asignar centros/especialidades a un médico (si quedan vacíos = disponible para todos).
+  const medScopeMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)\/scope$/);
+  if (medScopeMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const modelos = informes.listarModelos();
+    const centrosOK = new Set(modelos.map((m) => m.centro).filter(Boolean));
+    const espsOK = new Set(modelos.map((m) => m.especialidad).filter(Boolean));
+    const cfg = loadInformesConfig();
+    const medico = cfg.medicos.find((m) => m.id === medScopeMatch[1]);
+    if (!medico) return json(res, 404, { error: "Médico no encontrado." });
+    medico.centros = (Array.isArray(body.centros) ? body.centros : []).map(String).filter((c) => centrosOK.has(c));
+    medico.especialidades = (Array.isArray(body.especialidades) ? body.especialidades : []).map(String).filter((e) => espsOK.has(e));
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
   }
   const medFirmaMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)\/firma$/);
   if (medFirmaMatch && req.method === "POST") {
@@ -2579,9 +2607,24 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadInformesConfig();
     let id = slugId(tx) || ("d" + cfg.descripciones.length);
     while (cfg.descripciones.some((d) => d.id === id)) id += "-1";
-    cfg.descripciones.push({ id, texto: tx });
+    cfg.descripciones.push({ id, texto: tx, especialidades: [] });
     saveInformesConfig(cfg);
     return json(res, 201, { ok: true, id });
+  }
+  // Asignar especialidades a un resultado (vacío = disponible para todos).
+  const descScopeMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)\/scope$/);
+  if (descScopeMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const espsOK = new Set(informes.listarModelos().map((m) => m.especialidad).filter(Boolean));
+    const cfg = loadInformesConfig();
+    const desc = cfg.descripciones.find((d) => d.id === descScopeMatch[1]);
+    if (!desc) return json(res, 404, { error: "Resultado no encontrado." });
+    desc.especialidades = (Array.isArray(body.especialidades) ? body.especialidades : []).map(String).filter((e) => espsOK.has(e));
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
   }
   const descDelMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)$/);
   if (descDelMatch && req.method === "DELETE") {
