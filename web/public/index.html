@@ -173,11 +173,23 @@
         <section id="view-clientes" style="display:none">
           <section class="client-detail">
               <div class="client-tabs">
-                <button class="active" id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
-                <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Reportes</button>
+                <button id="clientTabMescurso" type="button" onclick="setClientSection('mescurso')">Dashboard mes en curso</button>
+                <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
+                <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
+                <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
               </div>
 
-              <section id="client-section-basica" class="client-section">
+              <section id="client-section-mescurso" class="client-section" style="display:none">
+                <div class="client-card" style="text-align:center;padding:46px 20px">
+                  <div class="empty" style="padding:0">
+                    <div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 16v-5M13 16V8M18 16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                    <b>Proximamente</b>
+                    <span>Este panel se va a llenar solo con la bandeja del mes que sube la app cada noche.</span>
+                  </div>
+                </div>
+              </section>
+
+              <section id="client-section-basica" class="client-section" style="display:none">
               <div class="client-grid">
                 <article class="client-card client-info-card">
                   <dl class="info-list">
@@ -200,7 +212,9 @@
                   <div class="module-chip-list" id="clientModules"></div>
                 </article>
               </div>
+              </section>
 
+              <section id="client-section-dashboard" class="client-section">
               <div class="client-card client-dashboard-card">
                 <div class="client-card-head dashboard-head">
                   <div>

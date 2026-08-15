@@ -154,7 +154,7 @@ var NOM_SELECTED_MODULES = [];
 var CLIENTS = [];
 var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
-var CLIENT_SECTION = 'basica';
+var CLIENT_SECTION = 'dashboard';
 var CLIENT_NOM_OPEN = false;
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
@@ -460,23 +460,30 @@ function renderClientList(){
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
-  CLIENT_SECTION = 'basica';
+  CLIENT_SECTION = 'dashboard';
   CLIENT_NOM_OPEN = false;
   renderClientList();
   renderActiveClient();
 }
+var CLIENT_SECTIONS = [
+  { key:'mescurso',  sec:'client-section-mescurso',  tab:'clientTabMescurso',  crumb:'Dashboard mes en curso' },
+  { key:'basica',    sec:'client-section-basica',    tab:'clientTabBasica',    crumb:'Informacion basica' },
+  { key:'dashboard', sec:'client-section-dashboard', tab:'clientTabDashboard', crumb:'Dashboard de reportes' },
+  { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' }
+];
 function setClientSection(section){
-  CLIENT_SECTION = section === 'reportes' ? 'reportes' : 'basica';
-  var basica = document.getElementById('client-section-basica');
-  var reportes = document.getElementById('client-section-reportes');
-  var tabBasica = document.getElementById('clientTabBasica');
-  var tabReportes = document.getElementById('clientTabReportes');
-  if (basica) basica.style.display = CLIENT_SECTION === 'basica' ? 'block' : 'none';
-  if (reportes) reportes.style.display = CLIENT_SECTION === 'reportes' ? 'block' : 'none';
-  if (tabBasica) tabBasica.classList.toggle('active', CLIENT_SECTION === 'basica');
-  if (tabReportes) tabReportes.classList.toggle('active', CLIENT_SECTION === 'reportes');
+  var found = null;
+  for (var i = 0; i < CLIENT_SECTIONS.length; i++){ if (CLIENT_SECTIONS[i].key === section){ found = CLIENT_SECTIONS[i]; break; } }
+  if (!found) found = CLIENT_SECTIONS[2]; // por defecto: Dashboard de reportes
+  CLIENT_SECTION = found.key;
+  CLIENT_SECTIONS.forEach(function(s){
+    var sec = document.getElementById(s.sec);
+    var tab = document.getElementById(s.tab);
+    if (sec) sec.style.display = s.key === CLIENT_SECTION ? 'block' : 'none';
+    if (tab) tab.classList.toggle('active', s.key === CLIENT_SECTION);
+  });
   var crumb = document.getElementById('clientCrumbSection');
-  if (crumb) crumb.textContent = CLIENT_SECTION === 'reportes' ? 'Reportes' : 'Informacion basica';
+  if (crumb) crumb.textContent = found.crumb;
   // El hash queda a nivel cliente (no la sub-pestaña): así F5 restaura el cliente
   // correcto de forma confiable, sin pelear con las cargas async.
   if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug);
