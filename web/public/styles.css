@@ -291,6 +291,8 @@
   .multi-menu.show{display:block}
   .multi-menu-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border-bottom:1px solid var(--border);background:var(--hover);font-size:11.5px;font-weight:750;color:var(--text-2)}
   .multi-menu-head button{border:0;background:transparent;color:var(--turq);font-size:11.5px;font-weight:750;padding:2px 4px}
+  .multi-search{width:calc(100% - 16px);margin:8px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12.5px}
+  .multi-search:focus{outline:none;border-color:var(--turq)}
   .multi-options{max-height:260px;overflow:auto;padding:6px}
   .multi-option{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;font-size:12.5px;line-height:1.25;color:var(--text);cursor:pointer}
   .multi-option:hover{background:var(--hover)}

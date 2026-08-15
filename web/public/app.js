@@ -572,11 +572,35 @@ function renderModuleOptions(items){
     var checked = NOM_SELECTED_MODULES.includes(item.value) ? ' checked' : '';
     return '<label class="multi-option"><input type="checkbox" value="' + esc(item.value) + '"' + checked + ' onchange="toggleModuleSelection(this)"> <span>' + esc(item.label) + '</span></label>';
   }).join('') || '<div class="multi-empty">Sin modulos</div>';
+  filterModuleOptions();
   updateModuleTrigger();
+}
+// Filtra los checkboxes visibles según lo tipeado en el buscador del menú.
+function filterModuleOptions(){
+  var box = document.getElementById('nomModuleOptions');
+  var input = document.getElementById('nomModuleSearch');
+  if (!box) return;
+  var q = normalizeReportSearch(input ? input.value : '');
+  var any = false;
+  box.querySelectorAll('.multi-option').forEach(function(lbl){
+    var show = !q || normalizeReportSearch(lbl.textContent).indexOf(q) >= 0;
+    lbl.style.display = show ? '' : 'none';
+    if (show) any = true;
+  });
+  var none = box.querySelector('.multi-noresult');
+  if (q && !any){
+    if (!none){ none = document.createElement('div'); none.className = 'multi-empty multi-noresult'; none.textContent = 'Sin resultados'; box.appendChild(none); }
+    none.style.display = '';
+  } else if (none){ none.style.display = 'none'; }
 }
 function toggleModuleMenu(){
   var menu = document.getElementById('nomModuleMenu');
-  if (menu) menu.classList.toggle('show');
+  if (!menu) return;
+  var opened = menu.classList.toggle('show');
+  if (opened){
+    var input = document.getElementById('nomModuleSearch');
+    if (input) setTimeout(function(){ input.focus(); }, 0);
+  }
 }
 function toggleModuleSelection(input){
   var value = input.value;
