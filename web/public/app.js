@@ -490,6 +490,8 @@ async function renderActiveClient(){
   renderClientNomencladorPanel();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
+  document.getElementById('clientUgl').textContent = client.ugl || '-';
+  document.getElementById('clientSap').textContent = client.sap || '-';
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){
     return '<span class="module-chip"><b>' + esc(module.code) + '</b> ' + esc(module.name) + '</span>';
   }).join('');
@@ -563,7 +565,7 @@ function selectedClientModulesFrom(boxId){
 async function openClientCreateModal(){
   var err = document.getElementById('clientCreateError');
   if (err) err.textContent = '';
-  ['clientCreateName','clientCreateBusinessName','clientCreateCuit'].forEach(function(id){
+  ['clientCreateName','clientCreateBusinessName','clientCreateCuit','clientCreateUgl','clientCreateSap'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -580,6 +582,8 @@ async function saveClientCreate(){
     name: (document.getElementById('clientCreateName') || {}).value || '',
     businessName: (document.getElementById('clientCreateBusinessName') || {}).value || '',
     cuit: (document.getElementById('clientCreateCuit') || {}).value || '',
+    ugl: (document.getElementById('clientCreateUgl') || {}).value || '',
+    sap: (document.getElementById('clientCreateSap') || {}).value || '',
     activeModules: selected
   };
   var btn = document.getElementById('clientCreateSave');

@@ -228,6 +228,8 @@ const DEFAULT_CLIENTS = [
     name: "Sala Millon",
     businessName: "SALA DE AUXILIO DE LOMAS DEL MILLON",
     cuit: "30545942123",
+    ugl: "UGL XXXV",
+    sap: "",
     status: "Activo",
     activeModules: [
       { code: "546", name: "TRAUMATOLOGIA" },
@@ -236,6 +238,40 @@ const DEFAULT_CLIENTS = [
       { code: "543", name: "CARDIOLOGIA" },
       { code: "557", name: "NUTRICION" },
       { code: "545", name: "UROLOGIA" },
+    ],
+  },
+  {
+    slug: "cima",
+    name: "CIMA",
+    businessName: "CEINTRAMED SRL",
+    cuit: "30712382828",
+    ugl: "UGL XXXV",
+    sap: "110853",
+    status: "Activo",
+    activeModules: [
+      { code: "543", name: "CARDIOLOGIA" },
+      { code: "537", name: "DERMATOLOGIA" },
+      { code: "555", name: "DIABETOLOGIA" },
+      { code: "434", name: "ENDOCRINOLOGIA" },
+      { code: "435", name: "FLEBOLOGIA" },
+      { code: "552", name: "GASTROENTEROLOGIA" },
+      { code: "551", name: "GINECOLOGIA Y OBSTETRICIA" },
+      { code: "418", name: "HEMATOLOGIA" },
+      { code: "432", name: "PEDIATRIA" },
+      { code: "433", name: "REUMATOLOGIA" },
+      { code: "546", name: "TRAUMATOLOGIA" },
+      { code: "3", name: "ECODIAGNOSTICO DE NIVEL 1" },
+      { code: "22", name: "ECODOPPLER EN AMBULATORIO" },
+      { code: "557", name: "NUTRICION" },
+      { code: "545", name: "UROLOGIA" },
+      { code: "558", name: "LIC. EN NUTRICION" },
+      { code: "549", name: "NEFROLOGIA" },
+      { code: "548", name: "NEUMONOLOGIA" },
+      { code: "541", name: "NEUROLOGIA" },
+      { code: "437", name: "OTORRINOLARINGOLOGIA" },
+      { code: "2", name: "RADIOLOGIA AMBULATORIA DE NIVEL 1" },
+      { code: "553", name: "FONOAUDIOLOGIA" },
+      { code: "36", name: "OFTALMOLOGIA - CONSULTAS Y PRACTICAS" },
     ],
   },
 ];
@@ -282,6 +318,8 @@ function normalizeClient(client, fallback) {
     name: String(client.name || base.name || "").trim(),
     businessName: String(client.businessName || base.businessName || "").trim(),
     cuit: String(client.cuit || base.cuit || "").trim(),
+    ugl: String(client.ugl || base.ugl || "").trim(),
+    sap: String(client.sap || base.sap || "").trim(),
     status: String(client.status || base.status || "Activo").trim() || "Activo",
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
   };
@@ -1642,6 +1680,8 @@ const server = http.createServer(async (req, res) => {
     const name = String(body.name || "").replace(/\s+/g, " ").trim();
     const businessName = String(body.businessName || "").replace(/\s+/g, " ").trim();
     const cuit = normalizeCuit(body.cuit);
+    const ugl = String(body.ugl || "").replace(/\s+/g, " ").trim();
+    const sap = String(body.sap || "").replace(/\s+/g, " ").trim();
     const slug = clientSlugFromName(name);
     const modules = normalizeClientModules(body.activeModules);
     if (!name) return json(res, 400, { error: "Ingresa el nombre del cliente." });
@@ -1651,7 +1691,7 @@ const server = http.createServer(async (req, res) => {
     if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
     const clients = loadClientsStore();
     if (clients.some((client) => client.slug === slug)) return json(res, 409, { error: "Ya existe un cliente con ese nombre." });
-    const client = normalizeClient({ slug, name, businessName, cuit, status: "Activo", activeModules: modules });
+    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", activeModules: modules });
     clients.push(client);
     saveClientsStore(clients);
     return json(res, 201, { client, clients });
