@@ -440,6 +440,11 @@
         <!-- SOON -->
         <section id="view-informes" style="display:none">
           <div class="page-head"><h1>Informes</h1><p>Generá el informe de un paciente y descargalo en PDF.</p></div>
+          <div class="client-tabs" style="margin-bottom:16px">
+            <button class="active" id="infTabGenerar" type="button" onclick="setInformesTab('generar')">Generar</button>
+            <button id="infTabConfig" type="button" onclick="setInformesTab('config')" style="display:none">Configuración</button>
+          </div>
+          <section id="inf-tab-generar" class="inf-section">
           <div class="card" id="infFormCard" style="max-width:640px" oninput="invalidarPreview()" onchange="invalidarPreview()">
             <div class="field">
               <label>Modelo</label>
@@ -475,9 +480,10 @@
             </div>
             <iframe id="infPreviewFrame" title="Vista previa del informe" style="width:100%;height:560px;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>
           </div>
-          <div class="card" id="infConfigCard" style="max-width:640px;margin-top:16px;display:none">
-            <h3 style="margin:0 0 2px;font-size:15px">Configuración <span style="font-weight:400;color:var(--text-2);font-size:12px">(admin)</span></h3>
-            <p style="margin:0 0 16px;color:var(--text-2);font-size:13px">Lo que cargues acá aparece en los desplegables de arriba. Las firmas quedan en el servidor, no en el repositorio.</p>
+          </section>
+          <section id="inf-tab-config" class="inf-section" style="display:none">
+          <div class="card" id="infConfigCard" style="max-width:640px">
+            <p style="margin:0 0 16px;color:var(--text-2);font-size:13px">Lo que cargues acá aparece en los desplegables de la pestaña Generar. Las firmas quedan en el servidor, no en el repositorio.</p>
             <div class="cfg-block">
               <div class="cfg-head">Médicos y firmas</div>
               <div id="infMedicosList" class="cfg-list"></div>
@@ -496,6 +502,7 @@
             </div>
             <div class="msg err" id="infConfigMsg"></div>
           </div>
+          </section>
         </section>
 
         <section id="view-soon" style="display:none">

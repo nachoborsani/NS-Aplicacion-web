@@ -28,7 +28,7 @@ function go(v, el){
   if (v === 'users') renderUsers();
   if (v === 'clientes') loadClients();
   if (v === 'nomencladores') loadNomencladorSummary();
-  if (v === 'informes') loadInformesConfig();
+  if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   var clientsGroup = document.getElementById('clientsNavGroup');
   if (clientsGroup) {
@@ -149,7 +149,7 @@ async function loadInformesConfig(){
   if (desc){
     desc.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
       return '<option value="' + esc(d.texto) + '">' + esc(d.texto) + '</option>';
-    }).join('') || '<option value="">(cargá descripciones abajo)</option>';
+    }).join('') || '<option value="">(cargá resultados en Configuración)</option>';
   }
   var med = document.getElementById('infMedico');
   if (med){
@@ -159,11 +159,20 @@ async function loadInformesConfig(){
   }
   renderInformesConfigLists();
 }
+function setInformesTab(tab){
+  var isConfig = tab === 'config';
+  var g = document.getElementById('inf-tab-generar'), c = document.getElementById('inf-tab-config');
+  if (g) g.style.display = isConfig ? 'none' : '';
+  if (c) c.style.display = isConfig ? '' : 'none';
+  var bg = document.getElementById('infTabGenerar'), bc = document.getElementById('infTabConfig');
+  if (bg) bg.classList.toggle('active', !isConfig);
+  if (bc) bc.classList.toggle('active', isConfig);
+}
 function renderInformesConfigLists(){
-  var card = document.getElementById('infConfigCard');
   var isAdmin = ME && ME.role === 'admin';
-  if (card) card.style.display = isAdmin ? '' : 'none';
-  if (!isAdmin) return;
+  var tabBtn = document.getElementById('infTabConfig');
+  if (tabBtn) tabBtn.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin){ setInformesTab('generar'); return; }
   var ml = document.getElementById('infMedicosList');
   if (ml){
     ml.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
