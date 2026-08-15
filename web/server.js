@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
+const informes = require("./informes");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -2431,6 +2432,36 @@ const server = http.createServer(async (req, res) => {
     delete users[idx].reset;
     saveUsers(users);
     return json(res, 200, { ok: true });
+  }
+
+  // ---- Informes: generar PDF de un paciente ----
+  if (p === "/api/informes/generar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const body = await readBody(req);
+    const modelo = String(body.modelo || "caballito-cardio-ecg");
+    if (!informes.MODELOS[modelo]) return json(res, 400, { error: "Modelo de informe desconocido." });
+    try {
+      const bytes = await informes.buildInformePdf(modelo, {
+        paciente: body.paciente || {},
+        textoInforme: body.textoInforme,
+        solicitante: body.solicitante,
+        firmar: body.firmar,
+      });
+      const filename = informes.informeFilename(modelo, body.paciente || {});
+      const buf = Buffer.from(bytes);
+      res.writeHead(200, {
+        "content-type": "application/pdf",
+        "content-length": buf.length,
+        "content-disposition": `attachment; filename="${filename.replace(/[^\x20-\x7E]/g, "_")}"`,
+        "cache-control": "no-store",
+      });
+      res.end(buf);
+      return;
+    } catch (error) {
+      console.log("[informes] error:", error && error.message);
+      return json(res, 500, { error: "No se pudo generar el informe." });
+    }
   }
 
   // ---- Estatico ----

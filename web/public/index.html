@@ -439,8 +439,40 @@
 
         <!-- SOON -->
         <section id="view-informes" style="display:none">
-          <div class="page-head"><h1>Informes</h1><p>Herramienta de informes de NS.</p></div>
-          <div class="card" style="text-align:center;padding:50px"><div class="empty" style="padding:0"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M8 3h8a2 2 0 012 2v14a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2zM9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>Próximamente</b><span>Esta herramienta se está definiendo.</span></div></div>
+          <div class="page-head"><h1>Informes</h1><p>Generá el informe de un paciente y descargalo en PDF.</p></div>
+          <div class="card" style="max-width:640px">
+            <div class="field">
+              <label>Modelo</label>
+              <select class="inp" id="infModelo">
+                <option value="caballito-cardio-ecg">Centro Médico Caballito — Consulta Cardiología / ECG (570129)</option>
+              </select>
+            </div>
+            <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO"></div>
+            <div class="form-grid two">
+              <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" placeholder="Ej: 14023345500100"></div>
+              <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
+            </div>
+            <div class="field"><label>Documento <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label><input class="inp" id="infDoc" spellcheck="false" placeholder="Si lo dejás vacío, no aparece en el informe"></div>
+            <div class="field">
+              <label>Descripción del informe</label>
+              <select class="inp" id="infDescripcion">
+                <option value="">Normal — Ecg sin complicaciones, trazado sin valor patológico.</option>
+                <option value="Ritmo sinusal. Sin signos de isquemia aguda.">Ritmo sinusal, sin isquemia</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Médico que firma</label>
+              <select class="inp" id="infMedico">
+                <option value="1">Dra. Naiara A. Jacinto</option>
+                <option value="0">Sin firma (deja el espacio "Firma Médico")</option>
+              </select>
+            </div>
+            <div class="msg err" id="infError"></div>
+            <button class="btn btn-primary" id="infGenerar" onclick="generarInforme()">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Generar y descargar PDF
+            </button>
+          </div>
         </section>
 
         <section id="view-soon" style="display:none">

@@ -24,6 +24,13 @@ const MODELOS = {
 };
 
 function readAsset(name) {
+  // Las firmas (dato sensible) viven en el volumen del servidor, no en el repo.
+  // Buscamos primero en el volumen (<volumen>/informes/) y si no, en assets del
+  // repo (donde va el logo). En local, todo sale de assets.
+  const vol = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  if (vol) {
+    try { return fs.readFileSync(path.join(vol, "informes", name)); } catch {}
+  }
   try { return fs.readFileSync(path.join(ASSETS, name)); } catch { return null; }
 }
 

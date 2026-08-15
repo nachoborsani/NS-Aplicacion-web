@@ -81,6 +81,33 @@ window.addEventListener('hashchange', function(){
 function openDrawer(){ document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); }
 function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
 
+// ---------- Informes: generar PDF de un paciente y descargarlo ----------
+async function generarInforme(){
+  var err = document.getElementById('infError'); err.textContent = '';
+  var nombre = document.getElementById('infNombre').value.trim();
+  var benef = document.getElementById('infBenef').value.trim();
+  var fecha = document.getElementById('infFecha').value.trim();
+  if (!nombre || !benef || !fecha){ err.textContent = 'Completá nombre, beneficiario y fecha.'; return; }
+  var btn = document.getElementById('infGenerar'); btn.disabled = true;
+  try {
+    var payload = {
+      modelo: document.getElementById('infModelo').value,
+      paciente: { nombre: nombre, benef: benef, fecha: fecha, documento: document.getElementById('infDoc').value.trim() },
+      textoInforme: document.getElementById('infDescripcion').value,
+      firmar: document.getElementById('infMedico').value === '1'
+    };
+    var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el informe.'; return; }
+    var blob = await r.blob();
+    var cd = r.headers.get('content-disposition') || '';
+    var m = cd.match(/filename="([^"]+)"/);
+    var fname = m ? m[1] : 'informe.pdf';
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  } finally { btn.disabled = false; }
+}
+
 // ---------- ojo ver/ocultar ----------
 var EYE_ON  = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>';
 var EYE_OFF = '<path d="M17.94 17.94A10 10 0 0112 20c-7 0-11-8-11-8a18 18 0 015.06-5.94M9.9 4.24A9 9 0 0112 4c7 0 11 8 11 8a18 18 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
