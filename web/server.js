@@ -1164,7 +1164,7 @@ function buildProfessionalPdf(report, moduleCode) {
     commands.push(pdfTextCommand(margin, y, `SALA MILLON - INFORME ${moduleLabel}`, 13, "F2"));
     commands.push(pdfTextCommand(610, y, `Total: ${pdfMoney(summary.net)}`, 12, "F2"));
     y -= 16;
-    commands.push(pdfTextCommand(margin, y, `${report.title || "Reporte"} - ${report.nomencladorLabel || ""}`, 8, "F1"));
+    commands.push(pdfTextCommand(margin, y, report.title || "Reporte", 8, "F1"));
     commands.push(pdfTextCommand(610, y, `Prestaciones: ${rows.length} - Debitos: ${pdfMoney(summary.debit)}`, 8, "F1"));
     y -= 18;
     commands.push(pdfLineCommand(margin, y + 8, width - margin, y + 8));
