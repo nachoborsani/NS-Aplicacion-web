@@ -455,7 +455,8 @@
             <button id="infTabConfig" type="button" onclick="setInformesTab('config')" style="display:none">Configuración</button>
           </div>
           <section id="inf-tab-generar" class="inf-section">
-          <div class="card" id="infFormCard" style="max-width:640px" oninput="invalidarPreview()" onchange="invalidarPreview()">
+          <div class="inf-gen-layout">
+          <div class="card" id="infFormCard" oninput="programarPreviewVivo()" onchange="programarPreviewVivo()">
             <div class="form-grid two">
               <div class="field">
                 <label>Centro</label>
@@ -504,26 +505,18 @@
               <select class="inp" id="infMedico"></select>
             </div>
             <div class="msg err" id="infError"></div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <button class="btn btn-ghost" id="infGenerar" onclick="generarInforme()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>
-                Generar vista previa
-              </button>
-              <button class="btn btn-primary" id="infDescargarDirecto" onclick="descargarInformeDirecto()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Generar y descargar PDF
-              </button>
+            <button class="btn btn-primary" id="infDescargarDirecto" onclick="descargarInformeDirecto()">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Descargar PDF
+            </button>
+          </div>
+          <div class="inf-preview-live" id="infPreviewLive">
+            <div class="inf-preview-bar">Vista previa <span>en vivo</span></div>
+            <div class="inf-preview-stage">
+              <iframe id="infLiveFrame" title="Vista previa del informe"></iframe>
+              <div id="infLivePlaceholder" class="inf-preview-ph">Completá <b>nombre</b>, <b>N° beneficiario</b> y <b>fecha</b> para ver la vista previa del informe acá.</div>
             </div>
           </div>
-          <div class="card" id="infPreviewCard" style="max-width:640px;margin-top:16px;display:none">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap">
-              <h3 style="margin:0;font-size:15px">Vista previa</h3>
-              <button class="btn btn-primary" id="infDescargar" onclick="descargarInforme()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Descargar PDF
-              </button>
-            </div>
-            <iframe id="infPreviewFrame" title="Vista previa del informe" style="width:100%;height:560px;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>
           </div>
           </section>
 

@@ -122,17 +122,10 @@ async function pedirInformePdf(){
   if (!benef) faltan.push('el N° de beneficiario');
   if (!fecha) faltan.push('la fecha');
   if (faltan.length){ err.textContent = 'Falta completar ' + faltan.join(', ') + '.'; return null; }
-  var b1 = document.getElementById('infGenerar'), b2 = document.getElementById('infDescargarDirecto');
-  if (b1) b1.disabled = true; if (b2) b2.disabled = true;
+  var b2 = document.getElementById('infDescargarDirecto');
+  if (b2) b2.disabled = true;
   try {
-    var payload = {
-      modelo: document.getElementById('infPractica').value,
-      paciente: { nombre: nombre, benef: benef, fecha: fecha, documento: document.getElementById('infDoc').value.trim() },
-      textoInforme: (document.getElementById('infTexto') || {}).value || '',
-      valores: recolectarCampos(),
-      medicoId: document.getElementById('infMedico').value
-    };
-    var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
+    var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(construirPayloadInforme()) });
     if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el informe.'; return null; }
     var blob = await r.blob();
     var cd = r.headers.get('content-disposition') || '';
@@ -141,7 +134,46 @@ async function pedirInformePdf(){
   } catch (e) {
     err.textContent = 'No se pudo generar el informe (error de conexión).';
     return null;
-  } finally { if (b1) b1.disabled = false; if (b2) b2.disabled = false; }
+  } finally { if (b2) b2.disabled = false; }
+}
+function construirPayloadInforme(){
+  return {
+    modelo: document.getElementById('infPractica').value,
+    paciente: {
+      nombre: document.getElementById('infNombre').value.trim(),
+      benef: document.getElementById('infBenef').value.trim(),
+      fecha: document.getElementById('infFecha').value.trim(),
+      documento: document.getElementById('infDoc').value.trim(),
+    },
+    textoInforme: (document.getElementById('infTexto') || {}).value || '',
+    valores: recolectarCampos(),
+    medicoId: document.getElementById('infMedico').value,
+  };
+}
+// ---- Vista previa en vivo (mientras se completa el formulario) ----
+var PREVIEW_TIMER = null, PREVIEW_SEQ = 0;
+function programarPreviewVivo(){ clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = setTimeout(actualizarPreviewVivo, 500); }
+async function actualizarPreviewVivo(){
+  var frame = document.getElementById('infLiveFrame'), ph = document.getElementById('infLivePlaceholder');
+  if (!frame) return;
+  var nombre = document.getElementById('infNombre').value.trim();
+  var benef = document.getElementById('infBenef').value.trim();
+  var fecha = document.getElementById('infFecha').value.trim();
+  if (!nombre || !benef || !fecha){ frame.style.display = 'none'; if (ph) ph.style.display = ''; return; }
+  var seq = ++PREVIEW_SEQ;
+  try {
+    var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(construirPayloadInforme()) });
+    if (seq !== PREVIEW_SEQ) return;          // respuesta vieja: la ignoramos
+    if (!r.ok) return;
+    var blob = await r.blob();
+    if (seq !== PREVIEW_SEQ) return;
+    if (INF_BLOB && INF_BLOB.url) URL.revokeObjectURL(INF_BLOB.url);
+    var url = URL.createObjectURL(blob);
+    var cd = r.headers.get('content-disposition') || ''; var m = cd.match(/filename="([^"]+)"/);
+    INF_BLOB = { url: url, filename: m ? m[1] : 'informe.pdf' };
+    frame.src = url + '#toolbar=0&navpanes=0&view=FitH';
+    frame.style.display = 'block'; if (ph) ph.style.display = 'none';
+  } catch (e) { /* en preview no molestamos con errores */ }
 }
 function bajarBlob(blob, fname){
   var url = URL.createObjectURL(blob);
@@ -149,34 +181,10 @@ function bajarBlob(blob, fname){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
 }
-// "Generar vista previa": muestra el PDF y deja el botón Descargar.
-async function generarInforme(){
-  var r = await pedirInformePdf(); if (!r) return;
-  if (INF_BLOB && INF_BLOB.url) URL.revokeObjectURL(INF_BLOB.url);
-  var url = URL.createObjectURL(r.blob);
-  INF_BLOB = { url: url, filename: r.fname };
-  document.getElementById('infPreviewFrame').src = url;
-  var card = document.getElementById('infPreviewCard');
-  card.style.display = '';
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-// "Descargar PDF" directo: genera y baja sin previsualizar.
+// "Descargar PDF": genera y baja el informe.
 async function descargarInformeDirecto(){
   var r = await pedirInformePdf(); if (!r) return;
   bajarBlob(r.blob, r.fname);
-}
-function descargarInforme(){
-  if (!INF_BLOB || !INF_BLOB.url) return;
-  var a = document.createElement('a'); a.href = INF_BLOB.url; a.download = INF_BLOB.filename;
-  document.body.appendChild(a); a.click(); a.remove();
-}
-function invalidarPreview(){
-  // Si cambian un dato después de previsualizar, la vista previa queda vieja: la ocultamos.
-  var card = document.getElementById('infPreviewCard');
-  if (card && card.style.display !== 'none'){
-    card.style.display = 'none';
-    var fr = document.getElementById('infPreviewFrame'); if (fr) fr.removeAttribute('src');
-  }
 }
 // ---------- Informes: cascada Centro → Especialidad → Práctica + config ----------
 var INFORMES_CFG = { modelos: [], medicos: [], descripciones: [] };
@@ -259,7 +267,7 @@ function aplicarPreset(){
     var k = inp.getAttribute('data-key');
     if (valores[k] != null && String(valores[k]).trim() !== '') inp.value = valores[k];
   });
-  invalidarPreview();
+  programarPreviewVivo();
 }
 function recolectarCampos(){
   var v = {};
@@ -299,6 +307,7 @@ function setInformesTab(tab){
     var b = document.getElementById(btns[k]); if (b) b.classList.toggle('active', k === tab);
   });
   if (tab === 'lote') loteInit();
+  if (tab === 'generar') programarPreviewVivo();
 }
 function renderInformesConfigLists(){
   var isAdmin = ME && ME.role === 'admin';
@@ -804,10 +813,26 @@ function loteInit(){
   var c = document.getElementById('loteCentro');
   if (c){ var pv = c.value; var centros = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.centro; }));
     c.innerHTML = centros.map(function(x){ return opt(x, x); }).join(''); if (pv) c.value = pv; }
-  var med = document.getElementById('loteMedico');
-  if (med){ var pm = med.value;
-    med.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('') + opt('', 'Sin firma / elegir por fila');
-    if (pm) med.value = pm; }
+  loteLlenarMedicos();
+}
+// Médicos autorizados para alguna práctica del centro elegido (los válidos del lote).
+function loteMedicosValidos(){
+  var keys;
+  if (LOTE_ROWS.length){
+    // Con lote detectado: solo las prácticas realmente presentes.
+    keys = uniq(LOTE_ROWS.map(function(r){ return r.modelo; }).filter(Boolean));
+  } else {
+    var centro = (document.getElementById('loteCentro') || {}).value || '';
+    keys = (INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro; }).map(function(m){ return m.key; });
+  }
+  return (INFORMES_CFG.medicos || []).filter(function(m){ return keys.some(function(k){ return scopeAplica(m.modelos, k); }); });
+}
+function loteLlenarMedicos(){
+  var med = document.getElementById('loteMedico'); if (!med) return;
+  var pm = med.value;
+  var vals = loteMedicosValidos();
+  med.innerHTML = vals.map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('') + opt('', 'Sin firma / elegir por fila');
+  med.value = (pm && vals.some(function(m){ return m.id === pm; })) ? pm : (vals[0] ? vals[0].id : '');
 }
 // Una línea del pegado (tab-separada tipo Excel; si no hay tabs, 2+ espacios).
 function loteParseLinea(linea){
@@ -870,9 +895,10 @@ function loteDetectar(){
     return { nombre: r.nombre, benef: r.benef, fecha: r.fecha, documento: '', codigo: r.codigo, practicaTxt: r.practica,
       modelo: modelo, presetId: presets.length ? presets[0].id : '', lado: 'noesp', medicoId: modelo ? loteMedicoParaModelo(modelo, medDef) : '' };
   });
+  loteLlenarMedicos(); // ahora que hay lote, acota el "por defecto" a los médicos de esas prácticas
   loteRender();
 }
-function loteRedetectar(){ if (LOTE_ROWS.length) loteDetectar(); }
+function loteRedetectar(){ loteLlenarMedicos(); if (LOTE_ROWS.length) loteDetectar(); }
 function loteMedicoDefault(){
   var medDef = document.getElementById('loteMedico').value;
   LOTE_ROWS.forEach(function(row){ if (row.modelo) row.medicoId = loteMedicoParaModelo(row.modelo, medDef); });
