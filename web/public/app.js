@@ -29,6 +29,14 @@ function toggleSidebar(){
   try { localStorage.setItem('ns-sidebar-collapsed', collapsed ? '1' : '0'); } catch (e) {}
   setSidebarCollapseIcon();
 }
+// La lista de clientes vive en la barra: si está colapsada no se ve. Al entrar
+// a Clientes la expandimos para poder elegir un cliente.
+function expandSidebar(){
+  if (!document.body.classList.contains('sidebar-collapsed')) return;
+  document.body.classList.remove('sidebar-collapsed');
+  try { localStorage.setItem('ns-sidebar-collapsed', '0'); } catch (e) {}
+  setSidebarCollapseIcon();
+}
 (function(){
   try { if (localStorage.getItem('ns-sidebar-collapsed') === '1') document.body.classList.add('sidebar-collapsed'); } catch (e) {}
   // Tooltips nativos para cuando está colapsado (los labels quedan ocultos).
@@ -45,7 +53,7 @@ function go(v, el){
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'users') renderUsers();
-  if (v === 'clientes') loadClients();
+  if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
