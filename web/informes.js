@@ -50,6 +50,46 @@ const SIBO_CAMPOS = [
   { key: "ppm9", label: "PPM 9", default: "" },
   { key: "ppm10", label: "PPM 10", default: "" },
 ];
+// Campos del MAPA / Presurometría 24 hs (página resumen). Muchos, todos editables.
+const MAPA_CAMPOS = [
+  { key: "edad", label: "Edad", default: "" },
+  { key: "sexo", label: "Sexo", default: "" },
+  { key: "medico", label: "Médico", default: "", wide: true },
+  { key: "medicacion", label: "Medicación", default: "", wide: true },
+  { key: "nTot", label: "N total", default: "" },
+  { key: "nVig", label: "N vigilia", default: "" },
+  { key: "nSue", label: "N sueño", default: "" },
+  { key: "pasTP", label: "PAS tot prom", default: "" },
+  { key: "pasTMin", label: "PAS tot mín", default: "" },
+  { key: "pasTMax", label: "PAS tot máx", default: "" },
+  { key: "padTP", label: "PAD tot prom", default: "" },
+  { key: "padTMin", label: "PAD tot mín", default: "" },
+  { key: "padTMax", label: "PAD tot máx", default: "" },
+  { key: "fcTP", label: "FC tot prom", default: "" },
+  { key: "pasVP", label: "PAS vig prom", default: "" },
+  { key: "pasVMin", label: "PAS vig mín", default: "" },
+  { key: "pasVMax", label: "PAS vig máx", default: "" },
+  { key: "padVP", label: "PAD vig prom", default: "" },
+  { key: "padVMin", label: "PAD vig mín", default: "" },
+  { key: "padVMax", label: "PAD vig máx", default: "" },
+  { key: "fcVP", label: "FC vig prom", default: "" },
+  { key: "pasSP", label: "PAS sue prom", default: "" },
+  { key: "pasSMin", label: "PAS sue mín", default: "" },
+  { key: "pasSMax", label: "PAS sue máx", default: "" },
+  { key: "padSP", label: "PAD sue prom", default: "" },
+  { key: "padSMin", label: "PAD sue mín", default: "" },
+  { key: "padSMax", label: "PAD sue máx", default: "" },
+  { key: "fcSP", label: "FC sue prom", default: "" },
+  { key: "horarioSueno", label: "Horario de sueño", default: "", wide: true },
+  { key: "patronDescenso", label: "Descenso nocturno", default: "", wide: true },
+  { key: "clasificacion", label: "Clasificación", default: "" },
+  { key: "cgTPas", label: "Carga tot PAS", default: "" },
+  { key: "cgTPad", label: "Carga tot PAD", default: "" },
+  { key: "cgVPas", label: "Carga vig PAS", default: "" },
+  { key: "cgVPad", label: "Carga vig PAD", default: "" },
+  { key: "cgSPas", label: "Carga sue PAS", default: "" },
+  { key: "cgSPad", label: "Carga sue PAD", default: "" },
+];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
@@ -274,6 +314,24 @@ const MODELOS = {
     textoDefault: "Estudio negativo para SIBO",
     pie: PIE_CABALLITO,
   },
+  // --- CIMA: MAPA / Presurometría 24 hs — layout propio (página resumen) ---
+  "cima-mapa": {
+    label: "CIMA — MAPA / Presurometría 24 hs (570120)",
+    short: "CIMA · MAPA",
+    practica: "570120 - Presurometría 24 hs / MAPA",
+    centro: "CIMA",
+    especialidad: "Cardiología",
+    codigoPractica: "570120",
+    estudio: "PRESUROMETRÍA POR 24 HS / MAPA",
+    estudioArchivo: "MAPA Presurometria 24hs",
+    tipo: "mapa",
+    encabezado: "CIMA SALUD",
+    subtitulo: "Islas malvinas 2722 - Isidro Casanova",
+    campos: MAPA_CAMPOS,
+    solicitanteDefault: "",
+    textoDefault: "REGISTRO DE PRESIÓN ARTERIAL DENTRO DE PARÁMETROS CONSERVADOS. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+    pie: PIE_CIMA,
+  },
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
@@ -334,6 +392,7 @@ async function buildInformePdf(modeloKey, input) {
   const modelo = MODELOS[modeloKey] || MODELOS[DEFAULT_MODELO];
   // Modelos con layout propio (ej. SIBO: tabla PPM + gráfico) van por otro builder.
   if (modelo.tipo === "sibo") return buildSiboPdf(modelo, input || {}, { PDFDocument, StandardFonts, rgb });
+  if (modelo.tipo === "mapa") return buildMapaPdf(modelo, input || {});
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
@@ -610,6 +669,136 @@ async function buildSiboPdf(modelo, input, lib) {
   // leyenda
   page.drawRectangle({ x: px1 + 8, y: (py0 + py1) / 2, width: 6, height: 6, color: blue });
   T("PPM", px1 + 17, (py0 + py1) / 2 - 1, { size: 8, color: line });
+
+  return await doc.save();
+}
+
+// ---- Builder propio del MAPA / Presurometría 24 hs (página resumen) ----
+async function buildMapaPdf(modelo, input) {
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
+  const p = input.paciente || {};
+  const val = input.valores || {};
+  const conclusion = ((input.textoInforme || "").trim()) || modelo.textoDefault || "";
+  const v = (k) => String(val[k] == null ? "" : val[k]).trim();
+  const firmaArchivo = input.firmaArchivo || "";
+
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89, M = 40;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0.12, 0.12, 0.12), line = rgb(0.35, 0.35, 0.35), grid = rgb(0.8, 0.8, 0.8), band = rgb(0.9, 0.9, 0.9), soft = rgb(0.4, 0.4, 0.4);
+
+  const T = (t, x, y, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 8.5, font: o.bold ? bold : font, color: o.color || ink }); };
+  const ws = (t, f, s) => f.widthOfTextAtSize(String(t == null ? "" : t), s);
+  const center = (t, x1, x2, y, o) => { o = o || {}; const f = o.bold ? bold : font, s = o.size || 8.5; T(t, x1 + (x2 - x1 - ws(t, f, s)) / 2, y, o); };
+  const box = (x, topY, w, h) => page.drawRectangle({ x, y: topY - h, width: w, height: h, borderColor: line, borderWidth: 0.8 });
+  const wrap = (text, f, s, maxW) => { const words = String(text || "").split(/\s+/).filter(Boolean); const L = []; let c = ""; for (const w of words) { const t = c ? c + " " + w : w; if (ws(t, f, s) > maxW && c) { L.push(c); c = w; } else c = t; } if (c) L.push(c); return L; };
+
+  let y = H - M;
+  // Encabezado
+  center(modelo.encabezado || "CIMA SALUD", M, W - M, y - 18, { bold: true, size: 20 });
+  center(modelo.subtitulo || "", M, W - M, y - 34, { size: 10, color: soft });
+  y -= 54;
+  // Barra gris con paciente
+  page.drawRectangle({ x: M, y: y - 20, width: W - 2 * M, height: 20, color: band });
+  T((p.nombre || "—") + " - Estudio MAPA", M + 6, y - 14, { bold: true, size: 11 });
+  y -= 28;
+  // Fila de datos
+  { const h = 32; box(M, y, W - 2 * M, h);
+    T("Fecha", M + 6, y - 12, { bold: true }); T(p.fecha || "—", M + 42, y - 12);
+    if (v("edad")) { T("Edad", M + 150, y - 12, { bold: true }); T(v("edad"), M + 182, y - 12); }
+    if (v("sexo")) { T("Sexo", M + 230, y - 12, { bold: true }); T(v("sexo"), M + 262, y - 12); }
+    let dy = y - 25;
+    if ((p.documento || "").trim()) { T("Doc.", M + 6, dy, { bold: true }); T(p.documento, M + 42, dy); }
+    if ((p.benef || "").trim()) { T("N° Benef.", M + 230, dy, { bold: true }); T(p.benef, M + 285, dy); }
+    y -= h + 10;
+  }
+
+  const colTop = y, colGap = 12;
+  const leftW = 208, rightX = M + leftW + colGap, rightW = W - M - rightX;
+  // ---- Columna izquierda: cajas ----
+  { const h = 46; box(M, colTop, leftW, h); let iy = colTop - 13;
+    T("Médico", M + 6, iy, { bold: true }); T(v("medico"), M + 52, iy); iy -= 14;
+    T("Técnico", M + 6, iy, { bold: true }); iy -= 14;
+    T("Referido por", M + 6, iy, { bold: true });
+  }
+  const box2Top = colTop - 46 - 8;
+  { const h = 58; box(M, box2Top, leftW, h); let iy = box2Top - 13;
+    T("Indicaciones", M + 6, iy, { bold: true }); iy -= 16;
+    T("Medicación", M + 6, iy, { bold: true }); T(v("medicacion"), M + 70, iy); iy -= 16;
+    T("Observaciones", M + 6, iy, { bold: true });
+  }
+  const box3Top = box2Top - 58 - 8;
+  { const h = 40; box(M, box3Top, leftW, h);
+    T("Horario de sueño: " + (v("horarioSueno") || "—"), M + 6, box3Top - 15);
+    const pat = v("patronDescenso") + (v("clasificacion") ? " (" + v("clasificacion") + ")" : "");
+    T("Patrón de descenso nocturno: " + (pat || "—"), M + 6, box3Top - 30);
+  }
+
+  // ---- Columna derecha: tabla por períodos ----
+  const cols = [
+    { x: rightX, w: 58 },        // Período
+    { x: rightX + 58, w: 34 },   // stat
+    { x: rightX + 92, w: 40 },   // PAS
+    { x: rightX + 132, w: 40 },  // PAD
+    { x: rightX + 172, w: 34 },  // FC
+    { x: rightX + 206, w: 40 },  // PAM
+    { x: rightX + 246, w: rightW - 246 }, // PP
+  ];
+  const rh = 13;
+  const cellC = (ci, txt, ry, o) => { o = o || {}; center(txt, cols[ci].x, cols[ci].x + cols[ci].w, ry, o); };
+  // header
+  page.drawRectangle({ x: rightX, y: colTop - rh, width: rightW, height: rh, color: band });
+  ["Período", "", "PAS", "PAD", "FC", "PAM", "PP"].forEach((t, i) => cellC(i, t, colTop - 9, { bold: true, size: 8 }));
+  let ty = colTop - rh;
+  const num = (k) => { const n = Number(v(k).replace(",", ".")); return isFinite(n) ? n : null; };
+  const pam = (pas, pad) => (pas != null && pad != null) ? String(Math.round(pad + (pas - pad) / 3)) : "";
+  const pp = (pas, pad) => (pas != null && pad != null) ? String(Math.round(pas - pad)) : "";
+  const periodos = [
+    { lbl: "Total", n: v("nTot"), ref: "", pre: "T" },
+    { lbl: "Vigilia", n: v("nVig"), ref: "135/85", pre: "V" },
+    { lbl: "Sueño", n: v("nSue"), ref: "120/70", pre: "S" },
+  ];
+  for (const per of periodos) {
+    const P = per.pre;
+    const pasP = num("pas" + P + "P"), padP = num("pad" + P + "P");
+    const filas = [
+      { s: "Prom.", pas: v("pas" + P + "P"), pad: v("pad" + P + "P"), fc: v("fc" + P + "P"), pam: pam(pasP, padP), pp: pp(pasP, padP) },
+      { s: "Mín.", pas: v("pas" + P + "Min"), pad: v("pad" + P + "Min"), fc: "", pam: "", pp: "" },
+      { s: "Máx.", pas: v("pas" + P + "Max"), pad: v("pad" + P + "Max"), fc: "", pam: "", pp: "" },
+      { s: "Carga", pas: v("cg" + P + "Pas"), pad: v("cg" + P + "Pad"), fc: "", pam: "", pp: "" },
+    ];
+    const blockTop = ty, blockH = rh * filas.length;
+    // celda período (spanning)
+    T(per.lbl, cols[0].x + 4, blockTop - 10, { bold: true, size: 8 });
+    T("(N = " + (per.n || "—") + ")", cols[0].x + 4, blockTop - 21, { size: 7, color: soft });
+    if (per.ref) { T("Ref:", cols[0].x + 4, blockTop - blockH + 15, { size: 6.5, color: soft }); T(per.ref, cols[0].x + 4, blockTop - blockH + 6, { size: 6.5, color: soft }); }
+    filas.forEach((f, ri) => {
+      const ry = ty - ri * rh - 9;
+      cellC(1, f.s, ry, { size: 7.5, bold: f.s === "Prom." });
+      cellC(2, f.pas, ry, { size: 8 }); cellC(3, f.pad, ry, { size: 8 }); cellC(4, f.fc, ry, { size: 8 }); cellC(5, f.pam, ry, { size: 8 }); cellC(6, f.pp, ry, { size: 8 });
+    });
+    ty -= blockH;
+    page.drawLine({ start: { x: rightX, y: ty }, end: { x: rightX + rightW, y: ty }, thickness: 0.5, color: grid });
+  }
+  // borde tabla + líneas verticales
+  page.drawRectangle({ x: rightX, y: ty, width: rightW, height: colTop - ty, borderColor: line, borderWidth: 0.8 });
+  for (let i = 1; i < cols.length; i++) page.drawLine({ start: { x: cols[i].x, y: colTop }, end: { x: cols[i].x, y: ty }, thickness: 0.4, color: grid });
+
+  // ---- Conclusiones ----
+  const concTop = Math.min(box3Top - 40 - 12, ty - 12);
+  const concBottom = 70;
+  box(M, concTop, W - 2 * M, concTop - concBottom);
+  T("Conclusiones", M + 6, concTop - 14, { bold: true, size: 10 });
+  let cy = concTop - 30;
+  for (const ln of String(conclusion).split(/\n/)) {
+    for (const w of wrap(ln, font, 9, W - 2 * M - 16)) { T(w, M + 6, cy, { size: 9 }); cy -= 13; }
+  }
+  // Firma (solo si hay firma autorizada)
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
+  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const fw = 140, fh = (img.height / img.width) * fw; page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
+  else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); center("Firma y sello", W - M - 170, W - M - 20, concBottom + 6, { size: 8, color: soft }); }
 
   return await doc.save();
 }

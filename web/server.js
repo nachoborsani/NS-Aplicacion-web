@@ -175,6 +175,26 @@ const ORL_SEED_PRESETS = [
     texto: "Estudio compatible con SIBO",
     valores: { umbral: "25", ppm1: "4", ppm2: "4", ppm3: "5", ppm4: "4", ppm5: "33", ppm6: "62", ppm7: "44", ppm8: "41", ppm9: "79", ppm10: "82" },
   },
+  {
+    id: "mapa-normal", modelo: "cima-mapa", nombre: "MAPA normal / técnicamente satisfactorio",
+    texto: "PRESIÓN ARTERIAL SISTÓLICA MÁXIMA 156, MÍNIMA 96, MEDIA 126 MMHG.\nPRESIÓN ARTERIAL DIASTÓLICA MÁXIMA 84, MÍNIMA 52, MEDIA 72 MMHG.\nSE REALIZARON 62 MEDICIONES VALIDABLES. DEL PROMEDIO DE LAS MISMAS SE CONCLUYE:\nREGISTRO DE PRESIÓN ARTERIAL DENTRO DE PARÁMETROS CONSERVADOS.\nPATRÓN DIPPER CONSERVADO.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+    valores: {
+      nTot: "62", nVig: "42", nSue: "20",
+      pasTP: "126", padTP: "72", fcTP: "72", pasTMin: "96", pasTMax: "156", padTMin: "52", padTMax: "84",
+      pasVP: "131", padVP: "75", fcVP: "76",
+      pasSP: "114", padSP: "64", fcSP: "66",
+      horarioSueno: "22:00 - 08:00", patronDescenso: "13%", clasificacion: "dipper",
+      cgTPas: "18%", cgTPad: "6%", cgVPas: "22%", cgVPad: "8%", cgSPas: "10%", cgSPad: "0%",
+    },
+  },
+  {
+    id: "mapa-hta-nondipper", modelo: "cima-mapa", nombre: "HTA sistólica / patrón non-dipper",
+    texto: "SE OBSERVA HIPERTENSIÓN ARTERIAL SISTÓLICA, CON PREDOMINIO DURANTE TODO EL ESTUDIO.\nPATRÓN NON-DIPPER.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+  },
+  {
+    id: "mapa-hipotension-dipper", modelo: "cima-mapa", nombre: "Hipotensión diastólica nocturna / patrón dipper",
+    texto: "HIPOTENSIÓN ARTERIAL DIASTÓLICA NOCTURNA.\nPATRÓN DIPPER.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+  },
 ];
 function loadInformesConfig() {
   let cfg = {};
