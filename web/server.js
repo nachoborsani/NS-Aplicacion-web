@@ -9,6 +9,17 @@ const nomExport = require("./nomenclador_export");
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
 
+// Versión de assets: cambia cuando cambian styles.css o app.js. Se inyecta como
+// ?v= en index.html para que ningún caché sirva una versión vieja tras un deploy.
+function assetVersion() {
+  let v = 0;
+  for (const f of ["styles.css", "app.js"]) {
+    try { v += fs.statSync(path.join(publicDir, f)).mtimeMs; } catch {}
+  }
+  return String(Math.round(v)) || "1";
+}
+const ASSET_VER = assetVersion();
+
 // Persistencia: usa el volumen de Railway si esta montado; si no, ./data local.
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
@@ -2725,6 +2736,18 @@ const server = http.createServer(async (req, res) => {
   if (!resolved.startsWith(publicDir)) {
     res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
     res.end("Acceso denegado");
+    return;
+  }
+  // index.html: inyectamos la versión de assets para bustear cachés viejos.
+  if (cleanPath === "/index.html") {
+    fs.readFile(resolved, "utf8", (error, html) => {
+      if (error) { res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); res.end("No encontrado"); return; }
+      html = html
+        .replace('href="/styles.css"', 'href="/styles.css?v=' + ASSET_VER + '"')
+        .replace('src="/app.js"', 'src="/app.js?v=' + ASSET_VER + '"');
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      res.end(html);
+    });
     return;
   }
   sendFile(res, resolved);
