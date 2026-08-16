@@ -326,18 +326,18 @@ function renderInformesConfigLists(){
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
         + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
-      var chips = modelos.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Informes</span>' + scopeChips('med', m.id, modelos, m.modelos) + '</div>' : '';
-      return '<div class="cfg-item">' + fila + chips + '</div>';
+      var sub = modelos.length ? cfgSub('Informes que firma', cfgMetaInformes(m.modelos), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
+      return '<div class="cfg-item">' + fila + sub + '</div>';
     }).join('') || '<div class="cfg-empty">Todavía no hay médicos.</div>';
   }
   var dl = document.getElementById('infDescripcionesList');
   if (dl){
     dl.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
       var titulo = d.nombre || presetLabel(d);
-      var prev = (d.nombre && d.texto) ? '<div class="cfg-textoprev">' + esc(d.texto.length > 110 ? d.texto.slice(0, 108) + '…' : d.texto) + '</div>' : '';
+      var prev = d.texto ? '<div class="cfg-textoprev">' + esc(d.texto.length > 220 ? d.texto.slice(0, 218) + '…' : d.texto) + '</div>' : '';
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(titulo) + '</span>'
-        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>' + prev;
-      var chips = modelos.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Informes</span>' + scopeChips('desc', d.id, modelos, d.modelos) + '</div>' : '';
+        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
+      var chips = modelos.length ? '<div class="cfg-scope">' + scopeChips('desc', d.id, modelos, d.modelos) + '</div>' : '';
       // Editor de valores estándar (solo si el resultado está asignado a un informe con campos, ej. Holter)
       var campos = presetCampos(d), valEditor = '';
       if (campos.length){
@@ -350,9 +350,25 @@ function renderInformesConfigLists(){
             }).join('') + '</div>'
           + '<button class="btn btn-ghost" style="margin-top:8px" onclick="guardarValoresPreset(\'' + esc(d.id) + '\',this)">Guardar valores</button></div>';
       }
-      return '<div class="cfg-item">' + fila + chips + valEditor + '</div>';
+      var sub = (chips || valEditor) ? cfgSub('Informes y valores', cfgMetaInformes(d.modelos), chips + valEditor) : '';
+      return '<div class="cfg-item">' + fila + prev + sub + '</div>';
     }).join('') || '<div class="cfg-empty">Todavía no hay resultados.</div>';
   }
+}
+// Bloque desplegable con las opciones seleccionables (chips / valores) del ítem.
+function cfgSub(titulo, meta, contenido){
+  return '<details class="cfg-sub"><summary class="cfg-sub-head">' + esc(titulo)
+    + ' <span class="cfg-item-meta">' + esc(meta) + '</span></summary>' + contenido + '</details>';
+}
+// Resumen de a cuántos informes está asignado (vacío = todos).
+function cfgMetaInformes(modelos){
+  var n = (modelos || []).length;
+  return n ? (n + ' informe' + (n > 1 ? 's' : '')) : 'todos';
+}
+// Resumen de a cuántos informes está asignado (vacío = todos).
+function cfgMetaInformes(modelos){
+  var n = (modelos || []).length;
+  return n ? (n + ' informe' + (n > 1 ? 's' : '')) : 'todos';
 }
 // Chips = informes (modelos). seleccionadas = array de keys de modelo.
 function scopeChips(kind, id, modelos, seleccionadas){

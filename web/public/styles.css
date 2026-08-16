@@ -465,6 +465,13 @@
   @media(max-width:560px){ .inf-campos{grid-template-columns:1fr 1fr} }
   .cfg-item{border:1px solid var(--border);border-radius:9px;background:var(--surface-2);padding:8px 10px}
   .cfg-item .cfg-row{border:0;background:transparent;padding:0}
+  details.cfg-sub{margin-top:8px}
+  .cfg-sub-head{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--turq);user-select:none;padding:3px 0}
+  .cfg-sub-head::-webkit-details-marker{display:none}
+  .cfg-sub-head::after{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s;flex:0 0 auto}
+  details.cfg-sub[open] > .cfg-sub-head::after{transform:rotate(-135deg)}
+  .cfg-sub-head .cfg-item-meta{font-weight:600;color:var(--text-2)}
+  .cfg-sub > .cfg-scope{margin-top:8px}
   .cfg-scope{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
   .cfg-scope-lbl{font-size:11px;font-weight:700;color:var(--text-2);min-width:92px}
   .scope-chip{border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;cursor:pointer}
