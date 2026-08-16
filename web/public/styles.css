@@ -416,8 +416,15 @@
   .bandeja-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:600px}
   .bandeja-table th{background:var(--surface-2);text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap}
   .bandeja-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
-  .cfg-block{margin-bottom:18px}
-  .cfg-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin-bottom:8px}
+  .cfg-block{margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .cfg-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2)}
+  summary.cfg-head{margin:0;padding:11px 12px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;background:var(--surface-2);user-select:none}
+  summary.cfg-head::-webkit-details-marker{display:none}
+  summary.cfg-head::after{content:"";margin-left:auto;width:7px;height:7px;border-right:2px solid var(--text-2);border-bottom:2px solid var(--text-2);transform:rotate(45deg);transition:transform .15s ease}
+  .cfg-block[open]>summary.cfg-head::after{transform:rotate(-135deg)}
+  .cfg-count{font-weight:800;color:var(--turq);font-size:11px;letter-spacing:0}
+  .cfg-block>.cfg-list{padding:10px 12px 0}
+  .cfg-block>.cfg-add{padding:0 12px 12px}
   .cfg-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
   .cfg-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}
   .cfg-row .cfg-name{font-weight:600;color:var(--text);font-size:13.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -518,22 +518,22 @@
           <section id="inf-tab-config" class="inf-section" style="display:none">
           <div class="card" id="infConfigCard" style="max-width:640px">
             <p style="margin:0 0 16px;color:var(--text-2);font-size:13px">Lo que cargues acá aparece en los desplegables de la pestaña Generar. Las firmas quedan en el servidor, no en el repositorio.</p>
-            <div class="cfg-block">
-              <div class="cfg-head">Médicos y firmas</div>
+            <details class="cfg-block">
+              <summary class="cfg-head">Médicos y firmas <span class="cfg-count" id="infMedicosCount"></span></summary>
               <div id="infMedicosList" class="cfg-list"></div>
               <div class="cfg-add">
                 <input class="inp" id="infMedicoNombre" placeholder="Nombre del médico (ej: Dr. Juan Pérez)" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ .,]/g,'')">
                 <button class="btn btn-ghost" onclick="addMedico()">Agregar</button>
               </div>
-            </div>
-            <div class="cfg-block">
-              <div class="cfg-head">Resultados del informe</div>
+            </details>
+            <details class="cfg-block">
+              <summary class="cfg-head">Resultados del informe <span class="cfg-count" id="infDescripcionesCount"></span></summary>
               <div id="infDescripcionesList" class="cfg-list"></div>
               <div class="cfg-add">
                 <input class="inp" id="infDescripcionTexto" placeholder="Texto del resultado (ej: Ecg sin complicaciones…)">
                 <button class="btn btn-ghost" onclick="addDescripcion()">Agregar</button>
               </div>
-            </div>
+            </details>
             <div class="msg err" id="infConfigMsg"></div>
           </div>
           </section>

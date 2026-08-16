@@ -291,6 +291,8 @@ function renderInformesConfigLists(){
   if (tabBtn) tabBtn.style.display = isAdmin ? '' : 'none';
   if (!isAdmin){ setInformesTab('generar'); return; }
   var modelos = INFORMES_CFG.modelos || [];
+  var cm = document.getElementById('infMedicosCount'); if (cm) cm.textContent = '(' + (INFORMES_CFG.medicos || []).length + ')';
+  var cd = document.getElementById('infDescripcionesCount'); if (cd) cd.textContent = '(' + (INFORMES_CFG.descripciones || []).length + ')';
   var ml = document.getElementById('infMedicosList');
   if (ml){
     ml.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
