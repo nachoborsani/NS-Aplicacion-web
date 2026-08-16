@@ -222,6 +222,10 @@ function modeloCampos(key){
   var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; });
   return (m && m.campos) || [];
 }
+function modeloRequiereLado(key){
+  var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; });
+  return !!(m && m.requiereLado);
+}
 function presetById(id){ return (INFORMES_CFG.descripciones || []).find(function(d){ return d.id === id; }); }
 function presetLabel(d){ var t = String(d.texto || ''); return t.length > 72 ? t.slice(0, 70) + '…' : t; }
 // Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
@@ -237,10 +241,19 @@ function renderCampos(key){
 }
 // Al elegir un preset: llena el texto del informe y pisa los valores estándar.
 function aplicarPreset(){
-  renderCampos(modeloActualKey());
+  var key = modeloActualKey();
+  renderCampos(key);
   var preset = presetById((document.getElementById('infDescripcion') || {}).value);
   var txt = document.getElementById('infTexto');
-  if (txt && preset) txt.value = preset.texto || '';
+  if (txt && preset){
+    var texto = preset.texto || '';
+    // Prácticas con lado (ORL): el preset trae variantes por lado.
+    if (modeloRequiereLado(key) && preset.ladoTextos){
+      var lado = (document.getElementById('infLado') || {}).value || 'noesp';
+      if (preset.ladoTextos[lado]) texto = preset.ladoTextos[lado];
+    }
+    txt.value = texto;
+  }
   var valores = (preset && preset.valores) || {};
   document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
     var k = inp.getAttribute('data-key');
@@ -274,6 +287,8 @@ function filtrarPorModelo(){
       + opt('', 'Sin firma (deja el espacio)');
     if (prevM) med.value = prevM;
   }
+  var ladoWrap = document.getElementById('infLadoWrap');
+  if (ladoWrap) ladoWrap.style.display = modeloRequiereLado(key) ? '' : 'none';
   aplicarPreset();
 }
 function setInformesTab(tab){

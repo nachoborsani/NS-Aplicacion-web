@@ -137,6 +137,91 @@ const MODELOS = {
     tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
     campos: HOLTER_CAMPOS_CIMA,
   },
+  // ===================== ORL / Otorrinolaringología =====================
+  // Mismo layout que cardiología (sin caja técnica). Cambia el servicio y, en
+  // algunas prácticas, se elige el lado (el texto del preset cambia según el lado).
+  "caballito-orl-cerumen": {
+    label: "Caballito — Extracción tapón de cerumen / cuerpo extraño (717111)",
+    short: "Caballito · Cerumen",
+    practica: "717111 - Extracción de tapón de cerumen / cuerpo extraño",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
+    especialidad: "ORL",
+    codigoPractica: "717111",
+    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN",
+    estudioArchivo: "Extraccion tapon cerumen",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+    pie: PIE_CABALLITO,
+    requiereLado: true,
+  },
+  "caballito-orl-quimico": {
+    label: "Caballito — Tratamiento químico ORL (717125)",
+    short: "Caballito · Trat. químico",
+    practica: "717125 - Tratamiento de lesiones ORL por medios físicos o químicos",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
+    especialidad: "ORL",
+    codigoPractica: "717125",
+    estudio: "TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
+    estudioArchivo: "Tratamiento quimico ORL",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
+    pie: PIE_CABALLITO,
+  },
+  "caballito-orl-combinado": {
+    label: "Caballito — Cerumen + Tratamiento químico (717111 + 717125)",
+    short: "Caballito · Combinado",
+    practica: "717111 + 717125 - Cerumen + Tratamiento químico (combinado)",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
+    especialidad: "ORL",
+    codigoPractica: "717111 + 717125",
+    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN + TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
+    estudioArchivo: "Cerumen y tratamiento quimico",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
+    pie: PIE_CABALLITO,
+    requiereLado: true,
+  },
+  "caballito-orl-videorino": {
+    label: "Caballito — Video rinofibrolaringoscopia (717132)",
+    short: "Caballito · Videorino",
+    practica: "717132 - Video rinofibrolaringoscopia",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
+    especialidad: "ORL",
+    codigoPractica: "717132",
+    estudio: "VIDEO RINOFIBROLARINGOSCOPIA",
+    estudioArchivo: "Video rinofibrolaringoscopia",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
+    pie: PIE_CABALLITO,
+  },
+  "cima-orl-videorino": {
+    label: "CIMA — Video rinofibrolaringoscopia (717132)",
+    short: "CIMA · Videorino",
+    practica: "717132 - Video rinofibrolaringoscopia",
+    centro: "CIMA",
+    logo: "cima_logo.png",
+    logoW: 150,
+    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
+    especialidad: "ORL",
+    codigoPractica: "717132",
+    estudio: "VIDEO RINOFIBROLARINGOSCOPIA",
+    estudioArchivo: "Video rinofibrolaringoscopia",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
+    pie: PIE_CIMA,
+  },
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
@@ -148,6 +233,7 @@ function listarModelos() {
     centro: MODELOS[k].centro || "",
     especialidad: MODELOS[k].especialidad || "",
     campos: MODELOS[k].campos || [],
+    requiereLado: !!MODELOS[k].requiereLado,
   }));
 }
 
@@ -264,8 +350,28 @@ async function buildInformePdf(modeloKey, input) {
   // Caja: Médico Solicitante
   { const h = 34; drawBox(y, h); T("Médico Solicitante:", LBLX, y - 22, { bold: true }); T(solicitante, VALX + 30, y - 22); y -= h + 12; }
 
-  // Caja: Estudio realizado
-  { const h = 34; drawBox(y, h); T("Estudio realizado:", LBLX, y - 22, { bold: true }); T(modelo.estudio, VALX + 30, y - 22, { bold: true }); y -= h + 22; }
+  // Caja: Estudio realizado. Los títulos largos (ORL, combinados) envuelven:
+  // si entra en una línea va inline; si no, la etiqueta arriba y el título
+  // a lo ancho debajo, para que no se corte dentro del recuadro.
+  {
+    const vx = VALX + 30;
+    const rightX = boxX + boxW - PADX;
+    const estudio = modelo.estudio || "";
+    if (bold.widthOfTextAtSize(estudio, 10.5) <= rightX - vx) {
+      const h = 34; drawBox(y, h);
+      T("Estudio realizado:", LBLX, y - 22, { bold: true });
+      T(estudio, vx, y - 22, { bold: true });
+      y -= h + 22;
+    } else {
+      const lines = wrapText(estudio, bold, 10.5, boxW - 2 * PADX);
+      const h = 20 + lines.length * 14 + 8;
+      drawBox(y, h);
+      T("Estudio realizado:", LBLX, y - 18, { bold: true });
+      let iy = y - 34;
+      for (const ln of lines) { T(ln, LBLX, iy, { bold: true, size: 10.5 }); iy -= 14; }
+      y -= h + 22;
+    }
+  }
 
   // Caja: DATOS TÉCNICOS DEL REGISTRO (solo modelos con campos, ej. Holter)
   if (modelo.campos && modelo.campos.length) {

@@ -120,6 +120,47 @@ const HOLTER_SEED_PRESETS = [
     valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
   },
 ];
+// Presets ORL. Los que llevan `ladoTextos` cambian el texto según el lado
+// elegido (derecho/izquierdo/bilateral/noesp); `texto` es el default sin lado.
+const ORL_SEED_PRESETS = [
+  {
+    id: "orl-cerumen-normal", modelo: "caballito-orl-cerumen",
+    texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+    ladoTextos: {
+      derecho: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN OÍDO DERECHO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO DERECHO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+      izquierdo: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN OÍDO IZQUIERDO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO IZQUIERDO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+      bilateral: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIAN TAPONES DE CERUMEN BILATERALES, LOS CUALES SE EXTRAEN EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA AMBOS CONDUCTOS AUDITIVOS PERMEABLES, CON MEMBRANAS TIMPÁNICAS NORMOLÚCIDAS.",
+      noesp: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+    },
+  },
+  {
+    id: "orl-cerumen-cuerpo", modelo: "caballito-orl-cerumen",
+    texto: "SE REALIZA OTOMICROSCOPIA. SE OBSERVA CUERPO EXTRAÑO EN CONDUCTO AUDITIVO EXTERNO, SE PROCEDE A SU EXTRACCIÓN. SE EVIDENCIA TAPÓN DE CERUMEN, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
+  },
+  {
+    id: "orl-quimico-epistaxis", modelo: "caballito-orl-quimico",
+    texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
+  },
+  {
+    id: "orl-quimico-vaso", modelo: "caballito-orl-quimico",
+    texto: "SE REALIZA EXAMEN OTORRINOLARINGOLÓGICO. SE OBSERVA VASO SEPTAL PROMINENTE, SE PROCEDE A CAUTERIZACIÓN QUÍMICA POR EPÍSTAXIS RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
+  },
+  {
+    id: "orl-combinado-normal", modelo: "caballito-orl-combinado",
+    texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
+    ladoTextos: {
+      bilateral: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIAN TAPONES DE CERUMEN BILATERALES, LOS CUALES SE EXTRAEN EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA AMBOS CONDUCTOS AUDITIVOS PERMEABLES, CON MEMBRANAS TIMPÁNICAS NORMOLÚCIDAS. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
+    },
+  },
+  {
+    id: "orl-videorino-normal", modelo: "caballito-orl-videorino",
+    texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
+  },
+  {
+    id: "cima-orl-videorino-normal", modelo: "cima-orl-videorino",
+    texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
+  },
+];
 function loadInformesConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
@@ -132,6 +173,7 @@ function loadInformesConfig() {
       { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
+      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} })),
     ];
   }
   return cfg;
@@ -2604,7 +2646,7 @@ const server = http.createServer(async (req, res) => {
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), modelos: m.modelos || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, texto: d.texto, modelos: d.modelos || [], valores: d.valores || {},
+        id: d.id, texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {},
       })),
     });
   }
@@ -2799,6 +2841,24 @@ function ensureHolterSeed() {
   } catch (e) { console.log("[holter-seed] omitido:", e && e.message); }
 }
 ensureHolterSeed();
+
+// Precarga los presets ORL en configs ya existentes (idempotente: solo agrega
+// el preset de una práctica ORL si esa práctica todavía no tiene resultados).
+function ensureOrlSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of ORL_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
+        cfg.descripciones.push({ id: s.id, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} });
+        cambio = true;
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[orl-seed] omitido:", e && e.message); }
+}
+ensureOrlSeed();
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);

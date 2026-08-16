@@ -477,6 +477,15 @@
               <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" inputmode="numeric" placeholder="Ej: 14023345500100" oninput="this.value=this.value.replace(/[^0-9-]/g,'')"></div>
               <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
             </div>
+            <div class="field" id="infLadoWrap" style="display:none">
+              <label>Lado</label>
+              <select class="inp" id="infLado" onchange="aplicarPreset()">
+                <option value="noesp">No especificado</option>
+                <option value="derecho">Derecho</option>
+                <option value="izquierdo">Izquierdo</option>
+                <option value="bilateral">Bilateral</option>
+              </select>
+            </div>
             <div class="field">
               <label>Resultado del informe</label>
               <select class="inp" id="infDescripcion" onchange="aplicarPreset()"></select>
