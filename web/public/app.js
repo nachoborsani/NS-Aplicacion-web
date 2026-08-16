@@ -231,7 +231,7 @@ function renderCampos(key){
   var campos = modeloCampos(key);
   if (!campos.length){ wrap.style.display = 'none'; box.innerHTML = ''; return; }
   box.innerHTML = campos.map(function(c){
-    return '<label class="inf-campo"><span>' + esc(c.label) + '</span><input class="inp" data-key="' + esc(c.key) + '" value="' + esc(c.default || '') + '" spellcheck="false"></label>';
+    return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + '</span><input class="inp" data-key="' + esc(c.key) + '" value="' + esc(c.default || '') + '" spellcheck="false"></label>';
   }).join('');
   wrap.style.display = '';
 }
@@ -318,7 +318,7 @@ function renderInformesConfigLists(){
           + '<div class="cfg-scope-lbl">Valores estándar</div>'
           + '<div class="inf-campos">' + campos.map(function(c){
               var v = (val[c.key] != null && String(val[c.key]).trim() !== '') ? val[c.key] : (c.default || '');
-              return '<label class="inf-campo"><span>' + esc(c.label) + '</span><input class="inp" data-vk="' + esc(c.key) + '" value="' + esc(v) + '" spellcheck="false"></label>';
+              return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + '</span><input class="inp" data-vk="' + esc(c.key) + '" value="' + esc(v) + '" spellcheck="false"></label>';
             }).join('') + '</div>'
           + '<button class="btn btn-ghost" style="margin-top:8px" onclick="guardarValoresPreset(\'' + esc(d.id) + '\',this)">Guardar valores</button></div>';
       }

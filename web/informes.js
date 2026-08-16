@@ -25,7 +25,7 @@ const HOLTER_CAMPOS = [
   { key: "esv", label: "ESV", default: "0" },
   { key: "ev", label: "EV", default: "0" },
   { key: "pausas", label: "Pausas significativas", default: "0" },
-  { key: "stt", label: "ST-T", default: "sin cambios significativos" },
+  { key: "stt", label: "ST-T", default: "sin cambios significativos", wide: true },
   { key: "sintomas", label: "Síntomas", default: "no refiere" },
 ];
 const HOLTER_CAMPOS_CIMA = [
@@ -33,7 +33,7 @@ const HOLTER_CAMPOS_CIMA = [
   { key: "pausaMasLarga", label: "Pausa más larga", default: "0,0 seg" },
   { key: "bradicardia", label: "Bradicardia", default: "0 episodios" },
   { key: "motivo", label: "Motivo", default: "Control" },
-  { key: "medicacion", label: "Medicación", default: "—" },
+  { key: "medicacion", label: "Medicación", default: "—", wide: true },
 ];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
