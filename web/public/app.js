@@ -64,7 +64,7 @@ function go(v, el){
   }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
-  pushHash(v);
+  if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
 }
 
 // ---------- ruteo por URL (hash): que F5 recargue la misma sección ----------
@@ -86,6 +86,7 @@ function applyRoute(){
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
+  if (v === 'informes'){ var t = parts[1]; setInformesTab(['generar', 'lote', 'config'].indexOf(t) >= 0 ? t : 'generar'); }
   if (v === 'clientes' && parts[1]) selectClientWhenReady(parts[1], parts[2]);
 }
 function selectClientWhenReady(slug, section, tries){
@@ -308,6 +309,7 @@ function setInformesTab(tab){
   });
   if (tab === 'lote') loteInit();
   if (tab === 'generar') programarPreviewVivo();
+  pushHash('informes/' + tab);
 }
 function renderInformesConfigLists(){
   var isAdmin = ME && ME.role === 'admin';
@@ -899,6 +901,13 @@ function loteDetectar(){
   loteRender();
 }
 function loteRedetectar(){ loteLlenarMedicos(); if (LOTE_ROWS.length) loteDetectar(); }
+function loteLimpiar(){
+  document.getElementById('loteTexto').value = '';
+  LOTE_ROWS = [];
+  document.getElementById('loteError').textContent = '';
+  var card = document.getElementById('loteResultCard'); if (card) card.style.display = 'none';
+  loteLlenarMedicos();
+}
 function loteMedicoDefault(){
   var medDef = document.getElementById('loteMedico').value;
   LOTE_ROWS.forEach(function(row){ if (row.modelo) row.medicoId = loteMedicoParaModelo(row.modelo, medDef); });
