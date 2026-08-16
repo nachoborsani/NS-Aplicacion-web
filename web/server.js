@@ -101,12 +101,13 @@ function loadInformesConfig() {
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
   if (!cfg || typeof cfg !== "object") cfg = {};
   if (!Array.isArray(cfg.medicos)) {
-    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png", modelos: ["caballito-consulta-570129", "caballito-electro"] }];
+    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png", modelos: ["caballito-consulta-570129", "caballito-electro", "caballito-holter"] }];
   }
   if (!Array.isArray(cfg.descripciones)) {
     cfg.descripciones = [
       { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
+      { id: "holter-normal", texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.", modelos: ["caballito-holter"], valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" } },
     ];
   }
   return cfg;
@@ -118,6 +119,17 @@ function saveInformesConfig(cfg) {
 function slugId(text) {
   return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+}
+// Valores de la caja técnica (Holter): mapa key->texto corto, saneado.
+function sanitizarValores(obj) {
+  const out = {};
+  if (!obj || typeof obj !== "object") return out;
+  for (const k of Object.keys(obj)) {
+    if (!/^[a-zA-Z0-9]{1,30}$/.test(k)) continue;
+    const v = String(obj[k] == null ? "" : obj[k]).replace(/\s+/g, " ").trim().slice(0, 60);
+    if (v) out[k] = v;
+  }
+  return out;
 }
 function firmaExiste(name) {
   if (!name) return false;
@@ -2533,6 +2545,7 @@ const server = http.createServer(async (req, res) => {
         paciente: body.paciente || {},
         textoInforme: body.textoInforme,
         solicitante: body.solicitante,
+        valores: sanitizarValores(body.valores),
         firmaArchivo: medico ? medico.firma : "",
       });
       const filename = informes.informeFilename(modelo, body.paciente || {});
@@ -2567,7 +2580,7 @@ const server = http.createServer(async (req, res) => {
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), modelos: m.modelos || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, texto: d.texto, modelos: d.modelos || [],
+        id: d.id, texto: d.texto, modelos: d.modelos || [], valores: d.valores || {},
       })),
     });
   }
@@ -2639,15 +2652,33 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
-    const { texto } = await readBody(req);
-    const tx = String(texto || "").replace(/\s+/g, " ").trim();
-    if (!tx) return json(res, 400, { error: "Escribí el texto de la descripción." });
+    const body = await readBody(req);
+    const tx = String(body.texto || "").replace(/\s+/g, " ").trim();
+    if (!tx) return json(res, 400, { error: "Escribí el texto del resultado." });
     const cfg = loadInformesConfig();
     let id = slugId(tx) || ("d" + cfg.descripciones.length);
     while (cfg.descripciones.some((d) => d.id === id)) id += "-1";
-    cfg.descripciones.push({ id, texto: tx, modelos: [] });
+    cfg.descripciones.push({ id, texto: tx, modelos: [], valores: sanitizarValores(body.valores) });
     saveInformesConfig(cfg);
     return json(res, 201, { ok: true, id });
+  }
+  // Editar un resultado: texto y/o valores estándar (Holter). No toca el scope.
+  const descEditMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)$/);
+  if (descEditMatch && req.method === "PUT") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const cfg = loadInformesConfig();
+    const desc = cfg.descripciones.find((d) => d.id === descEditMatch[1]);
+    if (!desc) return json(res, 404, { error: "Resultado no encontrado." });
+    if (typeof body.texto === "string") {
+      const tx = body.texto.replace(/\s+/g, " ").trim();
+      if (tx) desc.texto = tx;
+    }
+    if (body.valores && typeof body.valores === "object") desc.valores = sanitizarValores(body.valores);
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
   }
   // Asignar informes (modelos) a un resultado (vacío = disponible para todos).
   const descScopeMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)\/scope$/);
@@ -2685,6 +2716,35 @@ const server = http.createServer(async (req, res) => {
   }
   sendFile(res, resolved);
 });
+
+// Migración suave: deja el Holter de Caballito listo para usar aunque la config
+// ya exista (producción). Idempotente: solo actúa si el Holter no tiene resultados.
+function ensureHolterSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones) || !Array.isArray(cfg.medicos)) return;
+    let cambio = false;
+    const tieneHolter = cfg.descripciones.some((d) => (d.modelos || []).includes("caballito-holter"));
+    if (!tieneHolter) {
+      cfg.descripciones.push({
+        id: "holter-normal",
+        texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
+        modelos: ["caballito-holter"],
+        valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
+      });
+      cambio = true;
+    }
+    // El/los médicos que ya firman electro de Caballito, que también firmen el Holter.
+    for (const m of cfg.medicos) {
+      if (Array.isArray(m.modelos) && m.modelos.includes("caballito-electro") && !m.modelos.includes("caballito-holter")) {
+        m.modelos.push("caballito-holter");
+        cambio = true;
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[holter-seed] omitido:", e && e.message); }
+}
+ensureHolterSeed();
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);

@@ -120,7 +120,8 @@ async function pedirInformePdf(){
     var payload = {
       modelo: document.getElementById('infPractica').value,
       paciente: { nombre: nombre, benef: benef, fecha: fecha, documento: document.getElementById('infDoc').value.trim() },
-      textoInforme: document.getElementById('infDescripcion').value,
+      textoInforme: (document.getElementById('infTexto') || {}).value || '',
+      valores: recolectarCampos(),
       medicoId: document.getElementById('infMedico').value
     };
     var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) });
@@ -209,15 +210,53 @@ function onEspecialidadChange(keep){
 function modeloActualKey(){ return (document.getElementById('infPractica') || {}).value || ''; }
 // Un scope vacío = disponible para cualquier informe.
 function scopeAplica(arr, key){ return !arr || arr.length === 0 || (key && arr.indexOf(key) >= 0); }
+function modeloCampos(key){
+  var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; });
+  return (m && m.campos) || [];
+}
+function presetById(id){ return (INFORMES_CFG.descripciones || []).find(function(d){ return d.id === id; }); }
+function presetLabel(d){ var t = String(d.texto || ''); return t.length > 72 ? t.slice(0, 70) + '…' : t; }
+// Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
+function renderCampos(key){
+  var wrap = document.getElementById('infCamposWrap'), box = document.getElementById('infCampos');
+  if (!wrap || !box) return;
+  var campos = modeloCampos(key);
+  if (!campos.length){ wrap.style.display = 'none'; box.innerHTML = ''; return; }
+  box.innerHTML = campos.map(function(c){
+    return '<label class="inf-campo"><span>' + esc(c.label) + '</span><input class="inp" data-key="' + esc(c.key) + '" value="' + esc(c.default || '') + '" spellcheck="false"></label>';
+  }).join('');
+  wrap.style.display = '';
+}
+// Al elegir un preset: llena el texto del informe y pisa los valores estándar.
+function aplicarPreset(){
+  renderCampos(modeloActualKey());
+  var preset = presetById((document.getElementById('infDescripcion') || {}).value);
+  var txt = document.getElementById('infTexto');
+  if (txt && preset) txt.value = preset.texto || '';
+  var valores = (preset && preset.valores) || {};
+  document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
+    var k = inp.getAttribute('data-key');
+    if (valores[k] != null && String(valores[k]).trim() !== '') inp.value = valores[k];
+  });
+  invalidarPreview();
+}
+function recolectarCampos(){
+  var v = {};
+  document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
+    var val = inp.value.trim();
+    if (val) v[inp.getAttribute('data-key')] = val;
+  });
+  return v;
+}
 function filtrarPorModelo(){
   var key = modeloActualKey();
   var desc = document.getElementById('infDescripcion');
   if (desc){
     var prevD = desc.value;
     var rs = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); });
-    desc.innerHTML = rs.map(function(d){ return opt(d.texto, d.texto); }).join('')
+    desc.innerHTML = rs.map(function(d){ return opt(d.id, presetLabel(d)); }).join('')
       || '<option value="">(sin resultados para esta práctica)</option>';
-    if (prevD) desc.value = prevD;
+    if (prevD && rs.some(function(d){ return d.id === prevD; })) desc.value = prevD;
   }
   var med = document.getElementById('infMedico');
   if (med){
@@ -227,6 +266,7 @@ function filtrarPorModelo(){
       + opt('', 'Sin firma (deja el espacio)');
     if (prevM) med.value = prevM;
   }
+  aplicarPreset();
 }
 function setInformesTab(tab){
   var isConfig = tab === 'config';
@@ -260,7 +300,19 @@ function renderInformesConfigLists(){
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(d.texto) + '</span>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
       var chips = modelos.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Informes</span>' + scopeChips('desc', d.id, modelos, d.modelos) + '</div>' : '';
-      return '<div class="cfg-item">' + fila + chips + '</div>';
+      // Editor de valores estándar (solo si el resultado está asignado a un informe con campos, ej. Holter)
+      var campos = presetCampos(d), valEditor = '';
+      if (campos.length){
+        var val = d.valores || {};
+        valEditor = '<div class="cfg-valores" data-preset="' + esc(d.id) + '">'
+          + '<div class="cfg-scope-lbl">Valores estándar</div>'
+          + '<div class="inf-campos">' + campos.map(function(c){
+              var v = (val[c.key] != null && String(val[c.key]).trim() !== '') ? val[c.key] : (c.default || '');
+              return '<label class="inf-campo"><span>' + esc(c.label) + '</span><input class="inp" data-vk="' + esc(c.key) + '" value="' + esc(v) + '" spellcheck="false"></label>';
+            }).join('') + '</div>'
+          + '<button class="btn btn-ghost" style="margin-top:8px" onclick="guardarValoresPreset(\'' + esc(d.id) + '\',this)">Guardar valores</button></div>';
+      }
+      return '<div class="cfg-item">' + fila + chips + valEditor + '</div>';
     }).join('') || '<div class="cfg-empty">Todavía no hay resultados.</div>';
   }
 }
@@ -316,6 +368,30 @@ async function deleteDescripcion(id){
   if (!confirm('¿Eliminar esta descripción?')) return;
   var r = await req('DELETE', '/api/informes/descripciones/' + encodeURIComponent(id));
   if (r.ok) await loadInformesConfig();
+}
+// Campos a editar para un resultado = los del primer informe asignado que tenga campos.
+function presetCampos(d){
+  var modelos = INFORMES_CFG.modelos || [];
+  var keys = d.modelos || [];
+  for (var i = 0; i < keys.length; i++){
+    var m = modelos.find(function(x){ return x.key === keys[i]; });
+    if (m && m.campos && m.campos.length) return m.campos;
+  }
+  return [];
+}
+async function guardarValoresPreset(id, btn){
+  var box = btn.closest('.cfg-valores'); if (!box) return;
+  var valores = {};
+  box.querySelectorAll('input[data-vk]').forEach(function(inp){
+    var val = inp.value.trim(); if (val) valores[inp.getAttribute('data-vk')] = val;
+  });
+  btn.disabled = true;
+  var r = await req('PUT', '/api/informes/descripciones/' + encodeURIComponent(id), { valores: valores });
+  btn.disabled = false;
+  var msg = document.getElementById('infConfigMsg');
+  if (!r.ok){ if (msg) msg.textContent = (r.data && r.data.error) || 'No se pudieron guardar los valores.'; return; }
+  if (msg){ msg.className = 'msg ok'; msg.textContent = 'Valores guardados ✓'; setTimeout(function(){ msg.textContent = ''; msg.className = 'msg err'; }, 2500); }
+  await loadInformesConfig();
 }
 
 // ---------- ojo ver/ocultar ----------

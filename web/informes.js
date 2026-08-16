@@ -46,6 +46,37 @@ const MODELOS = {
     textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
     pie: PIE_CABALLITO,
   },
+  "caballito-holter": {
+    label: "Caballito — Holter cardíaco 24 hs",
+    short: "Caballito · Holter",
+    practica: "Holter cardíaco 24 hs",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
+    codigoPractica: "",
+    estudio: "Holter cardíaco de 3 canales 24 hs.",
+    estudioArchivo: "Holter 24 hs",
+    solicitanteDefault: "Dra. Naiara, Jacinto",
+    textoDefault: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
+    pie: PIE_CABALLITO,
+    // Caja "DATOS TÉCNICOS DEL REGISTRO": valores estándar precargados, todos editables.
+    tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
+    campos: [
+      { key: "duracion", label: "Duración", default: "24 hs" },
+      { key: "fcProm", label: "FC promedio", default: "72 lpm" },
+      { key: "fcMin", label: "FC mínima", default: "55 lpm" },
+      { key: "fcMax", label: "FC máxima", default: "118 lpm" },
+      { key: "totalLatidos", label: "Total de latidos", default: "103.000 aprox." },
+      { key: "latidosAnormales", label: "Latidos anormales", default: "0" },
+      { key: "esv", label: "ESV", default: "0" },
+      { key: "ev", label: "EV", default: "0" },
+      { key: "pausas", label: "Pausas significativas", default: "0" },
+      { key: "stt", label: "ST-T", default: "sin cambios significativos" },
+      { key: "sintomas", label: "Síntomas", default: "no refiere" },
+    ],
+  },
   // --- CIMA (Innovación en Medicina): electro, firma Dr. Savia ---
   "cima-electro": {
     label: "CIMA — Electrocardiograma",
@@ -88,6 +119,7 @@ function listarModelos() {
     practica: MODELOS[k].practica || MODELOS[k].estudio || k,
     centro: MODELOS[k].centro || "",
     especialidad: MODELOS[k].especialidad || "",
+    campos: MODELOS[k].campos || [],
   }));
 }
 
@@ -206,6 +238,39 @@ async function buildInformePdf(modeloKey, input) {
 
   // Caja: Estudio realizado
   { const h = 34; drawBox(y, h); T("Estudio realizado:", LBLX, y - 22, { bold: true }); T(modelo.estudio, VALX + 30, y - 22, { bold: true }); y -= h + 22; }
+
+  // Caja: DATOS TÉCNICOS DEL REGISTRO (solo modelos con campos, ej. Holter)
+  if (modelo.campos && modelo.campos.length) {
+    const valores = (input && input.valores) || {};
+    const campos = modelo.campos;
+    const cols = 3;
+    const rows = Math.ceil(campos.length / cols);
+    const rowH = 16, titleH = 24;
+    const h = titleH + rows * rowH + 6;
+    drawBox(y, h);
+    T(modelo.tecnicosTitulo || "DATOS TÉCNICOS", LBLX, y - 16, { bold: true, size: 11 });
+    const grid = rgb(0.75, 0.77, 0.8);
+    const gridTop = y - titleH;
+    const colW = boxW / cols;
+    for (let i = 0; i < campos.length; i++) {
+      const r = Math.floor(i / cols), c = i % cols;
+      const cx = boxX + c * colW + 8;
+      const cy = gridTop - r * rowH - 11;
+      const lbl = campos[i].label + ": ";
+      T(lbl, cx, cy, { bold: true, size: 8.5 });
+      const val = String((valores[campos[i].key] == null ? "" : valores[campos[i].key])).trim() || campos[i].default || "";
+      T(val, cx + bold.widthOfTextAtSize(lbl, 8.5), cy, { size: 8.5 });
+    }
+    for (let r = 0; r <= rows; r++) {
+      const ly = gridTop - r * rowH;
+      page.drawLine({ start: { x: boxX, y: ly }, end: { x: boxX + boxW, y: ly }, thickness: 0.5, color: grid });
+    }
+    for (let c = 1; c < cols; c++) {
+      const lx = boxX + c * colW;
+      page.drawLine({ start: { x: lx, y: gridTop }, end: { x: lx, y: gridTop - rows * rowH }, thickness: 0.5, color: grid });
+    }
+    y -= h + 18;
+  }
 
   // INFORME (sin caja)
   T("INFORME", LBLX, y, { bold: true, size: 10.5, color: soft });

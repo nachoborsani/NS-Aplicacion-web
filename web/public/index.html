@@ -478,7 +478,15 @@
             <div class="field"><label>Documento <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label><input class="inp" id="infDoc" spellcheck="false" placeholder="Si lo dejás vacío, no aparece en el informe"></div>
             <div class="field">
               <label>Resultado del informe</label>
-              <select class="inp" id="infDescripcion"></select>
+              <select class="inp" id="infDescripcion" onchange="aplicarPreset()"></select>
+            </div>
+            <div id="infCamposWrap" style="display:none;margin-bottom:14px">
+              <label style="display:block;font-weight:700;font-size:12px;color:var(--text-2);margin-bottom:6px">Datos técnicos del registro <span style="font-weight:400">(editables)</span></label>
+              <div id="infCampos" class="inf-campos"></div>
+            </div>
+            <div class="field">
+              <label>Texto del informe</label>
+              <textarea class="inp" id="infTexto" rows="4" spellcheck="false" placeholder="Conclusión del informe"></textarea>
             </div>
             <div class="field">
               <label>Médico que firma</label>
