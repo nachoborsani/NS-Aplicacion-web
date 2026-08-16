@@ -264,6 +264,7 @@ function aplicarPreset(){
       if (preset.ladoTextos[lado]) texto = preset.ladoTextos[lado];
     }
     txt.value = texto;
+    autoGrow(txt);
   }
   var valores = (preset && preset.valores) || {};
   document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
@@ -272,6 +273,8 @@ function aplicarPreset(){
   });
   programarPreviewVivo();
 }
+// El textarea del informe crece solo con el contenido (arranca chico).
+function autoGrow(el){ if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 function recolectarCampos(){
   var v = {};
   document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){

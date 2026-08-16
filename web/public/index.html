@@ -509,7 +509,7 @@
             </div>
             <div class="field">
               <label>Texto del informe</label>
-              <textarea class="inp" id="infTexto" rows="7" spellcheck="false" placeholder="Conclusión del informe" style="height:auto;min-height:145px;resize:vertical;line-height:1.45"></textarea>
+              <textarea class="inp" id="infTexto" rows="5" spellcheck="false" placeholder="Conclusión del informe" oninput="autoGrow(this)" style="height:auto;min-height:110px;overflow:hidden;resize:none;line-height:1.45"></textarea>
             </div>
             <div class="field">
               <label>Médico que firma</label>
@@ -525,7 +525,7 @@
             <div class="inf-preview-bar">Vista previa <span>en vivo</span></div>
             <div class="inf-preview-stage">
               <iframe id="infLiveFrame" title="Vista previa del informe"></iframe>
-              <div id="infLivePlaceholder" class="inf-preview-ph">Completá <b>nombre</b>, <b>N° beneficiario</b> y <b>fecha</b> para ver la vista previa del informe acá.</div>
+              <div id="infLivePlaceholder" class="inf-preview-ph"><span>Completá <b>nombre</b>, <b>N° beneficiario</b> y <b>fecha</b><br>para ver la vista previa del informe acá.</span></div>
             </div>
           </div>
           </div>
