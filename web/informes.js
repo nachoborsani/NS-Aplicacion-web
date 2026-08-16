@@ -90,6 +90,30 @@ const MAPA_CAMPOS = [
   { key: "cgSPas", label: "Carga sue PAS", default: "" },
   { key: "cgSPad", label: "Carga sue PAD", default: "" },
 ];
+// Campos de la Ergometría (página resumen). Todos editables, precargables por preset.
+const ERGO_CAMPOS = [
+  { key: "sexo", label: "Sexo", default: "" },
+  { key: "edad", label: "Edad", default: "" },
+  { key: "peso", label: "Peso", default: "" },
+  { key: "estatura", label: "Estatura", default: "" },
+  { key: "imc", label: "IMC", default: "" },
+  { key: "indicacion", label: "Indicación / motivo", default: "", wide: true },
+  { key: "medicacion", label: "Medicación / tratamiento", default: "", wide: true },
+  { key: "fechaHoraInicio", label: "Inicio de la prueba", default: "", wide: true },
+  { key: "protocolo", label: "Protocolo", default: "", wide: true },
+  { key: "fcPrevMax", label: "FC prev. máx", default: "" },
+  { key: "fcPrevSub", label: "FC prev. submáx", default: "" },
+  { key: "fcAlcanzada", label: "FC alcanzada", default: "" },
+  { key: "pctFcMax", label: "% FC máx", default: "" },
+  { key: "pctFcSub", label: "% FC submáx", default: "" },
+  { key: "taSis", label: "TA sistólica máx", default: "" },
+  { key: "taDia", label: "TA diastólica máx", default: "" },
+  { key: "mets", label: "METS", default: "" },
+  { key: "dobleProd", label: "Doble producto", default: "" },
+  { key: "vo2", label: "VO2", default: "" },
+  { key: "carga", label: "Carga alcanzada", default: "" },
+  { key: "motivoDeten", label: "Motivo de detención", default: "", wide: true },
+];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
@@ -332,6 +356,26 @@ const MODELOS = {
     textoDefault: "REGISTRO DE PRESIÓN ARTERIAL DENTRO DE PARÁMETROS CONSERVADOS. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
     pie: PIE_CIMA,
   },
+  // --- CIMA: Ergometría computarizada — layout propio (página resumen) ---
+  "cima-ergo": {
+    label: "CIMA — Ergometría (570124)",
+    short: "CIMA · Ergometría",
+    practica: "570124 - Ergometría computarizada 12 derivaciones",
+    centro: "CIMA",
+    especialidad: "Cardiología",
+    codigoPractica: "570124",
+    estudio: "ERGOMETRÍA COMPUTARIZADA DE DOCE DERIVACIONES CON OXIMETRÍA",
+    estudioArchivo: "Ergometria",
+    tipo: "ergo",
+    encabezado: "CIMA",
+    depto: "Dpto. de Cardiología",
+    subtitulo: "Islas Malvinas 2722 - Isidro Casanova",
+    titulo: "Estudio CardioVex Ergometría",
+    campos: ERGO_CAMPOS,
+    solicitanteDefault: "",
+    textoDefault: "PRUEBA SUBMÁXIMA SUFICIENTE. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+    pie: PIE_CIMA,
+  },
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
@@ -393,6 +437,7 @@ async function buildInformePdf(modeloKey, input) {
   // Modelos con layout propio (ej. SIBO: tabla PPM + gráfico) van por otro builder.
   if (modelo.tipo === "sibo") return buildSiboPdf(modelo, input || {}, { PDFDocument, StandardFonts, rgb });
   if (modelo.tipo === "mapa") return buildMapaPdf(modelo, input || {});
+  if (modelo.tipo === "ergo") return buildErgoPdf(modelo, input || {});
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
@@ -799,6 +844,100 @@ async function buildMapaPdf(modelo, input) {
   const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
   if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const fw = 140, fh = (img.height / img.width) * fw; page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
   else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); center("Firma y sello", W - M - 170, W - M - 20, concBottom + 6, { size: 8, color: soft }); }
+
+  return await doc.save();
+}
+
+// ---- Builder propio de la Ergometría (página resumen) ----
+async function buildErgoPdf(modelo, input) {
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
+  const p = input.paciente || {};
+  const val = input.valores || {};
+  const conclusion = ((input.textoInforme || "").trim()) || modelo.textoDefault || "";
+  const v = (k) => String(val[k] == null ? "" : val[k]).trim();
+  const firmaArchivo = input.firmaArchivo || "";
+
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89, M = 40;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ital = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const ink = rgb(0.12, 0.12, 0.12), line = rgb(0.35, 0.35, 0.35), soft = rgb(0.4, 0.4, 0.4);
+
+  const T = (t, x, y, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 8.5, font: o.font || (o.bold ? bold : font), color: o.color || ink }); };
+  const ws = (t, f, s) => f.widthOfTextAtSize(String(t == null ? "" : t), s);
+  const box = (x, topY, w, h) => page.drawRectangle({ x, y: topY - h, width: w, height: h, borderColor: line, borderWidth: 0.8 });
+  const hr = (yy) => page.drawLine({ start: { x: M, y: yy }, end: { x: W - M, y: yy }, thickness: 0.6, color: line });
+  const wrap = (text, f, s, maxW) => { const words = String(text || "").split(/\s+/).filter(Boolean); const L = []; let c = ""; for (const w of words) { const t = c ? c + " " + w : w; if (ws(t, f, s) > maxW && c) { L.push(c); c = w; } else c = t; } if (c) L.push(c); return L; };
+
+  let y = H - M;
+  // Encabezado (caja): CIMA / Dpto. de Cardiología / dirección
+  { const h = 62; box(M, y, W - 2 * M, h);
+    T(modelo.encabezado || "CIMA", M + 70, y - 22, { bold: true, size: 20 });
+    T(modelo.depto || "", M + 70, y - 38, { font: ital, size: 11 });
+    page.drawLine({ start: { x: M + 70, y: y - 43 }, end: { x: W - M - 8, y: y - 43 }, thickness: 0.5, color: soft });
+    T(modelo.subtitulo || "", M + 70, y - 55, { size: 9, color: soft });
+    y -= h + 12;
+  }
+  // Título
+  T(modelo.titulo || "Estudio", M + 4, y - 12, { bold: true, size: 12 });
+  hr(y - 18); y -= 26;
+
+  // Datos del paciente
+  T("Paciente", M, y, { bold: true }); T(p.nombre || "—", M + 52, y);
+  T("Fecha", W - M - 150, y, { bold: true }); T(p.fecha || "—", W - M - 110, y); y -= 14;
+  const lab = (t, x, yy) => T(t, x, yy, { bold: true });
+  lab("Sexo", M, y); T(v("sexo") || "—", M + 34, y);
+  lab("Edad", M + 130, y); T(v("edad") || "—", M + 164, y);
+  lab("Peso", M + 220, y); T(v("peso") || "—", M + 254, y);
+  lab("Estatura", M + 320, y); T(v("estatura") || "—", M + 366, y);
+  lab("IMC", M + 430, y); T(v("imc") || "—", M + 458, y); y -= 14;
+  if ((p.documento || "").trim()) { lab("Doc. Nº", M, y); T(p.documento, M + 52, y); }
+  if ((p.benef || "").trim()) { lab("N° Benef.", M + 220, y); T(p.benef, M + 275, y); }
+  if ((p.documento || "").trim() || (p.benef || "").trim()) y -= 14;
+  hr(y + 2); y -= 12;
+  lab("Indicación/motivo", M, y); T(v("indicacion") || "—", M + 110, y); y -= 14;
+  lab("Medicación/tratamiento", M, y); T(v("medicacion") || "—", M + 135, y); y -= 18;
+  lab("Fecha/hora inicio de la prueba", M, y); T(v("fechaHoraInicio") || "—", M + 175, y); y -= 18;
+
+  // Resultados (2 columnas)
+  { const h = 82; box(M, y, W - 2 * M, h);
+    page.drawRectangle({ x: M, y: y - 16, width: W - 2 * M, height: 16, color: rgb(0.92, 0.92, 0.92) });
+    T("Resultados", M + 6, y - 11, { bold: true, size: 9.5 });
+    const colL = M + 8, colR = M + (W - 2 * M) / 2 + 6;
+    const izq = [
+      "Protocolo: " + (v("protocolo") || "—"),
+      "Frec. cardíaca prevista (máx./submáx.): " + (v("fcPrevMax") || "—") + " / " + (v("fcPrevSub") || "—"),
+      "Máx. frec. cardíaca alcanzada: " + (v("fcAlcanzada") || "—") + (v("pctFcMax") || v("pctFcSub") ? " (" + (v("pctFcMax") || "—") + " / " + (v("pctFcSub") || "—") + ")" : ""),
+      "Máx. Doble Producto: " + (v("dobleProd") || "—"),
+      "Carga alcanzada: " + (v("carga") || "—"),
+    ];
+    const der = [
+      "Máx. presión arterial sistólica: " + (v("taSis") || "—"),
+      "Máx. presión arterial diastólica: " + (v("taDia") || "—"),
+      "Máx. METS: " + (v("mets") || "—"),
+      "Máx. VO2: " + (v("vo2") || "—"),
+      "Motivo de detención: " + (v("motivoDeten") || "—"),
+    ];
+    let ly = y - 30; izq.forEach((t) => { for (const w of wrap(t, font, 8.5, (W - 2 * M) / 2 - 16)) { T(w, colL, ly, { size: 8.5 }); ly -= 11; } });
+    let ry = y - 30; der.forEach((t) => { for (const w of wrap(t, font, 8.5, (W - 2 * M) / 2 - 16)) { T(w, colR, ry, { size: 8.5 }); ry -= 11; } });
+    y -= h + 10;
+  }
+
+  // Conclusiones
+  const concTop = y, concBottom = 80;
+  box(M, concTop, W - 2 * M, concTop - concBottom);
+  page.drawRectangle({ x: M, y: concTop - 16, width: W - 2 * M, height: 16, color: rgb(0.92, 0.92, 0.92) });
+  T("Conclusiones", M + 6, concTop - 11, { bold: true, size: 9.5 });
+  let cy = concTop - 30;
+  for (const ln of String(conclusion).split(/\n/)) {
+    for (const w of wrap(ln, ital, 9.5, W - 2 * M - 16)) { T(w, M + 8, cy, { font: ital, size: 9.5 }); cy -= 13; }
+  }
+  // Firma (solo si hay firma autorizada)
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
+  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const fw = 140, fh = (img.height / img.width) * fw; page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
+  else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); T("Firma y sello", W - M - 130, concBottom + 6, { size: 8, color: soft }); }
 
   return await doc.save();
 }

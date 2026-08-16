@@ -181,8 +181,8 @@ const ORL_SEED_PRESETS = [
     valores: {
       nTot: "62", nVig: "42", nSue: "20",
       pasTP: "126", padTP: "72", fcTP: "72", pasTMin: "96", pasTMax: "156", padTMin: "52", padTMax: "84",
-      pasVP: "131", padVP: "75", fcVP: "76",
-      pasSP: "114", padSP: "64", fcSP: "66",
+      pasVP: "131", padVP: "75", fcVP: "76", pasVMin: "100", pasVMax: "156", padVMin: "55", padVMax: "84",
+      pasSP: "114", padSP: "64", fcSP: "66", pasSMin: "96", pasSMax: "132", padSMin: "52", padSMax: "72",
       horarioSueno: "22:00 - 08:00", patronDescenso: "13%", clasificacion: "dipper",
       cgTPas: "18%", cgTPad: "6%", cgVPas: "22%", cgVPad: "8%", cgSPas: "10%", cgSPad: "0%",
     },
@@ -194,6 +194,21 @@ const ORL_SEED_PRESETS = [
   {
     id: "mapa-hipotension-dipper", modelo: "cima-mapa", nombre: "Hipotensión diastólica nocturna / patrón dipper",
     texto: "HIPOTENSIÓN ARTERIAL DIASTÓLICA NOCTURNA.\nPATRÓN DIPPER.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+  },
+  {
+    id: "ergo-submax-suficiente", modelo: "cima-ergo", nombre: "Ergometría normal / submáxima suficiente",
+    texto: "PRUEBA SUBMÁXIMA SUFICIENTE.\nDETENIDA A LOS 450 KGM POR FATIGA MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST HASTA LA CARGA ALCANZADA.\nNO REFIRIÓ ANGOR NI DISNEA.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nMETS 5.3. CF II B.",
+    valores: { protocolo: "Astrand", fcPrevMax: "145 lpm", fcPrevSub: "123 lpm", fcAlcanzada: "126 lpm", pctFcMax: "87%", pctFcSub: "102%", taSis: "160 mmHg", taDia: "80 mmHg", mets: "5.3", dobleProd: "20160", vo2: "18.6", carga: "450 KGM", motivoDeten: "Fatiga muscular" },
+  },
+  {
+    id: "ergo-max-suficiente", modelo: "cima-ergo", nombre: "Ergometría normal / máxima suficiente",
+    texto: "PRUEBA MÁXIMA SUFICIENTE.\nDETENIDA A LOS 450 KGM POR AGOTAMIENTO MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST DURANTE EL ESFUERZO NI EN LA RECUPERACIÓN.\nNO REFIRIÓ ANGOR NI DISNEA.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nMETS 5.3. CF II B.",
+    valores: { protocolo: "Astrand", fcPrevMax: "145 lpm", fcPrevSub: "123 lpm", fcAlcanzada: "138 lpm", pctFcMax: "95%", pctFcSub: "112%", taSis: "170 mmHg", taDia: "80 mmHg", mets: "5.3", dobleProd: "23460", vo2: "18.6", carga: "450 KGM", motivoDeten: "Agotamiento muscular" },
+  },
+  {
+    id: "ergo-submax-insuficiente", modelo: "cima-ergo", nombre: "Ergometría submáxima insuficiente",
+    texto: "PRUEBA SUBMÁXIMA INSUFICIENTE.\nDETENIDA A LOS 300 KGM POR FATIGA MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST HASTA LA CARGA ALCANZADA.\nNO REFIRIÓ ANGOR.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nBAJA CAPACIDAD FUNCIONAL PARA LA EDAD.",
+    valores: { protocolo: "Astrand", fcPrevMax: "135 lpm", fcPrevSub: "115 lpm", fcAlcanzada: "82 lpm", pctFcMax: "61%", pctFcSub: "71%", taSis: "140 mmHg", taDia: "80 mmHg", mets: "4.6", dobleProd: "11480", vo2: "16.1", carga: "300 KGM", motivoDeten: "Fatiga muscular / baja tolerancia al esfuerzo" },
   },
 ];
 function loadInformesConfig() {
@@ -3046,9 +3061,20 @@ function ensureNombresPresets() {
     const nombres = { normal: "ECG normal", "ritmo-sinusal": "Ritmo sinusal" };
     for (const s of HOLTER_SEED_PRESETS) nombres[s.id] = s.nombre;
     for (const s of ORL_SEED_PRESETS) nombres[s.id] = s.nombre;
+    // Valores por preset (para rellenar claves faltantes en configs existentes).
+    const valsSeed = {};
+    for (const s of [...HOLTER_SEED_PRESETS, ...ORL_SEED_PRESETS]) if (s.valores) valsSeed[s.id] = s.valores;
     let cambio = false;
     for (const d of cfg.descripciones) {
       if (!d.nombre && nombres[d.id]) { d.nombre = nombres[d.id]; cambio = true; }
+      const sv = valsSeed[d.id];
+      if (sv) {
+        d.valores = d.valores || {};
+        // Solo rellena lo que falta: no pisa valores ya cargados/editados.
+        for (const k of Object.keys(sv)) {
+          if (d.valores[k] == null || String(d.valores[k]).trim() === "") { d.valores[k] = sv[k]; cambio = true; }
+        }
+      }
     }
     if (cambio) saveInformesConfig(cfg);
   } catch (e) { console.log("[nombres-seed] omitido:", e && e.message); }
