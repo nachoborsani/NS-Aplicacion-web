@@ -487,6 +487,26 @@ const DEFAULT_CLIENTS = [
       { code: "558", name: "LIC. EN NUTRICION" },
     ],
   },
+  {
+    slug: "st-ignacio",
+    name: "St Ignacio",
+    businessName: "ST IGNACIO SRL",
+    cuit: "30716016680",
+    ugl: "UGL XXXV",
+    sap: "112553",
+    status: "Activo",
+    activeModules: [
+      { code: "540", name: "ALERGIA E INMUNOLOGIA" },
+      { code: "543", name: "CARDIOLOGIA" },
+      { code: "555", name: "DIABETOLOGIA" },
+      { code: "22", name: "ECODOPPLER EN AMBULATORIO" },
+      { code: "434", name: "ENDOCRINOLOGIA" },
+      { code: "435", name: "FLEBOLOGIA" },
+      { code: "553", name: "FONOAUDIOLOGIA" },
+      { code: "437", name: "OTORRINOLARINGOLOGIA" },
+      { code: "433", name: "REUMATOLOGIA" },
+    ],
+  },
 ];
 function normalizeClientModules(modules) {
   const seen = new Set();
