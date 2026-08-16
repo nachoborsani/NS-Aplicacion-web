@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const XLSX = require("xlsx");
 const informes = require("./informes");
 const nomExport = require("./nomenclador_export");
+const zipMin = require("./zip_min");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -2632,6 +2633,54 @@ const server = http.createServer(async (req, res) => {
           ? "Falta instalar pdf-lib en el servidor. Hacé un Redeploy (build limpio) en Railway."
           : "Error al generar el PDF del informe.",
       });
+    }
+  }
+
+  // Lote: genera 1 PDF por paciente y devuelve un ZIP. Cada item viene resuelto
+  // desde el front (modelo, paciente, textoInforme final, medicoId, valores).
+  if (p === "/api/informes/lote" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const body = await readBody(req);
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) return json(res, 400, { error: "No hay pacientes para generar." });
+    if (items.length > 200) return json(res, 400, { error: "Demasiados informes en un lote (máx 200)." });
+    try {
+      const cfg = loadInformesConfig();
+      const archivos = [];
+      const usados = {};
+      for (const it of items) {
+        const modelo = String(it.modelo || "");
+        if (!informes.MODELOS[modelo]) continue;
+        const pac = it.paciente || {};
+        if (!String(pac.nombre || "").trim() || !String(pac.fecha || "").trim()) continue;
+        const medico = (cfg.medicos || []).find((m) => m.id === it.medicoId);
+        const bytes = await informes.buildInformePdf(modelo, {
+          paciente: pac,
+          textoInforme: it.textoInforme,
+          solicitante: it.solicitante,
+          valores: sanitizarValores(it.valores),
+          firmaArchivo: medico ? medico.firma : "",
+        });
+        let nombre = informes.informeFilename(modelo, pac).replace(/[\\/:*?"<>|]+/g, " ");
+        if (usados[nombre]) { const n = ++usados[nombre]; nombre = nombre.replace(/\.pdf$/i, "") + " (" + n + ").pdf"; }
+        else usados[nombre] = 1;
+        archivos.push({ name: nombre, data: Buffer.from(bytes) });
+      }
+      if (!archivos.length) return json(res, 400, { error: "Ningún paciente tenía plantilla y datos válidos para generar." });
+      const zbuf = zipMin.zip(archivos);
+      res.writeHead(200, {
+        "content-type": "application/zip",
+        "content-length": zbuf.length,
+        "content-disposition": 'attachment; filename="Informes_lote.zip"',
+        "cache-control": "no-store",
+      });
+      res.end(zbuf);
+      return;
+    } catch (error) {
+      console.log("[informes-lote] error:", error && error.message);
+      const falta = error && error.code === "MODULE_NOT_FOUND" && /pdf-lib/.test(String(error.message));
+      return json(res, 500, { error: falta ? "Falta pdf-lib en el servidor. Redeploy en Railway." : "Error al generar el lote." });
     }
   }
 

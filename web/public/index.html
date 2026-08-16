@@ -451,6 +451,7 @@
         <section id="view-informes" style="display:none">
           <div class="client-tabs" style="margin-bottom:16px">
             <button class="active" id="infTabGenerar" type="button" onclick="setInformesTab('generar')">Generar</button>
+            <button id="infTabLote" type="button" onclick="setInformesTab('lote')">Varios pacientes</button>
             <button id="infTabConfig" type="button" onclick="setInformesTab('config')" style="display:none">Configuración</button>
           </div>
           <section id="inf-tab-generar" class="inf-section">
@@ -525,6 +526,36 @@
             <iframe id="infPreviewFrame" title="Vista previa del informe" style="width:100%;height:560px;border:1px solid var(--border);border-radius:10px;background:#fff"></iframe>
           </div>
           </section>
+
+          <section id="inf-tab-lote" class="inf-section" style="display:none">
+            <div class="card">
+              <div class="form-grid two">
+                <div class="field"><label>Centro</label><select class="inp" id="loteCentro" onchange="loteRedetectar()"></select></div>
+                <div class="field"><label>Médico que firma <span style="font-weight:400;color:var(--text-2)">(por defecto)</span></label><select class="inp" id="loteMedico" onchange="loteMedicoDefault()"></select></div>
+              </div>
+              <div class="field">
+                <label>Pegá los pacientes <span style="font-weight:400;color:var(--text-2)">(una línea por práctica: benef · nombre · código - práctica · fecha)</span></label>
+                <textarea class="inp" id="loteTexto" rows="6" spellcheck="false" placeholder="15020764060200&#9;&#9;&#9;CECCHINI EDDA JULIA&#9;717132 - VIDEO RINOFIBROLARINGOSCOPIA&#9;21/07/2026 - 09:00 - P" style="height:auto;min-height:120px;resize:vertical;font-family:ui-monospace,monospace;font-size:12px;white-space:pre;overflow-x:auto"></textarea>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <button class="btn btn-primary" onclick="loteDetectar()">Detectar pacientes</button>
+                <span class="msg err" id="loteError"></span>
+              </div>
+            </div>
+            <div class="card" id="loteResultCard" style="margin-top:16px;display:none">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+                <h3 style="margin:0;font-size:15px"><span id="loteCount">0</span> — <span id="loteOkCount">0</span> listos para generar</h3>
+                <button class="btn btn-primary" id="loteZipBtn" onclick="loteGenerarZip()">Descargar ZIP</button>
+              </div>
+              <div class="table-scroll">
+                <table class="lote-table">
+                  <thead><tr><th>Paciente</th><th>Práctica</th><th>Resultado</th><th>Lado</th><th>Médico</th><th></th></tr></thead>
+                  <tbody id="loteBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <section id="inf-tab-config" class="inf-section" style="display:none">
           <div class="card" id="infConfigCard" style="max-width:640px">
             <p style="margin:0 0 16px;color:var(--text-2);font-size:13px">Lo que cargues acá aparece en los desplegables de la pestaña Generar. Las firmas quedan en el servidor, no en el repositorio.</p>

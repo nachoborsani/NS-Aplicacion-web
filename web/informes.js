@@ -232,6 +232,7 @@ function listarModelos() {
     practica: MODELOS[k].practica || MODELOS[k].estudio || k,
     centro: MODELOS[k].centro || "",
     especialidad: MODELOS[k].especialidad || "",
+    codigoPractica: MODELOS[k].codigoPractica || "",
     campos: MODELOS[k].campos || [],
     requiereLado: !!MODELOS[k].requiereLado,
   }));

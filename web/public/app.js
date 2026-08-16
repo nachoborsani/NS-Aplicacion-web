@@ -292,13 +292,13 @@ function filtrarPorModelo(){
   aplicarPreset();
 }
 function setInformesTab(tab){
-  var isConfig = tab === 'config';
-  var g = document.getElementById('inf-tab-generar'), c = document.getElementById('inf-tab-config');
-  if (g) g.style.display = isConfig ? 'none' : '';
-  if (c) c.style.display = isConfig ? '' : 'none';
-  var bg = document.getElementById('infTabGenerar'), bc = document.getElementById('infTabConfig');
-  if (bg) bg.classList.toggle('active', !isConfig);
-  if (bc) bc.classList.toggle('active', isConfig);
+  var secc = { generar: 'inf-tab-generar', lote: 'inf-tab-lote', config: 'inf-tab-config' };
+  var btns = { generar: 'infTabGenerar', lote: 'infTabLote', config: 'infTabConfig' };
+  Object.keys(secc).forEach(function(k){
+    var s = document.getElementById(secc[k]); if (s) s.style.display = (k === tab) ? '' : 'none';
+    var b = document.getElementById(btns[k]); if (b) b.classList.toggle('active', k === tab);
+  });
+  if (tab === 'lote') loteInit();
 }
 function renderInformesConfigLists(){
   var isAdmin = ME && ME.role === 'admin';
@@ -796,6 +796,166 @@ function renderNomencladorRows(rows, bodyId, metaId, total){
       + '<td class="nom-auth">' + esc(row.authLevel || '-') + '</td>'
       + '</tr>';
   }).join('');
+}
+// ================= Informes: varios pacientes (lote) =================
+var LOTE_ROWS = [];
+var LOTE_LADOS = [{ v: 'noesp', t: 'No especificado' }, { v: 'derecho', t: 'Derecho' }, { v: 'izquierdo', t: 'Izquierdo' }, { v: 'bilateral', t: 'Bilateral' }];
+function loteInit(){
+  var c = document.getElementById('loteCentro');
+  if (c){ var pv = c.value; var centros = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.centro; }));
+    c.innerHTML = centros.map(function(x){ return opt(x, x); }).join(''); if (pv) c.value = pv; }
+  var med = document.getElementById('loteMedico');
+  if (med){ var pm = med.value;
+    med.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('') + opt('', 'Sin firma / elegir por fila');
+    if (pm) med.value = pm; }
+}
+// Una línea del pegado (tab-separada tipo Excel; si no hay tabs, 2+ espacios).
+function loteParseLinea(linea){
+  var cells = String(linea).split('\t');
+  if (cells.length < 2) cells = String(linea).split(/\s{2,}/);
+  cells = cells.map(function(s){ return s.trim(); });
+  var out = { benef: '', nombre: '', codigo: '', practica: '', fecha: '' };
+  for (var i = 0; i < cells.length; i++){
+    var c = cells[i]; if (!c) continue;
+    var mCod = c.match(/^(\d{4,6})\s*[-–]\s*(.+)$/);
+    var mFec = c.match(/(\d{2}\/\d{2}\/\d{4})/);
+    if (!out.benef && /^\d{9,}$/.test(c)) { out.benef = c; continue; }
+    if (!out.codigo && mCod) { out.codigo = mCod[1]; out.practica = mCod[2].trim(); continue; }
+    if (!out.fecha && mFec) { out.fecha = mFec[1]; continue; }
+    if (!out.nombre && /[A-Za-zÁÉÍÓÚÑáéíóúñ]{3,}/.test(c) && !/\d{4}/.test(c)) { out.nombre = c; continue; }
+  }
+  return out;
+}
+function loteModeloPorCodigo(codigo, centro){
+  if (!codigo) return '';
+  var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.centro === centro && String(x.codigoPractica) === String(codigo); });
+  return m ? m.key : '';
+}
+function loteMedicoParaModelo(modelo, medDef){
+  var meds = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.modelos, modelo); });
+  if (medDef && meds.some(function(m){ return m.id === medDef; })) return medDef;
+  return meds.length ? meds[0].id : '';
+}
+// Si un paciente tiene 717111 y 717125 el mismo día (Caballito) -> combinado.
+function loteCombinar(rows, centro){
+  if (centro !== 'Centro Médico Caballito') return rows;
+  var grupos = {};
+  rows.forEach(function(r){ var k = r.benef + '|' + r.fecha; (grupos[k] = grupos[k] || []).push(r); });
+  var out = [], hechos = {};
+  rows.forEach(function(r){
+    var k = r.benef + '|' + r.fecha, g = grupos[k];
+    var tiene11 = g.some(function(x){ return x.codigo === '717111'; });
+    var tiene25 = g.some(function(x){ return x.codigo === '717125'; });
+    if (tiene11 && tiene25 && (r.codigo === '717111' || r.codigo === '717125')){
+      if (hechos[k]) return; hechos[k] = true;
+      var base = g.find(function(x){ return x.codigo === '717111'; }) || r;
+      out.push({ nombre: base.nombre, benef: base.benef, fecha: base.fecha, codigo: '717111+717125', practica: 'Cerumen + tratamiento químico', modeloForzado: 'caballito-orl-combinado' });
+      return;
+    }
+    out.push(r);
+  });
+  return out;
+}
+function loteDetectar(){
+  var err = document.getElementById('loteError'); err.textContent = '';
+  var centro = document.getElementById('loteCentro').value;
+  var lineas = document.getElementById('loteTexto').value.split(/\r?\n/).filter(function(l){ return l.trim(); });
+  if (!lineas.length){ err.textContent = 'Pegá al menos una línea.'; return; }
+  var parsed = lineas.map(loteParseLinea).filter(function(r){ return r.nombre || r.benef; });
+  parsed = loteCombinar(parsed, centro);
+  var medDef = document.getElementById('loteMedico').value;
+  LOTE_ROWS = parsed.map(function(r){
+    var modelo = r.modeloForzado || loteModeloPorCodigo(r.codigo, centro);
+    var presets = modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, modelo); }) : [];
+    return { nombre: r.nombre, benef: r.benef, fecha: r.fecha, documento: '', codigo: r.codigo, practicaTxt: r.practica,
+      modelo: modelo, presetId: presets.length ? presets[0].id : '', lado: 'noesp', medicoId: modelo ? loteMedicoParaModelo(modelo, medDef) : '' };
+  });
+  loteRender();
+}
+function loteRedetectar(){ if (LOTE_ROWS.length) loteDetectar(); }
+function loteMedicoDefault(){
+  var medDef = document.getElementById('loteMedico').value;
+  LOTE_ROWS.forEach(function(row){ if (row.modelo) row.medicoId = loteMedicoParaModelo(row.modelo, medDef); });
+  loteRender();
+}
+function loteRender(){
+  var centro = document.getElementById('loteCentro').value;
+  var modelosCentro = (INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro; });
+  var body = document.getElementById('loteBody'); if (!body) return;
+  var ok = 0;
+  body.innerHTML = LOTE_ROWS.map(function(row, i){
+    var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === row.modelo; });
+    if (row.modelo) ok++;
+    var pracSel = '<select class="inp lote-inp" onchange="loteSetPractica(' + i + ',this.value)"><option value="">— sin plantilla —</option>'
+      + modelosCentro.map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === row.modelo ? ' selected' : '') + '>' + esc(x.short) + '</option>'; }).join('') + '</select>';
+    var presets = row.modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, row.modelo); }) : [];
+    var presetSel = presets.length
+      ? '<select class="inp lote-inp" onchange="loteSetPreset(' + i + ',this.value)">'
+        + presets.map(function(d){ return '<option value="' + esc(d.id) + '"' + (d.id === row.presetId ? ' selected' : '') + '>' + esc(presetLabel(d)) + '</option>'; }).join('')
+        + '<option value="__custom__"' + (row.presetId === '__custom__' ? ' selected' : '') + '>Texto personalizado</option></select>'
+      : '<span class="lote-muted">—</span>';
+    var ladoSel = (m && m.requiereLado)
+      ? '<select class="inp lote-inp" onchange="loteSetLado(' + i + ',this.value)">'
+        + LOTE_LADOS.map(function(l){ return '<option value="' + l.v + '"' + (l.v === row.lado ? ' selected' : '') + '>' + l.t + '</option>'; }).join('') + '</select>'
+      : '<span class="lote-muted">—</span>';
+    var meds = row.modelo ? (INFORMES_CFG.medicos || []).filter(function(mm){ return scopeAplica(mm.modelos, row.modelo); }) : (INFORMES_CFG.medicos || []);
+    var medSel = '<select class="inp lote-inp" onchange="loteSetMedico(' + i + ',this.value)">'
+      + meds.map(function(mm){ return '<option value="' + esc(mm.id) + '"' + (mm.id === row.medicoId ? ' selected' : '') + '>' + esc(mm.nombre) + (mm.hasFirma ? '' : ' (s/f)') + '</option>'; }).join('')
+      + '<option value=""' + (row.medicoId ? '' : ' selected') + '>Sin firma</option></select>';
+    var dl = row.modelo ? '<button class="rowbtn" title="Descargar este PDF" onclick="loteDescargarFila(' + i + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '<span class="lote-muted">sin plantilla</span>';
+    return '<tr' + (row.modelo ? '' : ' class="lote-row-off"') + '>'
+      + '<td><div class="lote-nom">' + esc(row.nombre || '—') + '</div><div class="lote-muted">' + esc(row.benef || '') + ' · ' + esc(row.fecha || '—') + '</div></td>'
+      + '<td>' + pracSel + '<div class="lote-muted">' + esc(row.codigo || '') + '</div></td>'
+      + '<td>' + presetSel + '</td><td>' + ladoSel + '</td><td>' + medSel + '</td>'
+      + '<td style="text-align:right">' + dl + '</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="lote-muted" style="padding:14px">No se detectaron pacientes.</td></tr>';
+  document.getElementById('loteCount').textContent = LOTE_ROWS.length;
+  document.getElementById('loteOkCount').textContent = ok;
+  document.getElementById('loteResultCard').style.display = LOTE_ROWS.length ? '' : 'none';
+  document.getElementById('loteZipBtn').disabled = ok === 0;
+}
+function loteSetPractica(i, key){
+  LOTE_ROWS[i].modelo = key;
+  var presets = key ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); }) : [];
+  LOTE_ROWS[i].presetId = presets.length ? presets[0].id : '';
+  LOTE_ROWS[i].medicoId = key ? loteMedicoParaModelo(key, document.getElementById('loteMedico').value) : '';
+  loteRender();
+}
+function loteSetPreset(i, id){ LOTE_ROWS[i].presetId = id; }
+function loteSetLado(i, v){ LOTE_ROWS[i].lado = v; }
+function loteSetMedico(i, id){ LOTE_ROWS[i].medicoId = id; }
+function loteTextoDe(row){
+  if (row.presetId === '__custom__') return row.texto || '';
+  var p = presetById(row.presetId); if (!p) return '';
+  if (row.lado && p.ladoTextos && p.ladoTextos[row.lado]) return p.ladoTextos[row.lado];
+  return p.texto || '';
+}
+function loteItemPayload(row){
+  if (!row.modelo) return null;
+  var p = presetById(row.presetId);
+  return { modelo: row.modelo,
+    paciente: { nombre: row.nombre, benef: row.benef, fecha: row.fecha, documento: row.documento || '' },
+    textoInforme: loteTextoDe(row), medicoId: row.medicoId || '', valores: (p && p.valores) ? p.valores : {} };
+}
+async function loteDescargarFila(i){
+  var payload = loteItemPayload(LOTE_ROWS[i]); if (!payload) return;
+  var r = await fetch('/api/informes/generar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar.'); return; }
+  var blob = await r.blob(); var cd = r.headers.get('content-disposition') || ''; var m = cd.match(/filename="([^"]+)"/);
+  bajarBlob(blob, m ? m[1] : 'informe.pdf');
+}
+async function loteGenerarZip(){
+  var err = document.getElementById('loteError'); err.textContent = '';
+  var items = LOTE_ROWS.map(loteItemPayload).filter(Boolean);
+  if (!items.length){ err.textContent = 'No hay pacientes con plantilla para generar.'; return; }
+  var btn = document.getElementById('loteZipBtn'); btn.disabled = true; var t = btn.textContent; btn.textContent = 'Generando…';
+  try {
+    var r = await fetch('/api/informes/lote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: items }) });
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} err.textContent = (d && d.error) || 'No se pudo generar el lote.'; return; }
+    var blob = await r.blob(); var cd = r.headers.get('content-disposition') || ''; var m = cd.match(/filename="([^"]+)"/);
+    bajarBlob(blob, m ? m[1] : 'Informes_lote.zip');
+  } catch (e){ err.textContent = 'No se pudo generar el lote.'; }
+  finally { btn.disabled = false; btn.textContent = t; }
 }
 async function loadClients(options){
   options = options || {};
