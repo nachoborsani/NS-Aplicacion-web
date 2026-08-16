@@ -222,6 +222,23 @@ const MODELOS = {
     textoDefault: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
     pie: PIE_CIMA,
   },
+  // --- Centro Médico Caballito: Dermatología (criocirugía) ---
+  "caballito-derma-crio": {
+    label: "Caballito — Criocirugía de piel (510320)",
+    short: "Caballito · Criocirugía",
+    practica: "510320 - Ablación de lesiones de piel por criocirugía",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE DERMATOLOGÍA",
+    especialidad: "Dermatología",
+    codigoPractica: "510320",
+    estudio: "ABLACIÓN DE LESIONES DE PIEL EN GENERAL POR CRIOCIRUGÍA",
+    estudioArchivo: "Ablacion de piel por criocirugia",
+    solicitanteDefault: "",
+    textoDefault: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
+    pie: PIE_CABALLITO,
+  },
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
