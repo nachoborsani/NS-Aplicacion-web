@@ -981,7 +981,8 @@ function renderClientList(){
     });
   });
   var createBtn = document.getElementById('clientNewBtn');
-  if (createBtn) createBtn.style.display = ME && ME.role === 'admin' ? 'flex' : 'none';
+  // Clase (no style inline) para que el modo colapsado pueda ocultarlo.
+  if (createBtn) createBtn.classList.toggle('is-admin', !!(ME && ME.role === 'admin'));
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
