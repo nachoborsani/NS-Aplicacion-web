@@ -157,6 +157,8 @@ function programarPreviewVivo(){ clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = se
 async function actualizarPreviewVivo(){
   var frame = document.getElementById('infLiveFrame'), ph = document.getElementById('infLivePlaceholder');
   if (!frame) return;
+  var panel = document.getElementById('infPreviewLive');
+  if (panel && panel.offsetParent === null) return; // panel oculto (mobile / otra pestaña): no generamos
   var nombre = document.getElementById('infNombre').value.trim();
   var benef = document.getElementById('infBenef').value.trim();
   var fecha = document.getElementById('infFecha').value.trim();
