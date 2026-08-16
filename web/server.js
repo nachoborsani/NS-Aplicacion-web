@@ -2608,6 +2608,26 @@ const server = http.createServer(async (req, res) => {
       })),
     });
   }
+  // Diagnóstico (admin): confirma si la config vive en el volumen persistente
+  // y qué scope hay guardado. Sirve para descartar "se borra en cada deploy".
+  if (p === "/api/informes/_diag" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const cfg = loadInformesConfig();
+    let existe = false, tam = 0;
+    try { const st = fs.statSync(informesConfigFile); existe = true; tam = st.size; } catch {}
+    return json(res, 200, {
+      usaVolumenPersistente: !!process.env.RAILWAY_VOLUME_MOUNT_PATH,
+      dataDir,
+      configArchivo: informesConfigFile,
+      configExiste: existe,
+      configTamBytes: tam,
+      modelosValidos: informes.listarModelos().map((m) => m.key),
+      medicos: (cfg.medicos || []).map((m) => ({ id: m.id, modelos: m.modelos || [] })),
+      resultados: (cfg.descripciones || []).map((d) => ({ id: d.id, modelos: d.modelos || [] })),
+    });
+  }
   if (p === "/api/informes/medicos" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
