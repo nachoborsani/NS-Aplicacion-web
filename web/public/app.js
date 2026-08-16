@@ -533,6 +533,7 @@ var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_QUERY = '';
 var CLIENT_REPORT_PRACTICE_QUERY = '';
 var CLIENT_REPORT_MODULE = '';
+var CLIENT_REPORT_STATUS = '';
 var CLIENT_REPORT_TRANS_FROM = '';
 var CLIENT_REPORT_TRANS_TO = '';
 var CLIENT_REPORT_QUICK_FILTER = '';
@@ -1669,11 +1670,13 @@ function getClientReportVisibleRows(){
       if (practiceHaystack.indexOf(practiceQ) < 0) return false;
     }
     if (moduleValue && String(item.row.moduleCode || '') !== moduleValue) return false;
+    if (CLIENT_REPORT_STATUS && reportDisplayStatus(item.row) !== CLIENT_REPORT_STATUS) return false;
     var transDate = String(item.row.transmittedAt || '').slice(0, 10);
     if (transFrom && (!transDate || transDate < transFrom)) return false;
     if (transTo && (!transDate || transDate > transTo)) return false;
     if (CLIENT_REPORT_QUICK_FILTER === 'cutoff' && !item.row.outsideCutoff) return false;
     if (CLIENT_REPORT_QUICK_FILTER === 'missingInforme' && !reportMissingInforme(item.row)) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'debito' && !(reportDebitAmount(item.row) > 0)) return false;
     return true;
   });
   if (CLIENT_REPORT_SORT === 'practice-asc' || CLIENT_REPORT_SORT === 'practice-desc') {
@@ -1710,8 +1713,10 @@ function updateClientReportSummary(){
   if (cards[5]) cards[5].querySelector('b').textContent = moneyFmt(missingInformeAmount);
   var cutoffCard = document.getElementById('clientReportCutoffCard');
   var missingCard = document.getElementById('clientReportMissingInformeCard');
+  var debitCard = document.getElementById('clientReportDebitCard');
   if (cutoffCard) cutoffCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'cutoff');
   if (missingCard) missingCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'missingInforme');
+  if (debitCard) debitCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'debito');
   updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
@@ -1796,6 +1801,21 @@ function setClientReportModuleFilter(value){
   CLIENT_REPORT_MODULE = value || '';
   renderClientReportRows();
 }
+function setClientReportStatusFilter(value){
+  CLIENT_REPORT_STATUS = value || '';
+  renderClientReportRows();
+}
+function renderClientReportStatusFilter(){
+  var el = document.getElementById('clientReportStatusFilter');
+  if (!el) return;
+  var estados = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(row){ var s = reportDisplayStatus(row); if (s && s !== '-') estados[s] = true; });
+  var current = CLIENT_REPORT_STATUS;
+  var options = Object.keys(estados).sort().map(function(s){ return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
+  el.innerHTML = '<option value="">Todos los estados</option>' + options;
+  if (current && estados[current]) el.value = current;
+  else { CLIENT_REPORT_STATUS = ''; el.value = ''; }
+}
 function toggleClientReportPracticeSort(){
   CLIENT_REPORT_SORT = CLIENT_REPORT_SORT === 'practice-asc' ? 'practice-desc' : 'practice-asc';
   renderClientReportRows();
@@ -1833,6 +1853,7 @@ function resetClientReportFilters(){
   var practice = document.getElementById('clientReportPracticeFilter');
   if (practice) practice.value = '';
   renderClientReportModuleFilter();
+  renderClientReportStatusFilter();
   var from = document.getElementById('clientReportTransFrom');
   if (from) from.value = '';
   var to = document.getElementById('clientReportTransTo');
@@ -1885,6 +1906,7 @@ function restoreClientReportDraft(){
   CLIENT_REPORT_SOURCE = draft.source || null;
   CLIENT_REPORT_FILE = null;
   renderClientReportModuleFilter();
+  renderClientReportStatusFilter();
   resetClientReportFilters();
   setClientReportExpectedInput(draft.expectedAmount || '');
   setClientReportObservationsInput(draft.observations || '');
@@ -2002,6 +2024,7 @@ async function openClientReport(id){
     nomencladorLabel: report.nomencladorLabel || ''
   };
   renderClientReportModuleFilter();
+  renderClientReportStatusFilter();
   resetClientReportFilters();
   setClientReportExpectedInput(report.expectedAmount ? String(report.expectedAmount).replace('.', ',') : '');
   setClientReportObservationsInput(report.observations || '');
@@ -2087,6 +2110,7 @@ async function uploadClientReport(files){
     periodSelect.value = data.nomencladorPeriod;
   }
   renderClientReportModuleFilter();
+  renderClientReportStatusFilter();
   resetClientReportFilters();
   if (wasClosed) setClientReportExpectedInput('');
   if (wasClosed) setClientReportObservationsInput('');

@@ -346,7 +346,7 @@
 
                 <div class="report-summary-grid" id="clientReportSummary">
                   <div><b>$ 0,00</b><span>Bruto facturable</span></div>
-                  <div><b>$ 0,00</b><span>Debitos</span></div>
+                  <div class="report-summary-card filterable" id="clientReportDebitCard" onclick="setClientReportQuickFilter('debito')" onkeydown="handleReportSummaryCardKey(event,'debito')" role="button" tabindex="0"><b>$ 0,00</b><span>Debitos</span></div>
                   <div><b>$ 0,00</b><span>Neto estimado</span></div>
                   <div><b>0</b><span>Ausentes / activas</span></div>
                   <div class="report-summary-card filterable" id="clientReportCutoffCard" onclick="setClientReportQuickFilter('cutoff')" onkeydown="handleReportSummaryCardKey(event,'cutoff')" role="button" tabindex="0"><b>$ 0,00</b><span>Proximo periodo por corte</span></div>
@@ -364,6 +364,7 @@
                       <input class="inp report-search" id="clientReportSearch" placeholder="Paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
                       <input class="inp report-search" id="clientReportPracticeFilter" placeholder="Codigo o practica..." oninput="setClientReportPracticeFilter(this.value)">
                       <select class="inp" id="clientReportModuleFilter" onchange="setClientReportModuleFilter(this.value)"><option value="">Todos los modulos</option></select>
+                      <select class="inp" id="clientReportStatusFilter" onchange="setClientReportStatusFilter(this.value)"><option value="">Todos los estados</option></select>
                       <label class="date-filter"><span>Transm. desde</span><input class="inp" type="date" id="clientReportTransFrom" onchange="setClientReportTransmissionFilter()"></label>
                       <label class="date-filter"><span>Transm. hasta</span><input class="inp" type="date" id="clientReportTransTo" onchange="setClientReportTransmissionFilter()"></label>
                     </div>
