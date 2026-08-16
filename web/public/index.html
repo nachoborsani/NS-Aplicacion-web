@@ -496,7 +496,7 @@
             </div>
             <div class="field">
               <label>Texto del informe</label>
-              <textarea class="inp" id="infTexto" rows="4" spellcheck="false" placeholder="Conclusión del informe"></textarea>
+              <textarea class="inp" id="infTexto" rows="10" spellcheck="false" placeholder="Conclusión del informe" style="height:auto;min-height:190px;resize:vertical;line-height:1.45"></textarea>
             </div>
             <div class="field">
               <label>Médico que firma</label>
@@ -539,8 +539,9 @@
             <details class="cfg-block">
               <summary class="cfg-head">Resultados del informe <span class="cfg-count" id="infDescripcionesCount"></span></summary>
               <div id="infDescripcionesList" class="cfg-list"></div>
-              <div class="cfg-add">
-                <input class="inp" id="infDescripcionTexto" placeholder="Texto del resultado (ej: Ecg sin complicaciones…)">
+              <div class="cfg-add" style="flex-wrap:wrap">
+                <input class="inp" id="infDescripcionNombre" placeholder="Nombre corto (ej: Tapón normal)" style="flex:0 0 190px">
+                <input class="inp" id="infDescripcionTexto" placeholder="Texto completo del resultado…" style="flex:1 1 240px">
                 <button class="btn btn-ghost" onclick="addDescripcion()">Agregar</button>
               </div>
             </details>

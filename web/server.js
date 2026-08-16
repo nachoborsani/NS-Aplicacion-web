@@ -110,12 +110,12 @@ const informesConfigFile = path.join(dataDir, "informes_config.json");
 // Presets "Normal" de cada Holter, con sus valores estándar (todos editables).
 const HOLTER_SEED_PRESETS = [
   {
-    id: "holter-normal", modelo: "caballito-holter",
+    id: "holter-normal", modelo: "caballito-holter", nombre: "Holter normal",
     texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
     valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
   },
   {
-    id: "cima-holter-normal", modelo: "cima-holter",
+    id: "cima-holter-normal", modelo: "cima-holter", nombre: "Holter normal",
     texto: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
     valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
   },
@@ -124,7 +124,7 @@ const HOLTER_SEED_PRESETS = [
 // elegido (derecho/izquierdo/bilateral/noesp); `texto` es el default sin lado.
 const ORL_SEED_PRESETS = [
   {
-    id: "orl-cerumen-normal", modelo: "caballito-orl-cerumen",
+    id: "orl-cerumen-normal", modelo: "caballito-orl-cerumen", nombre: "Tapón de cerumen normal",
     texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
     ladoTextos: {
       derecho: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN OÍDO DERECHO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO DERECHO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
@@ -134,30 +134,30 @@ const ORL_SEED_PRESETS = [
     },
   },
   {
-    id: "orl-cerumen-cuerpo", modelo: "caballito-orl-cerumen",
+    id: "orl-cerumen-cuerpo", modelo: "caballito-orl-cerumen", nombre: "Cuerpo extraño + tapón de cerumen",
     texto: "SE REALIZA OTOMICROSCOPIA. SE OBSERVA CUERPO EXTRAÑO EN CONDUCTO AUDITIVO EXTERNO, SE PROCEDE A SU EXTRACCIÓN. SE EVIDENCIA TAPÓN DE CERUMEN, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
   },
   {
-    id: "orl-quimico-epistaxis", modelo: "caballito-orl-quimico",
+    id: "orl-quimico-epistaxis", modelo: "caballito-orl-quimico", nombre: "Cauterización / epistaxis anterior",
     texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "orl-quimico-vaso", modelo: "caballito-orl-quimico",
+    id: "orl-quimico-vaso", modelo: "caballito-orl-quimico", nombre: "Cauterización de vaso septal",
     texto: "SE REALIZA EXAMEN OTORRINOLARINGOLÓGICO. SE OBSERVA VASO SEPTAL PROMINENTE, SE PROCEDE A CAUTERIZACIÓN QUÍMICA POR EPÍSTAXIS RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "orl-combinado-normal", modelo: "caballito-orl-combinado",
+    id: "orl-combinado-normal", modelo: "caballito-orl-combinado", nombre: "Cerumen + tratamiento químico",
     texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
     ladoTextos: {
       bilateral: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIAN TAPONES DE CERUMEN BILATERALES, LOS CUALES SE EXTRAEN EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA AMBOS CONDUCTOS AUDITIVOS PERMEABLES, CON MEMBRANAS TIMPÁNICAS NORMOLÚCIDAS. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
     },
   },
   {
-    id: "orl-videorino-normal", modelo: "caballito-orl-videorino",
+    id: "orl-videorino-normal", modelo: "caballito-orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
     texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "cima-orl-videorino-normal", modelo: "cima-orl-videorino",
+    id: "cima-orl-videorino-normal", modelo: "cima-orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
     texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
   },
 ];
@@ -170,10 +170,10 @@ function loadInformesConfig() {
   }
   if (!Array.isArray(cfg.descripciones)) {
     cfg.descripciones = [
-      { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
-      { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
-      ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
-      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} })),
+      { id: "normal", nombre: "ECG normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
+      { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
+      ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
+      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} })),
     ];
   }
   return cfg;
@@ -2646,7 +2646,7 @@ const server = http.createServer(async (req, res) => {
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), modelos: m.modelos || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {},
+        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {},
       })),
     });
   }
@@ -2744,7 +2744,8 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadInformesConfig();
     let id = slugId(tx) || ("d" + cfg.descripciones.length);
     while (cfg.descripciones.some((d) => d.id === id)) id += "-1";
-    cfg.descripciones.push({ id, texto: tx, modelos: [], valores: sanitizarValores(body.valores) });
+    const nombre = String(body.nombre || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    cfg.descripciones.push({ id, nombre, texto: tx, modelos: [], valores: sanitizarValores(body.valores) });
     saveInformesConfig(cfg);
     return json(res, 201, { ok: true, id });
   }
@@ -2762,6 +2763,7 @@ const server = http.createServer(async (req, res) => {
       const tx = body.texto.replace(/\s+/g, " ").trim();
       if (tx) desc.texto = tx;
     }
+    if (typeof body.nombre === "string") desc.nombre = body.nombre.replace(/\s+/g, " ").trim().slice(0, 60);
     if (body.valores && typeof body.valores === "object") desc.valores = sanitizarValores(body.valores);
     saveInformesConfig(cfg);
     return json(res, 200, { ok: true });
@@ -2825,7 +2827,7 @@ function ensureHolterSeed() {
     // Precargar el preset "Normal" de cada Holter si ese modelo no tiene resultados.
     for (const s of HOLTER_SEED_PRESETS) {
       if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
-        cfg.descripciones.push({ id: s.id, texto: s.texto, modelos: [s.modelo], valores: s.valores });
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores });
         cambio = true;
       }
     }
@@ -2851,7 +2853,7 @@ function ensureOrlSeed() {
     let cambio = false;
     for (const s of ORL_SEED_PRESETS) {
       if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
-        cfg.descripciones.push({ id: s.id, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} });
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} });
         cambio = true;
       }
     }

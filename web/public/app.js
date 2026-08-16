@@ -227,7 +227,7 @@ function modeloRequiereLado(key){
   return !!(m && m.requiereLado);
 }
 function presetById(id){ return (INFORMES_CFG.descripciones || []).find(function(d){ return d.id === id; }); }
-function presetLabel(d){ var t = String(d.texto || ''); return t.length > 72 ? t.slice(0, 70) + '…' : t; }
+function presetLabel(d){ if (d.nombre) return d.nombre; var t = String(d.texto || ''); return t.length > 60 ? t.slice(0, 58) + '…' : t; }
 // Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
 function renderCampos(key){
   var wrap = document.getElementById('infCamposWrap'), box = document.getElementById('infCampos');
@@ -276,7 +276,7 @@ function filtrarPorModelo(){
     var prevD = desc.value;
     var rs = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); });
     desc.innerHTML = rs.map(function(d){ return opt(d.id, presetLabel(d)); }).join('')
-      || '<option value="">(sin resultados para esta práctica)</option>';
+      + opt('__custom__', 'Texto personalizado');
     if (prevD && rs.some(function(d){ return d.id === prevD; })) desc.value = prevD;
   }
   var med = document.getElementById('infMedico');
@@ -322,8 +322,10 @@ function renderInformesConfigLists(){
   var dl = document.getElementById('infDescripcionesList');
   if (dl){
     dl.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
-      var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(d.texto) + '</span>'
-        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
+      var titulo = d.nombre || presetLabel(d);
+      var prev = (d.nombre && d.texto) ? '<div class="cfg-textoprev">' + esc(d.texto.length > 110 ? d.texto.slice(0, 108) + '…' : d.texto) + '</div>' : '';
+      var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(titulo) + '</span>'
+        + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>' + prev;
       var chips = modelos.length ? '<div class="cfg-scope"><span class="cfg-scope-lbl">Informes</span>' + scopeChips('desc', d.id, modelos, d.modelos) + '</div>' : '';
       // Editor de valores estándar (solo si el resultado está asignado a un informe con campos, ej. Holter)
       var campos = presetCampos(d), valEditor = '';
@@ -384,10 +386,11 @@ async function deleteMedico(id){
 async function addDescripcion(){
   var msg = document.getElementById('infConfigMsg'); msg.textContent = '';
   var inp = document.getElementById('infDescripcionTexto'); var texto = inp.value.trim();
-  if (!texto){ msg.textContent = 'Escribí el texto de la descripción.'; return; }
-  var r = await req('POST', '/api/informes/descripciones', { texto: texto });
+  var nomInp = document.getElementById('infDescripcionNombre'); var nombre = nomInp ? nomInp.value.trim() : '';
+  if (!texto){ msg.textContent = 'Escribí el texto del resultado.'; return; }
+  var r = await req('POST', '/api/informes/descripciones', { nombre: nombre, texto: texto });
   if (!r.ok){ msg.textContent = (r.data && r.data.error) || 'No se pudo agregar.'; return; }
-  inp.value = ''; await loadInformesConfig();
+  inp.value = ''; if (nomInp) nomInp.value = ''; await loadInformesConfig();
 }
 async function deleteDescripcion(id){
   if (!confirm('¿Eliminar esta descripción?')) return;
