@@ -2859,13 +2859,14 @@ function ensureOrlSeed() {
     // Quedan "sin firma" hasta que el admin suba el PNG (no va en el repo público).
     const orlCaballito = ["caballito-orl-cerumen", "caballito-orl-quimico", "caballito-orl-combinado", "caballito-orl-videorino"];
     const orlMedicos = [
-      { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana" },
-      { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo" },
+      { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana", modelos: orlCaballito },
+      { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito },
+      { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["cima-orl-videorino"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
         if (!cfg.medicos.some((x) => x.id === m.id)) {
-          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", modelos: orlCaballito.slice() });
+          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", modelos: m.modelos.slice() });
           cambio = true;
         }
       }
