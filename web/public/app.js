@@ -1148,8 +1148,10 @@ async function renderActiveClient(){
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){
     return '<span class="module-chip"><b>' + esc(module.code) + '</b> ' + esc(module.name) + '</span>';
   }).join('');
-  var editBtn = document.getElementById('clientModulesEdit');
-  if (editBtn) editBtn.style.display = ME && ME.role === 'admin' ? 'grid' : 'none';
+  var esAdmin = ME && ME.role === 'admin';
+  ['clientModulesEdit', 'clientEditBtn', 'clientDeleteBtn'].forEach(function(id){
+    var b = document.getElementById(id); if (b) b.style.display = esAdmin ? 'grid' : 'none';
+  });
   var summary = await api('/api/nomencladores');
   if (summary.ok) {
     var items = summary.data.nomencladores || [];
@@ -1292,6 +1294,60 @@ async function saveClientModules(){
   renderClientList();
   closeClientModulesModal();
   await renderActiveClient();
+}
+// ---- Editar / eliminar cliente ----
+function openClientEditModal(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientEditError'); if (err) err.textContent = '';
+  var set = function(id, v){ var el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('clientEditName', ACTIVE_CLIENT.name);
+  set('clientEditBusinessName', ACTIVE_CLIENT.businessName);
+  set('clientEditCuit', ACTIVE_CLIENT.cuit);
+  set('clientEditUgl', ACTIVE_CLIENT.ugl);
+  set('clientEditSap', ACTIVE_CLIENT.sap);
+  showModal('clientEditModal', 'ceScrim');
+}
+function closeClientEditModal(){ hideModal('clientEditModal', 'ceScrim'); }
+async function saveClientEdit(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientEditError'); if (err) err.textContent = '';
+  var payload = {
+    name: (document.getElementById('clientEditName') || {}).value || '',
+    businessName: (document.getElementById('clientEditBusinessName') || {}).value || '',
+    cuit: (document.getElementById('clientEditCuit') || {}).value || '',
+    ugl: (document.getElementById('clientEditUgl') || {}).value || '',
+    sap: (document.getElementById('clientEditSap') || {}).value || ''
+  };
+  var btn = document.getElementById('clientEditSave'); if (btn) btn.disabled = true;
+  var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug), payload);
+  if (btn) btn.disabled = false;
+  if (!res.ok){ if (err) err.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  CLIENTS = res.data.clients || CLIENTS;
+  ACTIVE_CLIENT = res.data.client || ACTIVE_CLIENT;
+  renderClientList();
+  closeClientEditModal();
+  await renderActiveClient();
+}
+function openClientDeleteModal(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientDeleteError'); if (err) err.textContent = '';
+  var nm = document.getElementById('clientDeleteName'); if (nm) nm.textContent = ACTIVE_CLIENT.name;
+  showModal('clientDeleteModal', 'cdScrim');
+}
+function closeClientDeleteModal(){ hideModal('clientDeleteModal', 'cdScrim'); }
+async function confirmClientDelete(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientDeleteError'); if (err) err.textContent = '';
+  var btn = document.getElementById('clientDeleteConfirm'); if (btn) btn.disabled = true;
+  var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug));
+  if (btn) btn.disabled = false;
+  if (!res.ok){ if (err) err.textContent = (res.data && res.data.error) || 'No se pudo eliminar.'; return; }
+  CLIENTS = res.data.clients || [];
+  closeClientDeleteModal();
+  ACTIVE_CLIENT = CLIENTS[0] || null;
+  renderClientList();
+  if (ACTIVE_CLIENT) selectClient(ACTIVE_CLIENT.slug);
+  else go('dash', navElFor('dash'));
 }
 function renderSavedClientReports(){
   var body = document.getElementById('clientSavedReportsBody');

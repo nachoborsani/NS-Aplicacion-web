@@ -508,6 +508,9 @@ const DEFAULT_CLIENTS = [
     ],
   },
 ];
+// Slugs que vienen por código (seed). Borrar uno de estos deja un "tombstone"
+// (status: "deleted") en el volumen para que no reaparezca al re-seedear.
+const DEFAULT_CLIENT_SLUGS = new Set(DEFAULT_CLIENTS.map((c) => c.slug));
 function normalizeClientModules(modules) {
   const seen = new Set();
   const result = [];
@@ -571,11 +574,21 @@ function loadClientsStore() {
     if (!slug) continue;
     bySlug.set(slug, normalizeClient(client, bySlug.get(slug)));
   }
-  return Array.from(bySlug.values()).filter((client) => client.slug && client.name);
+  return Array.from(bySlug.values()).filter((client) => client.slug && client.name && client.status !== "deleted");
+}
+function loadClientOverrides() {
+  try { const p = JSON.parse(fs.readFileSync(clientesFile, "utf8")); return Array.isArray(p) ? p : []; } catch { return []; }
 }
 function saveClientsStore(clients) {
+  // Preservamos los tombstones (borrados) que no vuelvan a estar activos, para
+  // que un alta/edición posterior no "reviva" un cliente eliminado.
+  const activos = new Set(clients.map((c) => String(c.slug)));
+  const tombs = loadClientOverrides()
+    .filter((c) => c && c.status === "deleted" && !activos.has(String(c.slug)))
+    .map((c) => ({ slug: String(c.slug), status: "deleted" }));
+  const out = clients.map((client) => normalizeClient(client)).concat(tombs);
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(clientesFile, JSON.stringify(clients.map((client) => normalizeClient(client)), null, 2));
+  fs.writeFileSync(clientesFile, JSON.stringify(out, null, 2));
 }
 function createClientReportsStore() {
   return { items: [] };
@@ -2082,6 +2095,48 @@ const server = http.createServer(async (req, res) => {
     clients[idx].activeModules = modules;
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
+  }
+
+  // Editar datos básicos del cliente (no cambia el slug, para no romper referencias).
+  const clientEditMatch = p.match(/^\/api\/clientes\/([^/]+)$/);
+  if (clientEditMatch && req.method === "PATCH") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede modificar clientes." });
+    const slug = decodeURIComponent(clientEditMatch[1]);
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((client) => client.slug === slug);
+    if (idx < 0) return json(res, 404, { error: "Cliente no encontrado." });
+    const body = await readBody(req);
+    const name = String(body.name || "").replace(/\s+/g, " ").trim();
+    const businessName = String(body.businessName || "").replace(/\s+/g, " ").trim();
+    const cuit = normalizeCuit(body.cuit);
+    if (!name) return json(res, 400, { error: "Ingresá el nombre del cliente." });
+    if (!businessName) return json(res, 400, { error: "Ingresá la razón social." });
+    if (!validCuit(cuit)) return json(res, 400, { error: "Ingresá un CUIT válido." });
+    clients[idx] = normalizeClient({
+      slug: clients[idx].slug,
+      name, businessName, cuit,
+      ugl: String(body.ugl || "").replace(/\s+/g, " ").trim(),
+      sap: String(body.sap || "").replace(/\s+/g, " ").trim(),
+      status: clients[idx].status,
+      activeModules: clients[idx].activeModules,
+    });
+    saveClientsStore(clients);
+    return json(res, 200, { client: clients[idx], clients });
+  }
+  // Eliminar cliente. Los que vienen por código dejan un tombstone en el volumen.
+  if (clientEditMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede eliminar clientes." });
+    const slug = decodeURIComponent(clientEditMatch[1]);
+    if (!loadClientsStore().some((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    let raw = loadClientOverrides().filter((c) => String(c.slug) !== slug);
+    if (DEFAULT_CLIENT_SLUGS.has(slug)) raw.push({ slug, status: "deleted" });
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(clientesFile, JSON.stringify(raw, null, 2));
+    return json(res, 200, { ok: true, clients: loadClientsStore() });
   }
 
   const clientDashboardMatch = p.match(/^\/api\/clientes\/([^/]+)\/dashboard$/);

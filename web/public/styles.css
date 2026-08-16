@@ -357,6 +357,7 @@
   .client-card h3,.client-nom-head h3{margin:0 0 10px;font-size:14.5px}
   .client-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
   .client-card-head h3{margin:0}
+  .client-info-actions{display:flex;gap:6px;flex:0 0 auto}
   .dashboard-head{align-items:flex-end}
   .dashboard-head p{margin:2px 0 0;color:var(--text-2);font-size:12px}
   .client-dashboard-controls{display:grid;grid-template-columns:170px 170px;gap:9px}

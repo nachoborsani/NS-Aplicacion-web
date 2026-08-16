@@ -187,6 +187,17 @@
               <section id="client-section-basica" class="client-section" style="display:none">
               <div class="client-grid">
                 <article class="client-card client-info-card">
+                  <div class="client-card-head">
+                    <h3>Datos del cliente</h3>
+                    <div class="client-info-actions">
+                      <button class="icon-btn mini" id="clientEditBtn" type="button" onclick="openClientEditModal()" title="Editar datos" aria-label="Editar datos del cliente">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                      <button class="icon-danger-btn mini" id="clientDeleteBtn" type="button" onclick="openClientDeleteModal()" title="Eliminar cliente" aria-label="Eliminar cliente">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
                   <dl class="info-list">
                     <div><dt>Razon social</dt><dd id="clientBusinessName">-</dd></div>
                     <div class="client-info-row">
@@ -691,6 +702,41 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeClientModulesModal()">Cancelar</button>
         <button class="btn btn-primary" id="clientModulesSave" onclick="saveClientModules()">Guardar modulos</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: editar datos del cliente ===== -->
+    <div class="scrim" id="ceScrim" onclick="closeClientEditModal()"></div>
+    <div class="modal wide" id="clientEditModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Editar cliente</h3><button class="x" onclick="closeClientEditModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <div class="form-grid two">
+          <label>Nombre<input class="inp" id="clientEditName" placeholder="Ej: St Ignacio"></label>
+          <label>CUIT<input class="inp" id="clientEditCuit" placeholder="Ej: 30716016680"></label>
+          <label class="span-2">Razon social<input class="inp" id="clientEditBusinessName" placeholder="Ej: ST IGNACIO SRL"></label>
+          <label>UGL<input class="inp" id="clientEditUgl" placeholder="Ej: UGL XXXV"></label>
+          <label>SAP<input class="inp" id="clientEditSap" placeholder="Ej: 112553"></label>
+        </div>
+        <p class="modal-note">Los módulos activos se editan aparte, desde la tarjeta "Modulos activos".</p>
+        <div class="msg err" id="clientEditError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeClientEditModal()">Cancelar</button>
+        <button class="btn btn-primary" id="clientEditSave" onclick="saveClientEdit()">Guardar cambios</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: eliminar cliente ===== -->
+    <div class="scrim" id="cdScrim" onclick="closeClientDeleteModal()"></div>
+    <div class="modal" id="clientDeleteModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Eliminar cliente</h3><button class="x" onclick="closeClientDeleteModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p>¿Seguro que querés eliminar <b id="clientDeleteName">este cliente</b>? Se quita de la lista. Los reportes y credenciales guardados quedan asociados a su código por si lo volvés a crear.</p>
+        <div class="msg err" id="clientDeleteError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeClientDeleteModal()">Cancelar</button>
+        <button class="btn btn-danger" id="clientDeleteConfirm" onclick="confirmClientDelete()">Sí, eliminar</button>
       </div>
     </div>
 
