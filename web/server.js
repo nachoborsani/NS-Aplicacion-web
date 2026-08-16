@@ -165,6 +165,16 @@ const ORL_SEED_PRESETS = [
     id: "derma-crio-queratosis", modelo: "caballito-derma-crio", nombre: "Criocirugía de queratosis actínicas y seborreicas",
     texto: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
   },
+  {
+    id: "sibo-negativo", modelo: "caballito-sibo", nombre: "Estudio negativo para SIBO",
+    texto: "Estudio negativo para SIBO",
+    valores: { umbral: "25", ppm1: "5", ppm2: "7", ppm3: "7", ppm4: "6", ppm5: "4", ppm6: "6", ppm7: "7", ppm8: "11", ppm9: "3", ppm10: "4" },
+  },
+  {
+    id: "sibo-positivo", modelo: "caballito-sibo", nombre: "Estudio compatible con SIBO",
+    texto: "Estudio compatible con SIBO",
+    valores: { umbral: "25", ppm1: "4", ppm2: "4", ppm3: "5", ppm4: "4", ppm5: "33", ppm6: "62", ppm7: "44", ppm8: "41", ppm9: "79", ppm10: "82" },
+  },
 ];
 function loadInformesConfig() {
   let cfg = {};
@@ -178,7 +188,7 @@ function loadInformesConfig() {
       { id: "normal", nombre: "ECG normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
-      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} })),
+      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} })),
     ];
   }
   return cfg;
@@ -2980,8 +2990,9 @@ function ensureOrlSeed() {
     if (!Array.isArray(cfg.descripciones)) return;
     let cambio = false;
     for (const s of ORL_SEED_PRESETS) {
-      if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
-        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {} });
+      // Por id (no por modelo): un modelo puede tener varios presets (ej. SIBO).
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} });
         cambio = true;
       }
     }

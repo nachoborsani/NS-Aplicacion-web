@@ -35,6 +35,21 @@ const HOLTER_CAMPOS_CIMA = [
   { key: "motivo", label: "Motivo", default: "Control" },
   { key: "medicacion", label: "Medicación", default: "—", wide: true },
 ];
+// Campos del Test de SIBO: fecha de nacimiento, umbral y las 10 mediciones PPM.
+const SIBO_CAMPOS = [
+  { key: "fechaNac", label: "Fecha nacimiento", default: "" },
+  { key: "umbral", label: "Umbral PPM", default: "25" },
+  { key: "ppm1", label: "PPM 1", default: "" },
+  { key: "ppm2", label: "PPM 2", default: "" },
+  { key: "ppm3", label: "PPM 3", default: "" },
+  { key: "ppm4", label: "PPM 4", default: "" },
+  { key: "ppm5", label: "PPM 5", default: "" },
+  { key: "ppm6", label: "PPM 6", default: "" },
+  { key: "ppm7", label: "PPM 7", default: "" },
+  { key: "ppm8", label: "PPM 8", default: "" },
+  { key: "ppm9", label: "PPM 9", default: "" },
+  { key: "ppm10", label: "PPM 10", default: "" },
+];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
@@ -239,6 +254,26 @@ const MODELOS = {
     textoDefault: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
     pie: PIE_CABALLITO,
   },
+  // --- Centro Médico Caballito: Test de SIBO (aire espirado) — layout propio ---
+  "caballito-sibo": {
+    label: "Caballito — Test de SIBO (607130)",
+    short: "Caballito · SIBO",
+    practica: "607130 - Test de aire espirado (SIBO)",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    especialidad: "Gastroenterología / Estudios funcionales",
+    codigoPractica: "607130",
+    estudio: "TEST DE AIRE ESPIRADO PARA SOBRECRECIMIENTO BACTERIANO",
+    estudioArchivo: "Test de SIBO",
+    tipo: "sibo",
+    testType: "SIBO 2026",
+    profesionalDefault: ["DR. RAMIRO CALCAGNO", "MN 149098   MP 232961"],
+    campos: SIBO_CAMPOS,
+    solicitanteDefault: "",
+    textoDefault: "Estudio negativo para SIBO",
+    pie: PIE_CABALLITO,
+  },
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
@@ -297,6 +332,8 @@ async function buildInformePdf(modeloKey, input) {
   // del npm install de Railway (su cache no instalaba el paquete).
   const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
   const modelo = MODELOS[modeloKey] || MODELOS[DEFAULT_MODELO];
+  // Modelos con layout propio (ej. SIBO: tabla PPM + gráfico) van por otro builder.
+  if (modelo.tipo === "sibo") return buildSiboPdf(modelo, input || {}, { PDFDocument, StandardFonts, rgb });
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
@@ -459,6 +496,120 @@ async function buildInformePdf(modeloKey, input) {
     centerT(modelo.pie[0], py, { bold: true, size: 12 }); py -= 15;
     for (let i = 1; i < modelo.pie.length; i++) { centerT(modelo.pie[i], py, { bold: true, size: 10.5 }); py -= 14; }
   }
+
+  return await doc.save();
+}
+
+// ---- Builder propio del Test de SIBO (cajas + tabla PPM + gráfico de línea) ----
+async function buildSiboPdf(modelo, input, lib) {
+  const { PDFDocument, StandardFonts, rgb, degrees } = require("./vendor/pdf-lib.min.js");
+  const p = input.paciente || {};
+  const val = input.valores || {};
+  const ppm = [];
+  for (let i = 1; i <= 10; i++) { const n = Number(String(val["ppm" + i]).replace(",", ".")); ppm.push(isFinite(n) ? n : 0); }
+  const umbral = (() => { const n = Number(String(val.umbral).replace(",", ".")); return isFinite(n) && n > 0 ? n : 25; })();
+  const interpretacion = ((input.textoInforme || "").trim()) || modelo.textoDefault || "";
+  const profes = modelo.profesionalDefault || [];
+
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89, M = 40;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0.12, 0.12, 0.12), line = rgb(0.25, 0.25, 0.25), grid = rgb(0.85, 0.85, 0.85);
+  const blue = rgb(0.15, 0.2, 0.85), red = rgb(0.9, 0.35, 0.4);
+
+  const T = (t, x, y, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 9, font: o.bold ? bold : font, color: o.color || ink }); };
+  const wsize = (t, f, s) => f.widthOfTextAtSize(String(t == null ? "" : t), s);
+  const centerIn = (t, x1, x2, y, o) => { o = o || {}; const f = o.bold ? bold : font, s = o.size || 9; T(t, x1 + (x2 - x1 - wsize(t, f, s)) / 2, y, o); };
+  const wrap = (text, f, s, maxW) => {
+    const words = String(text || "").split(/\s+/).filter(Boolean); const lines = []; let cur = "";
+    for (const w of words) { const test = cur ? cur + " " + w : w; if (wsize(test, f, s) > maxW && cur) { lines.push(cur); cur = w; } else cur = test; }
+    if (cur) lines.push(cur); return lines;
+  };
+  // Caja tipo fieldset: recuadro con el título "cortando" el borde superior.
+  const fieldset = (x, topY, w, h, title) => {
+    page.drawRectangle({ x, y: topY - h, width: w, height: h, borderColor: line, borderWidth: 1 });
+    const s = 9, tw = wsize(title, bold, s);
+    page.drawRectangle({ x: x + (w - tw) / 2 - 4, y: topY - s / 2 - 3, width: tw + 8, height: s + 2, color: rgb(1, 1, 1) });
+    T(title, x + (w - tw) / 2, topY - s + 1, { bold: true, size: s });
+  };
+
+  let y = H - M;
+  // Logo centrado
+  const logoBuf = readAsset(modelo.logo);
+  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const lw = modelo.logoW || 84, lh = (img.height / img.width) * lw; page.drawImage(img, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 16; } catch {} }
+
+  const colGap = 20, colW = (W - 2 * M - colGap) / 2;
+  const c1 = M, c2 = M + colW + colGap;
+  const rowTop = y;
+  // Fila 1: Test Type + Patient Information (izq) / Health Care Professional (der)
+  const ttH = 34, piH = 78, hcpH = ttH + 6 + piH;
+  fieldset(c1, rowTop, colW, ttH, "Test Type");
+  centerIn(modelo.testType || "SIBO", c1, c1 + colW, rowTop - 22, { bold: true, size: 11 });
+  const piTop = rowTop - ttH - 6;
+  fieldset(c1, piTop, colW, piH, "Patient Information");
+  {
+    let iy = piTop - 20;
+    T(p.nombre || "—", c1 + 8, iy, { bold: true, size: 9.5 }); iy -= 15;
+    if ((p.documento || "").trim()) { T("Documento: " + p.documento, c1 + 8, iy); iy -= 13; }
+    if ((p.benef || "").trim()) { T("N° Benef.: " + p.benef, c1 + 8, iy); iy -= 13; }
+    if ((val.fechaNac || "").trim()) { T("Nacimiento: " + val.fechaNac, c1 + 8, iy); iy -= 13; }
+    if ((p.fecha || "").trim()) { T("Fecha: " + p.fecha, c1 + 8, iy); }
+  }
+  fieldset(c2, rowTop, colW, hcpH, "Health Care Professional");
+  {
+    let iy = rowTop - 20;
+    (Array.isArray(profes) ? profes : [profes]).forEach((ln) => { T(ln, c2 + 8, iy); iy -= 14; });
+  }
+  y = rowTop - hcpH - 16;
+
+  // Fila 2: tabla PPM (izq) + Interpretation (der)
+  const rowH = 17, tblH = rowH * 11, row2Top = y;
+  const idxW = 42;
+  // grilla tabla
+  page.drawRectangle({ x: c1, y: row2Top - tblH, width: colW, height: tblH, borderColor: line, borderWidth: 1 });
+  for (let r = 1; r < 11; r++) page.drawLine({ start: { x: c1, y: row2Top - r * rowH }, end: { x: c1 + colW, y: row2Top - r * rowH }, thickness: 0.5, color: grid });
+  page.drawLine({ start: { x: c1 + idxW, y: row2Top }, end: { x: c1 + idxW, y: row2Top - tblH }, thickness: 0.5, color: grid });
+  T("PPM", c1 + idxW + 6, row2Top - 12, { bold: true });
+  for (let i = 0; i < 10; i++) {
+    const ry = row2Top - (i + 1) * rowH - 12;
+    T(String(i + 1), c1 + 6, ry);
+    T(String(val["ppm" + (i + 1)] != null && String(val["ppm" + (i + 1)]).trim() !== "" ? val["ppm" + (i + 1)] : ppm[i]), c1 + idxW + 6, ry);
+  }
+  fieldset(c2, row2Top, colW, tblH, "Interpretation");
+  { let iy = row2Top - 20; for (const ln of wrap(interpretacion, font, 9.5, colW - 16)) { T(ln, c2 + 8, iy, { size: 9.5 }); iy -= 14; } }
+  y = row2Top - tblH - 18;
+
+  // Gráfico (ancho completo)
+  const gx0 = M, gx1 = W - M, gTop = y, gBottom = 54;
+  page.drawRectangle({ x: gx0, y: gBottom, width: gx1 - gx0, height: gTop - gBottom, borderColor: line, borderWidth: 1 });
+  const px0 = gx0 + 34, px1 = gx1 - 46, py0 = gBottom + 30, py1 = gTop - 14; // área de ploteo
+  const maxV = Math.max(umbral, ...ppm, 10);
+  let yMax = Math.ceil((maxV + 5) / 10) * 10; if (yMax < 30) yMax = 30;
+  const yFor = (v) => py0 + (Math.max(0, Math.min(v, yMax)) / yMax) * (py1 - py0);
+  const xFor = (i) => px0 + (px1 - px0) * (i / 9);
+  // grilla + labels Y
+  for (let v = 0; v <= yMax; v += 10) {
+    const gy = yFor(v);
+    page.drawLine({ start: { x: px0, y: gy }, end: { x: px1, y: gy }, thickness: 0.4, color: grid });
+    T(String(v), px0 - 6 - wsize(String(v), font, 8), gy - 3, { size: 8, color: line });
+  }
+  // ejes
+  page.drawLine({ start: { x: px0, y: py0 }, end: { x: px1, y: py0 }, thickness: 0.8, color: line });
+  page.drawLine({ start: { x: px0, y: py0 }, end: { x: px0, y: py1 }, thickness: 0.8, color: line });
+  // umbral (rojo)
+  const uy = yFor(umbral);
+  page.drawLine({ start: { x: px0, y: uy }, end: { x: px1, y: uy }, thickness: 1, color: red });
+  // curva PPM (azul)
+  for (let i = 0; i < 9; i++) page.drawLine({ start: { x: xFor(i), y: yFor(ppm[i]) }, end: { x: xFor(i + 1), y: yFor(ppm[i + 1]) }, thickness: 1.3, color: blue });
+  // labels X (número de test)
+  for (let i = 0; i < 10; i++) { const lbl = String(i + 1); T(lbl, xFor(i) - wsize(lbl, font, 8) / 2, py0 - 12, { size: 8, color: line }); }
+  centerIn("Tests", px0, px1, gBottom + 6, { size: 8, color: line });
+  page.drawText("PPM", { x: gx0 + 10, y: (py0 + py1) / 2 - 8, size: 8, font, color: line, rotate: degrees(90) });
+  // leyenda
+  page.drawRectangle({ x: px1 + 8, y: (py0 + py1) / 2, width: 6, height: 6, color: blue });
+  T("PPM", px1 + 17, (py0 + py1) / 2 - 1, { size: 8, color: line });
 
   return await doc.save();
 }
