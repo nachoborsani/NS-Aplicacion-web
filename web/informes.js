@@ -273,8 +273,8 @@ async function buildInformePdf(modeloKey, input) {
     const campos = modelo.campos;
     const cols = 3;
     const rows = Math.ceil(campos.length / cols);
-    const rowH = 16, titleH = 24;
-    const h = titleH + rows * rowH + 6;
+    const rowH = 14, titleH = 20;
+    const h = titleH + rows * rowH + 5;
     drawBox(y, h);
     T(modelo.tecnicosTitulo || "DATOS TÉCNICOS", LBLX, y - 16, { bold: true, size: 11 });
     const grid = rgb(0.75, 0.77, 0.8);
