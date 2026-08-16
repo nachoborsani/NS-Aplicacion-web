@@ -156,7 +156,7 @@
         <!-- USUARIOS -->
         <section id="view-users" style="display:none">
           <div class="head-row">
-            <div class="page-head" style="margin:0"><h1>Usuarios</h1><p>Usuarios con acceso al sistema.</p></div>
+            <div class="page-head" style="margin:0"><p>Usuarios con acceso al sistema.</p></div>
             <button class="btn btn-primary" onclick="openUserModal('create')">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
               Agregar usuario
@@ -469,12 +469,14 @@
               <label>Práctica</label>
               <select class="inp" id="infPractica" onchange="filtrarPorModelo()"></select>
             </div>
-            <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'')"></div>
+            <div class="form-grid nombre-doc">
+              <div class="field"><label>Nombre y apellido</label><input class="inp" id="infNombre" spellcheck="false" placeholder="Ej: GIGENA JOSE GERARDO" oninput="this.value=this.value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'')"></div>
+              <div class="field"><label style="display:block">Documento <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label><input class="inp" id="infDoc" spellcheck="false" inputmode="numeric" maxlength="8" placeholder="Ej: 30123456" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div>
+            </div>
             <div class="form-grid two">
               <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" inputmode="numeric" placeholder="Ej: 14023345500100" oninput="this.value=this.value.replace(/[^0-9-]/g,'')"></div>
               <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
             </div>
-            <div class="field"><label>Documento <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label><input class="inp" id="infDoc" spellcheck="false" placeholder="Si lo dejás vacío, no aparece en el informe"></div>
             <div class="field">
               <label>Resultado del informe</label>
               <select class="inp" id="infDescripcion" onchange="aplicarPreset()"></select>
@@ -539,7 +541,6 @@
         </section>
 
         <section id="view-soon" style="display:none">
-          <div class="page-head"><h1>Configuración general</h1><p>Esta sección se construye más adelante.</p></div>
           <div class="card" style="text-align:center;padding:50px"><div class="empty" style="padding:0"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.5"/></svg></div><b>Próximamente</b><span>Configuración general del sistema.</span></div></div>
         </section>
       </div>

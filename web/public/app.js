@@ -46,7 +46,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', soon:'Configuracion general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', soon:'Configuración general' };
 function go(v, el){
   ['dash','users','clientes','nomencladores','informes','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
