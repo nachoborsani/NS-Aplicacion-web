@@ -764,13 +764,18 @@ function findPamiExclusionRule(rowA, rowB) {
   return null;
 }
 const automaticDebitRules = [
-  {
-    debitCodes: ["570124", "170157", "177157"],
-    dominantCodes: ["570121", "170145", "177145"],
-    debitLabel: "570124",
-    dominantLabel: "570121",
-    description: "Ergometria debitada por Holter en el mismo periodo",
-  },
+  // Regla ergo-por-holter DESACTIVADA: contra datos reales (bandeja 05/2026)
+  // PAMI no debitó ninguna ergometría pese a co-ocurrir con holter, en ningún
+  // orden de fechas. La teoría de co-ocurrencia (y la de secuencia) daban falsos
+  // positivos. Hasta tener la regla real, el débito se aplica a mano / desde la
+  // validación de PAMI. Ver charla 2026-08.
+  // {
+  //   debitCodes: ["570124", "170157", "177157"],
+  //   dominantCodes: ["570121", "170145", "177145"],
+  //   debitLabel: "570124",
+  //   dominantLabel: "570121",
+  //   description: "Ergometria debitada por Holter en el mismo periodo",
+  // },
 ];
 function rowMatchesAnyPracticeCode(row, codes) {
   const expanded = expandedPamiExclusionCodes(row);
