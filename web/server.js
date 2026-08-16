@@ -96,6 +96,19 @@ function saveClientBandejas(store) {
 // Config de Informes: médicos (con su firma) y descripciones. Se guarda en el
 // volumen; se siembra con los datos actuales (Naiara + descripciones base).
 const informesConfigFile = path.join(dataDir, "informes_config.json");
+// Presets "Normal" de cada Holter, con sus valores estándar (todos editables).
+const HOLTER_SEED_PRESETS = [
+  {
+    id: "holter-normal", modelo: "caballito-holter",
+    texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
+    valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
+  },
+  {
+    id: "cima-holter-normal", modelo: "cima-holter",
+    texto: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
+    valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+  },
+];
 function loadInformesConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
@@ -107,7 +120,7 @@ function loadInformesConfig() {
     cfg.descripciones = [
       { id: "normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       { id: "ritmo-sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
-      { id: "holter-normal", texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.", modelos: ["caballito-holter"], valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" } },
+      ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
     ];
   }
   return cfg;
@@ -2724,17 +2737,15 @@ function ensureHolterSeed() {
     const cfg = loadInformesConfig();
     if (!Array.isArray(cfg.descripciones) || !Array.isArray(cfg.medicos)) return;
     let cambio = false;
-    const tieneHolter = cfg.descripciones.some((d) => (d.modelos || []).includes("caballito-holter"));
-    if (!tieneHolter) {
-      cfg.descripciones.push({
-        id: "holter-normal",
-        texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
-        modelos: ["caballito-holter"],
-        valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
-      });
-      cambio = true;
+    // Precargar el preset "Normal" de cada Holter si ese modelo no tiene resultados.
+    for (const s of HOLTER_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
+        cfg.descripciones.push({ id: s.id, texto: s.texto, modelos: [s.modelo], valores: s.valores });
+        cambio = true;
+      }
     }
     // El/los médicos que ya firman electro de Caballito, que también firmen el Holter.
+    // (CIMA queda sin firma a propósito, no se asigna médico.)
     for (const m of cfg.medicos) {
       if (Array.isArray(m.modelos) && m.modelos.includes("caballito-electro") && !m.modelos.includes("caballito-holter")) {
         m.modelos.push("caballito-holter");

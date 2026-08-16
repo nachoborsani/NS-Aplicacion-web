@@ -13,6 +13,28 @@ const ASSETS = path.join(__dirname, "assets", "informes");
 
 const PIE_CABALLITO = ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"];
 const PIE_CIMA = ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"];
+
+// Campos de la caja técnica del Holter. Base = Caballito; CIMA suma 4 más.
+const HOLTER_CAMPOS = [
+  { key: "duracion", label: "Duración", default: "24 hs" },
+  { key: "fcProm", label: "FC promedio", default: "72 lpm" },
+  { key: "fcMin", label: "FC mínima", default: "55 lpm" },
+  { key: "fcMax", label: "FC máxima", default: "118 lpm" },
+  { key: "totalLatidos", label: "Total de latidos", default: "103.000 aprox." },
+  { key: "latidosAnormales", label: "Latidos anormales", default: "0" },
+  { key: "esv", label: "ESV", default: "0" },
+  { key: "ev", label: "EV", default: "0" },
+  { key: "pausas", label: "Pausas significativas", default: "0" },
+  { key: "stt", label: "ST-T", default: "sin cambios significativos" },
+  { key: "sintomas", label: "Síntomas", default: "no refiere" },
+];
+const HOLTER_CAMPOS_CIMA = [
+  ...HOLTER_CAMPOS,
+  { key: "pausaMasLarga", label: "Pausa más larga", default: "0,0 seg" },
+  { key: "bradicardia", label: "Bradicardia", default: "0 episodios" },
+  { key: "motivo", label: "Motivo", default: "Control" },
+  { key: "medicacion", label: "Medicación", default: "—" },
+];
 const MODELOS = {
   // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
   "caballito-consulta-570129": {
@@ -63,19 +85,7 @@ const MODELOS = {
     pie: PIE_CABALLITO,
     // Caja "DATOS TÉCNICOS DEL REGISTRO": valores estándar precargados, todos editables.
     tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
-    campos: [
-      { key: "duracion", label: "Duración", default: "24 hs" },
-      { key: "fcProm", label: "FC promedio", default: "72 lpm" },
-      { key: "fcMin", label: "FC mínima", default: "55 lpm" },
-      { key: "fcMax", label: "FC máxima", default: "118 lpm" },
-      { key: "totalLatidos", label: "Total de latidos", default: "103.000 aprox." },
-      { key: "latidosAnormales", label: "Latidos anormales", default: "0" },
-      { key: "esv", label: "ESV", default: "0" },
-      { key: "ev", label: "EV", default: "0" },
-      { key: "pausas", label: "Pausas significativas", default: "0" },
-      { key: "stt", label: "ST-T", default: "sin cambios significativos" },
-      { key: "sintomas", label: "Síntomas", default: "no refiere" },
-    ],
+    campos: HOLTER_CAMPOS,
   },
   // --- CIMA (Innovación en Medicina): electro, firma Dr. Savia ---
   "cima-electro": {
@@ -108,6 +118,24 @@ const MODELOS = {
     solicitanteDefault: "Gerardo Savia",
     textoDefault: "Trazado sin valor patológico.",
     pie: PIE_CIMA,
+  },
+  "cima-holter": {
+    label: "CIMA — Holter cardíaco 24 hs",
+    short: "CIMA · Holter",
+    practica: "Holter cardíaco 24 hs",
+    centro: "CIMA",
+    logo: "cima_logo.png",
+    logoW: 150,
+    servicio: "SERVICIO DE CARDIOLOGÍA",
+    especialidad: "Cardiología",
+    codigoPractica: "",
+    estudio: "Holter cardíaco de 3 canales 24 hs.",
+    estudioArchivo: "Holter 24 hs",
+    solicitanteDefault: "Gerardo Savia",
+    textoDefault: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
+    pie: PIE_CIMA,
+    tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
+    campos: HOLTER_CAMPOS_CIMA,
   },
 };
 // Para el desplegable del front (una sola fuente de verdad).
@@ -258,8 +286,14 @@ async function buildInformePdf(modeloKey, input) {
       const cy = gridTop - r * rowH - 11;
       const lbl = campos[i].label + ": ";
       T(lbl, cx, cy, { bold: true, size: 8.5 });
-      const val = String((valores[campos[i].key] == null ? "" : valores[campos[i].key])).trim() || campos[i].default || "";
-      T(val, cx + bold.widthOfTextAtSize(lbl, 8.5), cy, { size: 8.5 });
+      const lblW = bold.widthOfTextAtSize(lbl, 8.5);
+      let val = String((valores[campos[i].key] == null ? "" : valores[campos[i].key])).trim() || campos[i].default || "";
+      const maxVW = colW - 12 - lblW;
+      if (font.widthOfTextAtSize(val, 8.5) > maxVW) {
+        while (val.length > 1 && font.widthOfTextAtSize(val + "…", 8.5) > maxVW) val = val.slice(0, -1);
+        val += "…";
+      }
+      T(val, cx + lblW, cy, { size: 8.5 });
     }
     for (let r = 0; r <= rows; r++) {
       const ly = gridTop - r * rowH;
