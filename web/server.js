@@ -2878,6 +2878,23 @@ function ensureOrlSeed() {
 }
 ensureOrlSeed();
 
+// Rellena el nombre corto en presets ya existentes (configs previas al cambio).
+function ensureNombresPresets() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    const nombres = { normal: "ECG normal", "ritmo-sinusal": "Ritmo sinusal" };
+    for (const s of HOLTER_SEED_PRESETS) nombres[s.id] = s.nombre;
+    for (const s of ORL_SEED_PRESETS) nombres[s.id] = s.nombre;
+    let cambio = false;
+    for (const d of cfg.descripciones) {
+      if (!d.nombre && nombres[d.id]) { d.nombre = nombres[d.id]; cambio = true; }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[nombres-seed] omitido:", e && e.message); }
+}
+ensureNombresPresets();
+
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);
 });
