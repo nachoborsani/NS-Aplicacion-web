@@ -2855,6 +2855,21 @@ function ensureOrlSeed() {
         cambio = true;
       }
     }
+    // Las dos otorrinos de Caballito, ya con sus prácticas ORL asignadas.
+    // Quedan "sin firma" hasta que el admin suba el PNG (no va en el repo público).
+    const orlCaballito = ["caballito-orl-cerumen", "caballito-orl-quimico", "caballito-orl-combinado", "caballito-orl-videorino"];
+    const orlMedicos = [
+      { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana" },
+      { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo" },
+    ];
+    if (Array.isArray(cfg.medicos)) {
+      for (const m of orlMedicos) {
+        if (!cfg.medicos.some((x) => x.id === m.id)) {
+          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", modelos: orlCaballito.slice() });
+          cambio = true;
+        }
+      }
+    }
     if (cambio) saveInformesConfig(cfg);
   } catch (e) { console.log("[orl-seed] omitido:", e && e.message); }
 }
