@@ -806,6 +806,7 @@ function applyAutomaticExclusionDebits(rows) {
     row.autoDebitPairCode = "";
     row.autoDebitRulePage = "";
     row.autoDebitRuleCodes = "";
+    row.debitWarning = "";
     if (!row.billable || !row.practiceCode || reportRowGross(row) <= 0) return;
     const key = reportRowExclusionGroupKey(row);
     if (!key) return;
@@ -828,6 +829,11 @@ function applyAutomaticExclusionDebits(rows) {
         target.autoDebitReason = `${rule.description}: ${target.practiceCode || rule.debitLabel} contra ${other.practiceCode || rule.dominantLabel}`;
       }
     }
+    // Aviso (no aplica débito): con 2+ ecodopplers del mismo paciente/período,
+    // PAMI suele pagar uno al 40% (parcial). No sabemos cuál, así que avisamos
+    // en todos para que el operador lo aplique según la validación de PAMI.
+    const ecos = groupRows.filter((r) => normalizeText(`${r.practiceDescription || ""} ${r.practiceText || ""}`).includes("ecodoppler"));
+    if (ecos.length >= 2) ecos.forEach((r) => { r.debitWarning = "Posible débito parcial: PAMI suele pagar uno al 40%. Revisar validación."; });
   }
   return rows || [];
 }
@@ -1308,6 +1314,7 @@ function sanitizeReportRows(rows) {
       debitAmount: debitType === "partial" ? clampMoney(row.debitAmount, 0, Math.max(0, valueGross)) : 0,
       autoDebit: !!row.autoDebit,
       autoDebitReason: String(row.autoDebitReason || "").trim(),
+      debitWarning: String(row.debitWarning || "").trim(),
       autoDebitPairCode: cleanIdentifier(row.autoDebitPairCode),
       autoDebitRulePage: cleanIdentifier(row.autoDebitRulePage),
       autoDebitRuleCodes: String(row.autoDebitRuleCodes || "").trim(),

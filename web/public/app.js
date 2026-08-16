@@ -1677,6 +1677,9 @@ function getClientReportVisibleRows(){
     if (CLIENT_REPORT_QUICK_FILTER === 'cutoff' && !item.row.outsideCutoff) return false;
     if (CLIENT_REPORT_QUICK_FILTER === 'missingInforme' && !reportMissingInforme(item.row)) return false;
     if (CLIENT_REPORT_QUICK_FILTER === 'debito' && !(reportDebitAmount(item.row) > 0)) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'facturable' && !(item.row.billable && reportBaseGross(item.row) > 0)) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'neto' && !(reportNetAmount(item.row) > 0)) return false;
+    if (CLIENT_REPORT_QUICK_FILTER === 'ausentes' && !item.row.absent) return false;
     return true;
   });
   if (CLIENT_REPORT_SORT === 'practice-asc' || CLIENT_REPORT_SORT === 'practice-desc') {
@@ -1717,6 +1720,12 @@ function updateClientReportSummary(){
   if (cutoffCard) cutoffCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'cutoff');
   if (missingCard) missingCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'missingInforme');
   if (debitCard) debitCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'debito');
+  var grossCard = document.getElementById('clientReportGrossCard');
+  var netCard = document.getElementById('clientReportNetCard');
+  var absentCard = document.getElementById('clientReportAbsentCard');
+  if (grossCard) grossCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'facturable');
+  if (netCard) netCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'neto');
+  if (absentCard) absentCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'ausentes');
   updateExpectedAmountStatus(net);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
@@ -1757,6 +1766,7 @@ function renderClientReportRows(){
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
     var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
     var autoDebitNote = row.autoDebit ? '<div class="nom-muted auto-debit-note">Auto: excluyente con ' + esc(row.autoDebitPairCode || '-') + '</div>' : '';
+    if (!autoDebitNote && row.debitWarning) autoDebitNote = '<div class="debit-warning-note">⚠ ' + esc(row.debitWarning) + '</div>';
     return '<tr data-report-row="' + idx + '">'
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
       + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
