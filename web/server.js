@@ -1127,6 +1127,16 @@ const clientPracticeValueOverrides = {
       valueSourceCode: "570126",
     },
   },
+  "st-ignacio": {
+    "570126": {
+      moduleCode: "543",
+      moduleDescription: "CARDIOLOGIA",
+      practiceCode: "570126",
+      practiceDescription: "ELECTROCARDIOGRAMA",
+      total: 6905.52,
+      valueSourceCode: "570126",
+    },
+  },
 };
 function getClientPracticeOverride(clientSlug, practiceCode) {
   return ((clientPracticeValueOverrides[clientSlug] || {})[String(practiceCode || "")]) || null;
