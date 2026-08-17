@@ -1753,6 +1753,16 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     },
   };
 }
+// Un reporte "ya tiene débitos cargados" si alguna fila tiene un débito real
+// aplicado (a mano o de validación PAMI). Los débitos que son solo proyección de
+// las reglas (debitSource === "regla") NO cuentan: son estimación, falta confirmar.
+function reportHasRealDebits(rows) {
+  return (rows || []).some((r) => r && r.manualDebit && r.debitSource !== "regla" && reportRowDebit(r) > 0);
+}
+function reportDebitStatus(report) {
+  if (report && (report.debitStatus === "confirmado" || report.debitStatus === "pendiente")) return report.debitStatus;
+  return reportHasRealDebits(report && report.rows) ? "confirmado" : "pendiente";
+}
 function reportListItem(report) {
   const summary = summarizeReportRows(reportRows(report));
   return {
@@ -1769,7 +1779,7 @@ function reportListItem(report) {
     updatedBy: report.updatedBy,
     expectedAmount: report.expectedAmount,
     observations: report.observations,
-    debitStatus: report.debitStatus === "confirmado" ? "confirmado" : "pendiente",
+    debitStatus: reportDebitStatus(report),
     summary,
   };
 }
@@ -2566,7 +2576,7 @@ const server = http.createServer(async (req, res) => {
       closedBy: me.username,
       expectedAmount,
       observations: String(body.observations || "").trim(),
-      debitStatus: body.debitStatus === "confirmado" ? "confirmado" : "pendiente",
+      debitStatus: ["pendiente", "confirmado"].includes(body.debitStatus) ? body.debitStatus : (reportHasRealDebits(rows) ? "confirmado" : "pendiente"),
       summary,
       rows,
     };
@@ -2679,7 +2689,7 @@ const server = http.createServer(async (req, res) => {
       rowCount: rows.length,
       expectedAmount,
       observations: String(body.observations || "").trim(),
-      debitStatus: ["pendiente", "confirmado"].includes(body.debitStatus) ? body.debitStatus : (current.debitStatus || "pendiente"),
+      debitStatus: ["pendiente", "confirmado"].includes(body.debitStatus) ? body.debitStatus : (current.debitStatus || (reportHasRealDebits(rows) ? "confirmado" : "pendiente")),
       summary,
       rows,
       updatedAt: new Date().toISOString(),
