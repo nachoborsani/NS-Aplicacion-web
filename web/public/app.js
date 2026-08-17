@@ -1627,6 +1627,8 @@ function renderClientDashboard(data){
     var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
     // Para la variación por módulo vs el mes que se compara.
     var hayCompare = !!compare.period;
+    var curLbl = shortMonth(current.label || current.period || 'Este mes');
+    var cmpLbl = shortMonth(compare.label || compare.period || 'Mes ant.');
     var compareModules = {};
     (compare.modules || []).forEach(function(m){ compareModules[String(m.moduleCode)] = m; });
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
@@ -1651,16 +1653,18 @@ function renderClientDashboard(data){
         return list.map(function(g){
           var cd = hayCompare ? ' ' + dashboardDelta({ value: g.count - g.pcount, percent: g.pcount ? ((g.count - g.pcount) / Math.abs(g.pcount)) : null }, false) : '';
           var nd = hayCompare ? ' ' + dashboardDelta({ value: g.net - g.pnet, percent: g.pnet ? ((g.net - g.pnet) / Math.abs(g.pnet)) : null }, true) : '';
+          var cPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(g.pcount)) + '</div>' : '';
+          var nPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(moneyFmt(g.pnet)) + '</div>' : '';
           return '<tr>'
             + '<td><span class="nom-code">' + esc(g.code) + '</span> ' + esc(g.desc || '-') + '</td>'
-            + '<td class="tnum"><b>' + esc(numberFmt(g.count)) + '</b>' + cd + '</td>'
-            + '<td class="nom-money"><b>' + esc(moneyFmt(g.net)) + '</b>' + nd + '</td>'
+            + '<td class="tnum"><div class="cmp-cell"><b>' + esc(numberFmt(g.count)) + '</b>' + cd + cPrev + '</div></td>'
+            + '<td class="nom-money"><div class="cmp-cell"><b>' + esc(moneyFmt(g.net)) + '</b>' + nd + nPrev + '</div></td>'
             + '</tr>';
         }).join('');
       }
       function detailRow(kind, label, detailRows, prevRows){
         return '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + kind + '" style="display:none"><td colspan="4">'
-          + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + (hayCompare ? ' <span class="nom-muted">(cantidad y neto: variación vs el mes comparado)</span>' : '') + '</div>'
+          + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + (hayCompare ? ' <span class="nom-muted">(número grande = ' + esc(curLbl) + '; abajo = ' + esc(cmpLbl) + ')</span>' : '') + '</div>'
           + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Prestacion</th><th>Cantidad</th><th>Neto</th></tr></thead><tbody>'
           + renderDetailRows(detailRows, prevRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
           + '</tbody></table></div></td></tr>';
@@ -1686,12 +1690,15 @@ function renderClientDashboard(data){
         consDelta = mkDelta(consNow, prevMod.consultations || 0, false);
         pracDelta = mkDelta(pracNow, prevMod.practices || 0, false);
       }
+      var consPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(prevMod.consultations || 0)) + '</div>' : '';
+      var pracPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(prevMod.practices || 0)) + '</div>' : '';
+      var netoPrev = hayCompare ? '<div class="mod-neto-prev">' + esc(cmpLbl) + ' ' + esc(moneyFmt(prevMod.net || 0)) + ' ' + modDelta + '</div>' : '';
       return '<tr class="dashboard-module-row">'
         + '<td><span class="nom-code">' + esc(module.moduleCode || '-') + '</span> <span class="nom-muted">' + esc(module.moduleDescription || '') + '</span></td>'
-        + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + '</div></td>'
-        + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + '</div></td>'
-        + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>' + modDelta
-        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
+        + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + consPrev + '</div></td>'
+        + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + pracPrev + '</div></td>'
+        + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
+        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div>' + netoPrev + '</td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
         + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);

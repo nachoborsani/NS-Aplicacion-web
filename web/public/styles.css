@@ -407,6 +407,11 @@
   .mod-bar{flex:0 0 120px;height:4px;border-radius:3px;background:var(--hover);overflow:hidden;margin-left:auto}
   .mod-bar-fill{height:100%;border-radius:3px;background:var(--turq)}
   .mod-share{font-size:11px;font-weight:750;color:var(--turq-d);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+  .mod-prev{font-size:10.5px;font-weight:650;color:var(--text-2);font-variant-numeric:tabular-nums;margin-top:2px}
+  .mod-neto-prev{font-size:11px;color:var(--text-2);font-variant-numeric:tabular-nums;margin-top:4px;display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+  .dashboard-detail-scroll .cmp-cell{display:flex;flex-direction:column;gap:1px}
+  .dashboard-detail-scroll td.tnum .cmp-cell{align-items:center}
+  .dashboard-detail-scroll td.nom-money .cmp-cell{align-items:flex-end}
   .dashboard-trend{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:12px 14px}
   .dashboard-trend-title{font-size:10.5px;font-weight:750;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
   .dashboard-trend-bars{display:flex;align-items:flex-end;gap:8px;height:118px}
