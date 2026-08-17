@@ -378,6 +378,8 @@
   .dashboard-kpis .dashboard-delta{display:inline-flex;align-items:center;gap:5px;font-weight:750;margin-top:8px;padding:3px 8px;border-radius:999px;font-size:11px}
   .dashboard-kpis .dashboard-delta.good{color:var(--success);background:var(--success-bg)}
   .dashboard-kpis .dashboard-delta.bad{color:var(--error);background:var(--error-bg)}
+  .dashboard-kpis div.kpi-clickable{cursor:pointer;transition:border-color .15s ease,background .15s ease}
+  .dashboard-kpis div.kpi-clickable:hover{border-color:var(--turq);background:var(--hover)}
   .dashboard-delta-arrow{font-size:9px;line-height:1}
   .dashboard-delta-pct{font-weight:600;opacity:.75}
   .mod-share-row{display:flex;align-items:center;gap:7px;margin-top:5px}

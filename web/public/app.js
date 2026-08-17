@@ -1400,13 +1400,46 @@ function renderSavedClientReports(){
       + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
       + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
-      + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0)) + '</div></td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0))
+        + (Number(summary.missingInformeAmount) > 0 ? '<br>Falta inf. ' + esc(moneyFmt(summary.missingInformeAmount)) : '')
+        + (Number(summary.nextPeriodCutoff) > 0 ? '<br>Próx. corte ' + esc(moneyFmt(summary.nextPeriodCutoff)) : '')
+        + '</div></td>'
       + '<td><div class="report-row-actions">' + actions + '</div></td>'
       + '</tr>';
   }).join('');
 }
 // Modal con las opciones de PDF del reporte (en vez de muchos botones).
 var REPORT_PDF_ID = '';
+function closeDebitosModal(){ hideModal('debitosModal', 'debitosScrim'); }
+function openDebitosModal(){
+  var data = CLIENT_DASHBOARD_DATA || {};
+  var cur = data.current || {};
+  var rows = [];
+  (cur.modules || []).forEach(function(m){
+    (m.rows || []).forEach(function(r){
+      if (Number(r.debit) > 0) rows.push({
+        patientName: r.patientName, benefit: r.benefit,
+        practiceCode: r.practiceCode, practiceDescription: r.practiceDescription,
+        moduleCode: m.moduleCode, moduleDescription: m.moduleDescription,
+        gross: r.gross, debit: r.debit
+      });
+    });
+  });
+  rows.sort(function(a, b){ return Number(b.debit || 0) - Number(a.debit || 0); });
+  var total = rows.reduce(function(s, r){ return s + Number(r.debit || 0); }, 0);
+  var meta = document.getElementById('debitosModalMeta');
+  if (meta) meta.textContent = (cur.label || '') + ' · ' + rows.length + ' débito' + (rows.length === 1 ? '' : 's') + ' · total ' + moneyFmt(total);
+  var body = document.getElementById('debitosModalBody');
+  if (body) body.innerHTML = rows.length ? rows.map(function(r){
+    return '<tr>'
+      + '<td>' + esc(r.patientName || '-') + (r.benefit ? '<div class="nom-muted">' + esc(r.benefit) + '</div>' : '') + '</td>'
+      + '<td><span class="nom-code">' + esc(r.practiceCode || '-') + '</span> ' + esc(r.practiceDescription || '')
+        + (r.moduleCode ? '<div class="nom-muted">' + esc(r.moduleCode) + (r.moduleDescription ? ' ' + esc(r.moduleDescription) : '') + '</div>' : '') + '</td>'
+      + '<td class="nom-money"><b>' + esc(moneyFmt(r.debit || 0)) + '</b><div class="nom-muted">de ' + esc(moneyFmt(r.gross || 0)) + '</div></td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="3" class="muted-cell">No hay debitos en este mes.</td></tr>';
+  showModal('debitosModal', 'debitosScrim');
+}
 function openReportPdfModal(id){ REPORT_PDF_ID = id; showModal('reportPdfModal', 'reportPdfScrim'); }
 function closeReportPdfModal(){ hideModal('reportPdfModal', 'reportPdfScrim'); }
 function reportPdfChoose(kind){
@@ -1526,8 +1559,10 @@ async function descargarComparativa(format){
     bajarBlob(blob, m ? m[1] : ('comparativa.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
   } catch (e){ alert('No se pudo generar el archivo.'); }
 }
+var CLIENT_DASHBOARD_DATA = null;
 function renderClientDashboard(data){
   data = data || {};
+  CLIENT_DASHBOARD_DATA = data;
   var current = data.current || {};
   var compare = data.compare || {};
   var deltas = compare.period ? (data.deltas || {}) : {};
@@ -1540,7 +1575,7 @@ function renderClientDashboard(data){
       + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + dashboardDelta(deltas.net, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + dashboardDelta(deltas.consultations, false) + '</div>'
       + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + dashboardDelta(deltas.practices, false) + '</div>'
-      + '<div><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true, true) + '</div>'
+      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + dashboardDelta(deltas.absent, false, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
   }

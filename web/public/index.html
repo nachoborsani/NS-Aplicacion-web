@@ -803,6 +803,24 @@
       </div>
     </div>
 
+    <!-- ===== Modal: debitos del dashboard ===== -->
+    <div class="scrim" id="debitosScrim" onclick="closeDebitosModal()"></div>
+    <div class="modal wide" id="debitosModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Débitos del mes</h3><button class="x" onclick="closeDebitosModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-note" id="debitosModalMeta"></p>
+        <div class="table-scroll">
+          <table class="nom-table">
+            <thead><tr><th>Paciente</th><th>Práctica</th><th class="nom-money">Débito</th></tr></thead>
+            <tbody id="debitosModalBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeDebitosModal()">Cerrar</button>
+      </div>
+    </div>
+
     <!-- ===== Modal: eliminar reporte guardado ===== -->
     <div class="scrim" id="reportDeleteScrim" onclick="closeReportDeleteModal()"></div>
     <div class="modal" id="reportDeleteModal" role="dialog" aria-modal="true">
