@@ -1876,8 +1876,17 @@ function parsePamiValidacion(text){
     var nums = line.match(/\b\d{5,6}\b/g) || [];        // código = último número de 5-6 dígitos
     var codigo = nums.length ? nums[nums.length - 1] : '';
     if (!af || !codigo) return;
-    // "PARCIAL" = PAMI paga 40%; cualquier otro motivo (excluyentes, etc.) = débito total.
-    out.push({ afiliado: af, codigo: codigo, tipo: /parcial/i.test(line) ? 'pay40' : 'total', raw: line.trim() });
+    // Motivo del débito → cuánto paga PAMI:
+    //  - "UMBRALES" (valorización parcial por umbrales, Resol 2713) = paga 60%.
+    //  - "PARCIAL" sin umbrales (ej. ecodoppler arterial+venoso) = paga 40%.
+    //  - cualquier otro (excluyentes, incluyentes, inactivo, etc.) = débito total (100%).
+    // OJO: "umbral" se chequea ANTES que "parcial" porque el texto de umbrales
+    // dice "VALORIZACION PARCIAL POR UMBRALES" (contiene las dos palabras).
+    var tipo;
+    if (/umbral/i.test(line)) tipo = 'pay60';
+    else if (/parcial/i.test(line)) tipo = 'pay40';
+    else tipo = 'total';
+    out.push({ afiliado: af, codigo: codigo, tipo: tipo, raw: line.trim() });
   });
   return out;
 }

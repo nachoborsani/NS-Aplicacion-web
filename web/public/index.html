@@ -776,7 +776,7 @@
     <div class="modal wide" id="pamiDebitModal" role="dialog" aria-modal="true">
       <div class="modal-head"><h3>Aplicar débitos de PAMI</h3><button class="x" onclick="closePamiDebitModal()" aria-label="Cerrar">&times;</button></div>
       <div class="modal-body">
-        <p class="modal-note">Pegá las filas de la validación de PAMI (la pantalla del semáforo). El sistema cruza <b>afiliado + código</b> con la bandeja y aplica el débito. Las filas que dicen <b>PARCIAL</b> se aplican como "PAMI paga 40%".</p>
+        <p class="modal-note">Pegá las filas de la validación de PAMI (la pantalla del semáforo). El sistema cruza <b>afiliado + código</b> con la bandeja y aplica el débito según el motivo: <b>UMBRALES</b> → paga 60% · <b>PARCIAL</b> → paga 40% · <b>excluyentes / otros</b> → débito total.</p>
         <textarea class="inp" id="pamiDebitText" rows="8" placeholder="Pegá acá las filas de la validación de PAMI (una por línea, tal cual salen)..." style="height:auto;min-height:150px;resize:vertical;font-family:monospace;font-size:12px;white-space:pre;overflow:auto"></textarea>
         <div class="msg err" id="pamiDebitError"></div>
         <div id="pamiDebitResult" class="nom-muted" style="margin-top:8px"></div>
