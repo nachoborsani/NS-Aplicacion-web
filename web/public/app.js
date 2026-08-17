@@ -1510,12 +1510,30 @@ function dashboardDelta(delta, money, invert){
   var pct = delta.percent === null ? '' : '<span class="dashboard-delta-pct">' + esc(percentFmt(Math.abs(delta.percent))) + '</span>';
   return '<small class="dashboard-delta ' + signClass + '"><span class="dashboard-delta-arrow">' + arrow + '</span>' + esc(value) + pct + '</small>';
 }
+// Descarga la comparativa mes vs mes en Excel (con fórmulas) o PDF.
+async function descargarComparativa(format){
+  if (!ACTIVE_CLIENT) return;
+  var period = (document.getElementById('clientDashPeriod') || {}).value || '';
+  var compare = (document.getElementById('clientDashCompare') || {}).value || '';
+  if (!period || !compare){ alert('Elegí un mes y un mes para comparar antes de descargar.'); return; }
+  var params = new URLSearchParams({ period: period, compare: compare, format: format });
+  try {
+    var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/dashboard/comparativa/export?' + params.toString());
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar el archivo.'); return; }
+    var blob = await r.blob();
+    var cd = r.headers.get('content-disposition') || '';
+    var m = cd.match(/filename="([^"]+)"/);
+    bajarBlob(blob, m ? m[1] : ('comparativa.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
+  } catch (e){ alert('No se pudo generar el archivo.'); }
+}
 function renderClientDashboard(data){
   data = data || {};
   var current = data.current || {};
   var compare = data.compare || {};
   var deltas = compare.period ? (data.deltas || {}) : {};
   fillClientDashboardSelects(data.periods || [], current.period || '', compare.period || '');
+  var exp = document.getElementById('clientDashboardExport');
+  if (exp) exp.style.display = compare.period ? '' : 'none';
   var kpis = document.getElementById('clientDashboardKpis');
   if (kpis) {
     kpis.innerHTML = ''
@@ -1634,11 +1652,11 @@ function renderClientDashboard(data){
         pracDelta = mkDelta(pracNow, prevMod.practices || 0, false);
       }
       return '<tr class="dashboard-module-row">'
-        + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
+        + '<td><span class="nom-code">' + esc(module.moduleCode || '-') + '</span> <span class="nom-muted">' + esc(module.moduleDescription || '') + '</span></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + '</div></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + '</div></td>'
-        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b> ' + modDelta
-        + '<div class="mod-share-row"><div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
+        + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>' + modDelta
+        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
         + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);

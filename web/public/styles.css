@@ -360,7 +360,11 @@
   .client-info-actions{display:flex;gap:6px;flex:0 0 auto}
   .dashboard-head{align-items:flex-end}
   .dashboard-head p{margin:2px 0 0;color:var(--text-2);font-size:12px}
-  .client-dashboard-controls{display:grid;grid-template-columns:170px 170px;gap:9px}
+  .client-dashboard-controls{display:grid;grid-template-columns:170px 170px auto;gap:9px;align-items:end}
+  .dashboard-export{display:flex;flex-direction:column;gap:6px}
+  .dashboard-export .field-lbl{font-size:11.5px;font-weight:600;color:var(--text-2)}
+  .dashboard-export>div{display:flex;gap:8px}
+  .dashboard-export .btn{height:36px;border-radius:9px;font-size:12.5px;gap:6px;padding:0 12px}
   .client-dashboard-controls .field{margin:0}
   .client-dashboard-controls .field span{display:block;font-size:11px;font-weight:750;color:var(--text-2);margin-bottom:4px}
   .client-dashboard-controls .inp{height:36px;border-radius:9px;font-size:12.5px}
@@ -377,6 +381,8 @@
   .dashboard-delta-arrow{font-size:9px;line-height:1}
   .dashboard-delta-pct{font-weight:600;opacity:.75}
   .mod-share-row{display:flex;align-items:center;gap:7px;margin-top:5px}
+  .mod-neto-line{display:flex;align-items:center;gap:8px}
+  .mod-neto-line b{white-space:nowrap}
   .mod-bar{flex:1;min-width:38px;height:6px;border-radius:4px;background:var(--hover);overflow:hidden}
   .mod-bar-fill{height:100%;border-radius:4px;background:var(--turq)}
   .mod-share{font-size:11px;font-weight:750;color:var(--turq-d);font-variant-numeric:tabular-nums}

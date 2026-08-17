@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const XLSX = require("xlsx");
 const informes = require("./informes");
 const nomExport = require("./nomenclador_export");
+const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
 
 const port = Number(process.env.PORT || 3000);
@@ -1481,6 +1482,8 @@ function emptyDashboardPeriod(period) {
     absent: 0,
     outsideCutoff: 0,
     nextPeriodCutoff: 0,
+    missingInforme: 0,
+    missingInformeAmount: 0,
     unmatched: 0,
     gross: 0,
     debit: 0,
@@ -1504,6 +1507,7 @@ function addRowToDashboardPeriod(target, row) {
   if (row.absent) target.absent += 1;
   if (row.outsideCutoff) target.outsideCutoff += 1;
   target.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
+  if (reportRowMissingInforme(row)) { target.missingInforme += 1; target.missingInformeAmount += reportRowMissingInformeAmount(row); }
   if (!row.matchFound && !row.valueEdited) target.unmatched += 1;
   const gross = reportRowGross(row);
   const debit = reportRowDebit(row);
@@ -1557,6 +1561,8 @@ function finalizeDashboardPeriod(target) {
   target.practiceNet = money(target.practiceNet);
   target.averageNet = target.totalRows ? money(target.net / target.totalRows) : 0;
   target.consultationShare = target.totalRows ? target.consultations / target.totalRows : 0;
+  target.nextPeriodCutoff = money(target.nextPeriodCutoff);
+  target.missingInformeAmount = money(target.missingInformeAmount);
   target.modules = Object.values(target._modules || {})
     .map((module) => ({
       ...module,
@@ -2297,6 +2303,34 @@ const server = http.createServer(async (req, res) => {
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
     return json(res, 200, buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare")));
+  }
+
+  // Export de la comparativa mes vs mes (XLSX con fórmulas o PDF).
+  const compExportMatch = p.match(/^\/api\/clientes\/([^/]+)\/dashboard\/comparativa\/export$/);
+  if (compExportMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(compExportMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const data = buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare"));
+    if (!data.current || !data.current.period) return json(res, 400, { error: "No hay mes seleccionado para comparar." });
+    if (!data.compare || !data.compare.period) return json(res, 400, { error: "Elegí un mes para comparar antes de exportar." });
+    const format = String(url.searchParams.get("format") || "xlsx").toLowerCase();
+    const base = downloadName("Comparativa " + client.name + " " + (data.current.label || "") + " vs " + (data.compare.label || "")) || "comparativa";
+    try {
+      if (format === "pdf") {
+        const buf = Buffer.from(await comparativaExport.buildPdf(client, data));
+        res.writeHead(200, { "content-type": "application/pdf", "content-length": buf.length, "content-disposition": `attachment; filename="${base}.pdf"`, "cache-control": "no-store" });
+        return res.end(buf);
+      }
+      const buf = comparativaExport.buildXlsx(client, data);
+      res.writeHead(200, { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-length": buf.length, "content-disposition": `attachment; filename="${base}.xlsx"`, "cache-control": "no-store" });
+      return res.end(buf);
+    } catch (error) {
+      console.log("[comparativa-export] error:", error && error.message);
+      return json(res, 500, { error: "No se pudo generar el archivo." });
+    }
   }
 
   // Acceso PAMI del cliente (usuario + clave encriptada) — solo admin.

@@ -245,6 +245,17 @@
                   <div class="client-dashboard-controls">
                     <label class="field"><span>Mes</span><select class="inp" id="clientDashPeriod" onchange="loadClientDashboard()"><option value="">Sin reportes</option></select></label>
                     <label class="field"><span>Comparar con</span><select class="inp" id="clientDashCompare" onchange="loadClientDashboard()"><option value="">Sin comparacion</option></select></label>
+                    <div class="dashboard-export" id="clientDashboardExport" style="display:none">
+                      <span class="field-lbl">Comparativa</span>
+                      <div>
+                        <button class="btn btn-ghost" type="button" onclick="descargarComparativa('xlsx')" title="Descargar la comparativa en Excel (con fórmulas para editar/proyectar)">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Excel
+                        </button>
+                        <button class="btn btn-ghost" type="button" onclick="descargarComparativa('pdf')" title="Descargar la comparativa en PDF para presentar">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div class="dashboard-kpis" id="clientDashboardKpis">
