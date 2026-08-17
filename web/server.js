@@ -1769,6 +1769,7 @@ function reportListItem(report) {
     updatedBy: report.updatedBy,
     expectedAmount: report.expectedAmount,
     observations: report.observations,
+    debitStatus: report.debitStatus === "confirmado" ? "confirmado" : "pendiente",
     summary,
   };
 }
@@ -2565,6 +2566,7 @@ const server = http.createServer(async (req, res) => {
       closedBy: me.username,
       expectedAmount,
       observations: String(body.observations || "").trim(),
+      debitStatus: body.debitStatus === "confirmado" ? "confirmado" : "pendiente",
       summary,
       rows,
     };
@@ -2677,6 +2679,7 @@ const server = http.createServer(async (req, res) => {
       rowCount: rows.length,
       expectedAmount,
       observations: String(body.observations || "").trim(),
+      debitStatus: ["pendiente", "confirmado"].includes(body.debitStatus) ? body.debitStatus : (current.debitStatus || "pendiente"),
       summary,
       rows,
       updatedAt: new Date().toISOString(),
@@ -2707,6 +2710,24 @@ const server = http.createServer(async (req, res) => {
     store.items.splice(idx, 1);
     saveClientReportsStore(store);
     return json(res, 200, { ok: true });
+  }
+
+  // Marcar débitos como pendientes de confirmar / confirmados, sin re-guardar el
+  // reporte entero. Útil cuando recién al subir la factura llega la validación real.
+  const clientReportDebitStatusMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/debitos-estado$/);
+  if (clientReportDebitStatusMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportDebitStatusMatch[1]);
+    const id = decodeURIComponent(clientReportDebitStatusMatch[2]);
+    const body = await readBody(req);
+    const estado = body.estado === "confirmado" ? "confirmado" : "pendiente";
+    const store = loadClientReportsStore();
+    const idx = (store.items || []).findIndex((item) => item.clientSlug === slug && item.id === id);
+    if (idx < 0) return json(res, 404, { error: "Reporte no encontrado." });
+    store.items[idx] = { ...store.items[idx], debitStatus: estado, updatedAt: new Date().toISOString(), updatedBy: me.username };
+    saveClientReportsStore(store);
+    return json(res, 200, { report: reportListItem(store.items[idx]) });
   }
 
   const clientReportPreviewMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/preview$/);

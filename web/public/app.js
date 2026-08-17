@@ -560,6 +560,7 @@ var CLIENT_REPORT_EXPECTED_AMOUNT = '';
 var CLIENT_REPORT_SORT = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_ID = '';
+var CLIENT_REPORT_DEBIT_STATUS = '';   // '' = no tocar (backend mantiene/defaultea), 'confirmado' al pegar validación PAMI
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_REPORT_FILE = null;
 var CLIENT_REPORT_OBSERVATIONS = '';
@@ -1396,8 +1397,11 @@ function renderSavedClientReports(){
       + '<button class="btn btn-navy report-open-btn" type="button" onclick="openReportPdfModal(&quot;' + esc(report.id) + '&quot;)">Descargar PDF</button>'
       + (viewing ? '<button class="btn btn-ghost report-open-btn" type="button" onclick="closeClientReportView()">Cerrar</button>' : '')
       + '<button class="icon-danger-btn mini" type="button" title="Eliminar reporte" aria-label="Eliminar reporte" onclick="openReportDeleteModal(&quot;' + esc(report.id) + '&quot;,&quot;' + esc(report.title || 'reporte') + '&quot;)">' + SVG_TRASH + '</button>';
+    var ds = report.debitStatus === 'confirmado' ? 'confirmado' : 'pendiente';
+    var dsBadge = '<button type="button" class="debit-status ' + ds + '" title="Tocar para cambiar el estado de los débitos" onclick="toggleReportDebitStatus(&quot;' + esc(report.id) + '&quot;,&quot;' + (ds === 'confirmado' ? 'pendiente' : 'confirmado') + '&quot;)">'
+      + (ds === 'confirmado' ? '✓ Débitos confirmados' : '⏳ Falta confirmar débitos') + '</button>';
     return '<tr>'
-      + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
+      + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div><div class="report-badges">' + dsBadge + '</div></td>'
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
       + '<td class="tnum">' + esc(report.rowCount || summary.totalRows || 0) + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(summary.net || 0)) + '</b><div class="nom-muted">Deb. ' + esc(moneyFmt(summary.debit || 0))
@@ -1407,6 +1411,12 @@ function renderSavedClientReports(){
       + '<td><div class="report-row-actions">' + actions + '</div></td>'
       + '</tr>';
   }).join('');
+}
+// Marca los débitos de un reporte como confirmados / pendientes de confirmar.
+async function toggleReportDebitStatus(id, estado){
+  if (!ACTIVE_CLIENT || !id) return;
+  var r = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/debitos-estado', { estado: estado });
+  if (r.ok) await loadClientReports();
 }
 // Modal con las opciones de PDF del reporte (en vez de muchos botones).
 var REPORT_PDF_ID = '';
@@ -2004,10 +2014,13 @@ function aplicarDebitosPami(){
     if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; rows[idx].debitType = it.tipo; rows[idx].debitAmount = 0; rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; }
     else sinMatch.push(it.codigo + ' · ' + it.afiliado);
   });
+  // Pegar la validación real = los débitos quedan confirmados.
+  if (aplicados) CLIENT_REPORT_DEBIT_STATUS = 'confirmado';
   renderClientReportRows();
   updateClientReportSummary();
   saveClientReportDraft();
   var msg = 'Se aplicaron ' + aplicados + ' débito' + (aplicados !== 1 ? 's' : '') + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '.';
+  if (aplicados) msg += ' Los débitos quedan marcados como confirmados al guardar.';
   if (reglaAntes) msg += ' (La regla automática había proyectado ' + reglaAntes + '; ahora manda la validación de PAMI.)';
   if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
   resEl.textContent = msg;
@@ -2375,6 +2388,7 @@ function clearClientReport(){
   CLIENT_REPORT_ROWS = [];
   CLIENT_REPORT_MODE = '';
   CLIENT_REPORT_ID = '';
+  CLIENT_REPORT_DEBIT_STATUS = '';
   CLIENT_REPORT_SOURCE = null;
   CLIENT_REPORT_FILE = null;
   resetClientReportFilters();
@@ -2442,6 +2456,7 @@ async function saveClientReport(){
     nomencladorPeriod: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod,
     nomencladorLabel: CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorLabel
   };
+  if (CLIENT_REPORT_DEBIT_STATUS) payload.debitStatus = CLIENT_REPORT_DEBIT_STATUS;
   var path = '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes';
   var method = 'POST';
   if (CLIENT_REPORT_MODE === 'edit' && CLIENT_REPORT_ID) {
