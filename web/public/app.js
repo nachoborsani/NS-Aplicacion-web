@@ -29,6 +29,18 @@ function toggleSidebar(){
   try { localStorage.setItem('ns-sidebar-collapsed', collapsed ? '1' : '0'); } catch (e) {}
   setSidebarCollapseIcon();
 }
+// Click en el padre "Clientes": si ya estás en Clientes con el submenú abierto,
+// lo cierra (colapsa la lista); si no, entra a Clientes y lo abre.
+function toggleClientsNav(el){
+  var group = document.getElementById('clientsNavGroup');
+  var enClientes = document.getElementById('view-clientes').style.display !== 'none';
+  var colapsado = document.body.classList.contains('sidebar-collapsed');
+  if (enClientes && !colapsado && group && group.classList.contains('open')){
+    group.classList.remove('open');
+    return;
+  }
+  go('clientes', el);
+}
 // La lista de clientes vive en la barra: si está colapsada no se ve. Al entrar
 // a Clientes la expandimos para poder elegir un cliente.
 function expandSidebar(){
@@ -1169,7 +1181,10 @@ async function renderActiveClient(){
   if (summary.ok) {
     var items = summary.data.nomencladores || [];
     fillClientPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
-    fillClientReportPeriodSelect(items, items[0] ? items[0].value : summary.data.activePeriod);
+    // Si hay un reporte abierto, el nomenclador queda asociado a ese reporte
+    // (no se resetea al más reciente al cambiar de página).
+    var reportePeriod = (CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod) || '';
+    fillClientReportPeriodSelect(items, reportePeriod || (items[0] ? items[0].value : summary.data.activePeriod));
   }
   // Independientes -> en paralelo (antes iban en serie, uno esperando al otro).
   await Promise.all([loadClientReports(), loadClientDashboard(), loadClientNomenclador()]);

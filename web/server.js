@@ -1138,6 +1138,14 @@ const clientPracticeValueOverrides = {
       total: 6905.52,
       valueSourceCode: "570126",
     },
+    "570123": {
+      moduleCode: "543",
+      moduleDescription: "CARDIOLOGIA",
+      practiceCode: "570123",
+      practiceDescription: "ERGOMETRIA COMPUTARIZADA DE DOCE DERIVACIONES",
+      total: 28861.07,
+      valueSourceCode: "570123",
+    },
   },
   "st-ignacio": {
     "570126": {
@@ -1147,6 +1155,14 @@ const clientPracticeValueOverrides = {
       practiceDescription: "ELECTROCARDIOGRAMA",
       total: 6905.52,
       valueSourceCode: "570126",
+    },
+    "570123": {
+      moduleCode: "543",
+      moduleDescription: "CARDIOLOGIA",
+      practiceCode: "570123",
+      practiceDescription: "ERGOMETRIA COMPUTARIZADA DE DOCE DERIVACIONES",
+      total: 28861.07,
+      valueSourceCode: "570123",
     },
   },
 };
