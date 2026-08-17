@@ -258,6 +258,8 @@
                     </div>
                   </div>
                 </div>
+                <div class="dashboard-resumen" id="clientDashboardResumen" style="display:none"></div>
+                <div class="dashboard-nomnote" id="clientDashboardNomNote" style="display:none"></div>
                 <div class="dashboard-kpis" id="clientDashboardKpis">
                   <div><b>$ 0,00</b><span>Facturacion neta</span></div>
                   <div><b>0</b><span>Consultas</span></div>
@@ -265,12 +267,18 @@
                   <div><b>$ 0,00</b><span>Debitos</span></div>
                   <div><b>0</b><span>Ausentes</span></div>
                 </div>
-                <div class="dashboard-compare" id="clientDashboardCompare">Sin reportes guardados para comparar.</div>
-                <div class="dashboard-nomnote" id="clientDashboardNomNote" style="display:none"></div>
+                <div class="dashboard-compare" id="clientDashboardCompare" style="display:none"></div>
+                <div class="dashboard-ranking" id="clientDashboardRanking" style="display:none"></div>
                 <div class="dashboard-trend" id="clientDashboardTrend" style="display:none"></div>
                 <div class="dashboard-module-wrap">
+                  <div class="dashboard-module-sort" id="clientDashboardModuleSort" style="display:none">
+                    <span>Ordenar por</span>
+                    <button type="button" data-sort="neto" onclick="setDashModuleSort('neto')">Facturación</button>
+                    <button type="button" data-sort="suba" onclick="setDashModuleSort('suba')">Mayor suba</button>
+                    <button type="button" data-sort="baja" onclick="setDashModuleSort('baja')">Mayor baja</button>
+                  </div>
                   <table class="dashboard-module-table">
-                    <thead><tr><th>Modulo</th><th>Consultas</th><th>Practicas</th><th>Neto</th></tr></thead>
+                    <thead><tr><th>Modulo</th><th>Consultas</th><th>Practicas</th><th title="Participación sobre facturación total del mes">Neto · % part.</th></tr></thead>
                     <tbody id="clientDashboardModules"><tr><td colspan="4" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
                   </table>
                 </div>

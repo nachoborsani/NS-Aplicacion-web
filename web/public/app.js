@@ -1559,6 +1559,81 @@ async function descargarComparativa(format){
     bajarBlob(blob, m ? m[1] : ('comparativa.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
   } catch (e){ alert('No se pudo generar el archivo.'); }
 }
+// Resumen ejecutivo en texto: qué facturó y por qué cambió (arriba de todo).
+function renderDashResumen(current, compare, deltas){
+  var box = document.getElementById('clientDashboardResumen');
+  if (!box) return;
+  if (!current.period){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  var curL = current.label || current.period;
+  var totalPrest = (current.consultations || 0) + (current.practices || 0);
+  if (!compare.period){
+    box.innerHTML = '<b>' + esc(curL) + '</b> facturó <b>' + esc(moneyFmt(current.net || 0)) + '</b> en '
+      + esc(numberFmt(totalPrest)) + ' prestaciones (' + esc(numberFmt(current.consultations || 0)) + ' consultas · '
+      + esc(numberFmt(current.practices || 0)) + ' prácticas). Promedio por prestación ' + esc(moneyFmt(current.averageNet || 0)) + '. '
+      + '<span class="resumen-hint">Elegí un mes en “Comparar con” para ver qué cambió.</span>';
+    return;
+  }
+  var cmpL = compare.label || compare.period;
+  var dn = deltas.net || { value: 0, percent: null };
+  var v = Number(dn.value || 0);
+  var up = v >= 0;
+  var pct = dn.percent == null ? '' : ' (' + (up ? '+' : '−') + percentFmt(Math.abs(dn.percent)) + ')';
+  var varHtml = '<span class="resumen-var ' + (up ? 'pos' : 'neg') + '">' + (up ? '▲' : '▼') + ' '
+    + esc((up ? '+' : '−') + moneyFmt(Math.abs(v)) + pct) + '</span>';
+  var dc = Number((deltas.consultations || {}).value || 0);
+  var dp = Number((deltas.practices || {}).value || 0);
+  var drv = [];
+  if (dc) drv.push((dc > 0 ? '+' : '−') + numberFmt(Math.abs(dc)) + ' consultas');
+  if (dp) drv.push((dp > 0 ? '+' : '−') + numberFmt(Math.abs(dp)) + ' prácticas');
+  var drvPhrase = drv.length ? ' Movimiento de volumen: ' + esc(drv.join(' · ')) + '.' : '';
+  var avgPhrase = ' Promedio por prestación ' + esc(moneyFmt(current.averageNet || 0))
+    + (compare.averageNet ? ' (antes ' + esc(moneyFmt(compare.averageNet)) + ').' : '.');
+  box.innerHTML = '<b>' + esc(curL) + '</b> facturó <b>' + esc(moneyFmt(current.net || 0)) + '</b>, ' + varHtml
+    + ' frente a <b>' + esc(cmpL) + '</b> (' + esc(moneyFmt(compare.net || 0)) + ').' + drvPhrase + avgPhrase;
+}
+// Ranking "Qué explica la variación": módulos con mayor suba y mayor baja de neto.
+function dashModulePairs(current, compare){
+  var prev = {}; (compare.modules || []).forEach(function(m){ prev[String(m.moduleCode)] = m; });
+  var cur = {}; (current.modules || []).forEach(function(m){ cur[String(m.moduleCode)] = m; });
+  var keys = {}; Object.keys(prev).forEach(function(k){ keys[k] = 1; }); Object.keys(cur).forEach(function(k){ keys[k] = 1; });
+  return Object.keys(keys).map(function(k){
+    var c = cur[k] || {}, p = prev[k] || {};
+    return {
+      code: c.moduleCode || p.moduleCode || k,
+      desc: c.moduleDescription || p.moduleDescription || '',
+      netVar: Number(c.net || 0) - Number(p.net || 0),
+      consVar: Number(c.consultations || 0) - Number(p.consultations || 0),
+      pracVar: Number(c.practices || 0) - Number(p.practices || 0),
+    };
+  });
+}
+function renderDashRanking(current, compare){
+  var box = document.getElementById('clientDashboardRanking');
+  if (!box) return;
+  if (!compare.period){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var list = dashModulePairs(current, compare);
+  var subas = list.filter(function(x){ return x.netVar > 0; }).sort(function(a, b){ return b.netVar - a.netVar; }).slice(0, 5);
+  var bajas = list.filter(function(x){ return x.netVar < 0; }).sort(function(a, b){ return a.netVar - b.netVar; }).slice(0, 5);
+  function sub(v, lbl){ if (!v) return ''; return '<span class="rk-sub ' + (v > 0 ? 'pos' : 'neg') + '">' + (v > 0 ? '+' : '−') + numberFmt(Math.abs(v)) + ' ' + lbl + '</span>'; }
+  function item(x, pos){
+    return '<div class="rk-item"><div class="rk-mod"><span class="nom-code">' + esc(x.code) + '</span> ' + esc(x.desc) + '</div>'
+      + '<div class="rk-right"><div class="rk-net ' + (pos ? 'pos' : 'neg') + '">' + (pos ? '+' : '−') + esc(moneyFmt(Math.abs(x.netVar))) + '</div>'
+      + '<div class="rk-deltas">' + sub(x.consVar, 'cons') + sub(x.pracVar, 'prác') + '</div></div></div>';
+  }
+  function col(title, arr, pos, empty){
+    return '<div class="rk-col"><div class="rk-col-title ' + (pos ? 'pos' : 'neg') + '">' + esc(title) + '</div>'
+      + (arr.length ? arr.map(function(x){ return item(x, pos); }).join('') : '<div class="rk-empty">' + esc(empty) + '</div>') + '</div>';
+  }
+  box.style.display = '';
+  box.innerHTML = '<div class="rk-head">Qué explica la variación</div><div class="rk-cols">'
+    + col('Principales subas', subas, true, 'Sin subas.') + col('Principales bajas', bajas, false, 'Sin bajas.') + '</div>';
+}
+var DASH_MODULE_SORT = 'neto';
+function setDashModuleSort(mode){
+  DASH_MODULE_SORT = (mode === 'suba' || mode === 'baja') ? mode : 'neto';
+  if (CLIENT_DASHBOARD_DATA) renderClientDashboard(CLIENT_DASHBOARD_DATA);
+}
 var CLIENT_DASHBOARD_DATA = null;
 function renderClientDashboard(data){
   data = data || {};
@@ -1569,33 +1644,23 @@ function renderClientDashboard(data){
   fillClientDashboardSelects(data.periods || [], current.period || '', compare.period || '');
   var exp = document.getElementById('clientDashboardExport');
   if (exp) exp.style.display = compare.period ? '' : 'none';
+  var cmpShort = shortMonth(compare.label || compare.period || '');
+  renderDashResumen(current, compare, deltas);
   var kpis = document.getElementById('clientDashboardKpis');
   if (kpis) {
+    var hc = !!compare.period;
+    function kprev(txt){ return hc ? '<small class="kpi-prev">' + esc(cmpShort + ': ' + txt) + '</small>' : ''; }
     kpis.innerHTML = ''
-      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + dashboardDelta(deltas.net, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + dashboardDelta(deltas.consultations, false) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + dashboardDelta(deltas.practices, false) + '</div>'
-      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + dashboardDelta(deltas.debit, true, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + dashboardDelta(deltas.absent, false, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
+      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + kprev(moneyFmt(compare.net || 0)) + dashboardDelta(deltas.net, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + kprev(numberFmt(compare.consultations || 0)) + dashboardDelta(deltas.consultations, false) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(compare.practices || 0)) + dashboardDelta(deltas.practices, false) + '</div>'
+      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + kprev(numberFmt(compare.absent || 0)) + dashboardDelta(deltas.absent, false, true) + '</div>'
+      + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + kprev(numberFmt(compare.outsideCutoff || 0)) + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
   }
   var compareBox = document.getElementById('clientDashboardCompare');
-  if (compareBox) {
-    if (!current.period) {
-      compareBox.textContent = 'Sin reportes guardados para comparar.';
-    } else if (!compare.period) {
-      compareBox.innerHTML = '<b>' + esc(current.label || current.period) + '</b><span>No hay otro mes seleccionado para comparar.</span>';
-    } else {
-      var dl = data.deltas || {};
-      compareBox.innerHTML = '<div class="cmp-title">' + esc((current.label || current.period) + '  vs  ' + (compare.label || compare.period)) + '</div>'
-        + '<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr><th>Métrica</th><th class="num">Este mes</th><th class="num">Mes anterior</th><th class="num">Variación</th></tr></thead><tbody>'
-        + cmpRow('Facturación neta', current.net || 0, compare.net || 0, dl.net, true)
-        + cmpRow('Consultas', current.consultations || 0, compare.consultations || 0, dl.consultations, false)
-        + cmpRow('Prácticas / estudios', current.practices || 0, compare.practices || 0, dl.practices, false)
-        + cmpRow('Promedio por prestación', current.averageNet || 0, compare.averageNet || 0, dl.averageNet, true)
-        + '</tbody></table></div>';
-    }
-  }
+  if (compareBox) { compareBox.style.display = 'none'; compareBox.innerHTML = ''; }
+  renderDashRanking(current, compare);
   loadDashboardNomNote(current.period || '', compare.period || '');
   var trend = document.getElementById('clientDashboardTrend');
   if (trend) {
@@ -1622,7 +1687,7 @@ function renderClientDashboard(data){
   }
   var body = document.getElementById('clientDashboardModules');
   if (body) {
-    var modules = current.modules || [];
+    var modules = (current.modules || []).slice();
     var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
     var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
     // Para la variación por módulo vs el mes que se compara.
@@ -1631,6 +1696,21 @@ function renderClientDashboard(data){
     var cmpLbl = shortMonth(compare.label || compare.period || 'Mes ant.');
     var compareModules = {};
     (compare.modules || []).forEach(function(m){ compareModules[String(m.moduleCode)] = m; });
+    // Toggle de orden: por facturación (default) o por mayor suba/baja vs el mes comparado.
+    var sortCtl = document.getElementById('clientDashboardModuleSort');
+    if (sortCtl){
+      sortCtl.style.display = hayCompare ? '' : 'none';
+      [].slice.call(sortCtl.querySelectorAll('button')).forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-sort') === DASH_MODULE_SORT);
+      });
+    }
+    if (hayCompare && DASH_MODULE_SORT !== 'neto'){
+      modules.sort(function(a, b){
+        var pa = compareModules[String(a.moduleCode)] || {}, pb = compareModules[String(b.moduleCode)] || {};
+        var va = Number(a.net || 0) - Number(pa.net || 0), vb = Number(b.net || 0) - Number(pb.net || 0);
+        return DASH_MODULE_SORT === 'suba' ? vb - va : va - vb;
+      });
+    }
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
       // Agrupado por prestacion (codigo): cuantas de cada una y el neto sumado.
@@ -1698,7 +1778,7 @@ function renderClientDashboard(data){
         + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + consPrev + '</div></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + pracPrev + '</div></td>'
         + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
-        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div>' + netoPrev + '</td>'
+        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="Participación sobre la facturación total del mes">' + share + '%</span></div>' + netoPrev + '</td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
         + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);
