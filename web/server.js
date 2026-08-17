@@ -1250,15 +1250,17 @@ const clientPracticeValueOverrides = {
     },
   },
 };
-// Códigos viejos que el cliente sigue transmitiendo pero caen en "Sin módulo":
-// se reasignan a su módulo y se marcan "(Cod. Viejo)" en el dashboard. Solo tocan
-// el módulo y la descripción, NO el valor (ese sale del nomenclador / valores).
-const clientOldCodeModules = {
-  "cima": {
-    "570126": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Electrocardiograma
-    "607137": { moduleCode: "552", moduleDescription: "GASTROENTEROLOGIA" }, // Videoendoscopia digestiva baja
-  },
+// Códigos viejos que se siguen transmitiendo pero caen en "Sin módulo": se
+// reasignan a su módulo y se marcan "(Cod. Viejo)" en el dashboard. Solo tocan el
+// módulo y la descripción, NO el valor (ese sale del nomenclador / valores).
+// Son relaciones del nomenclador PAMI (código → módulo), iguales para todos los
+// clientes, así que se aplican global. Por-cliente solo si alguno necesita algo
+// distinto.
+const GLOBAL_OLD_CODE_MODULES = {
+  "570126": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Electrocardiograma
+  "607137": { moduleCode: "552", moduleDescription: "GASTROENTEROLOGIA" }, // Videoendoscopia digestiva baja
 };
+const clientOldCodeModules = {};
 // Valores de práctica cargados por el operador desde la web (persistidos en el
 // volumen), que se suman a los hardcodeados. Cache en memoria; se recarga al guardar.
 let _clientPracticeValuesCache = null;
@@ -1468,7 +1470,7 @@ function sanitizeReportRows(rows) {
   }).filter((row) => row.order || row.practiceText || row.patientName);
 }
 function applyClientPracticeOverrides(clientSlug, rows) {
-  const oldMap = clientOldCodeModules[clientSlug] || {};
+  const oldMap = { ...GLOBAL_OLD_CODE_MODULES, ...(clientOldCodeModules[clientSlug] || {}) };
   return (rows || []).map((row) => {
     let next = row;
     const override = getClientPracticeOverride(clientSlug, row.practiceCode);
