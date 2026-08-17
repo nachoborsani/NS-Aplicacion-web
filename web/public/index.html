@@ -359,7 +359,7 @@
                 </div>
 
                 <div class="tablecard nom-table">
-                  <div class="table-head">
+                  <div class="table-head report-head">
                     <div><b>Practicas</b><span id="clientReportMeta">Todavia no hay bandeja cargada.</span></div>
                     <div class="report-filter-bar">
                       <input class="inp report-search" id="clientReportSearch" placeholder="Paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
@@ -372,7 +372,7 @@
                   </div>
                   <div class="table-scroll">
                     <table class="report-results-table">
-                      <thead><tr><th>Paciente</th><th><button class="th-sort" type="button" onclick="toggleClientReportPracticeSort()">Practica <span id="clientReportPracticeSortIcon">A-Z</span></button></th><th>Turno / transmision</th><th>Estado</th><th>Bruto</th><th>Debito</th><th>Neto</th></tr></thead>
+                      <thead><tr><th>Paciente</th><th><button class="th-sort" type="button" onclick="toggleClientReportPracticeSort()">Practica <span id="clientReportPracticeSortIcon">A-Z</span></button></th><th>Turno / transmision</th><th>Estado</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('bruto')">Bruto <span id="clientReportBrutoSortIcon"></span></button></th><th>Debito</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('neto')">Neto <span id="clientReportNetoSortIcon"></span></button></th></tr></thead>
                       <tbody id="clientReportBody"><tr><td colspan="7" class="muted-cell">No hay datos cargados.</td></tr></tbody>
                     </table>
                   </div>

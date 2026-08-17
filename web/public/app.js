@@ -1741,6 +1741,11 @@ function getClientReportVisibleRows(){
       var cmp = av.localeCompare(bv);
       return CLIENT_REPORT_SORT === 'practice-desc' ? -cmp : cmp;
     });
+  } else if (/^(bruto|neto)-(asc|desc)$/.test(CLIENT_REPORT_SORT)) {
+    var field = CLIENT_REPORT_SORT.indexOf('bruto') === 0 ? 'bruto' : 'neto';
+    var desc = /-desc$/.test(CLIENT_REPORT_SORT);
+    var val = function(r){ return field === 'bruto' ? reportBaseGross(r) : reportNetAmount(r); };
+    rows.sort(function(a, b){ var d = val(a.row) - val(b.row); return desc ? -d : d; });
   }
   return rows;
 }
@@ -1790,6 +1795,16 @@ function updateClientReportSummary(){
   updateClientReportFormState();
   var sortIcon = document.getElementById('clientReportPracticeSortIcon');
   if (sortIcon) sortIcon.textContent = CLIENT_REPORT_SORT === 'practice-desc' ? 'Z-A' : 'A-Z';
+  var flecha = function(field){ return CLIENT_REPORT_SORT === field + '-asc' ? '↑' : CLIENT_REPORT_SORT === field + '-desc' ? '↓' : '↕'; };
+  var bIcon = document.getElementById('clientReportBrutoSortIcon');
+  if (bIcon) bIcon.textContent = flecha('bruto');
+  var nIcon = document.getElementById('clientReportNetoSortIcon');
+  if (nIcon) nIcon.textContent = flecha('neto');
+}
+// Ordena por valor $ (menor↔mayor). Primer click = menor a mayor.
+function toggleClientReportValueSort(field){
+  CLIENT_REPORT_SORT = CLIENT_REPORT_SORT === field + '-asc' ? field + '-desc' : field + '-asc';
+  renderClientReportRows();
 }
 function renderClientReportRows(){
   var body = document.getElementById('clientReportBody');
