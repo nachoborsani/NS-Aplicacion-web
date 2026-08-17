@@ -1641,7 +1641,59 @@ function updateClientReportFormState(){
     saveBtn.disabled = !totalRows || !editable;
     saveBtn.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Guardar cambios' : 'Guardar reporte';
   }
+  var pamiBtn = document.getElementById('clientReportPamiBtn');
+  if (pamiBtn) pamiBtn.disabled = !totalRows || !editable;
   renderSavedClientReports();
+}
+// ---------- Importar débitos desde la validación de PAMI ----------
+function openPamiDebitModal(){
+  if (!(CLIENT_REPORT_MODE === 'draft' || CLIENT_REPORT_MODE === 'edit')) return;
+  document.getElementById('pamiDebitText').value = '';
+  document.getElementById('pamiDebitError').textContent = '';
+  document.getElementById('pamiDebitResult').textContent = '';
+  showModal('pamiDebitModal', 'pamiScrim');
+}
+function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
+// Parsea las filas pegadas de la validación de PAMI: afiliado + código + tipo.
+function parsePamiValidacion(text){
+  var out = [];
+  (text || '').split(/\r?\n/).forEach(function(line){
+    if (!/valida/i.test(line)) return;                 // solo filas de validación
+    var af = (line.match(/\b(\d{10,13})\b/) || [])[1] || '';
+    var nums = line.match(/\b\d{5,6}\b/g) || [];        // código = último número de 5-6 dígitos
+    var codigo = nums.length ? nums[nums.length - 1] : '';
+    if (!af || !codigo) return;
+    out.push({ afiliado: af, codigo: codigo, tipo: /parcial/i.test(line) ? 'pay40' : 'total', raw: line.trim() });
+  });
+  return out;
+}
+function aplicarDebitosPami(){
+  var err = document.getElementById('pamiDebitError'); err.textContent = '';
+  var resEl = document.getElementById('pamiDebitResult'); resEl.textContent = '';
+  var items = parsePamiValidacion(document.getElementById('pamiDebitText').value);
+  if (!items.length){ err.textContent = 'No se detectaron filas de validación. Pegá las filas tal cual salen de PAMI (con afiliado y código).'; return; }
+  var rows = CLIENT_REPORT_ROWS || [];
+  var used = {}, aplicados = 0, sinMatch = [];
+  items.forEach(function(it){
+    var afN = it.afiliado.replace(/\D/g, '');
+    var idx = -1;
+    for (var i = 0; i < rows.length; i++){
+      if (used[i]) continue;
+      var r = rows[i];
+      var benN = String(r.benefit || '').replace(/\D/g, '');
+      var matchAf = benN && (benN === afN || benN.indexOf(afN) === 0 || afN.indexOf(benN) === 0);
+      if (matchAf && String(r.practiceCode || '') === it.codigo && reportBaseGross(r) > 0){ idx = i; break; }
+    }
+    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; rows[idx].debitType = it.tipo; rows[idx].debitAmount = 0; aplicados++; }
+    else sinMatch.push(it.codigo + ' · ' + it.afiliado);
+  });
+  renderClientReportRows();
+  updateClientReportSummary();
+  saveClientReportDraft();
+  var msg = 'Se aplicaron ' + aplicados + ' débito' + (aplicados !== 1 ? 's' : '') + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '.';
+  if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
+  resEl.textContent = msg;
+  if (aplicados && !sinMatch.length) setTimeout(closePamiDebitModal, 1100);
 }
 function normalizeReportSearch(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
