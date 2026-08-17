@@ -2261,6 +2261,21 @@ async function changeClientReportPeriod(){
   }
   await uploadClientReport([CLIENT_REPORT_FILE], { keepFile:true });
 }
+// Sugiere "Reporte <Mes> <Cliente>" con el mes más frecuente de los turnos.
+function sugerirNombreReporte(){
+  var meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var cnt = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(r){
+    var p = String(r.period || r.appointmentAt || '').slice(0, 7);
+    var m = p.slice(5, 7);
+    if (/^\d{2}$/.test(m)) cnt[m] = (cnt[m] || 0) + 1;
+  });
+  var best = '', max = 0;
+  Object.keys(cnt).forEach(function(m){ if (cnt[m] > max){ max = cnt[m]; best = m; } });
+  var mesNombre = best ? (meses[parseInt(best, 10) - 1] || '') : '';
+  var cliente = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
+  return ('Reporte ' + (mesNombre ? mesNombre + ' ' : '') + cliente).replace(/\s+/g, ' ').trim();
+}
 async function uploadClientReport(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
   CLIENT_REPORT_FILE = files[0];
@@ -2316,7 +2331,9 @@ async function uploadClientReport(files){
   if (wasClosed) setClientReportExpectedInput('');
   if (wasClosed) setClientReportObservationsInput('');
   var title = document.getElementById('clientReportTitle');
-  if (title && wasClosed) title.value = '';
+  // Sugerir un nombre si el campo está vacío (o venía de un reporte cerrado):
+  // "Reporte <Mes de los turnos> <Cliente>".
+  if (title && (wasClosed || !title.value.trim())) title.value = sugerirNombreReporte();
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
   renderClientReportRows();
   saveClientReportDraft();
