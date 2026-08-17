@@ -1393,11 +1393,7 @@ function renderSavedClientReports(){
     var viewing = CLIENT_REPORT_MODE === 'closed' && CLIENT_REPORT_ID === report.id;
     var actions = '<button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Excel</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadGeneralReportPdf(&quot;' + esc(report.id) + '&quot;)">PDF general</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;543&quot;)">PDF cardio</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadProfessionalReport(&quot;' + esc(report.id) + '&quot;,&quot;546&quot;)">PDF traumato</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadSpecialReportPdf(&quot;' + esc(report.id) + '&quot;,&quot;cutoff&quot;)">PDF proximo periodo</button>'
-      + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadSpecialReportPdf(&quot;' + esc(report.id) + '&quot;,&quot;missingInforme&quot;)">PDF falta informe</button>'
+      + '<button class="btn btn-navy report-open-btn" type="button" onclick="openReportPdfModal(&quot;' + esc(report.id) + '&quot;)">Descargar PDF</button>'
       + (viewing ? '<button class="btn btn-ghost report-open-btn" type="button" onclick="closeClientReportView()">Cerrar</button>' : '');
     return '<tr>'
       + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
@@ -1407,6 +1403,17 @@ function renderSavedClientReports(){
       + '<td><div class="report-row-actions">' + actions + '</div></td>'
       + '</tr>';
   }).join('');
+}
+// Modal con las opciones de PDF del reporte (en vez de muchos botones).
+var REPORT_PDF_ID = '';
+function openReportPdfModal(id){ REPORT_PDF_ID = id; showModal('reportPdfModal', 'reportPdfScrim'); }
+function closeReportPdfModal(){ hideModal('reportPdfModal', 'reportPdfScrim'); }
+function reportPdfChoose(kind){
+  var id = REPORT_PDF_ID; if (!id) return;
+  closeReportPdfModal();
+  if (kind === 'general') downloadGeneralReportPdf(id);
+  else if (kind === '543' || kind === '546') downloadProfessionalReport(id, kind);
+  else downloadSpecialReportPdf(id, kind);
 }
 function downloadClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;
