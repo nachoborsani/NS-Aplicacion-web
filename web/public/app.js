@@ -1903,7 +1903,15 @@ function toggleClientReportValueSort(field){
   CLIENT_REPORT_SORT = CLIENT_REPORT_SORT === field + '-asc' ? field + '-desc' : field + '-asc';
   renderClientReportRows();
 }
+// El área de trabajo (form + resumen + tabla) solo se ve con un reporte activo.
+function updateReportWorkArea(){
+  var work = document.getElementById('clientReportWork');
+  if (!work) return;
+  var activo = ['draft', 'edit', 'closed'].indexOf(CLIENT_REPORT_MODE) >= 0 && (CLIENT_REPORT_ROWS || []).length > 0;
+  work.style.display = activo ? '' : 'none';
+}
 function renderClientReportRows(){
+  updateReportWorkArea();
   var body = document.getElementById('clientReportBody');
   if (!body) return;
   if (!CLIENT_REPORT_ROWS.length){

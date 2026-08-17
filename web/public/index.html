@@ -309,29 +309,15 @@
               </section>
 
               <section id="client-section-reportes" class="client-section" style="display:none">
-                <div class="client-card report-upload-card">
-                  <div class="client-card-head">
-                    <h3>Valorizacion de practicas transmitidas</h3>
-                    <div class="report-head-actions">
-                      <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
-                      <button class="btn btn-ghost" id="clientReportEditBtn" onclick="unlockClientReport()" type="button" disabled>Editar</button>
-                      <button class="btn btn-ghost" id="clientReportPamiBtn" onclick="openPamiDebitModal()" type="button" disabled>Débitos PAMI</button>
-                      <button class="btn btn-ghost" id="clientReportDiscardBtn" onclick="discardClientReportDraft()" type="button" disabled>Descartar reporte</button>
-                      <button class="icon-danger-btn mini" id="clientReportClearBtn" onclick="discardClientReportDraft()" type="button" title="Descartar reporte" aria-label="Descartar reporte" disabled>
-                        <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      </button>
-                      <label class="btn btn-primary file-btn">
-                        Adjuntar bandeja
-                        <input type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadClientReport(this.files); this.value=''">
-                      </label>
-                    </div>
+                <div class="client-card report-attach-bar">
+                  <div class="report-attach-info">
+                    <h3>Reportes de prácticas transmitidas</h3>
+                    <span class="nom-muted">Adjuntá la bandeja para armar un reporte nuevo, o abrí uno guardado de la lista.</span>
                   </div>
-                  <div class="client-report-controls">
-                    <label class="field"><span>Nombre del reporte</span><input class="inp" id="clientReportTitle" placeholder="Ej: Mayo 2026 - Cardiologia" oninput="saveClientReportDraft()"></label>
-                    <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod" onchange="changeClientReportPeriod()"><option value="">Ultimo disponible</option></select></label>
-                    <div id="clientReportStatus" class="nom-muted">Subi la bandeja de transmision para previsualizar la factura.</div>
-                    <label class="field report-notes-field"><span>Observaciones</span><textarea class="inp" id="clientReportObservations" placeholder="Ej: diferencia menor aceptada, debitos revisados..." oninput="setClientReportObservations(this.value)"></textarea></label>
-                  </div>
+                  <label class="btn btn-primary file-btn">
+                    Adjuntar bandeja
+                    <input type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadClientReport(this.files); this.value=''">
+                  </label>
                 </div>
 
                 <div class="tablecard nom-table report-list-card">
@@ -343,6 +329,28 @@
                       <thead><tr><th>Reporte</th><th>Nomenclador</th><th>Practicas</th><th>Neto</th><th>Accion</th></tr></thead>
                       <tbody id="clientSavedReportsBody"><tr><td colspan="5" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
                     </table>
+                  </div>
+                </div>
+
+                <div id="clientReportWork" style="display:none">
+                <div class="client-card report-upload-card">
+                  <div class="client-card-head">
+                    <h3>Valorizacion de practicas transmitidas</h3>
+                    <div class="report-head-actions">
+                      <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
+                      <button class="btn btn-ghost" id="clientReportEditBtn" onclick="unlockClientReport()" type="button" disabled>Editar</button>
+                      <button class="btn btn-ghost" id="clientReportPamiBtn" onclick="openPamiDebitModal()" type="button" disabled>Débitos PAMI</button>
+                      <button class="btn btn-ghost" id="clientReportDiscardBtn" onclick="discardClientReportDraft()" type="button" disabled>Descartar reporte</button>
+                      <button class="icon-danger-btn mini" id="clientReportClearBtn" onclick="discardClientReportDraft()" type="button" title="Descartar reporte" aria-label="Descartar reporte" disabled>
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="client-report-controls">
+                    <label class="field"><span>Nombre del reporte</span><input class="inp" id="clientReportTitle" placeholder="Ej: Mayo 2026 - Cardiologia" oninput="saveClientReportDraft()"></label>
+                    <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod" onchange="changeClientReportPeriod()"><option value="">Ultimo disponible</option></select></label>
+                    <div id="clientReportStatus" class="nom-muted">Subi la bandeja de transmision para previsualizar la factura.</div>
+                    <label class="field report-notes-field"><span>Observaciones</span><textarea class="inp" id="clientReportObservations" placeholder="Ej: diferencia menor aceptada, debitos revisados..." oninput="setClientReportObservations(this.value)"></textarea></label>
                   </div>
                 </div>
 
@@ -382,6 +390,7 @@
                       <tbody id="clientReportBody"><tr><td colspan="7" class="muted-cell">No hay datos cargados.</td></tr></tbody>
                     </table>
                   </div>
+                </div>
                 </div>
               </section>
           </section>
