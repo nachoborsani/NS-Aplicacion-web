@@ -325,10 +325,13 @@
                     <h3>Reportes de prácticas transmitidas</h3>
                     <span class="nom-muted">Adjuntá la bandeja para armar un reporte nuevo, o abrí uno guardado de la lista.</span>
                   </div>
-                  <label class="btn btn-primary file-btn">
-                    Adjuntar bandeja
-                    <input type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadClientReport(this.files); this.value=''">
-                  </label>
+                  <div class="report-attach-actions">
+                    <button class="btn btn-ghost" type="button" onclick="openDebitoReglasModal()" title="Reglas de débito">⚖️ Débitos</button>
+                    <label class="btn btn-primary file-btn">
+                      Adjuntar bandeja
+                      <input type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadClientReport(this.files); this.value=''">
+                    </label>
+                  </div>
                 </div>
 
                 <div class="tablecard nom-table report-list-card">
@@ -781,6 +784,44 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closePamiDebitModal()">Cancelar</button>
         <button class="btn btn-primary" id="pamiDebitApply" onclick="aplicarDebitosPami()">Aplicar débitos</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: reglas de débito (cruces) ===== -->
+    <div class="scrim" id="debitoReglasScrim" onclick="closeDebitoReglasModal()"></div>
+    <div class="modal wide" id="debitoReglasModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Reglas de débito</h3><button class="x" onclick="closeDebitoReglasModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-note">Dos estudios que se pisan <b>el mismo día</b> al mismo afiliado: PAMI debita uno. Con la regla <b>tildada</b>, el sistema aplica ese débito solo cuando armás el reporte. Destildá para desactivarla. Cuando pegues la validación real de PAMI, esa reemplaza a lo automático.</p>
+        <div id="debitoReglasList" class="debito-reglas-list"><div class="nom-muted">Cargando…</div></div>
+        <details class="debito-regla-nueva">
+          <summary>+ Agregar una regla nueva</summary>
+          <div class="debito-nueva-form">
+            <label class="field"><span>Tipo</span>
+              <select class="inp" id="nuevaReglaTipo" onchange="onNuevaReglaTipo()">
+                <option value="inclusion">Inclusión (un estudio incluido en otro → débito 100%)</option>
+                <option value="par">Par (dos estudios juntos → uno paga 40%)</option>
+              </select>
+            </label>
+            <div id="nuevaReglaInclusion">
+              <label class="field"><span>Código que se debita</span><input class="inp" id="nuevaReglaDebita" placeholder="Ej: 180114"></label>
+              <label class="field"><span>Nombre del que se debita</span><input class="inp" id="nuevaReglaDebitaNombre" placeholder="Ej: Ecografía prostática"></label>
+              <label class="field"><span>Código(s) que lo incluyen (mismo día)</span><input class="inp" id="nuevaReglaCon" placeholder="Ej: 180123 (separá con coma)"></label>
+              <label class="field"><span>Nombre del que lo incluye</span><input class="inp" id="nuevaReglaConNombre" placeholder="Ej: Ecografía vesical c/ residuo"></label>
+            </div>
+            <div id="nuevaReglaPar" style="display:none">
+              <label class="field"><span>Los dos códigos del par</span><input class="inp" id="nuevaReglaCodigos" placeholder="Ej: 180610, 180606"></label>
+              <label class="field"><span>Nombre del par</span><input class="inp" id="nuevaReglaCodigosNombre" placeholder="Ej: Ecodoppler arterial + venoso MMII"></label>
+            </div>
+            <label class="field"><span>Nota (opcional)</span><input class="inp" id="nuevaReglaNota" placeholder="Dónde se confirmó, casos…"></label>
+            <button class="btn btn-navy" type="button" onclick="agregarReglaDebito()">Agregar</button>
+          </div>
+        </details>
+        <div class="msg err" id="debitoReglasError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeDebitoReglasModal()">Cerrar</button>
+        <button class="btn btn-primary" id="debitoReglasSave" onclick="guardarReglasDebito()">Guardar cambios</button>
       </div>
     </div>
 

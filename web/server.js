@@ -110,6 +110,7 @@ function saveClientBandejas(store) {
 // Config de Informes: médicos (con su firma) y descripciones. Se guarda en el
 // volumen; se siembra con los datos actuales (Naiara + descripciones base).
 const informesConfigFile = path.join(dataDir, "informes_config.json");
+const debitoReglasFile = path.join(dataDir, "debito_reglas.json");
 // Presets "Normal" de cada Holter, con sus valores estándar (todos editables).
 const HOLTER_SEED_PRESETS = [
   {
@@ -233,6 +234,55 @@ function loadInformesConfig() {
 function saveInformesConfig(cfg) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(informesConfigFile, JSON.stringify(cfg, null, 2));
+}
+// Reglas de débito de PAMI (cruces): dos estudios que se pisan el mismo día → PAMI debita uno.
+// Confirmadas contra bandejas reales (Caballito 05/06 y GJS 06 2026). Ver memoria pami-debitos-regla-mismo-dia.
+const DEBITO_REGLAS_SEED = [
+  { id: "prostatica-vesical", activa: true, tipo: "inclusion", monto: "total",
+    debita: "180114", debitaNombre: "Ecografía prostática / vesicoprostática",
+    conCodigos: ["180123"], conNombre: "Ecografía vesical c/ medición de residuo",
+    nota: "El mismo día que la vesical con residuo, PAMI debita la prostática al 100%. Confirmado Caballito 05 y 06/2026." },
+  { id: "renal-abdominal", activa: true, tipo: "inclusion", monto: "total",
+    debita: "180116", debitaNombre: "Ecografía renal bilateral",
+    conCodigos: ["180112"], conNombre: "Ecografía abdominal completa",
+    nota: "La abdominal completa ya incluye los riñones. Confirmado Caballito 05 y 06/2026." },
+  { id: "flujometria-urodinamia", activa: true, tipo: "inclusion", monto: "total",
+    debita: "507315", debitaNombre: "Flujometría urinaria computarizada",
+    conCodigos: ["507313"], conNombre: "Estudio urodinámico completo",
+    nota: "El urodinámico completo ya incluye la flujometría. Confirmado Caballito 05 y 06/2026." },
+  { id: "arterial-venoso-mmii", activa: true, tipo: "par", monto: "pay40",
+    codigos: ["180610", "180606"],
+    codigosNombre: "Ecodoppler arterial + venoso de miembros inferiores",
+    nota: "Hechos el mismo día, PAMI paga uno de los dos al 40%. Confirmado GJS 06 y Caballito 06/2026." },
+];
+function normalizarReglaDebito(r) {
+  if (!r || typeof r !== "object") return null;
+  const tipo = r.tipo === "par" ? "par" : "inclusion";
+  const monto = r.monto === "pay40" ? "pay40" : "total";
+  const base = { id: slugId(r.id || r.debitaNombre || r.codigosNombre || "regla") || `regla-${Math.abs(String(r.id||"").length)}`,
+    activa: r.activa !== false, tipo, monto, nota: String(r.nota || "").trim() };
+  if (tipo === "par") {
+    base.codigos = (Array.isArray(r.codigos) ? r.codigos : []).map((c) => cleanIdentifier(c)).filter(Boolean).slice(0, 4);
+    base.codigosNombre = String(r.codigosNombre || "").trim();
+  } else {
+    base.debita = cleanIdentifier(r.debita);
+    base.debitaNombre = String(r.debitaNombre || "").trim();
+    base.conCodigos = (Array.isArray(r.conCodigos) ? r.conCodigos : []).map((c) => cleanIdentifier(c)).filter(Boolean).slice(0, 6);
+    base.conNombre = String(r.conNombre || "").trim();
+  }
+  return base;
+}
+function loadDebitoReglas() {
+  let arr = null;
+  try { arr = JSON.parse(fs.readFileSync(debitoReglasFile, "utf8")); } catch {}
+  if (!Array.isArray(arr)) arr = DEBITO_REGLAS_SEED;
+  return arr.map(normalizarReglaDebito).filter(Boolean);
+}
+function saveDebitoReglas(arr) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const limpio = (Array.isArray(arr) ? arr : []).map(normalizarReglaDebito).filter(Boolean);
+  fs.writeFileSync(debitoReglasFile, JSON.stringify(limpio, null, 2));
+  return limpio;
 }
 function slugId(text) {
   return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -800,42 +850,75 @@ function reportRowExclusionGroupKey(row) {
   const period = normalizePeriod(row && row.period) || String(row && row.appointmentAt || "").slice(0, 7);
   return period ? `${benefit}|${period}` : "";
 }
+function reportRowDay(row) {
+  const iso = String((row && row.appointmentAt) || "");
+  return iso ? iso.slice(0, 10) : "";
+}
+// Aplica las reglas de débito configurables (panel Débitos): dos estudios que se
+// pisan EL MISMO DÍA al mismo afiliado → PAMI debita uno. Es una proyección: no
+// pisa un débito cargado a mano ni de la validación de PAMI (debitSource).
 function applyAutomaticExclusionDebits(rows) {
-  const groups = new Map();
   (rows || []).forEach((row) => {
+    if (row.debitSource === "regla") {
+      // limpiar una proyección anterior antes de recalcular
+      row.manualDebit = false;
+      row.debitType = "total";
+      row.debitAmount = 0;
+      row.debitSource = "";
+    }
     row.autoDebit = false;
     row.autoDebitReason = "";
+    row.autoDebitRuleId = "";
     row.autoDebitPairCode = "";
-    row.autoDebitRulePage = "";
     row.autoDebitRuleCodes = "";
     row.debitWarning = "";
-    if (!row.billable || !row.practiceCode || reportRowGross(row) <= 0) return;
-    const key = reportRowExclusionGroupKey(row);
-    if (!key) return;
+  });
+  const reglas = loadDebitoReglas().filter((r) => r && r.activa);
+  if (!reglas.length) return rows || [];
+  const groups = new Map();
+  (rows || []).forEach((row) => {
+    if (!row.billable || !cleanIdentifier(row.practiceCode) || reportRowGross(row) <= 0) return;
+    const benefit = cleanIdentifier(row.benefit);
+    const day = reportRowDay(row);
+    if (!benefit || !day) return;
+    const key = `${benefit}|${day}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   });
+  const yaCargado = (row) => row.debitSource === "validacion" || row.debitSource === "manual";
+  const marcar = (row, monto, regla, reason, pairCodes) => {
+    if (yaCargado(row)) return false;
+    row.manualDebit = true;
+    row.debitType = monto === "pay40" ? "pay40" : "total";
+    row.debitAmount = 0;
+    row.autoDebit = true;
+    row.autoDebitRuleId = regla.id;
+    row.autoDebitReason = reason;
+    row.autoDebitRuleCodes = pairCodes || "";
+    row.debitSource = "regla";
+    return true;
+  };
   for (const groupRows of groups.values()) {
-    for (let i = 0; i < groupRows.length; i += 1) {
-      for (let j = i + 1; j < groupRows.length; j += 1) {
-        const match = findAutomaticDebitRule(groupRows[i], groupRows[j]);
-        if (!match) continue;
-        const { rule, target, other } = match;
-        target.manualDebit = true;
-        target.debitType = "total";
-        target.debitAmount = 0;
-        target.autoDebit = true;
-        target.autoDebitPairCode = other.practiceCode || "";
-        target.autoDebitRulePage = "";
-        target.autoDebitRuleCodes = `${rule.debitLabel} / ${rule.dominantLabel}`;
-        target.autoDebitReason = `${rule.description}: ${target.practiceCode || rule.debitLabel} contra ${other.practiceCode || rule.dominantLabel}`;
+    const codes = new Set(groupRows.map((r) => cleanIdentifier(r.practiceCode)));
+    for (const regla of reglas) {
+      if (regla.tipo === "inclusion") {
+        const hayGrande = (regla.conCodigos || []).some((c) => codes.has(cleanIdentifier(c)));
+        if (!hayGrande) continue;
+        const dc = cleanIdentifier(regla.debita);
+        const reason = `${regla.debitaNombre || dc} debitada: el mismo día se hizo ${regla.conNombre || (regla.conCodigos || []).join("/")}.`;
+        groupRows.filter((r) => cleanIdentifier(r.practiceCode) === dc)
+          .forEach((r) => marcar(r, "total", regla, reason, (regla.conCodigos || []).join("/")));
+      } else if (regla.tipo === "par") {
+        const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
+        const presentes = new Set(cods.filter((c) => codes.has(c)));
+        if (presentes.size < 2) continue;
+        const candidatos = groupRows.filter((r) => cods.includes(cleanIdentifier(r.practiceCode)) && !yaCargado(r));
+        if (candidatos.length < 2) continue;
+        // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
+        const reason = `${regla.codigosNombre || "Par de estudios"} el mismo día: PAMI paga uno al 40%.`;
+        marcar(candidatos[candidatos.length - 1], regla.monto || "pay40", regla, reason, cods.join("/"));
       }
     }
-    // Aviso (no aplica débito): con 2+ ecodopplers del mismo paciente/período,
-    // PAMI suele pagar uno al 40% (parcial). No sabemos cuál, así que avisamos
-    // en todos para que el operador lo aplique según la validación de PAMI.
-    const ecos = groupRows.filter((r) => normalizeText(`${r.practiceDescription || ""} ${r.practiceText || ""}`).includes("ecodoppler"));
-    if (ecos.length >= 2) ecos.forEach((r) => { r.debitWarning = "Posible débito parcial: PAMI suele pagar uno al 40%. Revisar validación."; });
   }
   return rows || [];
 }
@@ -1357,6 +1440,8 @@ function sanitizeReportRows(rows) {
       debitAmount: debitType === "partial" ? clampMoney(row.debitAmount, 0, Math.max(0, valueGross)) : 0,
       autoDebit: !!row.autoDebit,
       autoDebitReason: String(row.autoDebitReason || "").trim(),
+      autoDebitRuleId: cleanIdentifier(row.autoDebitRuleId),
+      debitSource: ["regla", "validacion", "manual"].includes(row.debitSource) ? row.debitSource : "",
       debitWarning: String(row.debitWarning || "").trim(),
       autoDebitPairCode: cleanIdentifier(row.autoDebitPairCode),
       autoDebitRulePage: cleanIdentifier(row.autoDebitRulePage),
@@ -2960,6 +3045,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- Informes: config (médicos con firma + descripciones) ----
+  // Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno).
+  if (p === "/api/debito-reglas" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    return json(res, 200, { reglas: loadDebitoReglas() });
+  }
+  if (p === "/api/debito-reglas" && req.method === "PUT") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    if (!body || !Array.isArray(body.reglas)) return json(res, 400, { error: "Falta la lista de reglas." });
+    const guardadas = saveDebitoReglas(body.reglas);
+    return json(res, 200, { reglas: guardadas });
+  }
   if (p === "/api/informes/config" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

@@ -270,6 +270,25 @@
   .rowbtn.danger:hover{border-color:var(--error);color:var(--error)}
   .file-btn{position:relative;overflow:hidden}
   .file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .report-attach-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .auto-debit-note{font-size:10.5px;margin-top:3px;color:var(--turq-d)}
+  .debit-warning-note{font-size:10.5px;margin-top:3px;color:var(--warning)}
+  /* Panel Débitos: reglas de cruce */
+  .debito-reglas-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .debito-regla-item{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+  .debito-regla-txt{flex:1;min-width:0;font-size:13px}
+  .debito-regla-txt b{font-size:13.5px}
+  .debito-regla-nota{font-size:11.5px;color:var(--text-2);margin-top:5px;font-style:italic}
+  .debito-regla-toggle{position:relative;display:inline-block;width:38px;height:22px;flex:none;margin-top:2px;cursor:pointer}
+  .debito-regla-toggle input{opacity:0;width:0;height:0;position:absolute}
+  .debito-regla-toggle span{position:absolute;inset:0;background:var(--border);border-radius:999px;transition:background .15s ease}
+  .debito-regla-toggle span::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .15s ease;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+  .debito-regla-toggle input:checked + span{background:var(--turq)}
+  .debito-regla-toggle input:checked + span::before{transform:translateX(16px)}
+  .debito-regla-nueva{margin-top:4px;border-top:1px solid var(--border);padding-top:12px}
+  .debito-regla-nueva summary{cursor:pointer;font-size:13px;font-weight:650;color:var(--turq-d)}
+  .debito-nueva-form{margin-top:12px}
+  .debito-nueva-form .field span{display:block;font-size:11.5px;font-weight:600;color:var(--text-2);margin-bottom:5px}
   .nom-upload{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
   .month-field{display:grid;gap:5px;min-width:150px}
   .month-field span{font-size:11.5px;font-weight:700;color:var(--text-2)}

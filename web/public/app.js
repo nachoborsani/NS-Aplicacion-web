@@ -1797,6 +1797,75 @@ function openPamiDebitModal(){
   showModal('pamiDebitModal', 'pamiScrim');
 }
 function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
+
+// ===== Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno) =====
+var DEBITO_REGLAS = [];
+async function openDebitoReglasModal(){
+  document.getElementById('debitoReglasError').textContent = '';
+  document.getElementById('debitoReglasList').innerHTML = '<div class="nom-muted">Cargando…</div>';
+  showModal('debitoReglasModal', 'debitoReglasScrim');
+  var r = await api('/api/debito-reglas');
+  DEBITO_REGLAS = (r.ok && Array.isArray(r.data.reglas)) ? r.data.reglas : [];
+  renderDebitoReglas();
+}
+function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasScrim'); }
+function renderDebitoReglas(){
+  var box = document.getElementById('debitoReglasList');
+  if (!DEBITO_REGLAS.length){ box.innerHTML = '<div class="nom-muted">No hay reglas cargadas.</div>'; return; }
+  box.innerHTML = DEBITO_REGLAS.map(function(rg, i){
+    var esPar = rg.tipo === 'par';
+    var titulo, detalle;
+    if (esPar){
+      titulo = esc(rg.codigosNombre || (rg.codigos||[]).join(' + '));
+      detalle = '<span class="nom-code">' + esc((rg.codigos||[]).join(' + ')) + '</span> el mismo día → uno paga <b>40%</b>';
+    } else {
+      titulo = esc(rg.debitaNombre || rg.debita);
+      detalle = 'Se debita <span class="nom-code">' + esc(rg.debita) + '</span> al <b>100%</b> si el mismo día hay <span class="nom-code">' + esc((rg.conCodigos||[]).join('/')) + '</span> ' + esc(rg.conNombre || '');
+    }
+    return '<div class="debito-regla-item">'
+      + '<label class="debito-regla-toggle"><input type="checkbox" ' + (rg.activa ? 'checked' : '') + ' onchange="toggleReglaDebito(' + i + ', this.checked)"><span></span></label>'
+      + '<div class="debito-regla-txt"><b>' + titulo + '</b><div class="nom-muted">' + detalle + '</div>'
+      + (rg.nota ? '<div class="debito-regla-nota">' + esc(rg.nota) + '</div>' : '') + '</div>'
+      + '<button class="icon-danger-btn mini" type="button" title="Eliminar" onclick="eliminarReglaDebito(' + i + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+      + '</div>';
+  }).join('');
+}
+function toggleReglaDebito(i, on){ if (DEBITO_REGLAS[i]) DEBITO_REGLAS[i].activa = !!on; }
+function eliminarReglaDebito(i){ DEBITO_REGLAS.splice(i, 1); renderDebitoReglas(); }
+function onNuevaReglaTipo(){
+  var par = document.getElementById('nuevaReglaTipo').value === 'par';
+  document.getElementById('nuevaReglaPar').style.display = par ? '' : 'none';
+  document.getElementById('nuevaReglaInclusion').style.display = par ? 'none' : '';
+}
+function splitCodigos(v){ return String(v||'').split(/[,\s]+/).map(function(x){ return x.trim(); }).filter(Boolean); }
+function agregarReglaDebito(){
+  var err = document.getElementById('debitoReglasError'); err.textContent = '';
+  var tipo = document.getElementById('nuevaReglaTipo').value;
+  var regla;
+  if (tipo === 'par'){
+    var cods = splitCodigos(document.getElementById('nuevaReglaCodigos').value);
+    if (cods.length < 2){ err.textContent = 'Poné los dos códigos del par.'; return; }
+    regla = { activa: true, tipo: 'par', monto: 'pay40', codigos: cods, codigosNombre: document.getElementById('nuevaReglaCodigosNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
+  } else {
+    var debita = document.getElementById('nuevaReglaDebita').value.trim();
+    var con = splitCodigos(document.getElementById('nuevaReglaCon').value);
+    if (!debita || !con.length){ err.textContent = 'Poné el código que se debita y al menos uno que lo incluye.'; return; }
+    regla = { activa: true, tipo: 'inclusion', monto: 'total', debita: debita, debitaNombre: document.getElementById('nuevaReglaDebitaNombre').value.trim(), conCodigos: con, conNombre: document.getElementById('nuevaReglaConNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
+  }
+  DEBITO_REGLAS.push(regla);
+  ['nuevaReglaDebita','nuevaReglaDebitaNombre','nuevaReglaCon','nuevaReglaConNombre','nuevaReglaCodigos','nuevaReglaCodigosNombre','nuevaReglaNota'].forEach(function(id){ document.getElementById(id).value=''; });
+  renderDebitoReglas();
+}
+async function guardarReglasDebito(){
+  var err = document.getElementById('debitoReglasError'); err.textContent = '';
+  var btn = document.getElementById('debitoReglasSave'); btn.disabled = true;
+  var r = await req('PUT', '/api/debito-reglas', { reglas: DEBITO_REGLAS });
+  btn.disabled = false;
+  if (!r.ok){ err.textContent = (r.data && r.data.error) || 'No se pudo guardar.'; return; }
+  DEBITO_REGLAS = r.data.reglas || DEBITO_REGLAS;
+  renderDebitoReglas();
+  closeDebitoReglasModal();
+}
 // Parsea las filas pegadas de la validación de PAMI: afiliado + código + tipo.
 function parsePamiValidacion(text){
   var out = [];
@@ -1818,6 +1887,10 @@ function aplicarDebitosPami(){
   var items = parsePamiValidacion(document.getElementById('pamiDebitText').value);
   if (!items.length){ err.textContent = 'No se detectaron filas de validación. Pegá las filas tal cual salen de PAMI (con afiliado y código).'; return; }
   var rows = CLIENT_REPORT_ROWS || [];
+  // La validación real REEMPLAZA la proyección automática: limpiamos primero los
+  // débitos que puso la regla, y contamos si había acertado.
+  var reglaAntes = 0, reglaAcerto = 0;
+  rows.forEach(function(r){ if (r.debitSource === 'regla'){ reglaAntes++; r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0; r.autoDebit = false; r.debitSource = ''; } });
   var used = {}, aplicados = 0, sinMatch = [];
   items.forEach(function(it){
     var afN = it.afiliado.replace(/\D/g, '');
@@ -1829,16 +1902,17 @@ function aplicarDebitosPami(){
       var matchAf = benN && (benN === afN || benN.indexOf(afN) === 0 || afN.indexOf(benN) === 0);
       if (matchAf && String(r.practiceCode || '') === it.codigo && reportBaseGross(r) > 0){ idx = i; break; }
     }
-    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; rows[idx].debitType = it.tipo; rows[idx].debitAmount = 0; aplicados++; }
+    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; rows[idx].debitType = it.tipo; rows[idx].debitAmount = 0; rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; }
     else sinMatch.push(it.codigo + ' · ' + it.afiliado);
   });
   renderClientReportRows();
   updateClientReportSummary();
   saveClientReportDraft();
   var msg = 'Se aplicaron ' + aplicados + ' débito' + (aplicados !== 1 ? 's' : '') + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '.';
+  if (reglaAntes) msg += ' (La regla automática había proyectado ' + reglaAntes + '; ahora manda la validación de PAMI.)';
   if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
   resEl.textContent = msg;
-  if (aplicados && !sinMatch.length) setTimeout(closePamiDebitModal, 1100);
+  if (aplicados && !sinMatch.length) setTimeout(closePamiDebitModal, 1400);
 }
 function normalizeReportSearch(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -2033,8 +2107,10 @@ function renderClientReportRows(){
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
     var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
-    var autoDebitNote = row.autoDebit ? '<div class="nom-muted auto-debit-note">Auto: excluyente con ' + esc(row.autoDebitPairCode || '-') + '</div>' : '';
-    if (!autoDebitNote && row.debitWarning) autoDebitNote = '<div class="debit-warning-note">⚠ ' + esc(row.debitWarning) + '</div>';
+    var autoDebitNote = '';
+    if (row.debitSource === 'validacion') autoDebitNote = '<div class="nom-muted auto-debit-note">✓ Validación PAMI</div>';
+    else if (row.autoDebit) autoDebitNote = '<div class="nom-muted auto-debit-note" title="' + esc(row.autoDebitReason || '') + '">Regla automática</div>';
+    else if (row.debitWarning) autoDebitNote = '<div class="debit-warning-note">⚠ ' + esc(row.debitWarning) + '</div>';
     return '<tr data-report-row="' + idx + '">'
       + '<td><div class="nom-code">' + esc(row.patientName || '-') + '</div><div class="nom-muted">' + esc(row.benefit || '') + '<br>OME ' + esc(row.order || '-') + '</div></td>'
       + '<td><div class="nom-practice-line"><span class="nom-code">' + esc(row.practiceCode || '-') + '</span><span class="nom-desc">' + esc(row.practiceDescription || row.practiceText || '') + '</span></div><div class="nom-muted">' + esc(row.moduleCode || '') + ' ' + esc(row.moduleDescription || '') + valueSource + '</div></td>'
@@ -2229,6 +2305,7 @@ function toggleReportDebit(index, checked){
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = checked;
+  row.debitSource = checked ? 'manual' : '';
   if (checked && !row.debitType) row.debitType = 'total';
   if (!checked) {
     row.autoDebit = false;
@@ -2245,6 +2322,7 @@ function setReportDebitType(index, value){
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   row.manualDebit = true;
+  if (row.debitSource !== 'validacion') row.debitSource = 'manual';
   row.debitType = value === 'pay40' || value === 'pay60' ? value : 'total';
   row.debitAmount = 0;
   renderClientReportRows();
