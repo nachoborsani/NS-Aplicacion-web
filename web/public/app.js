@@ -1579,31 +1579,37 @@ function renderClientDashboard(data){
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
       // Agrupado por prestacion (codigo): cuantas de cada una y el neto sumado.
-      function renderDetailRows(detailRows, emptyText){
-        if (!detailRows.length) return '<tr><td colspan="3" class="muted-cell">' + esc(emptyText) + '</td></tr>';
+      function renderDetailRows(detailRows, prevRows, emptyText){
         var groups = {};
-        detailRows.forEach(function(row){
-          var code = row.practiceCode || '-';
-          var key = code + '|' + (row.practiceDescription || '');
-          if (!groups[key]) groups[key] = { code: code, desc: row.practiceDescription || '', count: 0, net: 0 };
-          groups[key].count += 1;
-          groups[key].net += Number(row.net || 0);
-        });
-        return Object.keys(groups).map(function(k){ return groups[k]; })
-          .sort(function(a, b){ return b.count - a.count || b.net - a.net; })
-          .map(function(g){
-            return '<tr>'
-              + '<td><span class="nom-code">' + esc(g.code) + '</span> ' + esc(g.desc || '-') + '</td>'
-              + '<td class="tnum"><b>' + esc(numberFmt(g.count)) + '</b></td>'
-              + '<td class="nom-money"><b>' + esc(moneyFmt(g.net)) + '</b></td>'
-              + '</tr>';
-          }).join('');
+        function acumular(rows, campoCount, campoNet){
+          (rows || []).forEach(function(row){
+            var code = row.practiceCode || '-';
+            var key = code + '|' + (row.practiceDescription || '');
+            if (!groups[key]) groups[key] = { code: code, desc: row.practiceDescription || '', count: 0, net: 0, pcount: 0, pnet: 0 };
+            groups[key][campoCount] += 1;
+            groups[key][campoNet] += Number(row.net || 0);
+          });
+        }
+        acumular(detailRows, 'count', 'net');
+        if (hayCompare) acumular(prevRows, 'pcount', 'pnet');
+        var list = Object.keys(groups).map(function(k){ return groups[k]; });
+        if (!list.length) return '<tr><td colspan="3" class="muted-cell">' + esc(emptyText) + '</td></tr>';
+        list.sort(function(a, b){ return (b.count + b.pcount) - (a.count + a.pcount) || b.net - a.net; });
+        return list.map(function(g){
+          var cd = hayCompare ? ' ' + dashboardDelta({ value: g.count - g.pcount, percent: g.pcount ? ((g.count - g.pcount) / Math.abs(g.pcount)) : null }, false) : '';
+          var nd = hayCompare ? ' ' + dashboardDelta({ value: g.net - g.pnet, percent: g.pnet ? ((g.net - g.pnet) / Math.abs(g.pnet)) : null }, true) : '';
+          return '<tr>'
+            + '<td><span class="nom-code">' + esc(g.code) + '</span> ' + esc(g.desc || '-') + '</td>'
+            + '<td class="tnum"><b>' + esc(numberFmt(g.count)) + '</b>' + cd + '</td>'
+            + '<td class="nom-money"><b>' + esc(moneyFmt(g.net)) + '</b>' + nd + '</td>'
+            + '</tr>';
+        }).join('');
       }
-      function detailRow(kind, label, detailRows){
+      function detailRow(kind, label, detailRows, prevRows){
         return '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + kind + '" style="display:none"><td colspan="4">'
-          + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + '</div>'
+          + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + (hayCompare ? ' <span class="nom-muted">(cantidad y neto: variación vs el mes comparado)</span>' : '') + '</div>'
           + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Prestacion</th><th>Cantidad</th><th>Neto</th></tr></thead><tbody>'
-          + renderDetailRows(detailRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
+          + renderDetailRows(detailRows, prevRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
           + '</tbody></table></div></td></tr>';
       }
       function countButton(kind, count){
@@ -1612,6 +1618,9 @@ function renderClientDashboard(data){
       }
       var consultationRows = rows.filter(function(row){ return row.kind === 'Consulta'; });
       var practiceRows = rows.filter(function(row){ return row.kind === 'Practica'; });
+      var prevMod = compareModules[String(module.moduleCode)] || {};
+      var prevConsRows = (prevMod.rows || []).filter(function(r){ return r.kind === 'Consulta'; });
+      var prevPracRows = (prevMod.rows || []).filter(function(r){ return r.kind === 'Practica'; });
       var netAbs = Math.abs(Number(module.net || 0));
       var barW = Math.round(netAbs / maxNet * 100);
       var share = totalNet ? Math.round(netAbs / totalNet * 100) : 0;
@@ -1619,7 +1628,6 @@ function renderClientDashboard(data){
       var pracNow = module.practices || practiceRows.length;
       var modDelta = '', consDelta = '', pracDelta = '';
       if (hayCompare){
-        var prevMod = compareModules[String(module.moduleCode)] || {};
         var mkDelta = function(now, prev, money){ var d = Number(now) - Number(prev || 0); return dashboardDelta({ value: d, percent: prev ? (d / Math.abs(prev)) : null }, money); };
         modDelta = mkDelta(module.net || 0, prevMod.net || 0, true);
         consDelta = mkDelta(consNow, prevMod.consultations || 0, false);
@@ -1632,8 +1640,8 @@ function renderClientDashboard(data){
         + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b> ' + modDelta
         + '<div class="mod-share-row"><div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
         + '</tr>'
-        + detailRow('Consulta', 'Consultas', consultationRows)
-        + detailRow('Practica', 'Practicas', practiceRows);
+        + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
+        + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);
     }).join('') : '<tr><td colspan="4" class="muted-cell">Sin datos para este mes.</td></tr>';
   }
 }
