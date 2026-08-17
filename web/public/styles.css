@@ -487,10 +487,20 @@
   .scope-chip{border:1px solid var(--border);background:transparent;color:var(--text-2);font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;cursor:pointer}
   .scope-chip:hover{border-color:var(--turq);color:var(--text)}
   .scope-chip.on{background:var(--turq);border-color:var(--turq);color:#fff}
-  .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:9px 11px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-2)}
+  .dashboard-compare{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--hover);padding:11px 13px;display:flex;flex-direction:column;align-items:stretch;gap:8px;font-size:12px;color:var(--text-2)}
   .dashboard-compare b{color:var(--text);font-size:12.5px}
   .dashboard-compare .good{color:var(--success);font-weight:750}
   .dashboard-compare .bad{color:var(--error);font-weight:750}
+  .cmp-title{font-weight:700;font-size:13.5px;color:var(--text)}
+  .cmp-table-wrap{overflow-x:auto}
+  .cmp-table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .cmp-table th,.cmp-table td{padding:6px 10px;border-bottom:1px solid var(--border);text-align:left}
+  .cmp-table th{font-size:10.5px;color:var(--text-2);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+  .cmp-table td{color:var(--text)}
+  .cmp-table .num{text-align:right;white-space:nowrap}
+  .cmp-table td.good{color:var(--success);font-weight:700}
+  .cmp-table td.bad{color:var(--error);font-weight:700}
+  .cmp-table tbody tr:last-child td{border-bottom:0}
   .dashboard-module-wrap{margin-top:10px;border:1px solid var(--border);border-radius:10px;overflow:auto}
   .dashboard-module-table{min-width:560px}
   .dashboard-module-table th{padding:7px 10px;font-size:9.5px}

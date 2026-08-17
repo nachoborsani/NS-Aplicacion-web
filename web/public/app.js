@@ -1473,6 +1473,18 @@ function fillClientDashboardSelects(periods, currentPeriod, comparePeriod){
     if (comparePeriod && [].slice.call(compare.options).some(function(option){ return option.value === comparePeriod; })) compare.value = comparePeriod;
   }
 }
+// Fila de la tabla comparativa: métrica, valor de este mes, del anterior y la variación.
+function cmpRow(label, curr, prev, delta, money){
+  var fmt = money ? moneyFmt : numberFmt;
+  var raw = delta ? Number(delta.value || 0) : (Number(curr) - Number(prev));
+  var arrow = raw > 0 ? '▲ ' : (raw < 0 ? '▼ ' : '');
+  var cls = raw > 0 ? 'good' : (raw < 0 ? 'bad' : '');
+  var pct = (delta && delta.percent != null) ? ' (' + percentFmt(Math.abs(delta.percent)) + ')' : '';
+  return '<tr><td>' + esc(label) + '</td>'
+    + '<td class="num">' + esc(fmt(curr)) + '</td>'
+    + '<td class="num">' + esc(fmt(prev)) + '</td>'
+    + '<td class="num ' + cls + '">' + arrow + esc(fmt(Math.abs(raw)) + pct) + '</td></tr>';
+}
 function deltaText(label, delta, money){
   if (!delta) return '';
   var raw = Number(delta.value || 0);
@@ -1516,12 +1528,14 @@ function renderClientDashboard(data){
     } else if (!compare.period) {
       compareBox.innerHTML = '<b>' + esc(current.label || current.period) + '</b><span>No hay otro mes seleccionado para comparar.</span>';
     } else {
-      compareBox.innerHTML = '<b>' + esc((current.label || current.period) + ' vs ' + (compare.label || compare.period)) + '</b>'
-        + deltaText('Neto', data.deltas && data.deltas.net, true)
-        + deltaText('Prestaciones', data.deltas && data.deltas.totalRows, false)
-        + deltaText('Consultas', data.deltas && data.deltas.consultations, false)
-        + deltaText('Practicas', data.deltas && data.deltas.practices, false)
-        + deltaText('Promedio', data.deltas && data.deltas.averageNet, true);
+      var dl = data.deltas || {};
+      compareBox.innerHTML = '<div class="cmp-title">' + esc((current.label || current.period) + '  vs  ' + (compare.label || compare.period)) + '</div>'
+        + '<div class="cmp-table-wrap"><table class="cmp-table"><thead><tr><th>Métrica</th><th class="num">Este mes</th><th class="num">Mes anterior</th><th class="num">Variación</th></tr></thead><tbody>'
+        + cmpRow('Facturación neta', current.net || 0, compare.net || 0, dl.net, true)
+        + cmpRow('Consultas', current.consultations || 0, compare.consultations || 0, dl.consultations, false)
+        + cmpRow('Prácticas / estudios', current.practices || 0, compare.practices || 0, dl.practices, false)
+        + cmpRow('Promedio por prestación', current.averageNet || 0, compare.averageNet || 0, dl.averageNet, true)
+        + '</tbody></table></div>';
     }
   }
   loadDashboardNomNote(current.period || '', compare.period || '');
