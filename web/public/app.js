@@ -1871,7 +1871,9 @@ async function assignPracticeValue(btn){
   if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo guardar el valor.'); return; }
   (CLIENT_REPORT_ROWS || []).forEach(function(r){
     if (String(r.practiceCode) === code && !r.matchFound && !r.valueEdited){
-      r.valueGross = total; r.billable = true; r.matchFound = true; r.valueSourceCode = code;
+      // OJO: no tocar r.billable. Viene bien del parser (false para ausentes /
+      // no transmitidas). Ponerlo en true acá contaba prácticas ausentes.
+      r.valueGross = total; r.matchFound = true; r.valueSourceCode = code;
     }
   });
   renderClientReportRows(); updateClientReportSummary(); saveClientReportDraft();
