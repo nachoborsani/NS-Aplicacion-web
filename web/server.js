@@ -30,6 +30,7 @@ const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
 const clientCredsFile = path.join(dataDir, "client_credentials.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
+const clientPracticeValuesFile = path.join(dataDir, "client_practice_values.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
@@ -1149,8 +1150,33 @@ const clientPracticeValueOverrides = {
     },
   },
 };
+// Valores de práctica cargados por el operador desde la web (persistidos en el
+// volumen), que se suman a los hardcodeados. Cache en memoria; se recarga al guardar.
+let _clientPracticeValuesCache = null;
+function loadClientPracticeValues() {
+  if (_clientPracticeValuesCache) return _clientPracticeValuesCache;
+  try { _clientPracticeValuesCache = JSON.parse(fs.readFileSync(clientPracticeValuesFile, "utf8")) || {}; } catch { _clientPracticeValuesCache = {}; }
+  return _clientPracticeValuesCache;
+}
+function saveClientPracticeValues(store) {
+  _clientPracticeValuesCache = store;
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientPracticeValuesFile, JSON.stringify(store, null, 2));
+}
 function getClientPracticeOverride(clientSlug, practiceCode) {
-  return ((clientPracticeValueOverrides[clientSlug] || {})[String(practiceCode || "")]) || null;
+  const code = String(practiceCode || "");
+  const stored = (loadClientPracticeValues()[clientSlug] || {})[code];
+  if (stored && Number(stored.total) > 0) {
+    return {
+      moduleCode: stored.moduleCode || "",
+      moduleDescription: stored.moduleDescription || "",
+      practiceCode: code,
+      practiceDescription: stored.practiceDescription || "",
+      total: Number(stored.total),
+      valueSourceCode: code,
+    };
+  }
+  return ((clientPracticeValueOverrides[clientSlug] || {})[code]) || null;
 }
 function findNomencladorMatch(payload, client, practice) {
   const activeModules = new Set((client.activeModules || []).map((module) => String(module.code)));
@@ -2204,6 +2230,30 @@ const server = http.createServer(async (req, res) => {
     fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(clientesFile, JSON.stringify(raw, null, 2));
     return json(res, 200, { ok: true, clients: loadClientsStore() });
+  }
+
+  // Asignar valor a un código de práctica que vino "sin valor" (persistido).
+  const cpvMatch = p.match(/^\/api\/clientes\/([^/]+)\/practice-values$/);
+  if (cpvMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(cpvMatch[1]);
+    if (!loadClientsStore().some((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    const body = await readBody(req);
+    const code = cleanIdentifier(body.code);
+    const total = money(body.total);
+    if (!code) return json(res, 400, { error: "Falta el código de práctica." });
+    if (!(total > 0)) return json(res, 400, { error: "Ingresá un valor mayor a 0." });
+    const store = loadClientPracticeValues();
+    if (!store[slug]) store[slug] = {};
+    store[slug][code] = {
+      total,
+      practiceDescription: String(body.practiceDescription || "").replace(/\s+/g, " ").trim(),
+      moduleCode: cleanIdentifier(body.moduleCode),
+      moduleDescription: String(body.moduleDescription || "").replace(/\s+/g, " ").trim(),
+    };
+    saveClientPracticeValues(store);
+    return json(res, 200, { ok: true, code, total });
   }
 
   const clientDashboardMatch = p.match(/^\/api\/clientes\/([^/]+)\/dashboard$/);

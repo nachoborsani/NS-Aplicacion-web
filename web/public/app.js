@@ -54,6 +54,7 @@ function go(v, el){
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'users') renderUsers();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
+  if (v === 'dash') updateDashClientsTile();
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -518,6 +519,12 @@ async function renderUsers(){
   if (ds){ var pend = users.filter(function(u){ return u.mustChange || !u.active; }).length; ds.textContent = (users.length - pend) + ' activos · ' + pend + ' pendientes'; }
 }
 
+// Tile de "Clientes activos" en Inicio.
+async function updateDashClientsTile(){
+  var el = document.getElementById('dashClientsCount'); if (!el) return;
+  if (!CLIENTS || !CLIENTS.length){ var res = await api('/api/clientes'); if (res.ok) CLIENTS = res.data.clients || []; }
+  el.textContent = (CLIENTS || []).length;
+}
 // ---------- nomencladores ----------
 var NOM_READY = false;
 var NOM_TIMER = null;
@@ -1800,6 +1807,52 @@ function updateClientReportSummary(){
   if (bIcon) bIcon.textContent = flecha('bruto');
   var nIcon = document.getElementById('clientReportNetoSortIcon');
   if (nIcon) nIcon.textContent = flecha('neto');
+  renderClientReportZeroCodes();
+}
+// Panel de códigos "sin valor": lista los códigos (no pacientes) en $0 para asignarles valor.
+function renderClientReportZeroCodes(){
+  var panel = document.getElementById('clientReportZeroPanel'), list = document.getElementById('clientReportZeroList');
+  if (!panel || !list) return;
+  var editable = CLIENT_REPORT_MODE === 'draft' || CLIENT_REPORT_MODE === 'edit';
+  var map = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(r){
+    if (r.matchFound || r.valueEdited || !r.practiceCode) return;
+    var k = String(r.practiceCode);
+    if (!map[k]) map[k] = { code: k, desc: r.practiceDescription || r.practiceText || '', mc: r.moduleCode || '', md: r.moduleDescription || '', count: 0 };
+    map[k].count += 1;
+  });
+  var codes = Object.keys(map).map(function(k){ return map[k]; });
+  var cnt = document.getElementById('clientReportZeroCount'); if (cnt) cnt.textContent = codes.length;
+  if (!codes.length || !editable){ panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  list.innerHTML = codes.map(function(c){
+    return '<div class="report-zero-row" data-code="' + esc(c.code) + '" data-desc="' + esc(c.desc) + '" data-mc="' + esc(c.mc) + '" data-md="' + esc(c.md) + '">'
+      + '<div class="report-zero-info"><span class="nom-code">' + esc(c.code) + '</span> ' + esc(c.desc) + ' <span class="nom-muted">(' + c.count + ' paciente' + (c.count !== 1 ? 's' : '') + ')</span></div>'
+      + '<div class="report-zero-assign"><input class="inp" type="number" step="0.01" min="0" placeholder="Valor $"><button class="btn btn-ghost" onclick="assignPracticeValue(this)">Asignar</button></div>'
+      + '</div>';
+  }).join('');
+}
+async function assignPracticeValue(btn){
+  if (!ACTIVE_CLIENT) return;
+  var rowEl = btn.closest('.report-zero-row');
+  var code = rowEl.getAttribute('data-code');
+  var input = rowEl.querySelector('input');
+  var total = Number(String(input.value).replace(',', '.'));
+  if (!(total > 0)){ input.focus(); return; }
+  btn.disabled = true;
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/practice-values', {
+    code: code, total: total,
+    practiceDescription: rowEl.getAttribute('data-desc'),
+    moduleCode: rowEl.getAttribute('data-mc'), moduleDescription: rowEl.getAttribute('data-md')
+  });
+  btn.disabled = false;
+  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo guardar el valor.'); return; }
+  (CLIENT_REPORT_ROWS || []).forEach(function(r){
+    if (String(r.practiceCode) === code && !r.matchFound && !r.valueEdited){
+      r.valueGross = total; r.billable = true; r.matchFound = true; r.valueSourceCode = code;
+    }
+  });
+  renderClientReportRows(); updateClientReportSummary(); saveClientReportDraft();
 }
 // Ordena por valor $ (menor↔mayor). Primer click = menor a mayor.
 function toggleClientReportValueSort(field){

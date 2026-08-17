@@ -143,6 +143,7 @@
           </div>
           <div class="grid tiles">
             <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M11 11a4 4 0 100-8 4 4 0 000 8" stroke="currentColor" stroke-width="1.8"/></svg></span>Usuarios</div><div class="v tnum" id="dashUsersCount">—</div><div class="m" id="dashUsersSub">del sistema</div></div>
+            <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 13h.01M15 13h.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Clientes activos</div><div class="v tnum" id="dashClientsCount">—</div><div class="m">con acceso al sistema</div></div>
             <div class="card tile ok"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Reportes OK</div><div class="v tnum">0</div><div class="m">este mes</div></div>
             <div class="card tile warn"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Pendientes</div><div class="v tnum">0</div><div class="m">sin observaciones</div></div>
             <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8"/></svg></span>Notificaciones</div><div class="v tnum">0</div><div class="m">nada configurado aún</div></div>
@@ -356,6 +357,11 @@
                     <label><span>Monto esperado</span><input class="inp" id="clientReportExpectedAmount" placeholder="$ 0,00" oninput="setClientReportExpectedAmount(this.value)"></label>
                     <strong id="clientReportExpectedStatus" class="report-match-status muted">Sin control</strong>
                   </div>
+                </div>
+
+                <div class="report-zero-panel" id="clientReportZeroPanel" style="display:none">
+                  <div class="report-zero-head">⚠ <b><span id="clientReportZeroCount">0</span> códigos sin valor</b> <span>— asigná el valor y se aplica a todos los pacientes con ese código, y queda guardado para las próximas bandejas.</span></div>
+                  <div id="clientReportZeroList" class="report-zero-list"></div>
                 </div>
 
                 <div class="tablecard nom-table">
