@@ -509,6 +509,10 @@
   .dashboard-count-btn{height:28px;min-width:42px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-weight:800;cursor:pointer}
   .dashboard-count-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
   .dashboard-count-btn:disabled{cursor:default;color:var(--text-2);background:transparent;border-color:transparent}
+  .mod-metric{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .dashboard-module-row .dashboard-delta,.nom-money .dashboard-delta{display:inline-flex;align-items:center;gap:3px;font-weight:750;font-size:10.5px;padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .dashboard-module-row .dashboard-delta.good,.nom-money .dashboard-delta.good{color:var(--success);background:var(--success-bg)}
+  .dashboard-module-row .dashboard-delta.bad,.nom-money .dashboard-delta.bad{color:var(--error);background:var(--error-bg)}
   .dashboard-module-detail td{background:var(--surface-2);padding:0}
   .dashboard-detail-title{padding:9px 10px 6px;font-size:12px;font-weight:850;color:var(--text)}
   .dashboard-detail-scroll{max-height:280px;overflow:auto}

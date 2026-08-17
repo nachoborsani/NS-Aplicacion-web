@@ -1572,6 +1572,10 @@ function renderClientDashboard(data){
     var modules = current.modules || [];
     var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
     var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
+    // Para la variación por módulo vs el mes que se compara.
+    var hayCompare = !!compare.period;
+    var compareModules = {};
+    (compare.modules || []).forEach(function(m){ compareModules[String(m.moduleCode)] = m; });
     body.innerHTML = modules.length ? modules.map(function(module, moduleIndex){
       var rows = module.rows || [];
       // Agrupado por prestacion (codigo): cuantas de cada una y el neto sumado.
@@ -1611,11 +1615,21 @@ function renderClientDashboard(data){
       var netAbs = Math.abs(Number(module.net || 0));
       var barW = Math.round(netAbs / maxNet * 100);
       var share = totalNet ? Math.round(netAbs / totalNet * 100) : 0;
+      var consNow = module.consultations || consultationRows.length;
+      var pracNow = module.practices || practiceRows.length;
+      var modDelta = '', consDelta = '', pracDelta = '';
+      if (hayCompare){
+        var prevMod = compareModules[String(module.moduleCode)] || {};
+        var mkDelta = function(now, prev, money){ var d = Number(now) - Number(prev || 0); return dashboardDelta({ value: d, percent: prev ? (d / Math.abs(prev)) : null }, money); };
+        modDelta = mkDelta(module.net || 0, prevMod.net || 0, true);
+        consDelta = mkDelta(consNow, prevMod.consultations || 0, false);
+        pracDelta = mkDelta(pracNow, prevMod.practices || 0, false);
+      }
       return '<tr class="dashboard-module-row">'
         + '<td><div class="nom-code">' + esc(module.moduleCode || '-') + '</div><div class="nom-muted">' + esc(module.moduleDescription || '') + '</div></td>'
-        + '<td class="tnum">' + countButton('Consulta', module.consultations || consultationRows.length) + '</td>'
-        + '<td class="tnum">' + countButton('Practica', module.practices || practiceRows.length) + '</td>'
-        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
+        + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + '</div></td>'
+        + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + '</div></td>'
+        + '<td class="nom-money"><b>' + esc(moneyFmt(module.net || 0)) + '</b> ' + modDelta
         + '<div class="mod-share-row"><div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share">' + share + '%</span></div></td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows)
