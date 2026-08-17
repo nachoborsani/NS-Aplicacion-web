@@ -1250,6 +1250,15 @@ const clientPracticeValueOverrides = {
     },
   },
 };
+// Códigos viejos que el cliente sigue transmitiendo pero caen en "Sin módulo":
+// se reasignan a su módulo y se marcan "(Cod. Viejo)" en el dashboard. Solo tocan
+// el módulo y la descripción, NO el valor (ese sale del nomenclador / valores).
+const clientOldCodeModules = {
+  "cima": {
+    "570126": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Electrocardiograma
+    "607137": { moduleCode: "552", moduleDescription: "GASTROENTEROLOGIA" }, // Videoendoscopia digestiva baja
+  },
+};
 // Valores de práctica cargados por el operador desde la web (persistidos en el
 // volumen), que se suman a los hardcodeados. Cache en memoria; se recarga al guardar.
 let _clientPracticeValuesCache = null;
@@ -1459,18 +1468,32 @@ function sanitizeReportRows(rows) {
   }).filter((row) => row.order || row.practiceText || row.patientName);
 }
 function applyClientPracticeOverrides(clientSlug, rows) {
+  const oldMap = clientOldCodeModules[clientSlug] || {};
   return (rows || []).map((row) => {
+    let next = row;
     const override = getClientPracticeOverride(clientSlug, row.practiceCode);
-    if (!override || row.valueEdited) return row;
-    const next = {
-      ...row,
-      moduleCode: row.moduleCode || override.moduleCode || "",
-      moduleDescription: row.moduleDescription || override.moduleDescription || "",
-      practiceDescription: row.practiceDescription || override.practiceDescription || "",
-      valueGross: Number(row.valueGross || 0) > 0 ? row.valueGross : money(override.total),
-      valueSourceCode: row.valueSourceCode || override.valueSourceCode || override.practiceCode || "",
-      matchFound: true,
-    };
+    if (override && !row.valueEdited) {
+      next = {
+        ...row,
+        moduleCode: row.moduleCode || override.moduleCode || "",
+        moduleDescription: row.moduleDescription || override.moduleDescription || "",
+        practiceDescription: row.practiceDescription || override.practiceDescription || "",
+        valueGross: Number(row.valueGross || 0) > 0 ? row.valueGross : money(override.total),
+        valueSourceCode: row.valueSourceCode || override.valueSourceCode || override.practiceCode || "",
+        matchFound: true,
+      };
+    }
+    const old = oldMap[cleanIdentifier(row.practiceCode)];
+    if (old) {
+      const desc = String(next.practiceDescription || "");
+      next = {
+        ...next,
+        moduleCode: old.moduleCode,
+        moduleDescription: old.moduleDescription,
+        practiceDescription: /cod\.?\s*viejo/i.test(desc) ? desc : (desc ? `${desc} (Cod. Viejo)` : "(Cod. Viejo)"),
+      };
+    }
+    if (next === row) return row;
     next.valueBillable = reportRowGross(next);
     next.debitTotal = reportRowDebit(next);
     next.netTotal = reportRowNet(next);
@@ -1698,7 +1721,12 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
   const selectedPeriod = normalizePeriod(periodFilter) || (periods[0] && periods[0].period) || "";
   const selectedIndex = periods.findIndex((item) => item.period === selectedPeriod);
-  let comparePeriod = normalizePeriod(compareFilter) || (periods[selectedIndex + 1] && periods[selectedIndex + 1].period) || "";
+  // compareFilter === "none" = el usuario eligió NO comparar (aunque haya más
+  // reportes). Solo cuando el parámetro está ausente caemos por default al mes
+  // anterior.
+  let comparePeriod;
+  if (compareFilter === "none") comparePeriod = "";
+  else comparePeriod = normalizePeriod(compareFilter) || (periods[selectedIndex + 1] && periods[selectedIndex + 1].period) || "";
   // No comparar un período contra sí mismo (variaciones darían 0, no aporta).
   if (comparePeriod === selectedPeriod) comparePeriod = "";
   const current = periods.find((item) => item.period === selectedPeriod) || emptyDashboardPeriod(selectedPeriod);

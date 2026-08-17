@@ -1712,6 +1712,9 @@ async function loadClientDashboard(){
   var params = new URLSearchParams();
   if (period && period.value) params.set('period', period.value);
   if (compare && compare.value) params.set('compare', compare.value);
+  // Si el select ya está poblado y el usuario eligió "Sin comparación" (value=''),
+  // mandamos 'none' para que el server NO caiga por default al mes anterior.
+  else if (compare && compare.options.length > 1) params.set('compare', 'none');
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/dashboard' + (params.toString() ? '?' + params.toString() : ''));
   if (res.ok) renderClientDashboard(res.data);
 }
