@@ -1607,7 +1607,9 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
   const selectedPeriod = normalizePeriod(periodFilter) || (periods[0] && periods[0].period) || "";
   const selectedIndex = periods.findIndex((item) => item.period === selectedPeriod);
-  const comparePeriod = normalizePeriod(compareFilter) || (periods[selectedIndex + 1] && periods[selectedIndex + 1].period) || "";
+  let comparePeriod = normalizePeriod(compareFilter) || (periods[selectedIndex + 1] && periods[selectedIndex + 1].period) || "";
+  // No comparar un período contra sí mismo (variaciones darían 0, no aporta).
+  if (comparePeriod === selectedPeriod) comparePeriod = "";
   const current = periods.find((item) => item.period === selectedPeriod) || emptyDashboardPeriod(selectedPeriod);
   const previous = periods.find((item) => item.period === comparePeriod) || emptyDashboardPeriod(comparePeriod);
   return {

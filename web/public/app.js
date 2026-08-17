@@ -1469,8 +1469,13 @@ function fillClientDashboardSelects(periods, currentPeriod, comparePeriod){
     if (currentPeriod && [].slice.call(current.options).some(function(option){ return option.value === currentPeriod; })) current.value = currentPeriod;
   }
   if (compare) {
-    compare.innerHTML = '<option value="">Sin comparacion</option>' + options;
-    if (comparePeriod && [].slice.call(compare.options).some(function(option){ return option.value === comparePeriod; })) compare.value = comparePeriod;
+    // No se puede comparar un mes contra sí mismo: se excluye el actual.
+    var compareOptions = (periods || []).filter(function(item){ return item.period !== currentPeriod; }).map(function(item){
+      var suffix = item.reportCount ? ' (' + item.reportCount + ')' : '';
+      return '<option value="' + esc(item.period) + '">' + esc(item.label + suffix) + '</option>';
+    }).join('');
+    compare.innerHTML = '<option value="">Sin comparacion</option>' + compareOptions;
+    if (comparePeriod && comparePeriod !== currentPeriod && [].slice.call(compare.options).some(function(option){ return option.value === comparePeriod; })) compare.value = comparePeriod;
   }
 }
 // Fila de la tabla comparativa: métrica, valor de este mes, del anterior y la variación.
