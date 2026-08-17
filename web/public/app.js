@@ -1394,7 +1394,8 @@ function renderSavedClientReports(){
     var actions = '<button class="btn btn-ghost report-open-btn" type="button" onclick="openClientReport(&quot;' + esc(report.id) + '&quot;)">Ver</button>'
       + '<button class="btn btn-ghost report-open-btn" type="button" onclick="downloadClientReport(&quot;' + esc(report.id) + '&quot;)">Excel</button>'
       + '<button class="btn btn-navy report-open-btn" type="button" onclick="openReportPdfModal(&quot;' + esc(report.id) + '&quot;)">Descargar PDF</button>'
-      + (viewing ? '<button class="btn btn-ghost report-open-btn" type="button" onclick="closeClientReportView()">Cerrar</button>' : '');
+      + (viewing ? '<button class="btn btn-ghost report-open-btn" type="button" onclick="closeClientReportView()">Cerrar</button>' : '')
+      + '<button class="icon-danger-btn mini" type="button" title="Eliminar reporte" aria-label="Eliminar reporte" onclick="openReportDeleteModal(&quot;' + esc(report.id) + '&quot;,&quot;' + esc(report.title || 'reporte') + '&quot;)">' + SVG_TRASH + '</button>';
     return '<tr>'
       + '<td><div class="nom-code">' + esc(report.title || 'Reporte cerrado') + '</div><div class="nom-muted">' + esc(dateFmt(report.closedAt)) + '<br>' + esc(report.sourceFilename || '') + (notes ? '<br>Obs. ' + esc(notes) : '') + '</div></td>'
       + '<td>' + esc(report.nomencladorLabel || report.nomencladorPeriod || '-') + '</td>'
@@ -1414,6 +1415,25 @@ function reportPdfChoose(kind){
   if (kind === 'general') downloadGeneralReportPdf(id);
   else if (kind === '543' || kind === '546') downloadProfessionalReport(id, kind);
   else downloadSpecialReportPdf(id, kind);
+}
+var REPORT_DELETE_ID = '';
+function openReportDeleteModal(id, title){
+  REPORT_DELETE_ID = id;
+  var nm = document.getElementById('reportDeleteName'); if (nm) nm.textContent = title || 'este reporte';
+  var err = document.getElementById('reportDeleteError'); if (err) err.textContent = '';
+  showModal('reportDeleteModal', 'reportDeleteScrim');
+}
+function closeReportDeleteModal(){ hideModal('reportDeleteModal', 'reportDeleteScrim'); }
+async function confirmReportDelete(){
+  if (!ACTIVE_CLIENT || !REPORT_DELETE_ID) return;
+  var err = document.getElementById('reportDeleteError'); if (err) err.textContent = '';
+  var btn = document.getElementById('reportDeleteConfirm'); if (btn) btn.disabled = true;
+  var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(REPORT_DELETE_ID));
+  if (btn) btn.disabled = false;
+  if (!res.ok){ if (err) err.textContent = (res.data && res.data.error) || 'No se pudo eliminar el reporte.'; return; }
+  closeReportDeleteModal();
+  if (CLIENT_REPORT_ID === REPORT_DELETE_ID && CLIENT_REPORT_MODE === 'closed') clearClientReport();
+  await loadClientReports();
 }
 function downloadClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;

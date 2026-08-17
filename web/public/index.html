@@ -783,6 +783,20 @@
       </div>
     </div>
 
+    <!-- ===== Modal: eliminar reporte guardado ===== -->
+    <div class="scrim" id="reportDeleteScrim" onclick="closeReportDeleteModal()"></div>
+    <div class="modal" id="reportDeleteModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Eliminar reporte</h3><button class="x" onclick="closeReportDeleteModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p>¿Seguro que querés eliminar <b id="reportDeleteName">este reporte</b>? Esta acción no se puede deshacer.</p>
+        <div class="msg err" id="reportDeleteError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeReportDeleteModal()">Cancelar</button>
+        <button class="btn btn-danger" id="reportDeleteConfirm" onclick="confirmReportDelete()">Sí, eliminar</button>
+      </div>
+    </div>
+
     <!-- Notifications drawer -->
     <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
     <aside class="drawer" id="drawer">

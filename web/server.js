@@ -2532,6 +2532,18 @@ const server = http.createServer(async (req, res) => {
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
     return json(res, 200, { report: { ...report, rows: reportRows(report), summary: summarizeReportRows(reportRows(report)) } });
   }
+  if (clientReportDetailMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportDetailMatch[1]);
+    const id = decodeURIComponent(clientReportDetailMatch[2]);
+    const store = loadClientReportsStore();
+    const idx = (store.items || []).findIndex((item) => item.clientSlug === slug && item.id === id);
+    if (idx < 0) return json(res, 404, { error: "Reporte no encontrado." });
+    store.items.splice(idx, 1);
+    saveClientReportsStore(store);
+    return json(res, 200, { ok: true });
+  }
 
   const clientReportPreviewMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/preview$/);
   if (clientReportPreviewMatch && req.method === "POST") {
