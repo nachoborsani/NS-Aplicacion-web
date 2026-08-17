@@ -1574,20 +1574,35 @@ function metricDelta(current, previous, key) {
   const b = Number(previous && previous[key] || 0);
   return { value: money(a - b), percent: b ? (a - b) / b : null };
 }
+// Clave única de práctica para deduplicar entre reportes del mismo período.
+function dashboardRowKey(row) {
+  const order = cleanIdentifier(row && row.order);
+  if (order) return "o:" + order;
+  return "p:" + cleanIdentifier(row && row.benefit) + "|" + cleanIdentifier(row && row.practiceCode) + "|" + String((row && row.appointmentAt) || "");
+}
 function buildClientDashboard(slug, periodFilter, compareFilter) {
   const reports = (loadClientReportsStore().items || []).filter((report) => report.clientSlug === slug);
   const byPeriod = new Map();
-  for (const report of reports) {
+  // Ordenamos por fecha de cierre asc: si dos reportes del mismo período comparten
+  // una práctica (OME), el más reciente pisa (no se cuenta dos veces). Las prácticas
+  // distintas sí se suman -> permite comparar por quincenas sin duplicar.
+  const sortedReports = [...reports].sort((a, b) => String(a.closedAt || "").localeCompare(String(b.closedAt || "")));
+  for (const report of sortedReports) {
     const period = reportDashboardPeriod(report);
     if (!period) continue;
     if (!byPeriod.has(period)) {
       const item = emptyDashboardPeriod(period);
       item._modules = {};
+      item._rowsByKey = new Map();
       byPeriod.set(period, item);
     }
     const target = byPeriod.get(period);
     target.reportCount += 1;
-    for (const row of reportRows(report)) addRowToDashboardPeriod(target, row);
+    for (const row of reportRows(report)) target._rowsByKey.set(dashboardRowKey(row), row);
+  }
+  for (const item of byPeriod.values()) {
+    for (const row of item._rowsByKey.values()) addRowToDashboardPeriod(item, row);
+    delete item._rowsByKey;
   }
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
   const selectedPeriod = normalizePeriod(periodFilter) || (periods[0] && periods[0].period) || "";
