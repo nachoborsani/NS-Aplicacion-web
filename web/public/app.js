@@ -1726,11 +1726,13 @@ function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
 function parsePamiValidacion(text){
   var out = [];
   (text || '').split(/\r?\n/).forEach(function(line){
-    if (!/valida/i.test(line)) return;                 // solo filas de validación
+    // Fila de datos = tiene afiliado (10-13 díg) + código (5-6 díg). Sirve para
+    // cualquier motivo: "VALIDACION PARCIAL", "PRACTICAS EXCLUYENTES", etc.
     var af = (line.match(/\b(\d{10,13})\b/) || [])[1] || '';
     var nums = line.match(/\b\d{5,6}\b/g) || [];        // código = último número de 5-6 dígitos
     var codigo = nums.length ? nums[nums.length - 1] : '';
     if (!af || !codigo) return;
+    // "PARCIAL" = PAMI paga 40%; cualquier otro motivo (excluyentes, etc.) = débito total.
     out.push({ afiliado: af, codigo: codigo, tipo: /parcial/i.test(line) ? 'pay40' : 'total', raw: line.trim() });
   });
   return out;
