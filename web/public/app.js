@@ -1152,6 +1152,13 @@ function mesCursoCierre(period){
   while (mes > 12){ mes -= 12; anio++; }
   return '01/' + String(mes).padStart(2, '0') + '/' + anio;
 }
+function mesCursoFechaCorta(iso){
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+  } catch (e){ return ''; }
+}
 function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
@@ -1198,7 +1205,7 @@ function mesCursoCardMesEnCurso(b){
   }
   return '<div class="mescurso-card">' + head + cuerpo + '</div>';
 }
-function mesCursoCardSinCerrar(current){
+function mesCursoCardSinCerrar(current, reporte){
   if (!current || !current.period){
     return '<div class="mescurso-card sincerrar"><div class="mescurso-head">'
       + '<span class="mescurso-title">Sin cerrar</span></div>'
@@ -1206,23 +1213,28 @@ function mesCursoCardSinCerrar(current){
       + '<span>Cuando haya un reporte transmitido con débitos sin confirmar, el resumen aparece acá.</span></div></div>';
   }
   var cierre = mesCursoCierre(current.period);
+  var fechaRep = (reporte && reporte.closedAt) ? mesCursoFechaCorta(reporte.closedAt) : '';
   var faltan = current.missingInforme || 0;
   var faltanMonto = current.missingInformeAmount || 0;
   var ausentes = current.absent || 0;
   var clickable = MESCURSO_REPORTE_ID ? ' mescurso-click' : '';
   var onclick = MESCURSO_REPORTE_ID ? ' onclick="irAReporteSinCerrar()"' : '';
+  var footParts = [];
+  if (fechaRep) footParts.push('Reporte del ' + esc(fechaRep));
+  if (cierre) footParts.push('los débitos cierran el ' + esc(cierre));
+  var foot = footParts.length ? '<div class="mescurso-foot">' + footParts.join(' · ') + '</div>' : '';
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
-    + '<div class="mescurso-val-note">débitos sin confirmar' + (cierre ? ' · cierra ' + esc(cierre) : '') + '</div>'
+    + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line alert' + clickable + '"' + onclick + '><span>Faltan informes</span>'
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + clickable + '"' + onclick + '><span>Ausentes sin activar</span>'
     + '<b>' + esc(numberFmt(ausentes)) + '</b></div>'
-    + '</div></div>';
+    + '</div>' + foot + '</div>';
 }
 function irAReporteSinCerrar(){
   if (!MESCURSO_REPORTE_ID) return;
@@ -1250,7 +1262,7 @@ async function loadClientMesCurso(){
   var pendiente = reportes.filter(function(r){ return r.debitStatus === 'pendiente'; })[0] || reportes[0] || null;
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
-  var cards = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(b) + mesCursoCardSinCerrar(current) + '</div>';
+  var cards = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(b) + mesCursoCardSinCerrar(current, pendiente) + '</div>';
 
   var tabla = '';
   if (b){
