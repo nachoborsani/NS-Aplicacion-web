@@ -1644,14 +1644,44 @@ function buildBandejaResumen(slug) {
       manualDebit: false,
       debitType: "total",
       debitAmount: 0,
+      // Campos de display (los ignoran las reglas) para el detalle copiable.
+      _nombre: String(row[kNombre] || "").trim(),
+      _practica: pracRaw,
+      _turno: String(row[kTurno] || "").trim(),
     });
   }
   // Posibles débitos: proyección de las reglas de cruce mismo-día (Panel Débitos).
   applyAutomaticExclusionDebits(synth);
+  // Grupos afiliado+día para reconstruir con qué OME(s) cruza cada débito.
+  const grupoMap = new Map();
+  for (const s of synth) {
+    if (!s.benefit || !s.appointmentAt) continue;
+    const k = s.benefit + "|" + s.appointmentAt;
+    if (!grupoMap.has(k)) grupoMap.set(k, []);
+    grupoMap.get(k).push(s);
+  }
   let posiblesDebitos = 0, posiblesDebitosCount = 0;
+  const posiblesDebitosRows = [];
   for (const r of synth) {
     const d = reportRowDebit(r);
-    if (d > 0) { posiblesDebitos += d; posiblesDebitosCount++; }
+    if (d <= 0) continue;
+    posiblesDebitos += d;
+    posiblesDebitosCount++;
+    const ruleCodes = String(r.autoDebitRuleCodes || "").split("/").map((c) => cleanIdentifier(c)).filter(Boolean);
+    const grupo = grupoMap.get(r.benefit + "|" + r.appointmentAt) || [];
+    const cruce = grupo
+      .filter((g) => g !== r && (ruleCodes.length ? ruleCodes.includes(g.practiceCode) : true))
+      .map((g) => g._practica)
+      .filter(Boolean);
+    if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
+      benef: r.benefit,
+      nombre: r._nombre || "",
+      turno: r._turno || "",
+      practica: r._practica || "",
+      cruce: cruce.join(" + "),
+      motivo: r.autoDebitReason || "",
+      monto: money(d),
+    });
   }
   return {
     period: bandeja.month || "",
@@ -1663,6 +1693,7 @@ function buildBandejaResumen(slug) {
     missingInforme, missingInformeAmount: money(missingInformeAmount),
     missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
+    posiblesDebitosRows,
     nomencladorPeriod: nom ? (nom.period || "") : "",
     nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
     uploadedAt: bandeja.uploadedAt || "",
