@@ -546,7 +546,8 @@ var NOM_SELECTED_MODULES = [];
 var CLIENTS = [];
 var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
-var CLIENT_SECTION = 'dashboard';
+// Última solapa de cliente usada: se recuerda entre clientes y entre recargas.
+var CLIENT_SECTION = (function(){ try { return localStorage.getItem('ns_client_section') || 'dashboard'; } catch (e){ return 'dashboard'; } })();
 var CLIENT_NOM_OPEN = false;
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_SHOW_ALL = false;  // true = renderizar todas las filas (reportes grandes) aunque tarde
@@ -1065,7 +1066,8 @@ function renderClientList(){
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
-  CLIENT_SECTION = 'dashboard';
+  // NO forzamos la solapa: se mantiene la última usada (CLIENT_SECTION). Si venís
+  // por un link con solapa, selectClientWhenReady la aplica después.
   CLIENT_NOM_OPEN = false;
   renderClientList();
   renderActiveClient();
@@ -1081,6 +1083,7 @@ function setClientSection(section){
   for (var i = 0; i < CLIENT_SECTIONS.length; i++){ if (CLIENT_SECTIONS[i].key === section){ found = CLIENT_SECTIONS[i]; break; } }
   if (!found) found = CLIENT_SECTIONS[2]; // por defecto: Dashboard de reportes
   CLIENT_SECTION = found.key;
+  try { localStorage.setItem('ns_client_section', CLIENT_SECTION); } catch (e){}
   CLIENT_SECTIONS.forEach(function(s){
     var sec = document.getElementById(s.sec);
     var tab = document.getElementById(s.tab);
