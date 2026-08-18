@@ -463,6 +463,10 @@
   .cotejo-table th.nom-money,.cotejo-table td.nom-money{text-align:right;font-variant-numeric:tabular-nums}
   .cotejo-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
   .cotejo-table tr.cotejo-gap{background:var(--error-bg)}
+  .cotejo-table tr.cotejo-row{cursor:pointer}
+  .cotejo-table tr.cotejo-row:hover td{filter:brightness(.97);text-decoration:none}
+  .cotejo-table tr.cotejo-row:hover td:first-child{box-shadow:inset 3px 0 0 var(--turq)}
+  .debit-motivo{color:var(--text-2)}
   .cotejo-table td.pos{color:var(--success)}
   .cotejo-table td.neg{color:var(--error)}
   .cotejo-table tfoot td{border-top:2px solid var(--border);border-bottom:0;padding-top:8px}

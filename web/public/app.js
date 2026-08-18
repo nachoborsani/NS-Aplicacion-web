@@ -1934,6 +1934,10 @@ function openCotejoModal(){
 function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
 // El reporte tiene umbrales si alguna fila quedó marcada con motivo 'umbral'.
 function reportTieneUmbrales(){ return (CLIENT_REPORT_ROWS || []).some(function(r){ return r.debitMotivo === 'umbral'; }); }
+// Etiqueta corta del motivo del débito (para mostrar al lado de "Validación PAMI").
+function motivoDebitoLabel(m){
+  return { umbral:'Umbral', excluyente:'Excluyente', incluyente:'Incluyente', inactivo:'Inactivo', parcial:'Parcial' }[m] || '';
+}
 // Marca "Cotejar por módulo" como pendiente (⚠) SOLO si hay umbrales sin cotejar.
 // Si el reporte no tiene umbrales, el botón queda normal (no muestra nada).
 function updateCotejoPending(){
@@ -1990,7 +1994,7 @@ function correrCotejo(){
   var totalOf = parsed.total || Object.values(parsed.porModulo).reduce(function(s, v){ return s + v; }, 0);
   var body = filas.map(function(f){
     var gap = Math.abs(f.dif) > 5;
-    return '<tr class="' + (gap ? 'cotejo-gap' : '') + '"><td><span class="nom-code">' + esc(f.mod) + '</span></td>'
+    return '<tr class="cotejo-row ' + (gap ? 'cotejo-gap' : '') + '" onclick="cotejoIrAModulo(&quot;' + esc(f.mod) + '&quot;)" title="Ver las prácticas de este módulo"><td><span class="nom-code">' + esc(f.mod) + '</span></td>'
       + '<td class="nom-money">' + esc(moneyFmt(f.mio)) + '</td>'
       + '<td class="nom-money">' + (f.oficial ? esc(moneyFmt(f.oficial)) : '<span class="nom-muted">—</span>') + '</td>'
       + '<td class="nom-money ' + (gap ? (f.dif > 0 ? 'pos' : 'neg') : '') + '"><b>' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + '</b></td></tr>';
@@ -1999,7 +2003,7 @@ function correrCotejo(){
   res.innerHTML = '<div class="cotejo-tablewrap"><table class="cotejo-table"><thead><tr><th>Módulo</th><th class="nom-money">Mi neto</th><th class="nom-money">PAMI</th><th class="nom-money">Diferencia</th></tr></thead>'
     + '<tbody>' + body + '</tbody>'
     + '<tfoot><tr><td><b>TOTAL</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalMio)) + '</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalOf)) + '</b></td><td class="nom-money ' + (Math.abs(difTotal) > 5 ? (difTotal > 0 ? 'pos' : 'neg') : '') + '"><b>' + (difTotal >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(difTotal))) + '</b></td></tr></tfoot></table></div>'
-    + '<p class="nom-muted cotejo-hint">Los módulos en rojo son los que no coinciden. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más.</p>';
+    + '<p class="nom-muted cotejo-hint"><b>Tocá un módulo</b> para ver sus prácticas en la tabla y ajustar. Los módulos en rojo no coinciden. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más.</p>';
   CLIENT_REPORT_COTEJO_HECHO = true;   // ya cotejó → saca el "pendiente"
   updateCotejoPending();
 }
@@ -2070,18 +2074,20 @@ function parsePamiValidacion(text){
     var nums = line.match(/\b\d{5,6}\b/g) || [];        // código = último número de 5-6 dígitos
     var codigo = nums.length ? nums[nums.length - 1] : '';
     if (!af || !codigo) return;
-    // Motivo del débito → cuánto paga PAMI:
-    //  - "UMBRALES" (valorización parcial por umbrales, Resol 2713) = paga 60%.
-    //  - "PARCIAL" sin umbrales (ej. ecodoppler arterial+venoso) = paga 40%.
-    //  - cualquier otro (excluyentes, incluyentes, inactivo, etc.) = débito total (100%).
-    // OJO: "umbral" se chequea ANTES que "parcial" porque el texto de umbrales
-    // dice "VALORIZACION PARCIAL POR UMBRALES" (contiene las dos palabras).
-    // 'umbral' es un marcador: el % lo define la config (UMBRAL_PAGA_PCT) al aplicar.
-    var tipo;
-    if (/umbral/i.test(line)) tipo = 'umbral';
-    else if (/parcial/i.test(line)) tipo = 'pay40';
-    else tipo = 'total';
-    out.push({ afiliado: af, codigo: codigo, tipo: tipo, raw: line.trim() });
+    // Motivo del débito (para la leyenda) + cuánto paga PAMI (tipo):
+    //  - umbral (valorización parcial por umbrales) → estimación 40%, se ajusta por módulo.
+    //  - parcial sin umbral (ej. ecodoppler art+ven) → paga 40%.
+    //  - excluyente / incluyente / inactivo / otro → débito total.
+    // OJO: "umbral" se chequea ANTES que "parcial" (el texto de umbrales dice
+    // "VALORIZACION PARCIAL POR UMBRALES", contiene las dos palabras).
+    var motivo = /umbral/i.test(line) ? 'umbral'
+      : /excluyente/i.test(line) ? 'excluyente'
+      : /incluyente/i.test(line) ? 'incluyente'
+      : /inactivo/i.test(line) ? 'inactivo'
+      : /parcial/i.test(line) ? 'parcial'
+      : 'otro';
+    var tipo = motivo === 'umbral' ? 'umbral' : motivo === 'parcial' ? 'pay40' : 'total';
+    out.push({ afiliado: af, codigo: codigo, tipo: tipo, motivo: motivo, raw: line.trim() });
   });
   return out;
 }
@@ -2091,10 +2097,10 @@ async function aplicarDebitosPami(){
   var items = parsePamiValidacion(document.getElementById('pamiDebitText').value);
   if (!items.length){ err.textContent = 'No se detectaron filas de validación. Pegá las filas tal cual salen de PAMI (con afiliado y código).'; return; }
   // Umbral = estimación al 40% (el % real varía por módulo → se ajusta con
-  // "Cotejar por módulo"). Se marca debitMotivo='umbral' para el KPI y la alerta.
+  // "Cotejar por módulo"). El motivo se guarda aparte (para la leyenda de la fila).
   function aplicarTipo(r, tipo){
-    if (tipo === 'umbral'){ r.debitMotivo = 'umbral'; r.debitType = 'pay40'; r.debitAmount = 0; }
-    else { r.debitType = tipo; r.debitAmount = 0; r.debitMotivo = ''; }
+    if (tipo === 'umbral'){ r.debitType = 'pay40'; r.debitAmount = 0; }
+    else { r.debitType = tipo; r.debitAmount = 0; }
   }
   var rows = CLIENT_REPORT_ROWS || [];
   // La validación real REEMPLAZA la proyección automática: limpiamos primero los
@@ -2112,7 +2118,7 @@ async function aplicarDebitosPami(){
       var matchAf = benN && (benN === afN || benN.indexOf(afN) === 0 || afN.indexOf(benN) === 0);
       if (matchAf && String(r.practiceCode || '') === it.codigo && reportBaseGross(r) > 0){ idx = i; break; }
     }
-    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; aplicarTipo(rows[idx], it.tipo); rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; if (it.tipo === 'umbral') umbralAplicados++; }
+    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; aplicarTipo(rows[idx], it.tipo); rows[idx].debitSource = 'validacion'; rows[idx].debitMotivo = it.motivo || ''; rows[idx].autoDebit = false; aplicados++; if (it.motivo === 'umbral') umbralAplicados++; }
     else sinMatch.push(it.codigo + ' · ' + it.afiliado);
   });
   // Pegar la validación real = los débitos quedan confirmados.
@@ -2366,7 +2372,10 @@ function renderClientReportRows(){
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
     var valueDblClick = readOnly ? '' : ' ondblclick="editReportValue(' + idx + ')"';
     var autoDebitNote = '';
-    if (row.debitSource === 'validacion') autoDebitNote = '<div class="nom-muted auto-debit-note">✓ Validación PAMI</div>';
+    if (row.debitSource === 'validacion'){
+      var mot = motivoDebitoLabel(row.debitMotivo);
+      autoDebitNote = '<div class="nom-muted auto-debit-note">✓ Validación PAMI' + (mot ? ' · <b class="debit-motivo">' + esc(mot) + '</b>' : '') + '</div>';
+    }
     else if (row.autoDebit) autoDebitNote = '<div class="nom-muted auto-debit-note" title="' + esc(row.autoDebitReason || '') + '">Regla automática</div>';
     else if (row.debitWarning) autoDebitNote = '<div class="debit-warning-note">⚠ ' + esc(row.debitWarning) + '</div>';
     return '<tr data-report-row="' + idx + '">'
@@ -2386,6 +2395,15 @@ function renderClientReportRows(){
   updateClientReportSummary();
 }
 function mostrarTodasLasPracticas(){ CLIENT_REPORT_SHOW_ALL = true; renderClientReportRows(); }
+// Desde el cotejo: filtra la tabla al módulo tocado y cierra el modal.
+function cotejoIrAModulo(mod){
+  var sel = document.getElementById('clientReportModuleFilter');
+  if (sel) sel.value = mod;
+  setClientReportModuleFilter(mod);
+  closeCotejoModal();
+  var tabla = document.getElementById('clientReportBody');
+  if (tabla && tabla.scrollIntoView) tabla.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
 function renderClientReportModuleFilter(){
   var el = document.getElementById('clientReportModuleFilter');
   if (!el) return;

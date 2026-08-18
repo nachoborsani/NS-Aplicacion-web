@@ -1472,7 +1472,7 @@ function sanitizeReportRows(rows) {
       autoDebitReason: String(row.autoDebitReason || "").trim(),
       autoDebitRuleId: cleanIdentifier(row.autoDebitRuleId),
       debitSource: ["regla", "validacion", "manual"].includes(row.debitSource) ? row.debitSource : "",
-      debitMotivo: ["umbral", "excluyente", "incluyente"].includes(row.debitMotivo) ? row.debitMotivo : "",
+      debitMotivo: ["umbral", "excluyente", "incluyente", "inactivo", "parcial"].includes(row.debitMotivo) ? row.debitMotivo : "",
       debitWarning: String(row.debitWarning || "").trim(),
       autoDebitPairCode: cleanIdentifier(row.autoDebitPairCode),
       autoDebitRulePage: cleanIdentifier(row.autoDebitRulePage),
