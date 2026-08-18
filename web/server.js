@@ -1627,6 +1627,7 @@ function buildBandejaResumen(slug) {
         nombre: String(row[kNombre] || "").trim(),
         practica: pracRaw,
         turno: String(row[kTurno] || "").trim(),
+        valor: money(valueGross),
       });
     }
     // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
@@ -1667,17 +1668,20 @@ function buildBandejaResumen(slug) {
     if (d <= 0) continue;
     posiblesDebitos += d;
     posiblesDebitosCount++;
+    // Estado de una práctica en la bandeja del mes en vivo.
+    const estadoDe = (s) => s.transmitted ? "Transmitida" : (s.validated ? "Validada" : "Turno asignado");
     const ruleCodes = String(r.autoDebitRuleCodes || "").split("/").map((c) => cleanIdentifier(c)).filter(Boolean);
     const grupo = grupoMap.get(r.benefit + "|" + r.appointmentAt) || [];
     const cruce = grupo
       .filter((g) => g !== r && (ruleCodes.length ? ruleCodes.includes(g.practiceCode) : true))
-      .map((g) => g._practica)
+      .map((g) => g._practica + " · " + estadoDe(g))
       .filter(Boolean);
     if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
       benef: r.benefit,
       nombre: r._nombre || "",
       turno: r._turno || "",
       practica: r._practica || "",
+      estado: estadoDe(r),
       cruce: cruce.join(" + "),
       motivo: r.autoDebitReason || "",
       monto: money(d),

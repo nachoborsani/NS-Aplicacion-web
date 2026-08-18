@@ -1166,14 +1166,14 @@ function mesCursoTogglePanel(tipo){
     var fi = MESCURSO_FALTAN_INFORMES || [];
     if (!fi.length) return;
     html = mesCursoTablaHtml('Faltan informes · ' + fi.length, 'error', 'copiarFaltanInformes',
-      ['Benef', 'Apellido y nombre', 'Práctica', 'Turno'],
-      fi.map(function(x){ return [x.benef, x.nombre, x.practica, x.turno]; }));
+      ['Benef', 'Apellido y nombre', 'Práctica', 'Turno', 'Valor'],
+      fi.map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, moneyFmt(x.valor || 0)]; }));
   } else {
     var pd = MESCURSO_POSIBLES_DEBITOS || [];
     if (!pd.length) return;
     html = mesCursoTablaHtml('Posibles débitos · ' + pd.length, 'warn', 'copiarPosiblesDebitos',
-      ['Benef', 'Apellido y nombre', 'Turno', 'Práctica que se debita', 'Se cruza con', 'Débito'],
-      pd.map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.cruce, moneyFmt(x.monto)]; }));
+      ['Benef', 'Apellido y nombre', 'Turno', 'Práctica que se debita', 'Estado', 'Se cruza con', 'Débito'],
+      pd.map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.cruce, moneyFmt(x.monto)]; }));
   }
   panel.innerHTML = html;
   MESCURSO_PANEL_ABIERTO = tipo;
@@ -1193,12 +1193,12 @@ function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas){
 }
 // Copian el listado (con encabezado) separado por tabs, para pegar en Excel.
 function copiarFaltanInformes(btn){
-  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO'],
-    (MESCURSO_FALTAN_INFORMES || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno]; }));
+  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
+    (MESCURSO_FALTAN_INFORMES || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
 }
 function copiarPosiblesDebitos(btn){
-  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'SE CRUZA CON', 'DEBITO'],
-    (MESCURSO_POSIBLES_DEBITOS || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.cruce, x.monto]; }));
+  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'SE CRUZA CON', 'DEBITO'],
+    (MESCURSO_POSIBLES_DEBITOS || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.cruce, x.monto]; }));
 }
 function mesCursoCopiar(btn, headers, filas){
   var tsv = [headers.join('\t')].concat(filas.map(function(f){ return f.join('\t'); })).join('\n');
