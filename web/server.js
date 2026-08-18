@@ -1270,6 +1270,7 @@ const clientPracticeValueOverrides = {
 // distinto.
 const GLOBAL_OLD_CODE_MODULES = {
   "570126": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Electrocardiograma
+  "570123": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Ergometría (código viejo, hoy 570124)
   "820113": { moduleCode: "543", moduleDescription: "CARDIOLOGIA" },       // Consulta cardiología (código viejo, hoy 570129)
   "607137": { moduleCode: "552", moduleDescription: "GASTROENTEROLOGIA" }, // Videoendoscopia digestiva baja
 };
