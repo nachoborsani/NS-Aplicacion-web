@@ -1942,7 +1942,14 @@ function openCotejoModal(){
 }
 function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
 // El reporte tiene umbrales si alguna fila quedó marcada con motivo 'umbral'.
-function reportTieneUmbrales(){ return (CLIENT_REPORT_ROWS || []).some(function(r){ return r.debitMotivo === 'umbral'; }); }
+// ¿El reporte tiene algún motivo de débito marcado? (los hechos con código viejo
+// no lo tienen). Si no, para umbrales caemos a "débito parcial" (pay40/60/80).
+function reportTieneMotivos(){ return (CLIENT_REPORT_ROWS || []).some(function(r){ return r.debitMotivo; }); }
+function esFilaUmbral(r, tieneMotivos){
+  if (!r || !r.manualDebit) return false;
+  return tieneMotivos ? (r.debitMotivo === 'umbral') : (['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0);
+}
+function reportTieneUmbrales(){ var tm = reportTieneMotivos(); return (CLIENT_REPORT_ROWS || []).some(function(r){ return esFilaUmbral(r, tm); }); }
 // Etiqueta corta del motivo del débito (para mostrar al lado de "Validación PAMI").
 function motivoDebitoLabel(m){
   return { umbral:'Umbral', excluyente:'Excluyente', incluyente:'Incluyente', inactivo:'Inactivo', parcial:'Parcial' }[m] || '';
@@ -2040,19 +2047,20 @@ function cotejoVerTodos(){ COTEJO_VER_TODOS = !COTEJO_VER_TODOS; correrCotejo();
 // Calcula, por módulo con umbrales, el % que hace que mi neto coincida con PAMI.
 function calcularAjusteUmbrales(oficial){
   var rows = CLIENT_REPORT_ROWS || [];
+  var tm = reportTieneMotivos();
   var porMod = {};
   rows.forEach(function(r){ var m = cotejoModuloDeFila(r); if (m) (porMod[m] = porMod[m] || []).push(r); });
   var ajustes = [];
   Object.keys(porMod).forEach(function(m){
     if (!(m in oficial)) return;
     var group = porMod[m];
-    var umbrales = group.filter(function(r){ return r.debitMotivo === 'umbral' && reportBaseGross(r) > 0; });
+    var umbrales = group.filter(function(r){ return esFilaUmbral(r, tm) && reportBaseGross(r) > 0; });
     if (!umbrales.length) return;
     // Si el módulo YA cuadra (diferencia de redondeo), no hay nada que ajustar:
     // no lo listamos (así el botón desaparece cuando ya está todo aplicado).
     var miNeto = group.reduce(function(s, r){ return s + reportNetAmount(r); }, 0);
     if (Math.abs(miNeto - oficial[m]) < 50) return;
-    var netOther = 0; group.forEach(function(r){ if (r.debitMotivo !== 'umbral') netOther += reportNetAmount(r); });
+    var netOther = 0; group.forEach(function(r){ if (!esFilaUmbral(r, tm)) netOther += reportNetAmount(r); });
     var bUmbral = umbrales.reduce(function(s, r){ return s + reportBaseGross(r); }, 0);
     if (bUmbral <= 0) return;
     var pct = Math.max(0, Math.min(100, (oficial[m] - netOther) / bUmbral * 100));
@@ -2070,10 +2078,11 @@ function ajustarUmbralesPorCotejo(){
   rows.forEach(function(r){
     if (['excluyente','incluyente','inactivo'].indexOf(r.debitMotivo) >= 0 && r.debitSource === 'validacion' && r.debitType !== 'total'){ r.debitType = 'total'; r.debitAmount = 0; r.manualDebit = true; }
   });
+  var tm = reportTieneMotivos();
   var ajustes = calcularAjusteUmbrales(COTEJO_OFICIAL);
   var porMod = {}; rows.forEach(function(r){ var m = cotejoModuloDeFila(r); if (m) (porMod[m] = porMod[m] || []).push(r); });
   ajustes.forEach(function(a){
-    (porMod[a.mod] || []).filter(function(r){ return r.debitMotivo === 'umbral' && reportBaseGross(r) > 0; }).forEach(function(r){
+    (porMod[a.mod] || []).filter(function(r){ return esFilaUmbral(r, tm) && reportBaseGross(r) > 0; }).forEach(function(r){
       var p = a.pct;
       if (p >= 100){ r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0; }
       else { r.manualDebit = true; r.debitAmount = 0;
@@ -2323,10 +2332,10 @@ function updateClientReportSummary(){
   if (absentCard) absentCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'ausentes');
   // La "Diferencia" cruza SIEMPRE contra el neto TOTAL (todas las filas), no el
   // filtrado — así cambiar filtros no altera el control contra el monto esperado.
-  var netoTotal = 0, umbralLoss = 0;
+  var netoTotal = 0, umbralLoss = 0, __tm = reportTieneMotivos();
   (CLIENT_REPORT_ROWS || []).forEach(function(row){
     netoTotal += reportNetAmount(row);
-    if (row.debitMotivo === 'umbral') umbralLoss += reportDebitAmount(row);
+    if (esFilaUmbral(row, __tm)) umbralLoss += reportDebitAmount(row);
   });
   updateExpectedAmountStatus(netoTotal);
   var umbralCard = document.getElementById('clientReportUmbralCard');
