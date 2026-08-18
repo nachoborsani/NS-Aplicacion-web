@@ -1277,7 +1277,11 @@ function saveClientPracticeValues(store) {
 }
 function getClientPracticeOverride(clientSlug, practiceCode) {
   const code = String(practiceCode || "");
-  const stored = (loadClientPracticeValues()[clientSlug] || {})[code];
+  const values = loadClientPracticeValues();
+  // Prioridad: valor guardado por-cliente (legacy) → valor GLOBAL asignado desde
+  // el panel (aplica a TODOS los clientes, porque el valor PAMI es el mismo) →
+  // override hardcodeado por cliente.
+  const stored = (values[clientSlug] || {})[code] || (values["__global__"] || {})[code];
   if (stored && Number(stored.total) > 0) {
     return {
       moduleCode: stored.moduleCode || "",
@@ -2411,15 +2415,17 @@ const server = http.createServer(async (req, res) => {
     if (!code) return json(res, 400, { error: "Falta el código de práctica." });
     if (!(total > 0)) return json(res, 400, { error: "Ingresá un valor mayor a 0." });
     const store = loadClientPracticeValues();
-    if (!store[slug]) store[slug] = {};
-    store[slug][code] = {
+    // Se guarda GLOBAL: el valor de un código PAMI es el mismo para todos los
+    // clientes, así que asignarlo una vez aplica a todos y a las próximas bandejas.
+    if (!store["__global__"]) store["__global__"] = {};
+    store["__global__"][code] = {
       total,
       practiceDescription: String(body.practiceDescription || "").replace(/\s+/g, " ").trim(),
       moduleCode: cleanIdentifier(body.moduleCode),
       moduleDescription: String(body.moduleDescription || "").replace(/\s+/g, " ").trim(),
     };
     saveClientPracticeValues(store);
-    return json(res, 200, { ok: true, code, total });
+    return json(res, 200, { ok: true, code, total, scope: "global" });
   }
 
   const clientDashboardMatch = p.match(/^\/api\/clientes\/([^/]+)\/dashboard$/);
