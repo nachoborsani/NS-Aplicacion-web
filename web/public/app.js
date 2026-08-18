@@ -1666,7 +1666,7 @@ function renderClientDashboard(data){
       + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + kprev(moneyFmt(compare.net || 0)) + dashboardDelta(deltas.net, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + kprev(numberFmt(compare.consultations || 0)) + dashboardDelta(deltas.consultations, false) + '</div>'
       + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(compare.practices || 0)) + dashboardDelta(deltas.practices, false) + '</div>'
-      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '</div>'
+      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '<div class="debit-breakdown">' + debitBreakdownHtml(current.debitUmbral || 0, current.debitExcluyente || 0, current.debitOtros || 0) + '</div></div>'
       + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + kprev(numberFmt(compare.absent || 0)) + dashboardDelta(deltas.absent, false, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + kprev(numberFmt(compare.outsideCutoff || 0)) + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
   }
@@ -1950,6 +1950,23 @@ function esFilaUmbral(r, tieneMotivos){
   return tieneMotivos ? (r.debitMotivo === 'umbral') : (['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0);
 }
 function reportTieneUmbrales(){ var tm = reportTieneMotivos(); return (CLIENT_REPORT_ROWS || []).some(function(r){ return esFilaUmbral(r, tm); }); }
+// Categoría de un débito para el desglose (umbral / excluyente / otro).
+function debitoCategoria(r, tieneMotivos){
+  if (tieneMotivos){
+    if (r.debitMotivo === 'umbral') return 'umbral';
+    if (r.debitMotivo === 'excluyente' || r.debitMotivo === 'incluyente') return 'excluyente';
+    return 'otro';
+  }
+  // Reporte sin motivos (código viejo): umbral = débito parcial; el resto = otro.
+  return ['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0 ? 'umbral' : 'otro';
+}
+function debitBreakdownHtml(umbral, excl, otros){
+  var l = [];
+  if (umbral > 0) l.push('<span>Umbrales <b>' + esc(moneyFmt(umbral)) + '</b></span>');
+  if (excl > 0) l.push('<span>Excluyentes <b>' + esc(moneyFmt(excl)) + '</b></span>');
+  if (otros > 0) l.push('<span>Otros <b>' + esc(moneyFmt(otros)) + '</b></span>');
+  return l.join('');
+}
 // Etiqueta corta del motivo del débito (para mostrar al lado de "Validación PAMI").
 function motivoDebitoLabel(m){
   return { umbral:'Umbral', excluyente:'Excluyente', incluyente:'Incluyente', inactivo:'Inactivo', parcial:'Parcial' }[m] || '';
@@ -2332,18 +2349,18 @@ function updateClientReportSummary(){
   if (absentCard) absentCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'ausentes');
   // La "Diferencia" cruza SIEMPRE contra el neto TOTAL (todas las filas), no el
   // filtrado — así cambiar filtros no altera el control contra el monto esperado.
-  var netoTotal = 0, umbralLoss = 0, __tm = reportTieneMotivos();
+  var netoTotal = 0, dUmbral = 0, dExcl = 0, dOtros = 0, __tm = reportTieneMotivos();
   (CLIENT_REPORT_ROWS || []).forEach(function(row){
     netoTotal += reportNetAmount(row);
-    if (esFilaUmbral(row, __tm)) umbralLoss += reportDebitAmount(row);
+    if (!row.manualDebit) return;
+    var deb = reportDebitAmount(row);
+    if (deb <= 0) return;
+    var cat = debitoCategoria(row, __tm);
+    if (cat === 'umbral') dUmbral += deb; else if (cat === 'excluyente') dExcl += deb; else dOtros += deb;
   });
   updateExpectedAmountStatus(netoTotal);
-  var umbralCard = document.getElementById('clientReportUmbralCard');
-  if (umbralCard){
-    umbralCard.style.display = umbralLoss > 0 ? '' : 'none';
-    var amt = document.getElementById('clientReportUmbralAmount');
-    if (amt) amt.textContent = moneyFmt(umbralLoss);
-  }
+  var bd = document.getElementById('clientReportDebitBreakdown');
+  if (bd) bd.innerHTML = debitBreakdownHtml(dUmbral, dExcl, dOtros);
   updateCotejoPending();
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';

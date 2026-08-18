@@ -1617,6 +1617,9 @@ function emptyDashboardPeriod(period) {
     unmatched: 0,
     gross: 0,
     debit: 0,
+    debitUmbral: 0,
+    debitExcluyente: 0,
+    debitOtros: 0,
     net: 0,
     consultationNet: 0,
     practiceNet: 0,
@@ -1624,6 +1627,15 @@ function emptyDashboardPeriod(period) {
     consultationShare: 0,
     modules: [],
   };
+}
+// Categoría del débito de una fila (umbral / excluyente / otro), para el desglose.
+function debitoCategoria(row) {
+  const m = row && row.debitMotivo;
+  if (m === "umbral") return "umbral";
+  if (m === "excluyente" || m === "incluyente") return "excluyente";
+  if (m) return "otro";
+  // Sin motivo (reporte viejo): parcial = umbral, total = otro.
+  return ["pay40", "pay60", "pay80"].includes(row && row.debitType) ? "umbral" : "otro";
 }
 function addRowToDashboardPeriod(target, row) {
   target.totalRows += 1;
@@ -1644,6 +1656,12 @@ function addRowToDashboardPeriod(target, row) {
   const net = reportRowNet(row);
   target.gross += gross;
   target.debit += debit;
+  if (debit > 0) {
+    const cat = debitoCategoria(row);
+    if (cat === "umbral") target.debitUmbral += debit;
+    else if (cat === "excluyente") target.debitExcluyente += debit;
+    else target.debitOtros += debit;
+  }
   target.net += net;
   if (consultation) target.consultationNet += net;
   else target.practiceNet += net;
@@ -1686,6 +1704,9 @@ function addRowToDashboardPeriod(target, row) {
 function finalizeDashboardPeriod(target) {
   target.gross = money(target.gross);
   target.debit = money(target.debit);
+  target.debitUmbral = money(target.debitUmbral);
+  target.debitExcluyente = money(target.debitExcluyente);
+  target.debitOtros = money(target.debitOtros);
   target.net = money(target.net);
   target.consultationNet = money(target.consultationNet);
   target.practiceNet = money(target.practiceNet);
