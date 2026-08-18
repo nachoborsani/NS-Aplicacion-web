@@ -98,6 +98,7 @@ class HomeFrame(ctk.CTkFrame):
         open_validacion,
         open_afip,
         open_ns_conexion,
+        open_refresco,
     ) -> None:
         super().__init__(master, fg_color=APP_BG)
         self.card_columns = card_columns
@@ -161,6 +162,11 @@ class HomeFrame(ctk.CTkFrame):
                 "Conexión con NS",
                 "Conectarse a la web NS y traer los nomencladores del mes que elijas, sin copiar el Excel a mano.",
                 open_ns_conexion,
+            ),
+            (
+                "Refresco automático",
+                "Programar los horarios en que la app baja la bandeja del mes en curso y la sube a la web NS.",
+                open_refresco,
             ),
         ]
         self.grid_columnconfigure(0, weight=1)
@@ -286,6 +292,7 @@ class PamiDesktopApp(ctk.CTk):
             self.show_validacion_module,
             self.show_afip_module,
             self.show_ns_conexion_module,
+            self.show_refresco_module,
         )
 
         self.padron_frame = None
@@ -302,6 +309,7 @@ class PamiDesktopApp(ctk.CTk):
         self.validacion_frame = None
         self.afip_frame = None
         self.ns_conexion_frame = None
+        self.refresco_frame = None
 
         self._show_start_destination()
         self.bind("<Configure>", self._on_window_configure)
@@ -373,6 +381,7 @@ class PamiDesktopApp(ctk.CTk):
             "validacion": self.show_validacion_module,
             "afip": self.show_afip_module,
             "ns_conexion": self.show_ns_conexion_module,
+            "refresco": self.show_refresco_module,
         }
 
     def _show_start_destination(self) -> None:
@@ -523,6 +532,7 @@ class PamiDesktopApp(ctk.CTk):
             self.validacion_frame,
             self.afip_frame,
             self.ns_conexion_frame,
+            self.refresco_frame,
         ):
             if frame is not None:
                 yield frame
@@ -650,6 +660,13 @@ class PamiDesktopApp(ctk.CTk):
             self.ns_conexion_frame = NSConexionFrame(self, self.show_home)
         return self.ns_conexion_frame
 
+    def _get_refresco_frame(self):
+        if self.refresco_frame is None:
+            from app_refresco import RefrescoAutomaticoFrame
+
+            self.refresco_frame = RefrescoAutomaticoFrame(self, self.show_home)
+        return self.refresco_frame
+
     def show_home(self) -> None:
         self._hide_all()
         self.current_module_key = "home"
@@ -713,6 +730,10 @@ class PamiDesktopApp(ctk.CTk):
     def show_ns_conexion_module(self) -> None:
         self.current_module_key = "ns_conexion"
         self._show_module(self._get_ns_conexion_frame())
+
+    def show_refresco_module(self) -> None:
+        self.current_module_key = "refresco"
+        self._show_module(self._get_refresco_frame())
 
     def _close_modules(self) -> None:
         for frame in self._iter_frames():
@@ -854,6 +875,14 @@ class PamiDesktopApp(ctk.CTk):
 
 
 if __name__ == "__main__":
+    # Modo headless para la tarea programada (útil cuando la app está compilada
+    # como .exe y no hay python del venv para correr bandeja_sync.py directo).
+    if "--run-bandeja-sync" in sys.argv:
+        from bandeja_sync import sync_all
+        for _r in sync_all(progress=lambda m: print("  ", m)):
+            estado = f"OK — {_r.get('count')} filas" if _r.get("ok") else f"FALLO — {_r.get('error')}"
+            print(f"  {str(_r.get('name'))[:32]:32} -> {estado}")
+        sys.exit(0)
     if _acquire_single_instance_lock():
         app = PamiDesktopApp()
         app.mainloop()

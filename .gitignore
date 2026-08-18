@@ -73,6 +73,11 @@ web/data/
 ns_conexion.json
 ns_nomencladores/
 
+# Refresco automatico de la bandeja: config + artefactos generados por maquina
+refresco_config.json
+refrescar_bandeja.bat
+ns_bandeja_task.xml
+
 # Firmas de medicos (dato sensible) — NO van al repo (publico). Van al volumen.
 web/assets/informes/firma-*.png
 web/assets/informes/firma-*.jpg
