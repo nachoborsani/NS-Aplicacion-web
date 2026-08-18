@@ -727,6 +727,8 @@
   .mescurso-line b{font-size:13px;font-weight:750;color:var(--text);font-variant-numeric:tabular-nums}
   .mescurso-line.alert{background:var(--error-bg);border-color:var(--error)}
   .mescurso-line.alert span,.mescurso-line.alert b{color:var(--error)}
+  .mescurso-line.warn{background:var(--warning-bg);border-color:var(--warning)}
+  .mescurso-line.warn span,.mescurso-line.warn b{color:var(--warning)}
   .mescurso-line.mescurso-click{cursor:pointer;transition:border-color .15s ease,background .15s ease}
   .mescurso-line.mescurso-click:hover{border-color:var(--turq)}
   .mescurso-line.alert.mescurso-click:hover{border-color:var(--error)}

@@ -1593,19 +1593,51 @@ function buildBandejaResumen(slug) {
   const kPrac = findKey(/PRACTICA/);
   const kTrasm = findKey(/TRASMITIDA|TRANSMITIDA/);
   const kValid = findKey(/VALIDADA/);
+  const kBenef = findKey(/BENEFICIO/);
+  const kTurno = findKey(/TURNO/);
   let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
   let matched = 0, unmatched = 0, grossEstimado = 0;
+  // Filas sintéticas con el shape que esperan las reglas de débito y el faltante
+  // de informe (para reusar applyAutomaticExclusionDebits / reportRowMissingInforme).
+  const synth = [];
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
     if (code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA")) consultations++;
     else practices++;
-    if (String(row[kTrasm] || "").trim().toUpperCase() === "S") transmitted++;
-    if (String(row[kValid] || "").trim().toUpperCase() === "S") validated++;
+    const esValidada = String(row[kValid] || "").trim().toUpperCase() === "S";
+    const esTransmitida = String(row[kTrasm] || "").trim().toUpperCase() === "S";
+    if (esTransmitida) transmitted++;
+    if (esValidada) validated++;
     else absent++;
     const nomRow = code ? byCode.get(code) : null;
-    if (nomRow) { matched++; grossEstimado += Number(nomRow.total || 0); }
+    const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
+    if (nomRow) { matched++; grossEstimado += valueGross; }
     else unmatched++;
+    // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
+    const md = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(row[kTurno] || ""));
+    synth.push({
+      practiceCode: code,
+      valueGross,
+      billable: valueGross > 0,
+      benefit: String(row[kBenef] || "").trim(),
+      appointmentAt: md ? `${md[3]}-${md[2]}-${md[1]}` : "",
+      validated: esValidada,
+      transmitted: esTransmitida,
+      absent: !esValidada,
+      debitSource: "",
+      manualDebit: false,
+      debitType: "total",
+      debitAmount: 0,
+    });
+  }
+  // Posibles débitos: proyección de las reglas de cruce mismo-día (Panel Débitos).
+  applyAutomaticExclusionDebits(synth);
+  let posiblesDebitos = 0, posiblesDebitosCount = 0, missingInforme = 0, missingInformeAmount = 0;
+  for (const r of synth) {
+    const d = reportRowDebit(r);
+    if (d > 0) { posiblesDebitos += d; posiblesDebitosCount++; }
+    if (reportRowMissingInforme(r)) { missingInforme++; missingInformeAmount += money(r.valueGross); }
   }
   return {
     period: bandeja.month || "",
@@ -1614,6 +1646,8 @@ function buildBandejaResumen(slug) {
     consultations, practices, validated, transmitted, absent,
     matched, unmatched,
     grossEstimado: money(grossEstimado),
+    missingInforme, missingInformeAmount: money(missingInformeAmount),
+    posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     nomencladorPeriod: nom ? (nom.period || "") : "",
     nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
     uploadedAt: bandeja.uploadedAt || "",

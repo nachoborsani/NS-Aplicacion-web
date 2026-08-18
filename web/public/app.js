@@ -1193,9 +1193,10 @@ function mesCursoCardMesEnCurso(r){
     + '<div class="mescurso-val">' + esc(moneyFmt(r.grossEstimado || 0)) + '</div>'
     + '<div class="mescurso-val-note">' + esc(nomNota) + ' · sin débitos</div>'
     + '<div class="mescurso-lines">'
-    + '<div class="mescurso-line"><span>Consultas</span><b>' + esc(numberFmt(r.consultations || 0)) + '</b></div>'
-    + '<div class="mescurso-line"><span>Prácticas / estudios</span><b>' + esc(numberFmt(r.practices || 0)) + '</b></div>'
+    + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
+    + '<div class="mescurso-line warn"><span>Posibles débitos</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
+    + '<div class="mescurso-line alert"><span>Faltan informes</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
     + '</div>'
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + (r.uploadedAt ? ' · actualizada ' + esc(mesCursoFechaCorta(r.uploadedAt)) : '') + '</div>'
     + '</div>';
