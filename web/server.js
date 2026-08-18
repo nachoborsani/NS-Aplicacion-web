@@ -1580,7 +1580,18 @@ function isConsultationRow(row) {
 function buildBandejaResumen(slug) {
   const bandeja = loadClientBandejas()[slug];
   if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
-  const nom = getNomencladorByPeriod(loadNomencladorStore(), bandeja.month);
+  // Elegimos el nomenclador del mes de la bandeja; si no está cargado, el MÁS
+  // NUEVO disponible que no sea posterior a ese mes (no el "activo", que puede
+  // haber quedado en un mes viejo). Ej: bandeja de Agosto sin nomenclador de
+  // agosto → usa Julio (el último), no Abril por estar marcado activo.
+  const nomStore = loadNomencladorStore();
+  let nom = (nomStore.items || {})[bandeja.month] || null;
+  if (!nom) {
+    const periodos = Object.keys(nomStore.items || {}).sort();
+    const noPosteriores = periodos.filter((p) => p <= String(bandeja.month || ""));
+    const elegido = noPosteriores.length ? noPosteriores[noPosteriores.length - 1] : periodos[periodos.length - 1];
+    nom = elegido ? nomStore.items[elegido] : null;
+  }
   const byCode = new Map();
   if (nom && Array.isArray(nom.rows)) {
     for (const r of nom.rows) {
