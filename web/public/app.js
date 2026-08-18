@@ -1163,47 +1163,51 @@ function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
 }
-// Suma la primera columna con pinta de importe si la bandeja trae montos.
-function mesCursoValorBandeja(b){
-  if (!b || !Array.isArray(b.rows) || !b.rows.length) return null;
-  if (typeof b.estimatedNet === 'number' && b.estimatedNet > 0) return b.estimatedNet;
-  var cols = b.columns || [];
-  var candidata = null;
-  for (var i = 0; i < cols.length; i++){
-    if (/importe|monto|neto|valor|total/i.test(cols[i])){ candidata = cols[i]; break; }
-  }
-  if (!candidata) return null;
-  var suma = 0, hubo = false;
-  b.rows.forEach(function(r){
-    var raw = String(r[candidata] == null ? '' : r[candidata]).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
-    var n = parseFloat(raw);
-    if (!isNaN(n)){ suma += n; hubo = true; }
-  });
-  return hubo ? suma : null;
+// Periodo del mes anterior al actual ('2026-08' hoy -> '2026-07').
+function mesCursoPeriodoAnterior(){
+  var d = new Date();
+  var y = d.getFullYear(), m = d.getMonth() - 1; // getMonth 0-11
+  if (m < 0){ m = 11; y -= 1; }
+  return y + '-' + String(m + 1).padStart(2, '0');
 }
-function mesCursoCardMesEnCurso(b){
-  var chip = (b && (b.monthLabel || b.month)) || mesCursoMesActualLabel();
+function mesCursoLabelPeriodo(period){
+  var mm = /^(\d{4})-(\d{2})$/.exec(String(period || ''));
+  if (!mm) return String(period || '');
+  var nombre = MESCURSO_MESES[(+mm[2]) - 1] || '';
+  return nombre.replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + mm[1];
+}
+// Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
+function mesCursoCardMesEnCurso(r){
+  var chip = (r && r.label) || mesCursoMesActualLabel();
   var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso</span>'
     + '<span class="mescurso-chip">' + esc(chip) + '</span></div>';
-  if (!b){
+  if (!r){
     return '<div class="mescurso-card">' + head
       + '<div class="mescurso-empty"><b>Esperando la bandeja</b>'
-      + '<span>Cuando la app suba la bandeja de ' + esc(chip) + ', vas a ver acá la facturación estimada del mes.</span></div></div>';
+      + '<span>Cuando la app suba la bandeja de ' + esc(chip) + ', vas a ver acá el resumen del mes.</span></div></div>';
   }
-  var valor = mesCursoValorBandeja(b);
-  var cuerpo;
-  if (valor != null){
-    cuerpo = '<div class="mescurso-val-lbl">Facturación estimada</div>'
-      + '<div class="mescurso-val">' + esc(moneyFmt(valor)) + '</div>'
-      + '<div class="mescurso-val-note">valor estimativo · desde la bandeja de la app</div>'
-      + '<div class="mescurso-foot">' + esc(numberFmt(b.count || 0)) + ' prestaciones · actualizada ' + esc(dateFmt(b.uploadedAt)) + '</div>';
-  } else {
-    cuerpo = '<div class="mescurso-val-lbl">Prestaciones cargadas</div>'
-      + '<div class="mescurso-val">' + esc(numberFmt(b.count || 0)) + '</div>'
-      + '<div class="mescurso-val-note">el valor estimado aparece cuando la bandeja traiga los importes</div>'
-      + '<div class="mescurso-foot">actualizada ' + esc(dateFmt(b.uploadedAt)) + '</div>';
-  }
-  return '<div class="mescurso-card">' + head + cuerpo + '</div>';
+  var nomNota = r.nomencladorLabel ? ('valorizado con nomenclador ' + r.nomencladorLabel) : 'valor estimativo';
+  var footNom = r.count ? (esc(numberFmt(r.matched || 0)) + '/' + esc(numberFmt(r.count)) + ' prácticas valorizadas') : '';
+  return '<div class="mescurso-card">' + head
+    + '<div class="mescurso-val-lbl">Facturación estimada</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(r.grossEstimado || 0)) + '</div>'
+    + '<div class="mescurso-val-note">' + esc(nomNota) + ' · sin débitos</div>'
+    + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line"><span>Consultas</span><b>' + esc(numberFmt(r.consultations || 0)) + '</b></div>'
+    + '<div class="mescurso-line"><span>Prácticas / estudios</span><b>' + esc(numberFmt(r.practices || 0)) + '</b></div>'
+    + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
+    + '</div>'
+    + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + (r.uploadedAt ? ' · actualizada ' + esc(mesCursoFechaCorta(r.uploadedAt)) : '') + '</div>'
+    + '</div>';
+}
+// Card derecha cuando NO hay reporte del mes anterior: cartel "falta reporte".
+function mesCursoCardFaltaReporte(period){
+  var label = mesCursoLabelPeriodo(period);
+  return '<div class="mescurso-card sincerrar"><div class="mescurso-head">'
+    + '<span class="mescurso-title">Sin cerrar</span>'
+    + '<span class="mescurso-chip warn">' + esc(label) + '</span></div>'
+    + '<div class="mescurso-empty"><b>Falta el reporte de ' + esc(label) + '</b>'
+    + '<span>Todavía no subiste el reporte transmitido de ' + esc(label) + '. Cuando lo subas, vas a ver acá la facturación, los informes que faltan y los ausentes.</span></div></div>';
 }
 function mesCursoCardSinCerrar(current, reporte){
   if (!current || !current.period){
@@ -1246,38 +1250,27 @@ async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
   var slug = ACTIVE_CLIENT.slug;
-  // Pedimos los reportes acá mismo: si la pestaña activa al cargar es esta, la
-  // lista global CLIENT_SAVED_REPORTS todavía puede tener el cliente anterior.
+  // El mes anterior es SIEMPRE el calendario anterior a hoy (Agosto -> Julio), no
+  // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
+  // cartel de "falta reporte" (no se cae a un mes más viejo).
+  var prev = mesCursoPeriodoAnterior();
   var results = await Promise.all([
-    api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja'),
-    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/resumen'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev)),
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
   ]);
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
-  var b = (results[0].ok && results[0].data) ? results[0].data.bandeja : null;
+  var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
   var reportes = (results[2].ok && results[2].data) ? (results[2].data.reports || []) : [];
-  // El reporte "sin cerrar" es el último con débitos sin confirmar (pendiente).
-  var pendiente = reportes.filter(function(r){ return r.debitStatus === 'pendiente'; })[0] || reportes[0] || null;
+  // ¿Hay reporte del mes anterior? (current viene vacío si no hay nada de ese mes).
+  var hayAnterior = current && current.period === prev && ((current.reportCount || 0) > 0 || (current.totalRows || 0) > 0);
+  var pendiente = hayAnterior ? (reportes.filter(function(r){ return r.dashboardPeriod === prev; })[0] || null) : null;
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
-  var cards = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(b) + mesCursoCardSinCerrar(current, pendiente) + '</div>';
-
-  var tabla = '';
-  if (b){
-    var cols = b.columns || [];
-    var head = cols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('');
-    var rowsHtml = (b.rows || []).slice(0, 500).map(function(r){
-      return '<tr>' + cols.map(function(c){ return '<td>' + esc(r[c] == null ? '' : String(r[c])) + '</td>'; }).join('') + '</tr>';
-    }).join('') || '<tr><td colspan="' + (cols.length || 1) + '" class="muted-cell">Bandeja vacía.</td></tr>';
-    tabla = '<div class="client-card">'
-      + '<div class="client-card-head"><div><h3>Bandeja ' + esc(b.monthLabel || b.month || 'del mes') + '</h3>'
-      + '<p>' + esc(numberFmt(b.count || 0)) + ' filas · actualizada ' + esc(dateFmt(b.uploadedAt)) + (b.count > 500 ? ' · mostrando 500' : '') + '</p></div></div>'
-      + '<div class="table-scroll"><table class="bandeja-table"><thead><tr>' + head + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
-      + '</div>';
-  }
-  box.innerHTML = cards + tabla;
+  var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
+  box.innerHTML = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(resumen) + cardDer + '</div>';
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;

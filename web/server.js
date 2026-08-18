@@ -1572,6 +1572,53 @@ function isConsultationRow(row) {
   const text = normalizeText([row && row.practiceDescription, row && row.practiceText].join(" "));
   return code.startsWith("820") || text.includes("CONSULTA");
 }
+// Resumen valorizado de la bandeja del mes en curso (para el "Dashboard mes en
+// curso"). La bandeja de PAMI trae la práctica como "CODIGO - DESCRIPCION" pero
+// NINGÚN importe; el $ estimado sale de matchear cada código contra el
+// nomenclador del período y sumar el neto. Además cuenta consultas/prácticas y
+// validadas/transmitidas. Es una ESTIMACIÓN del mes en curso, sin débitos.
+function buildBandejaResumen(slug) {
+  const bandeja = loadClientBandejas()[slug];
+  if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
+  const nom = getNomencladorByPeriod(loadNomencladorStore(), bandeja.month);
+  const byCode = new Map();
+  if (nom && Array.isArray(nom.rows)) {
+    for (const r of nom.rows) {
+      const c = cleanIdentifier(r.practiceCode);
+      if (c && !byCode.has(c)) byCode.set(c, r);
+    }
+  }
+  const keys = Object.keys(bandeja.rows[0] || {});
+  const findKey = (re) => keys.find((k) => re.test(normalizeText(k))) || "";
+  const kPrac = findKey(/PRACTICA/);
+  const kTrasm = findKey(/TRASMITIDA|TRANSMITIDA/);
+  const kValid = findKey(/VALIDADA/);
+  let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
+  let matched = 0, unmatched = 0, grossEstimado = 0;
+  for (const row of bandeja.rows) {
+    const pracRaw = String(row[kPrac] || "");
+    const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
+    if (code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA")) consultations++;
+    else practices++;
+    if (String(row[kTrasm] || "").trim().toUpperCase() === "S") transmitted++;
+    if (String(row[kValid] || "").trim().toUpperCase() === "S") validated++;
+    else absent++;
+    const nomRow = code ? byCode.get(code) : null;
+    if (nomRow) { matched++; grossEstimado += Number(nomRow.total || 0); }
+    else unmatched++;
+  }
+  return {
+    period: bandeja.month || "",
+    label: bandeja.monthLabel || periodLabel(bandeja.month) || "",
+    count: bandeja.rows.length,
+    consultations, practices, validated, transmitted, absent,
+    matched, unmatched,
+    grossEstimado: money(grossEstimado),
+    nomencladorPeriod: nom ? (nom.period || "") : "",
+    nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
+    uploadedAt: bandeja.uploadedAt || "",
+  };
+}
 // Módulo de nivel 1 del nomenclador PAMI (ej. "RADIOLOGIA AMBULATORIA DE NIVEL 1").
 // Acepta "NIVEL 1" y "NIVEL I", sin confundir con NIVEL 2/3 ni II/III.
 function isNivel1Module(moduleDescription) {
@@ -1834,6 +1881,9 @@ function reportListItem(report) {
     sourceFilename: report.sourceFilename,
     nomencladorPeriod: report.nomencladorPeriod,
     nomencladorLabel: report.nomencladorLabel,
+    // Período dominante del reporte (por fecha de prestación). Sirve para
+    // ubicar el reporte de un mes puntual desde el front (ej. mes anterior).
+    dashboardPeriod: reportDashboardPeriod(report),
     rowCount: report.rowCount,
     closedAt: report.closedAt,
     closedBy: report.closedBy,
@@ -2564,6 +2614,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
+  // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las
+  // filas crudas, solo los totales tipo Julio). Va ANTES del match de /bandeja.
+  const clientBandejaResumenMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/resumen$/);
+  if (clientBandejaResumenMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientBandejaResumenMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    return json(res, 200, { resumen: buildBandejaResumen(slug) });
+  }
+
   const clientBandejaMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja$/);
   if (clientBandejaMatch && (req.method === "GET" || req.method === "POST")) {
     const me = getSessionUser(req);
