@@ -1138,28 +1138,130 @@ async function saveClientPami(){
   document.getElementById('clientPamiPass').placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
   msg.textContent = 'Acceso PAMI guardado.';
 }
-// Panel "Dashboard mes en curso": muestra la bandeja que subio la app.
+// Panel "Dashboard mes en curso": dos cuadros resumen (mes en curso desde la
+// bandeja de la app + mes pasado sin cerrar desde el último reporte con débitos
+// sin confirmar) y, debajo, la bandeja cruda que subió la app.
+var MESCURSO_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+var MESCURSO_REPORTE_ID = null;
+// Fecha en que se cierra un período (llegan los débitos ≈ día 1 del 2do mes
+// siguiente a la prestación). Ej. Julio 2026-07 → 01/09/2026.
+function mesCursoCierre(period){
+  var m = /^(\d{4})-(\d{2})$/.exec(String(period || ''));
+  if (!m) return '';
+  var anio = +m[1], mes = +m[2] + 2;
+  while (mes > 12){ mes -= 12; anio++; }
+  return '01/' + String(mes).padStart(2, '0') + '/' + anio;
+}
+function mesCursoMesActualLabel(){
+  var d = new Date();
+  return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
+}
+// Suma la primera columna con pinta de importe si la bandeja trae montos.
+function mesCursoValorBandeja(b){
+  if (!b || !Array.isArray(b.rows) || !b.rows.length) return null;
+  if (typeof b.estimatedNet === 'number' && b.estimatedNet > 0) return b.estimatedNet;
+  var cols = b.columns || [];
+  var candidata = null;
+  for (var i = 0; i < cols.length; i++){
+    if (/importe|monto|neto|valor|total/i.test(cols[i])){ candidata = cols[i]; break; }
+  }
+  if (!candidata) return null;
+  var suma = 0, hubo = false;
+  b.rows.forEach(function(r){
+    var raw = String(r[candidata] == null ? '' : r[candidata]).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    var n = parseFloat(raw);
+    if (!isNaN(n)){ suma += n; hubo = true; }
+  });
+  return hubo ? suma : null;
+}
+function mesCursoCardMesEnCurso(b){
+  var chip = (b && (b.monthLabel || b.month)) || mesCursoMesActualLabel();
+  var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso</span>'
+    + '<span class="mescurso-chip">' + esc(chip) + '</span></div>';
+  if (!b){
+    return '<div class="mescurso-card">' + head
+      + '<div class="mescurso-empty"><b>Esperando la bandeja</b>'
+      + '<span>Cuando la app suba la bandeja de ' + esc(chip) + ', vas a ver acá la facturación estimada del mes.</span></div></div>';
+  }
+  var valor = mesCursoValorBandeja(b);
+  var cuerpo;
+  if (valor != null){
+    cuerpo = '<div class="mescurso-val-lbl">Facturación estimada</div>'
+      + '<div class="mescurso-val">' + esc(moneyFmt(valor)) + '</div>'
+      + '<div class="mescurso-val-note">valor estimativo · desde la bandeja de la app</div>'
+      + '<div class="mescurso-foot">' + esc(numberFmt(b.count || 0)) + ' prestaciones · actualizada ' + esc(dateFmt(b.uploadedAt)) + '</div>';
+  } else {
+    cuerpo = '<div class="mescurso-val-lbl">Prestaciones cargadas</div>'
+      + '<div class="mescurso-val">' + esc(numberFmt(b.count || 0)) + '</div>'
+      + '<div class="mescurso-val-note">el valor estimado aparece cuando la bandeja traiga los importes</div>'
+      + '<div class="mescurso-foot">actualizada ' + esc(dateFmt(b.uploadedAt)) + '</div>';
+  }
+  return '<div class="mescurso-card">' + head + cuerpo + '</div>';
+}
+function mesCursoCardSinCerrar(current){
+  if (!current || !current.period){
+    return '<div class="mescurso-card sincerrar"><div class="mescurso-head">'
+      + '<span class="mescurso-title">Sin cerrar</span></div>'
+      + '<div class="mescurso-empty"><b>Sin período pendiente</b>'
+      + '<span>Cuando haya un reporte transmitido con débitos sin confirmar, el resumen aparece acá.</span></div></div>';
+  }
+  var cierre = mesCursoCierre(current.period);
+  var faltan = current.missingInforme || 0;
+  var faltanMonto = current.missingInformeAmount || 0;
+  var ausentes = current.absent || 0;
+  var clickable = MESCURSO_REPORTE_ID ? ' mescurso-click' : '';
+  var onclick = MESCURSO_REPORTE_ID ? ' onclick="irAReporteSinCerrar()"' : '';
+  return '<div class="mescurso-card sincerrar">'
+    + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
+    + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
+    + '<div class="mescurso-val-lbl">Facturación</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
+    + '<div class="mescurso-val-note">débitos sin confirmar' + (cierre ? ' · cierra ' + esc(cierre) : '') + '</div>'
+    + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line alert' + clickable + '"' + onclick + '><span>Faltan informes</span>'
+    + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line' + clickable + '"' + onclick + '><span>Ausentes sin activar</span>'
+    + '<b>' + esc(numberFmt(ausentes)) + '</b></div>'
+    + '</div></div>';
+}
+function irAReporteSinCerrar(){
+  if (!MESCURSO_REPORTE_ID) return;
+  setClientSection('reportes');
+  var id = MESCURSO_REPORTE_ID;
+  setTimeout(function(){ openClientReport(id); }, 30);
+}
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
-  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/bandeja');
-  var b = (res.ok && res.data) ? res.data.bandeja : null;
-  if (!b){
-    box.innerHTML = '<div class="client-card" style="text-align:center;padding:46px 20px"><div class="empty" style="padding:0">'
-      + '<div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M8 16v-5M13 16V8M18 16v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'
-      + '<b>Sin bandeja todavía</b><span>Cuando la app suba la bandeja del mes de este cliente, la vas a ver acá.</span></div></div>';
-    return;
+  var slug = ACTIVE_CLIENT.slug;
+  var results = await Promise.all([
+    api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard'),
+  ]);
+  var b = (results[0].ok && results[0].data) ? results[0].data.bandeja : null;
+  var dash = (results[1].ok && results[1].data) ? results[1].data : null;
+  var current = dash && dash.current ? dash.current : null;
+  // El reporte "sin cerrar" es el último con débitos sin confirmar (pendiente).
+  var pendiente = (CLIENT_SAVED_REPORTS || []).filter(function(r){ return r.debitStatus === 'pendiente'; })[0]
+    || (CLIENT_SAVED_REPORTS || [])[0] || null;
+  MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
+
+  var cards = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(b) + mesCursoCardSinCerrar(current) + '</div>';
+
+  var tabla = '';
+  if (b){
+    var cols = b.columns || [];
+    var head = cols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('');
+    var rowsHtml = (b.rows || []).slice(0, 500).map(function(r){
+      return '<tr>' + cols.map(function(c){ return '<td>' + esc(r[c] == null ? '' : String(r[c])) + '</td>'; }).join('') + '</tr>';
+    }).join('') || '<tr><td colspan="' + (cols.length || 1) + '" class="muted-cell">Bandeja vacía.</td></tr>';
+    tabla = '<div class="client-card">'
+      + '<div class="client-card-head"><div><h3>Bandeja ' + esc(b.monthLabel || b.month || 'del mes') + '</h3>'
+      + '<p>' + esc(numberFmt(b.count || 0)) + ' filas · actualizada ' + esc(dateFmt(b.uploadedAt)) + (b.count > 500 ? ' · mostrando 500' : '') + '</p></div></div>'
+      + '<div class="table-scroll"><table class="bandeja-table"><thead><tr>' + head + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
+      + '</div>';
   }
-  var cols = b.columns || [];
-  var head = cols.map(function(c){ return '<th>' + esc(c) + '</th>'; }).join('');
-  var rowsHtml = (b.rows || []).slice(0, 500).map(function(r){
-    return '<tr>' + cols.map(function(c){ return '<td>' + esc(r[c] == null ? '' : String(r[c])) + '</td>'; }).join('') + '</tr>';
-  }).join('') || '<tr><td colspan="' + (cols.length || 1) + '" class="muted-cell">Bandeja vacía.</td></tr>';
-  box.innerHTML = '<div class="client-card">'
-    + '<div class="client-card-head"><div><h3>Bandeja ' + esc(b.monthLabel || b.month || 'del mes') + '</h3>'
-    + '<p>' + esc(numberFmt(b.count || 0)) + ' filas · actualizada ' + esc(dateFmt(b.uploadedAt)) + (b.count > 500 ? ' · mostrando 500' : '') + '</p></div></div>'
-    + '<div class="table-scroll"><table class="bandeja-table"><thead><tr>' + head + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>'
-    + '</div>';
+  box.innerHTML = cards + tabla;
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
