@@ -1234,16 +1234,20 @@ async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
   var slug = ACTIVE_CLIENT.slug;
+  // Pedimos los reportes acá mismo: si la pestaña activa al cargar es esta, la
+  // lista global CLIENT_SAVED_REPORTS todavía puede tener el cliente anterior.
   var results = await Promise.all([
     api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
   ]);
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var b = (results[0].ok && results[0].data) ? results[0].data.bandeja : null;
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
+  var reportes = (results[2].ok && results[2].data) ? (results[2].data.reports || []) : [];
   // El reporte "sin cerrar" es el último con débitos sin confirmar (pendiente).
-  var pendiente = (CLIENT_SAVED_REPORTS || []).filter(function(r){ return r.debitStatus === 'pendiente'; })[0]
-    || (CLIENT_SAVED_REPORTS || [])[0] || null;
+  var pendiente = reportes.filter(function(r){ return r.debitStatus === 'pendiente'; })[0] || reportes[0] || null;
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
   var cards = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(b) + mesCursoCardSinCerrar(current) + '</div>';
