@@ -1123,12 +1123,21 @@ class PamiTransmisionController:
             if filtros:
                 self._apply_transmision_filters(page, filtros)
 
-            export_ok = page.locator("button:has-text('Exportar'), a:has-text('Exportar'), input[value='Exportar']").count() > 0
-            if not export_ok:
+            # El botón Exportar aparece junto al panel de resultados, que PAMI
+            # renderiza de forma asíncrona tras la búsqueda (y más lento en
+            # headless). Antes se chequeaba al instante y en headless daba 0 ->
+            # "No encontré el botón Exportar". Esperamos a que esté visible.
+            exportar = page.locator("input[value='Exportar'], button:has-text('Exportar'), a:has-text('Exportar')").first
+            try:
+                exportar.wait_for(state="visible", timeout=25000)
+            except Exception:
                 raise RuntimeError("No encontré el botón Exportar en la pantalla actual.")
 
-            with page.expect_download(timeout=30000) as download_info:
-                page.locator("button:has-text('Exportar'), a:has-text('Exportar'), input[value='Exportar']").first.click()
+            # PAMI genera el Excel del mes en el momento y tarda: para una bandeja
+            # entera puede pasar del minuto (medido ~42s en un mes chico). El
+            # timeout viejo de 30s cortaba antes de que largara la descarga.
+            with page.expect_download(timeout=240000) as download_info:
+                exportar.click()
             download = download_info.value
             temp_path = Path(download.path())
             sample = temp_path.read_bytes()[:4096]
