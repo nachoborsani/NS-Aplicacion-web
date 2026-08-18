@@ -1595,10 +1595,14 @@ function buildBandejaResumen(slug) {
   const kValid = findKey(/VALIDADA/);
   const kBenef = findKey(/BENEFICIO/);
   const kTurno = findKey(/TURNO/);
+  const kNombre = findKey(/APELLIDO/);
   let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
   let matched = 0, unmatched = 0, grossEstimado = 0;
-  // Filas sintéticas con el shape que esperan las reglas de débito y el faltante
-  // de informe (para reusar applyAutomaticExclusionDebits / reportRowMissingInforme).
+  let missingInforme = 0, missingInformeAmount = 0;
+  // Detalle copiable de las que faltan informe (validadas sin transmitir).
+  const missingInformeRows = [];
+  // Filas sintéticas con el shape que esperan las reglas de débito
+  // (para reusar applyAutomaticExclusionDebits).
   const synth = [];
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
@@ -1614,6 +1618,17 @@ function buildBandejaResumen(slug) {
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
     if (nomRow) { matched++; grossEstimado += valueGross; }
     else unmatched++;
+    // Falta informe: validada pero NO transmitida (le debemos el informe).
+    if (esValidada && !esTransmitida) {
+      missingInforme++;
+      missingInformeAmount += valueGross;
+      if (missingInformeRows.length < 2000) missingInformeRows.push({
+        benef: String(row[kBenef] || "").trim(),
+        nombre: String(row[kNombre] || "").trim(),
+        practica: pracRaw,
+        turno: String(row[kTurno] || "").trim(),
+      });
+    }
     // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
     const md = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(row[kTurno] || ""));
     synth.push({
@@ -1633,11 +1648,10 @@ function buildBandejaResumen(slug) {
   }
   // Posibles débitos: proyección de las reglas de cruce mismo-día (Panel Débitos).
   applyAutomaticExclusionDebits(synth);
-  let posiblesDebitos = 0, posiblesDebitosCount = 0, missingInforme = 0, missingInformeAmount = 0;
+  let posiblesDebitos = 0, posiblesDebitosCount = 0;
   for (const r of synth) {
     const d = reportRowDebit(r);
     if (d > 0) { posiblesDebitos += d; posiblesDebitosCount++; }
-    if (reportRowMissingInforme(r)) { missingInforme++; missingInformeAmount += money(r.valueGross); }
   }
   return {
     period: bandeja.month || "",
@@ -1647,6 +1661,7 @@ function buildBandejaResumen(slug) {
     matched, unmatched,
     grossEstimado: money(grossEstimado),
     missingInforme, missingInformeAmount: money(missingInformeAmount),
+    missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     nomencladorPeriod: nom ? (nom.period || "") : "",
     nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",

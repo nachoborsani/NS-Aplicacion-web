@@ -1143,6 +1143,45 @@ async function saveClientPami(){
 // sin confirmar) y, debajo, la bandeja cruda que subió la app.
 var MESCURSO_MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 var MESCURSO_REPORTE_ID = null;
+var MESCURSO_FALTAN_INFORMES = []; // detalle copiable de las que faltan informe
+// Abre/cierra el detalle copiable de "Faltan informes" debajo de los cuadros.
+function toggleFaltanInformes(){
+  var panel = document.getElementById('mescursoInformesPanel');
+  var caret = document.getElementById('mescursoInformesCaret');
+  if (!panel) return;
+  if (panel.innerHTML){ panel.innerHTML = ''; if (caret) caret.textContent = '▸'; return; }
+  var rows = MESCURSO_FALTAN_INFORMES || [];
+  if (!rows.length) return;
+  var body = rows.map(function(x){
+    return '<tr><td>' + esc(x.benef) + '</td><td>' + esc(x.nombre) + '</td><td>' + esc(x.practica) + '</td><td>' + esc(x.turno) + '</td></tr>';
+  }).join('');
+  panel.innerHTML = '<div class="mescurso-panel">'
+    + '<div class="mescurso-panel-head"><b>Faltan informes · ' + rows.length + '</b>'
+    + '<button class="btn btn-ghost" type="button" title="Copiar" onclick="copiarFaltanInformes(this)">📋</button></div>'
+    + '<div class="table-scroll"><table class="bandeja-table"><thead><tr><th>Benef</th><th>Apellido y nombre</th><th>Práctica</th><th>Turno</th></tr></thead><tbody>' + body + '</tbody></table></div>'
+    + '</div>';
+  if (caret) caret.textContent = '▾';
+}
+// Copia el listado (con encabezado) separado por tabs, para pegar en Excel.
+function copiarFaltanInformes(btn){
+  var rows = MESCURSO_FALTAN_INFORMES || [];
+  var tsv = ['BENEF\tAPELLIDO Y NOMBRE\tPRACTICA\tTURNO'].concat(rows.map(function(x){
+    return [x.benef, x.nombre, x.practica, x.turno].join('\t');
+  })).join('\n');
+  var ok = function(){ if (btn){ btn.textContent = '✓'; setTimeout(function(){ btn.textContent = '📋'; }, 1500); } };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(tsv).then(ok, function(){ mesCursoCopiaFallback(tsv, ok); });
+  } else {
+    mesCursoCopiaFallback(tsv, ok);
+  }
+}
+function mesCursoCopiaFallback(text, ok){
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); ok && ok(); } catch (e) {}
+  document.body.removeChild(ta);
+}
 // Fecha en que se cierra un período (llegan los débitos ≈ día 1 del 2do mes
 // siguiente a la prestación). Ej. Julio 2026-07 → 01/09/2026.
 function mesCursoCierre(period){
@@ -1188,6 +1227,9 @@ function mesCursoCardMesEnCurso(r){
   }
   var nomNota = r.nomencladorLabel ? ('valorizado con nomenclador ' + r.nomencladorLabel) : 'valor estimativo';
   var footNom = r.count ? (esc(numberFmt(r.matched || 0)) + '/' + esc(numberFmt(r.count)) + ' prácticas valorizadas') : '';
+  // La línea de "Faltan informes" es clickeable (abre el detalle copiable) si hay.
+  var faltanClick = (r.missingInforme > 0) ? ' mescurso-click" onclick="toggleFaltanInformes()' : '';
+  var faltanCaret = (r.missingInforme > 0) ? ' <span class="mescurso-caret" id="mescursoInformesCaret">▸</span>' : '';
   return '<div class="mescurso-card">' + head
     + '<div class="mescurso-val-lbl">Facturación estimada</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(r.grossEstimado || 0)) + '</div>'
@@ -1196,7 +1238,7 @@ function mesCursoCardMesEnCurso(r){
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn"><span>Posibles débitos</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
-    + '<div class="mescurso-line alert"><span>Faltan informes</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
+    + '<div class="mescurso-line alert' + faltanClick + '"><span>Faltan informes' + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
     + '</div>'
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + (r.uploadedAt ? ' · actualizada ' + esc(mesCursoFechaCorta(r.uploadedAt)) : '') + '</div>'
     + '</div>';
@@ -1262,6 +1304,7 @@ async function loadClientMesCurso(){
   ]);
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
+  MESCURSO_FALTAN_INFORMES = (resumen && resumen.missingInformeRows) || [];
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
   var reportes = (results[2].ok && results[2].data) ? (results[2].data.reports || []) : [];
@@ -1271,7 +1314,8 @@ async function loadClientMesCurso(){
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
   var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
-  box.innerHTML = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(resumen) + cardDer + '</div>';
+  box.innerHTML = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(resumen) + cardDer + '</div>'
+    + '<div id="mescursoInformesPanel"></div>';
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
