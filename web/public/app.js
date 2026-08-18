@@ -1256,6 +1256,14 @@ function mesCursoSaludHtml(estado, uploadedAt){
   }
   return '';
 }
+// Desglose del estimado por estado (qué está firme y qué depende de informes/turnos).
+function mesCursoDesgloseHtml(r){
+  var parts = [];
+  if (r.grossTransmitido) parts.push('<span class="ok">En cobro <b>' + esc(moneyFmt(r.grossTransmitido)) + '</b></span>');
+  if (r.missingInformeAmount) parts.push('<span class="err">Falta informe <b>' + esc(moneyFmt(r.missingInformeAmount)) + '</b></span>');
+  if (r.grossTurno) parts.push('<span class="warn">Proyectado <b>' + esc(moneyFmt(r.grossTurno)) + '</b></span>');
+  return parts.length ? '<div class="mescurso-desglose">' + parts.join('') + '</div>' : '';
+}
 function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
@@ -1301,6 +1309,7 @@ function mesCursoCardMesEnCurso(r, estado){
     + '<div class="mescurso-val-lbl">Facturación estimada</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(r.grossEstimado || 0)) + '</div>'
     + '<div class="mescurso-val-note">' + esc(nomNota) + ' · sin débitos</div>'
+    + mesCursoDesgloseHtml(r)
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'

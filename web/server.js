@@ -1624,6 +1624,9 @@ function buildBandejaResumen(slug) {
   const kNombre = findKey(/APELLIDO/);
   let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
   let matched = 0, unmatched = 0, grossEstimado = 0;
+  // Desglose del estimado por estado: transmitido (en cobro), falta informe
+  // (validado sin transmitir = missingInformeAmount) y turno asignado (proyectado).
+  let grossTransmitido = 0, grossTurno = 0;
   let missingInforme = 0, missingInformeAmount = 0;
   // Detalle copiable de las que faltan informe (validadas sin transmitir).
   const missingInformeRows = [];
@@ -1644,6 +1647,8 @@ function buildBandejaResumen(slug) {
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
     if (nomRow) { matched++; grossEstimado += valueGross; }
     else unmatched++;
+    if (esTransmitida) grossTransmitido += valueGross;
+    else if (!esValidada) grossTurno += valueGross; // el caso validada+sin-transmitir va a missingInformeAmount
     // Falta informe: validada pero NO transmitida (le debemos el informe).
     if (esValidada && !esTransmitida) {
       missingInforme++;
@@ -1720,6 +1725,7 @@ function buildBandejaResumen(slug) {
     consultations, practices, validated, transmitted, absent,
     matched, unmatched,
     grossEstimado: money(grossEstimado),
+    grossTransmitido: money(grossTransmitido), grossTurno: money(grossTurno),
     missingInforme, missingInformeAmount: money(missingInformeAmount),
     missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,

@@ -720,6 +720,12 @@
   .mescurso-val-lbl{font-size:11px;color:var(--text-2);margin-bottom:1px}
   .mescurso-val{font-size:30px;font-weight:750;line-height:1.05;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
   .mescurso-val-note{font-size:10.5px;color:var(--text-2);margin-top:3px}
+  .mescurso-desglose{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .mescurso-desglose span{font-size:11px;border-radius:999px;padding:3px 9px;color:var(--text-2);background:var(--hover)}
+  .mescurso-desglose b{font-variant-numeric:tabular-nums;font-weight:750}
+  .mescurso-desglose span.ok{color:var(--success);background:var(--success-bg)}
+  .mescurso-desglose span.err{color:var(--error);background:var(--error-bg)}
+  .mescurso-desglose span.warn{color:var(--warning);background:var(--warning-bg)}
   .mescurso-foot{font-size:11px;color:var(--text-2);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
   .mescurso-sync{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:7px 10px;border-radius:9px;background:var(--hover)}
   .mescurso-sync span{font-size:11.5px;color:var(--text-2)}
