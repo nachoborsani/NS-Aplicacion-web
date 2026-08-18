@@ -702,17 +702,36 @@ function saveClientsStore(clients) {
 function createClientReportsStore() {
   return { items: [] };
 }
+// El archivo de reportes trae TODOS los reportes de todos los clientes con sus
+// filas embebidas (varios MB). Leerlo + parsearlo en cada request (dashboard,
+// lista de reportes, etc.) trababa el cambio de cliente. Lo cacheamos en memoria
+// y solo re-leemos si el archivo cambió (fecha de modificación). El único que
+// escribe es este server, así que el mtime alcanza para invalidar.
+let _reportsStoreCache = null;
+let _reportsStoreMtime = -1;
 function loadClientReportsStore() {
   try {
+    const mtime = fs.statSync(clientReportsFile).mtimeMs;
+    if (_reportsStoreCache && mtime === _reportsStoreMtime) return _reportsStoreCache;
     const parsed = JSON.parse(fs.readFileSync(clientReportsFile, "utf8"));
-    if (parsed && Array.isArray(parsed.items)) return parsed;
-    if (Array.isArray(parsed)) return { items: parsed };
-  } catch {}
-  return createClientReportsStore();
+    let store;
+    if (parsed && Array.isArray(parsed.items)) store = parsed;
+    else if (Array.isArray(parsed)) store = { items: parsed };
+    else store = createClientReportsStore();
+    _reportsStoreCache = store;
+    _reportsStoreMtime = mtime;
+    return store;
+  } catch {
+    return _reportsStoreCache || createClientReportsStore();
+  }
 }
 function saveClientReportsStore(store) {
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(clientReportsFile, JSON.stringify({ items: store.items || [] }, null, 2));
+  const normalized = { items: store.items || [] };
+  fs.writeFileSync(clientReportsFile, JSON.stringify(normalized, null, 2));
+  // Refrescamos el cache con lo recién escrito (evita re-leer el archivo grande).
+  _reportsStoreCache = normalized;
+  try { _reportsStoreMtime = fs.statSync(clientReportsFile).mtimeMs; } catch { _reportsStoreMtime = -1; }
 }
 function validUsername(u) {
   return /^[a-z0-9._-]{3,20}$/.test(u);
