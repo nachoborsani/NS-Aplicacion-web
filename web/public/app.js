@@ -1933,9 +1933,11 @@ function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasS
 
 // ===== Cotejar neto por módulo contra los montos oficiales de PAMI =====
 var COTEJO_OFICIAL = null;   // último detalle PAMI parseado (para el ajuste automático)
+var COTEJO_VER_TODOS = false; // mostrar también los módulos que cuadran (redondeo)
 function openCotejoModal(){
   if (!(CLIENT_REPORT_ROWS || []).length){ alert('Abrí o armá un reporte primero.'); return; }
   document.getElementById('cotejoError').textContent = '';
+  COTEJO_VER_TODOS = false;
   showModal('cotejoModal', 'cotejoScrim');
 }
 function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
@@ -1999,13 +2001,21 @@ function correrCotejo(){
   }).sort(function(a, b){ return Math.abs(b.dif) - Math.abs(a.dif); });
   var totalMio = Object.values(mio).reduce(function(s, v){ return s + v; }, 0);
   var totalOf = parsed.total || Object.values(parsed.porModulo).reduce(function(s, v){ return s + v; }, 0);
-  var body = filas.map(function(f){
-    var gap = Math.abs(f.dif) > 5;
+  // Significativo (vale la pena revisar) = diferencia real, no redondeo: al menos
+  // $50 Y al menos 0,1% del monto del módulo. Así los ±$1-$16 de redondeo no molestan.
+  function esSignificativo(f){ return Math.abs(f.dif) >= 50 && (!f.oficial || Math.abs(f.dif) / f.oficial >= 0.001); }
+  var revisar = filas.filter(esSignificativo);
+  var cuadranN = filas.length - revisar.length;
+  var mostrar = COTEJO_VER_TODOS ? filas : revisar;
+  function filaHtml(f){
+    var gap = esSignificativo(f);
     return '<tr class="cotejo-row ' + (gap ? 'cotejo-gap' : '') + '" onclick="cotejoIrAModulo(&quot;' + esc(f.mod) + '&quot;)" title="Ver las prácticas de este módulo"><td><span class="nom-code">' + esc(f.mod) + '</span></td>'
       + '<td class="nom-money">' + esc(moneyFmt(f.mio)) + '</td>'
       + '<td class="nom-money">' + (f.oficial ? esc(moneyFmt(f.oficial)) : '<span class="nom-muted">—</span>') + '</td>'
-      + '<td class="nom-money ' + (gap ? (f.dif > 0 ? 'pos' : 'neg') : '') + '"><b>' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + '</b></td></tr>';
-  }).join('');
+      + '<td class="nom-money ' + (gap ? (f.dif > 0 ? 'pos' : 'neg') : 'nom-muted') + '"><b>' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + '</b></td></tr>';
+  }
+  var body = mostrar.map(filaHtml).join('');
+  var toggleRow = cuadranN > 0 ? '<tr class="cotejo-toggle"><td colspan="4"><button type="button" class="report-more-btn" onclick="cotejoVerTodos()">' + (COTEJO_VER_TODOS ? 'ocultar los ' + cuadranN + ' que cuadran' : 'ver los ' + cuadranN + ' módulos que cuadran (redondeo)') + '</button></td></tr>' : '';
   var difTotal = totalMio - totalOf;
   COTEJO_OFICIAL = parsed.porModulo;   // guardo el detalle PAMI para el ajuste automático
   var ajustes = calcularAjusteUmbrales(parsed.porModulo);
@@ -2014,14 +2024,19 @@ function correrCotejo(){
     ajusteBox = '<div class="cotejo-ajuste"><button type="button" class="btn btn-navy" onclick="ajustarUmbralesPorCotejo()">⚡ Ajustar umbrales automáticamente</button>'
       + '<span class="nom-muted">Pone cada módulo con umbral en el % que hace coincidir con PAMI: <b>' + ajustes.map(function(a){ return a.mod + ' → ' + a.pct + '%'; }).join(' · ') + '</b>.</span></div>';
   }
-  res.innerHTML = '<div class="cotejo-tablewrap"><table class="cotejo-table"><thead><tr><th>Módulo</th><th class="nom-money">Mi neto</th><th class="nom-money">PAMI</th><th class="nom-money">Diferencia</th></tr></thead>'
-    + '<tbody>' + body + '</tbody>'
+  var resumen = revisar.length
+    ? '<div class="cotejo-resumen bad">⚠ <b>' + revisar.length + ' módulo' + (revisar.length !== 1 ? 's' : '') + ' para revisar</b>: ' + revisar.map(function(f){ return '<b>' + esc(f.mod) + '</b> (' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + ')'; }).join(' · ') + '</div>'
+    : '<div class="cotejo-resumen ok">✓ <b>Todo cuadra</b> — las diferencias son de redondeo (centavos).</div>';
+  res.innerHTML = resumen
+    + '<div class="cotejo-tablewrap"><table class="cotejo-table"><thead><tr><th>Módulo</th><th class="nom-money">Mi neto</th><th class="nom-money">PAMI</th><th class="nom-money">Diferencia</th></tr></thead>'
+    + '<tbody>' + body + toggleRow + '</tbody>'
     + '<tfoot><tr><td><b>TOTAL</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalMio)) + '</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalOf)) + '</b></td><td class="nom-money ' + (Math.abs(difTotal) > 5 ? (difTotal > 0 ? 'pos' : 'neg') : '') + '"><b>' + (difTotal >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(difTotal))) + '</b></td></tr></tfoot></table></div>'
     + ajusteBox
-    + '<p class="nom-muted cotejo-hint"><b>Tocá un módulo</b> para ver sus prácticas y ajustar a mano. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más. Lo que no sea umbral (ej. excluyentes) se ajusta desde la fila.</p>';
+    + '<p class="nom-muted cotejo-hint"><b>Tocá un módulo</b> para ver sus prácticas y ajustar a mano. Lo que no sea umbral (ej. excluyentes) se ajusta desde la fila.</p>';
   CLIENT_REPORT_COTEJO_HECHO = true;   // ya cotejó → saca el "pendiente"
   updateCotejoPending();
 }
+function cotejoVerTodos(){ COTEJO_VER_TODOS = !COTEJO_VER_TODOS; correrCotejo(); }
 // Calcula, por módulo con umbrales, el % que hace que mi neto coincida con PAMI.
 function calcularAjusteUmbrales(oficial){
   var rows = CLIENT_REPORT_ROWS || [];
