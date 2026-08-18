@@ -2173,14 +2173,14 @@ function getClientReportVisibleRows(){
 function updateClientReportSummary(){
   var visible = getClientReportVisibleRows();
   var rows = visible.map(function(item){ return item.row; });
-  var gross = 0, debit = 0, net = 0, cutoffNext = 0, missingInformeAmount = 0, absent = 0, outside = 0, missingInforme = 0, unmatched = 0;
+  var gross = 0, debit = 0, net = 0, cutoffNext = 0, missingInformeAmount = 0, absent = 0, absentValue = 0, outside = 0, missingInforme = 0, unmatched = 0;
   rows.forEach(function(row){
     gross += reportBaseGross(row);
     debit += reportDebitAmount(row);
     net += reportNetAmount(row);
     cutoffNext += reportCutoffNextAmount(row);
     missingInformeAmount += reportMissingInformeAmount(row);
-    if (row.absent) absent += 1;
+    if (row.absent){ absent += 1; absentValue += Number(row.valueGross || 0); }
     if (row.outsideCutoff) outside += 1;
     if (reportMissingInforme(row)) missingInforme += 1;
     if (!row.matchFound && !row.valueEdited) unmatched += 1;
@@ -2190,6 +2190,8 @@ function updateClientReportSummary(){
   if (cards[1]) cards[1].querySelector('b').textContent = moneyFmt(debit);
   if (cards[2]) cards[2].querySelector('b').textContent = moneyFmt(net);
   if (cards[3]) cards[3].querySelector('b').textContent = String(absent);
+  var absentValueEl = document.getElementById('clientReportAbsentValue');
+  if (absentValueEl) absentValueEl.textContent = absentValue > 0 ? moneyFmt(absentValue) : '';
   if (cards[4]) cards[4].querySelector('b').textContent = moneyFmt(cutoffNext);
   if (cards[5]) cards[5].querySelector('b').textContent = moneyFmt(missingInformeAmount);
   var cutoffCard = document.getElementById('clientReportCutoffCard');
