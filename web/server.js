@@ -1666,7 +1666,10 @@ function buildBandejaResumen(slug) {
     synth.push({
       practiceCode: code,
       valueGross,
-      billable: valueGross > 0,
+      // Solo entran al cruce las OMEs que REALMENTE pasaron (validada o
+      // transmitida). Un "turno asignado" sin validar no cruza: si el paciente
+      // no vino es ausente, no débito. (Planteo del socio, correcto.)
+      billable: valueGross > 0 && (esValidada || esTransmitida),
       benefit: String(row[kBenef] || "").trim(),
       appointmentAt: md ? `${md[3]}-${md[2]}-${md[1]}` : "",
       validated: esValidada,
