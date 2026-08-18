@@ -2754,6 +2754,10 @@ async function openClientReport(id){
   setClientReportObservationsInput(report.observations || '');
   var title = document.getElementById('clientReportTitle');
   if (title) title.value = report.title || '';
+  // Sincronizar el desplegable de nomenclador con el del reporte (si no, queda
+  // mostrando el que había de antes, aunque el reporte se guardó con otro).
+  var periodSelect = document.getElementById('clientReportPeriod');
+  if (periodSelect && CLIENT_REPORT_SOURCE.nomencladorPeriod) periodSelect.value = CLIENT_REPORT_SOURCE.nomencladorPeriod;
   if (st) st.textContent = 'Viendo reporte cerrado: ' + (report.title || report.sourceFilename || report.id);
   renderClientReportRows();
 }
