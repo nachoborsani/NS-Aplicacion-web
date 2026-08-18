@@ -549,6 +549,7 @@ var CLIENT_NOM_TIMER = null;
 var CLIENT_SECTION = 'dashboard';
 var CLIENT_NOM_OPEN = false;
 var CLIENT_REPORT_ROWS = [];
+var CLIENT_REPORT_SHOW_ALL = false;  // true = renderizar todas las filas (reportes grandes) aunque tarde
 var CLIENT_REPORT_QUERY = '';
 var CLIENT_REPORT_PRACTICE_QUERY = '';
 var CLIENT_REPORT_MODULE = '';
@@ -2338,7 +2339,13 @@ function renderClientReportRows(){
     updateClientReportSummary();
     return;
   }
-  body.innerHTML = visible.map(function(item){
+  // Con reportes grandes (miles de filas), armar toda la tabla de una congela el
+  // hilo ~1s en cada re-render. Mostramos solo las primeras N y dejamos "ver todas".
+  // Los totales/summary igual se calculan sobre TODAS las filas visibles.
+  var LIMIT = 250;
+  var capado = !CLIENT_REPORT_SHOW_ALL && visible.length > LIMIT;
+  var mostrar = capado ? visible.slice(0, LIMIT) : visible;
+  var htmlFilas = mostrar.map(function(item){
     var row = item.row;
     var idx = item.index;
     var readOnly = CLIENT_REPORT_MODE === 'closed';
@@ -2364,8 +2371,13 @@ function renderClientReportRows(){
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
       + '</tr>';
   }).join('');
+  if (capado){
+    htmlFilas += '<tr class="report-more-row"><td colspan="7">Mostrando <b>' + LIMIT + '</b> de <b>' + visible.length + '</b> prácticas (los totales de arriba sí incluyen todas). Buscá o filtrá para encontrar una en particular, o <button type="button" class="report-more-btn" onclick="mostrarTodasLasPracticas()">ver todas</button> <span class="nom-muted">(puede tardar un momento)</span>.</td></tr>';
+  }
+  body.innerHTML = htmlFilas;
   updateClientReportSummary();
 }
+function mostrarTodasLasPracticas(){ CLIENT_REPORT_SHOW_ALL = true; renderClientReportRows(); }
 function renderClientReportModuleFilter(){
   var el = document.getElementById('clientReportModuleFilter');
   if (!el) return;
@@ -2521,6 +2533,7 @@ function clearClientReport(){
   CLIENT_REPORT_ID = '';
   CLIENT_REPORT_DEBIT_STATUS = '';
   CLIENT_REPORT_COTEJO_HECHO = false;
+  CLIENT_REPORT_SHOW_ALL = false;
   CLIENT_REPORT_SOURCE = null;
   CLIENT_REPORT_FILE = null;
   resetClientReportFilters();
@@ -2609,6 +2622,7 @@ async function saveClientReport(){
 }
 async function openClientReport(id){
   if (!ACTIVE_CLIENT || !id) return;
+  CLIENT_REPORT_SHOW_ALL = false;
   var st = document.getElementById('clientReportStatus');
   if (st) st.textContent = 'Abriendo reporte cerrado...';
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id));
@@ -2679,6 +2693,7 @@ function sugerirNombreReporte(){
 }
 async function uploadClientReport(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
+  CLIENT_REPORT_SHOW_ALL = false;
   CLIENT_REPORT_FILE = files[0];
   var wasClosed = CLIENT_REPORT_MODE === 'closed';
   var st = document.getElementById('clientReportStatus');
