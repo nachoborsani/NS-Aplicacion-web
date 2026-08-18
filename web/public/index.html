@@ -790,6 +790,7 @@
         <textarea class="inp" id="pamiDebitText" rows="8" placeholder="Pegá acá las filas de la validación de PAMI (una por línea, tal cual salen)..." style="height:auto;min-height:150px;resize:vertical;font-family:monospace;font-size:12px;white-space:pre;overflow:auto"></textarea>
         <div class="msg err" id="pamiDebitError"></div>
         <div id="pamiDebitResult" class="nom-muted" style="margin-top:8px"></div>
+        <div id="pamiDebitUmbral" class="pami-umbral-alert" style="display:none"></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closePamiDebitModal()">Cancelar</button>
@@ -820,8 +821,7 @@
       <div class="modal-body">
         <p class="modal-note">Dos estudios que se pisan <b>el mismo día</b> al mismo afiliado: PAMI debita uno. Con la regla <b>tildada</b>, el sistema aplica ese débito solo cuando armás el reporte. Destildá para desactivarla. Cuando pegues la validación real de PAMI, esa reemplaza a lo automático.</p>
         <div class="debito-umbral">
-          <div class="debito-umbral-txt"><b>Valorización parcial por umbrales</b><div class="nom-muted">Cuando PAMI marca “valorización parcial por umbrales” (Resol 2713) en la validación, paga este % de la práctica.</div></div>
-          <div class="debito-umbral-input">PAMI paga <input class="inp" id="umbralPagaPct" type="number" min="1" max="100" step="1" value="60"> %</div>
+          <div class="debito-umbral-txt"><b>Valorización parcial por umbrales</b><div class="nom-muted">El % de umbrales <b>cambia por módulo y por mes</b> (1er umbral 80%, 2do 60%, 3er 40%), no se puede fijar. Al pegar la validación, las prácticas con umbral se aplican como estimación (40%) y hay que <b>ajustarlas con “Cotejar por módulo”</b> contra la facturación de PAMI.</div></div>
         </div>
         <div id="debitoReglasList" class="debito-reglas-list"><div class="nom-muted">Cargando…</div></div>
         <details class="debito-regla-nueva">

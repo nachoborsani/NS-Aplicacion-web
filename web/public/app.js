@@ -561,6 +561,7 @@ var CLIENT_REPORT_SORT = '';
 var CLIENT_REPORT_MODE = '';
 var CLIENT_REPORT_ID = '';
 var CLIENT_REPORT_DEBIT_STATUS = '';   // '' = no tocar (backend mantiene/defaultea), 'confirmado' al pegar validación PAMI
+var CLIENT_REPORT_COTEJO_HECHO = false; // si el reporte tiene umbrales, queda pendiente hasta cotejar por módulo
 var CLIENT_REPORT_SOURCE = null;
 var CLIENT_REPORT_FILE = null;
 var CLIENT_REPORT_OBSERVATIONS = '';
@@ -1895,6 +1896,7 @@ function openPamiDebitModal(){
   document.getElementById('pamiDebitText').value = '';
   document.getElementById('pamiDebitError').textContent = '';
   document.getElementById('pamiDebitResult').textContent = '';
+  var al = document.getElementById('pamiDebitUmbral'); if (al){ al.style.display = 'none'; al.innerHTML = ''; }
   showModal('pamiDebitModal', 'pamiScrim');
 }
 function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
@@ -1916,7 +1918,6 @@ async function openDebitoReglasModal(){
   document.getElementById('debitoReglasList').innerHTML = '<div class="nom-muted">Cargando…</div>';
   showModal('debitoReglasModal', 'debitoReglasScrim');
   await fetchDebitoConfig();
-  var inp = document.getElementById('umbralPagaPct'); if (inp) inp.value = UMBRAL_PAGA_PCT;
   renderDebitoReglas();
 }
 function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasScrim'); }
@@ -1928,6 +1929,17 @@ function openCotejoModal(){
   showModal('cotejoModal', 'cotejoScrim');
 }
 function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
+// El reporte tiene umbrales si alguna fila quedó marcada con motivo 'umbral'.
+function reportTieneUmbrales(){ return (CLIENT_REPORT_ROWS || []).some(function(r){ return r.debitMotivo === 'umbral'; }); }
+// Marca "Cotejar por módulo" como pendiente (⚠) SOLO si hay umbrales sin cotejar.
+// Si el reporte no tiene umbrales, el botón queda normal (no muestra nada).
+function updateCotejoPending(){
+  var btn = document.getElementById('clientReportCotejoBtn');
+  if (!btn) return;
+  var pend = reportTieneUmbrales() && !CLIENT_REPORT_COTEJO_HECHO;
+  btn.classList.toggle('cotejo-pendiente', pend);
+  btn.innerHTML = pend ? 'Cotejar por módulo <small>⚠ pendiente</small>' : 'Cotejar por módulo';
+}
 // Módulo de una fila, remapeando los códigos viejos a su módulo (por si la vista
 // todavía no tomó el remap del server).
 function cotejoModuloDeFila(r){
@@ -1981,6 +1993,8 @@ function correrCotejo(){
     + '<tbody>' + body + '</tbody>'
     + '<tfoot><tr><td><b>TOTAL</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalMio)) + '</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalOf)) + '</b></td><td class="nom-money ' + (Math.abs(difTotal) > 5 ? (difTotal > 0 ? 'pos' : 'neg') : '') + '"><b>' + (difTotal >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(difTotal))) + '</b></td></tr></tfoot></table></div>'
     + '<p class="nom-muted cotejo-hint">Los módulos en rojo son los que no coinciden. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más.</p>';
+  CLIENT_REPORT_COTEJO_HECHO = true;   // ya cotejó → saca el "pendiente"
+  updateCotejoPending();
 }
 function renderDebitoReglas(){
   var box = document.getElementById('debitoReglasList');
@@ -2031,15 +2045,11 @@ function agregarReglaDebito(){
 }
 async function guardarReglasDebito(){
   var err = document.getElementById('debitoReglasError'); err.textContent = '';
-  var inp = document.getElementById('umbralPagaPct');
-  var pct = inp ? Number(inp.value) : UMBRAL_PAGA_PCT;
-  if (!(pct > 0 && pct <= 100)){ err.textContent = 'El % de umbrales tiene que estar entre 1 y 100.'; return; }
   var btn = document.getElementById('debitoReglasSave'); btn.disabled = true;
-  var r = await req('PUT', '/api/debito-reglas', { reglas: DEBITO_REGLAS, umbralPagaPct: pct });
+  var r = await req('PUT', '/api/debito-reglas', { reglas: DEBITO_REGLAS });
   btn.disabled = false;
   if (!r.ok){ err.textContent = (r.data && r.data.error) || 'No se pudo guardar.'; return; }
   DEBITO_REGLAS = r.data.reglas || DEBITO_REGLAS;
-  if (Number(r.data.umbralPagaPct) > 0) UMBRAL_PAGA_PCT = Number(r.data.umbralPagaPct);
   renderDebitoReglas();
   closeDebitoReglasModal();
 }
@@ -2073,24 +2083,18 @@ async function aplicarDebitosPami(){
   var resEl = document.getElementById('pamiDebitResult'); resEl.textContent = '';
   var items = parsePamiValidacion(document.getElementById('pamiDebitText').value);
   if (!items.length){ err.textContent = 'No se detectaron filas de validación. Pegá las filas tal cual salen de PAMI (con afiliado y código).'; return; }
-  await fetchDebitoConfig();   // % de umbrales configurado
-  // Traduce el marcador 'umbral' al débito según el % configurado (usa el bruto
-  // de la fila para %s que no son 40/60 exactos).
+  // Umbral = estimación al 40% (el % real varía por módulo → se ajusta con
+  // "Cotejar por módulo"). Se marca debitMotivo='umbral' para el KPI y la alerta.
   function aplicarTipo(r, tipo){
-    if (tipo === 'umbral'){
-      r.debitMotivo = 'umbral';
-      if (UMBRAL_PAGA_PCT === 40){ r.debitType = 'pay40'; r.debitAmount = 0; }
-      else if (UMBRAL_PAGA_PCT === 60){ r.debitType = 'pay60'; r.debitAmount = 0; }
-      else if (UMBRAL_PAGA_PCT === 80){ r.debitType = 'pay80'; r.debitAmount = 0; }
-      else { r.debitType = 'partial'; r.debitAmount = reportBaseGross(r) * (1 - UMBRAL_PAGA_PCT / 100); }
-    } else { r.debitType = tipo; r.debitAmount = 0; r.debitMotivo = ''; }
+    if (tipo === 'umbral'){ r.debitMotivo = 'umbral'; r.debitType = 'pay40'; r.debitAmount = 0; }
+    else { r.debitType = tipo; r.debitAmount = 0; r.debitMotivo = ''; }
   }
   var rows = CLIENT_REPORT_ROWS || [];
   // La validación real REEMPLAZA la proyección automática: limpiamos primero los
   // débitos que puso la regla, y contamos si había acertado.
   var reglaAntes = 0, reglaAcerto = 0;
   rows.forEach(function(r){ if (r.debitSource === 'regla'){ reglaAntes++; r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0; r.autoDebit = false; r.debitSource = ''; } });
-  var used = {}, aplicados = 0, sinMatch = [];
+  var used = {}, aplicados = 0, sinMatch = [], umbralAplicados = 0;
   items.forEach(function(it){
     var afN = it.afiliado.replace(/\D/g, '');
     var idx = -1;
@@ -2101,11 +2105,12 @@ async function aplicarDebitosPami(){
       var matchAf = benN && (benN === afN || benN.indexOf(afN) === 0 || afN.indexOf(benN) === 0);
       if (matchAf && String(r.practiceCode || '') === it.codigo && reportBaseGross(r) > 0){ idx = i; break; }
     }
-    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; aplicarTipo(rows[idx], it.tipo); rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; }
+    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; aplicarTipo(rows[idx], it.tipo); rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; if (it.tipo === 'umbral') umbralAplicados++; }
     else sinMatch.push(it.codigo + ' · ' + it.afiliado);
   });
   // Pegar la validación real = los débitos quedan confirmados.
   if (aplicados) CLIENT_REPORT_DEBIT_STATUS = 'confirmado';
+  if (umbralAplicados) CLIENT_REPORT_COTEJO_HECHO = false;   // hay umbrales sin cotejar
   renderClientReportRows();
   updateClientReportSummary();
   saveClientReportDraft();
@@ -2114,7 +2119,16 @@ async function aplicarDebitosPami(){
   if (reglaAntes) msg += ' (La regla automática había proyectado ' + reglaAntes + '; ahora manda la validación de PAMI.)';
   if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
   resEl.textContent = msg;
-  if (aplicados && !sinMatch.length) setTimeout(closePamiDebitModal, 1400);
+  // Alerta de umbrales: el % varía por módulo → hay que cotejar contra PAMI.
+  var alerta = document.getElementById('pamiDebitUmbral');
+  if (alerta){
+    if (umbralAplicados){
+      alerta.style.display = '';
+      alerta.innerHTML = '⚠ Este reporte tiene <b>' + umbralAplicados + ' práctica' + (umbralAplicados !== 1 ? 's' : '') + ' con umbral</b> (aplicadas al 40% como estimación). El % real cambia por módulo — pegá la <b>facturación de PAMI por módulo</b> en “Cotejar por módulo” para ajustar.';
+    } else { alerta.style.display = 'none'; }
+  }
+  // Con umbrales no cerramos el modal solo: que el usuario lea la alerta.
+  if (aplicados && !sinMatch.length && !umbralAplicados) setTimeout(closePamiDebitModal, 1400);
 }
 function normalizeReportSearch(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -2220,6 +2234,7 @@ function updateClientReportSummary(){
     var amt = document.getElementById('clientReportUmbralAmount');
     if (amt) amt.textContent = moneyFmt(umbralLoss);
   }
+  updateCotejoPending();
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
@@ -2494,6 +2509,7 @@ function clearClientReport(){
   CLIENT_REPORT_MODE = '';
   CLIENT_REPORT_ID = '';
   CLIENT_REPORT_DEBIT_STATUS = '';
+  CLIENT_REPORT_COTEJO_HECHO = false;
   CLIENT_REPORT_SOURCE = null;
   CLIENT_REPORT_FILE = null;
   resetClientReportFilters();
