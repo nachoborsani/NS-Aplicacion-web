@@ -1896,8 +1896,10 @@ function openPamiDebitModal(){
   if (!(CLIENT_REPORT_MODE === 'draft' || CLIENT_REPORT_MODE === 'edit')) return;
   document.getElementById('pamiDebitText').value = '';
   document.getElementById('pamiDebitError').textContent = '';
-  document.getElementById('pamiDebitResult').textContent = '';
+  var resEl0 = document.getElementById('pamiDebitResult'); resEl0.textContent = ''; resEl0.className = 'nom-muted';
   var al = document.getElementById('pamiDebitUmbral'); if (al){ al.style.display = 'none'; al.innerHTML = ''; }
+  var applyBtn0 = document.getElementById('pamiDebitApply'); if (applyBtn0) applyBtn0.textContent = 'Aplicar débitos';
+  var cancelBtn0 = document.getElementById('pamiDebitCancel'); if (cancelBtn0) cancelBtn0.textContent = 'Cancelar';
   showModal('pamiDebitModal', 'pamiScrim');
 }
 function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
@@ -2119,20 +2121,26 @@ async function aplicarDebitosPami(){
   renderClientReportRows();
   updateClientReportSummary();
   saveClientReportDraft();
-  var msg = 'Se aplicaron ' + aplicados + ' débito' + (aplicados !== 1 ? 's' : '') + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '.';
-  if (aplicados) msg += ' Los débitos quedan marcados como confirmados al guardar.';
+  // Mensaje de éxito (verde) — deja claro que se cargaron.
+  var msg = '✓ Débitos cargados: se aplicaron ' + aplicados + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '. Quedan confirmados al guardar el reporte.';
   if (reglaAntes) msg += ' (La regla automática había proyectado ' + reglaAntes + '; ahora manda la validación de PAMI.)';
   if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
-  resEl.textContent = msg;
+  resEl.textContent = aplicados ? msg : 'No se aplicó ningún débito (ninguna fila matcheó con la bandeja).';
+  resEl.className = aplicados ? 'pami-ok' : 'msg err';
+  // Botones: dejar claro que ya se aplicó.
+  var applyBtn = document.getElementById('pamiDebitApply');
+  if (applyBtn && aplicados) applyBtn.textContent = '✓ Débitos aplicados';
+  var cancelBtn = document.getElementById('pamiDebitCancel');
+  if (cancelBtn && aplicados) cancelBtn.textContent = 'Cerrar';
   // Alerta de umbrales: el % varía por módulo → hay que cotejar contra PAMI.
   var alerta = document.getElementById('pamiDebitUmbral');
   if (alerta){
     if (umbralAplicados){
       alerta.style.display = '';
-      alerta.innerHTML = '⚠ Este reporte tiene <b>' + umbralAplicados + ' práctica' + (umbralAplicados !== 1 ? 's' : '') + ' con umbral</b> (aplicadas al 40% como estimación). El % real cambia por módulo — pegá la <b>facturación de PAMI por módulo</b> en “Cotejar por módulo” para ajustar.';
+      alerta.innerHTML = '⚠ Además, este reporte tiene <b>' + umbralAplicados + ' práctica' + (umbralAplicados !== 1 ? 's' : '') + ' con umbral</b> (aplicadas al 40% como estimación). El % real cambia por módulo — cerrá y usá <b>“Cotejar por módulo”</b> con la facturación de PAMI para ajustar.';
     } else { alerta.style.display = 'none'; }
   }
-  // Con umbrales no cerramos el modal solo: que el usuario lea la alerta.
+  // Sin umbrales cerramos solos; con umbrales dejamos abierto para que lea la alerta.
   if (aplicados && !sinMatch.length && !umbralAplicados) setTimeout(closePamiDebitModal, 1400);
 }
 function normalizeReportSearch(value){
