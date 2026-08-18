@@ -133,7 +133,14 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
     for client in web.list_clients():
         if only_slugs and client.get("slug") not in only_slugs:
             continue
-        results.append(sync_client(web, client, period, progress=progress))
+        res = sync_client(web, client, period, progress=progress)
+        # Reportamos el resultado (ok/error) para el indicador de salud de la card.
+        try:
+            web.report_bandeja_estado(res.get("slug", ""), res.get("ok"),
+                                      res.get("count"), res.get("error", ""))
+        except Exception:  # noqa: BLE001 - un fallo del reporte no corta el sync
+            pass
+        results.append(res)
     return results
 
 

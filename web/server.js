@@ -31,6 +31,7 @@ const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
 const clientCredsFile = path.join(dataDir, "client_credentials.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
+const clientBandejaEstadoFile = path.join(dataDir, "client_bandeja_estado.json");
 const clientPracticeValuesFile = path.join(dataDir, "client_practice_values.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 
@@ -106,6 +107,20 @@ function loadClientBandejas() {
 function saveClientBandejas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasFile, JSON.stringify(store, null, 2));
+}
+// Resultado del último sync de bandeja por cliente (para el indicador de salud
+// en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
+function loadBandejaEstado() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientBandejaEstadoFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function saveBandejaEstado(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientBandejaEstadoFile, JSON.stringify(store, null, 2));
 }
 // Config de Informes: médicos (con su firma) y descripciones. Se guarda en el
 // volumen; se siembra con los datos actuales (Naiara + descripciones base).
@@ -2718,7 +2733,26 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(clientBandejaResumenMatch[1]);
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
-    return json(res, 200, { resumen: buildBandejaResumen(slug) });
+    return json(res, 200, { resumen: buildBandejaResumen(slug), estado: loadBandejaEstado()[slug] || null });
+  }
+
+  // La app reporta el resultado del último sync de cada cliente (ok/error + hora).
+  const clientBandejaEstadoMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/estado$/);
+  if (clientBandejaEstadoMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientBandejaEstadoMatch[1]);
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const store = loadBandejaEstado();
+    store[slug] = {
+      ok: !!body.ok,
+      count: Number(body.count) || 0,
+      error: String(body.error || "").slice(0, 300),
+      at: new Date().toISOString(),
+    };
+    saveBandejaEstado(store);
+    return json(res, 200, { ok: true });
   }
 
   const clientBandejaMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja$/);

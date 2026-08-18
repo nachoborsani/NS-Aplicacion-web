@@ -198,6 +198,14 @@ class NSWebClient:
             },
         )
 
+    def report_bandeja_estado(self, slug: str, ok: bool, count: int | None = None,
+                              error: str = "") -> dict:
+        """Reporta el resultado del último sync (para el indicador de salud)."""
+        return self._request(
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado",
+            body={"ok": bool(ok), "count": int(count or 0), "error": str(error or "")[:300]},
+        )
+
     # --- Nomencladores ------------------------------------------------------
     def list_nomencladores(self) -> tuple[list[dict], str]:
         """Devuelve (lista de periodos disponibles, periodo activo).
