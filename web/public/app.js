@@ -1900,12 +1900,22 @@ function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
 
 // ===== Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno) =====
 var DEBITO_REGLAS = [];
+var UMBRAL_PAGA_PCT = 60;   // % que paga PAMI en "valorización parcial por umbrales" (configurable)
+// Lee la config de débitos (reglas + % umbrales) del server, cacheando el %.
+async function fetchDebitoConfig(){
+  var r = await api('/api/debito-reglas');
+  if (r.ok){
+    if (Array.isArray(r.data.reglas)) DEBITO_REGLAS = r.data.reglas;
+    if (Number(r.data.umbralPagaPct) > 0) UMBRAL_PAGA_PCT = Number(r.data.umbralPagaPct);
+  }
+  return r;
+}
 async function openDebitoReglasModal(){
   document.getElementById('debitoReglasError').textContent = '';
   document.getElementById('debitoReglasList').innerHTML = '<div class="nom-muted">Cargando…</div>';
   showModal('debitoReglasModal', 'debitoReglasScrim');
-  var r = await api('/api/debito-reglas');
-  DEBITO_REGLAS = (r.ok && Array.isArray(r.data.reglas)) ? r.data.reglas : [];
+  await fetchDebitoConfig();
+  var inp = document.getElementById('umbralPagaPct'); if (inp) inp.value = UMBRAL_PAGA_PCT;
   renderDebitoReglas();
 }
 function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasScrim'); }
@@ -1958,11 +1968,15 @@ function agregarReglaDebito(){
 }
 async function guardarReglasDebito(){
   var err = document.getElementById('debitoReglasError'); err.textContent = '';
+  var inp = document.getElementById('umbralPagaPct');
+  var pct = inp ? Number(inp.value) : UMBRAL_PAGA_PCT;
+  if (!(pct > 0 && pct <= 100)){ err.textContent = 'El % de umbrales tiene que estar entre 1 y 100.'; return; }
   var btn = document.getElementById('debitoReglasSave'); btn.disabled = true;
-  var r = await req('PUT', '/api/debito-reglas', { reglas: DEBITO_REGLAS });
+  var r = await req('PUT', '/api/debito-reglas', { reglas: DEBITO_REGLAS, umbralPagaPct: pct });
   btn.disabled = false;
   if (!r.ok){ err.textContent = (r.data && r.data.error) || 'No se pudo guardar.'; return; }
   DEBITO_REGLAS = r.data.reglas || DEBITO_REGLAS;
+  if (Number(r.data.umbralPagaPct) > 0) UMBRAL_PAGA_PCT = Number(r.data.umbralPagaPct);
   renderDebitoReglas();
   closeDebitoReglasModal();
 }
@@ -1982,19 +1996,30 @@ function parsePamiValidacion(text){
     //  - cualquier otro (excluyentes, incluyentes, inactivo, etc.) = débito total (100%).
     // OJO: "umbral" se chequea ANTES que "parcial" porque el texto de umbrales
     // dice "VALORIZACION PARCIAL POR UMBRALES" (contiene las dos palabras).
+    // 'umbral' es un marcador: el % lo define la config (UMBRAL_PAGA_PCT) al aplicar.
     var tipo;
-    if (/umbral/i.test(line)) tipo = 'pay60';
+    if (/umbral/i.test(line)) tipo = 'umbral';
     else if (/parcial/i.test(line)) tipo = 'pay40';
     else tipo = 'total';
     out.push({ afiliado: af, codigo: codigo, tipo: tipo, raw: line.trim() });
   });
   return out;
 }
-function aplicarDebitosPami(){
+async function aplicarDebitosPami(){
   var err = document.getElementById('pamiDebitError'); err.textContent = '';
   var resEl = document.getElementById('pamiDebitResult'); resEl.textContent = '';
   var items = parsePamiValidacion(document.getElementById('pamiDebitText').value);
   if (!items.length){ err.textContent = 'No se detectaron filas de validación. Pegá las filas tal cual salen de PAMI (con afiliado y código).'; return; }
+  await fetchDebitoConfig();   // % de umbrales configurado
+  // Traduce el marcador 'umbral' al débito según el % configurado (usa el bruto
+  // de la fila para %s que no son 40/60 exactos).
+  function aplicarTipo(r, tipo){
+    if (tipo === 'umbral'){
+      if (UMBRAL_PAGA_PCT === 40){ r.debitType = 'pay40'; r.debitAmount = 0; }
+      else if (UMBRAL_PAGA_PCT === 60){ r.debitType = 'pay60'; r.debitAmount = 0; }
+      else { r.debitType = 'partial'; r.debitAmount = reportBaseGross(r) * (1 - UMBRAL_PAGA_PCT / 100); }
+    } else { r.debitType = tipo; r.debitAmount = 0; }
+  }
   var rows = CLIENT_REPORT_ROWS || [];
   // La validación real REEMPLAZA la proyección automática: limpiamos primero los
   // débitos que puso la regla, y contamos si había acertado.
@@ -2011,7 +2036,7 @@ function aplicarDebitosPami(){
       var matchAf = benN && (benN === afN || benN.indexOf(afN) === 0 || afN.indexOf(benN) === 0);
       if (matchAf && String(r.practiceCode || '') === it.codigo && reportBaseGross(r) > 0){ idx = i; break; }
     }
-    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; rows[idx].debitType = it.tipo; rows[idx].debitAmount = 0; rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; }
+    if (idx >= 0){ used[idx] = true; rows[idx].manualDebit = true; aplicarTipo(rows[idx], it.tipo); rows[idx].debitSource = 'validacion'; rows[idx].autoDebit = false; aplicados++; }
     else sinMatch.push(it.codigo + ' · ' + it.afiliado);
   });
   // Pegar la validación real = los débitos quedan confirmados.

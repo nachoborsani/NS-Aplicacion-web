@@ -274,6 +274,11 @@
   .auto-debit-note{font-size:10.5px;margin-top:3px;color:var(--turq-d)}
   .debit-warning-note{font-size:10.5px;margin-top:3px;color:var(--warning)}
   /* Panel Débitos: reglas de cruce */
+  .debito-umbral{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--celeste);margin-bottom:12px;flex-wrap:wrap}
+  .debito-umbral-txt{flex:1;min-width:200px;font-size:13px}
+  .debito-umbral-txt b{color:var(--text)}
+  .debito-umbral-input{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:650;white-space:nowrap}
+  .debito-umbral-input input{width:64px;text-align:center}
   .debito-reglas-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
   .debito-regla-item{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
   .debito-regla-txt{flex:1;min-width:0;font-size:13px}

@@ -272,17 +272,29 @@ function normalizarReglaDebito(r) {
   }
   return base;
 }
-function loadDebitoReglas() {
-  let arr = null;
-  try { arr = JSON.parse(fs.readFileSync(debitoReglasFile, "utf8")); } catch {}
-  if (!Array.isArray(arr)) arr = DEBITO_REGLAS_SEED;
-  return arr.map(normalizarReglaDebito).filter(Boolean);
+const UMBRAL_PAGA_PCT_DEFAULT = 60; // "valorización parcial por umbrales" (Resol 2713): PAMI paga este %.
+function sanearUmbralPct(v) {
+  const n = Number(v);
+  return (n > 0 && n <= 100) ? n : UMBRAL_PAGA_PCT_DEFAULT;
 }
-function saveDebitoReglas(arr) {
+// El archivo puede ser un array (formato viejo, solo reglas) o un objeto
+// { reglas, umbralPagaPct }. loadDebitoStore normaliza ambos.
+function loadDebitoStore() {
+  let raw = null;
+  try { raw = JSON.parse(fs.readFileSync(debitoReglasFile, "utf8")); } catch {}
+  let reglasRaw, umbral;
+  if (Array.isArray(raw)) { reglasRaw = raw; umbral = UMBRAL_PAGA_PCT_DEFAULT; }
+  else if (raw && typeof raw === "object") { reglasRaw = Array.isArray(raw.reglas) ? raw.reglas : DEBITO_REGLAS_SEED; umbral = sanearUmbralPct(raw.umbralPagaPct); }
+  else { reglasRaw = DEBITO_REGLAS_SEED; umbral = UMBRAL_PAGA_PCT_DEFAULT; }
+  return { reglas: reglasRaw.map(normalizarReglaDebito).filter(Boolean), umbralPagaPct: umbral };
+}
+function loadDebitoReglas() { return loadDebitoStore().reglas; }
+function saveDebitoStore(reglas, umbralPagaPct) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const limpio = (Array.isArray(arr) ? arr : []).map(normalizarReglaDebito).filter(Boolean);
-  fs.writeFileSync(debitoReglasFile, JSON.stringify(limpio, null, 2));
-  return limpio;
+  const limpio = (Array.isArray(reglas) ? reglas : []).map(normalizarReglaDebito).filter(Boolean);
+  const store = { reglas: limpio, umbralPagaPct: sanearUmbralPct(umbralPagaPct) };
+  fs.writeFileSync(debitoReglasFile, JSON.stringify(store, null, 2));
+  return store;
 }
 function slugId(text) {
   return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -3117,7 +3129,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/debito-reglas" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    return json(res, 200, { reglas: loadDebitoReglas() });
+    return json(res, 200, loadDebitoStore());
   }
   if (p === "/api/debito-reglas" && req.method === "PUT") {
     const me = getSessionUser(req);
@@ -3125,8 +3137,8 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     if (!body || !Array.isArray(body.reglas)) return json(res, 400, { error: "Falta la lista de reglas." });
-    const guardadas = saveDebitoReglas(body.reglas);
-    return json(res, 200, { reglas: guardadas });
+    const guardado = saveDebitoStore(body.reglas, body.umbralPagaPct);
+    return json(res, 200, guardado);
   }
   if (p === "/api/informes/config" && req.method === "GET") {
     const me = getSessionUser(req);
