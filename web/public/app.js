@@ -1823,6 +1823,7 @@ function reportDebitAmount(row){
   if (!row.manualDebit || gross <= 0) return 0;
   if (row.debitType === 'pay40') return Math.max(0, gross - (gross * 0.4));
   if (row.debitType === 'pay60') return Math.max(0, gross - (gross * 0.6));
+  if (row.debitType === 'pay80') return Math.max(0, gross - (gross * 0.8));
   if (row.debitType === 'partial') return Math.max(0, Math.min(gross, Number(row.debitAmount || 0)));
   return gross;
 }
@@ -2077,10 +2078,12 @@ async function aplicarDebitosPami(){
   // de la fila para %s que no son 40/60 exactos).
   function aplicarTipo(r, tipo){
     if (tipo === 'umbral'){
+      r.debitMotivo = 'umbral';
       if (UMBRAL_PAGA_PCT === 40){ r.debitType = 'pay40'; r.debitAmount = 0; }
       else if (UMBRAL_PAGA_PCT === 60){ r.debitType = 'pay60'; r.debitAmount = 0; }
+      else if (UMBRAL_PAGA_PCT === 80){ r.debitType = 'pay80'; r.debitAmount = 0; }
       else { r.debitType = 'partial'; r.debitAmount = reportBaseGross(r) * (1 - UMBRAL_PAGA_PCT / 100); }
-    } else { r.debitType = tipo; r.debitAmount = 0; }
+    } else { r.debitType = tipo; r.debitAmount = 0; r.debitMotivo = ''; }
   }
   var rows = CLIENT_REPORT_ROWS || [];
   // La validación real REEMPLAZA la proyección automática: limpiamos primero los
@@ -2203,8 +2206,18 @@ function updateClientReportSummary(){
   if (absentCard) absentCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'ausentes');
   // La "Diferencia" cruza SIEMPRE contra el neto TOTAL (todas las filas), no el
   // filtrado — así cambiar filtros no altera el control contra el monto esperado.
-  var netoTotal = (CLIENT_REPORT_ROWS || []).reduce(function(s, row){ return s + reportNetAmount(row); }, 0);
+  var netoTotal = 0, umbralLoss = 0;
+  (CLIENT_REPORT_ROWS || []).forEach(function(row){
+    netoTotal += reportNetAmount(row);
+    if (row.debitMotivo === 'umbral') umbralLoss += reportDebitAmount(row);
+  });
   updateExpectedAmountStatus(netoTotal);
+  var umbralCard = document.getElementById('clientReportUmbralCard');
+  if (umbralCard){
+    umbralCard.style.display = umbralLoss > 0 ? '' : 'none';
+    var amt = document.getElementById('clientReportUmbralAmount');
+    if (amt) amt.textContent = moneyFmt(umbralLoss);
+  }
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
@@ -2304,7 +2317,7 @@ function renderClientReportRows(){
     var disabled = (readOnly || reportBaseGross(row) <= 0) ? ' disabled' : '';
     var checked = row.manualDebit ? ' checked' : '';
     var type = row.debitType || 'total';
-    if (type === 'partial') type = reportNetAmount(row) >= reportBaseGross(row) * 0.5 ? 'pay60' : 'pay40';
+    if (type === 'partial'){ var pn = reportNetAmount(row), pg = reportBaseGross(row); type = pn >= pg * 0.7 ? 'pay80' : pn >= pg * 0.5 ? 'pay60' : 'pay40'; }
     var badgeClass = row.billable ? 'ok' : (row.absent || reportMissingInforme(row) ? 'warn' : 'muted');
     var valueSource = row.valueSourceCode && row.valueSourceCode !== row.practiceCode ? '<br>Valor segun ' + esc(row.valueSourceCode) : '';
     var valueNote = row.valueEdited ? '<div class="nom-muted">Editado manual</div>' : (readOnly ? '' : '<div class="nom-muted">Doble click</div>');
@@ -2319,7 +2332,7 @@ function renderClientReportRows(){
       + '<td><div>' + esc(row.appointmentLabel || '-') + '</div><div class="nom-muted">Transm. ' + esc(row.transmittedLabel || '-') + '</div></td>'
       + '<td><span class="report-status ' + badgeClass + '">' + esc(reportDisplayStatus(row)) + '</span></td>'
       + '<td class="nom-money report-value-cell"' + valueDblClick + '><b>' + esc(moneyFmt(reportBaseGross(row))) + '</b>' + valueNote + '</td>'
-      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option></select></div>' + autoDebitNote + '</td>'
+      + '<td><div class="debit-controls"><label class="debit-check"><input type="checkbox" onchange="toggleReportDebit(' + idx + ', this.checked)"' + checked + disabled + '> Debito</label><select class="inp" onchange="setReportDebitType(' + idx + ', this.value)"' + disabled + '><option value="total"' + (type === 'total' ? ' selected' : '') + '>Total</option><option value="pay40"' + (type === 'pay40' ? ' selected' : '') + '>40%</option><option value="pay60"' + (type === 'pay60' ? ' selected' : '') + '>60%</option><option value="pay80"' + (type === 'pay80' ? ' selected' : '') + '>80%</option></select></div>' + autoDebitNote + '</td>'
       + '<td class="nom-money"><b>' + esc(moneyFmt(reportNetAmount(row))) + '</b></td>'
       + '</tr>';
   }).join('');
@@ -2526,7 +2539,7 @@ function setReportDebitType(index, value){
   if (!row) return;
   row.manualDebit = true;
   if (row.debitSource !== 'validacion') row.debitSource = 'manual';
-  row.debitType = value === 'pay40' || value === 'pay60' ? value : 'total';
+  row.debitType = (value === 'pay40' || value === 'pay60' || value === 'pay80') ? value : 'total';
   row.debitAmount = 0;
   renderClientReportRows();
   saveClientReportDraft();

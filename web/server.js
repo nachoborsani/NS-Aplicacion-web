@@ -1420,6 +1420,7 @@ function reportRowDebit(row) {
   if (!row || !row.manualDebit || gross <= 0) return 0;
   if (row.debitType === "pay40") return money(gross - (gross * 0.4));
   if (row.debitType === "pay60") return money(gross - (gross * 0.6));
+  if (row.debitType === "pay80") return money(gross - (gross * 0.8));
   if (row.debitType === "partial") return clampMoney(row.debitAmount, 0, gross);
   return gross;
 }
@@ -1439,7 +1440,7 @@ function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
     const valueGross = money(row.valueGross);
     const manualDebit = !!row.manualDebit;
-    const debitType = ["pay40", "pay60", "partial"].includes(row.debitType) ? row.debitType : "total";
+    const debitType = ["pay40", "pay60", "pay80", "partial"].includes(row.debitType) ? row.debitType : "total";
     const sanitized = {
       id: String(row.id || `${cleanIdentifier(row.order) || index + 1}-${index}`),
       order: cleanIdentifier(row.order),
@@ -1471,6 +1472,7 @@ function sanitizeReportRows(rows) {
       autoDebitReason: String(row.autoDebitReason || "").trim(),
       autoDebitRuleId: cleanIdentifier(row.autoDebitRuleId),
       debitSource: ["regla", "validacion", "manual"].includes(row.debitSource) ? row.debitSource : "",
+      debitMotivo: ["umbral", "excluyente", "incluyente"].includes(row.debitMotivo) ? row.debitMotivo : "",
       debitWarning: String(row.debitWarning || "").trim(),
       autoDebitPairCode: cleanIdentifier(row.autoDebitPairCode),
       autoDebitRulePage: cleanIdentifier(row.autoDebitRulePage),
@@ -1850,7 +1852,7 @@ function buildClientReportWorkbook(report) {
     Bruto: reportRowGross(row),
     Debito: reportRowDebit(row),
     Neto: reportRowNet(row),
-    "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : "Total") : "",
+    "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : row.debitType === "pay80" ? "Paga 80%" : "Total") : "",
     "Debito automatico": row.autoDebit ? "Si" : "",
     "Motivo debito automatico": row.autoDebitReason || "",
     "Codigo excluyente": row.autoDebitPairCode || "",
