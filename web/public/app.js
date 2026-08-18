@@ -1898,11 +1898,17 @@ function openPamiDebitModal(){
   document.getElementById('pamiDebitError').textContent = '';
   var resEl0 = document.getElementById('pamiDebitResult'); resEl0.textContent = ''; resEl0.className = 'nom-muted';
   var al = document.getElementById('pamiDebitUmbral'); if (al){ al.style.display = 'none'; al.innerHTML = ''; }
-  var applyBtn0 = document.getElementById('pamiDebitApply'); if (applyBtn0) applyBtn0.textContent = 'Aplicar débitos';
-  var cancelBtn0 = document.getElementById('pamiDebitCancel'); if (cancelBtn0) cancelBtn0.textContent = 'Cancelar';
+  resetPamiApplyBtn();
   showModal('pamiDebitModal', 'pamiScrim');
 }
 function closePamiDebitModal(){ hideModal('pamiDebitModal', 'pamiScrim'); }
+// Vuelve el botón "Aplicar débitos" a su estado inicial (al abrir el modal o al
+// editar la validación pegada, para poder re-aplicar si la corrigen).
+function resetPamiApplyBtn(){
+  var b = document.getElementById('pamiDebitApply');
+  if (b){ b.textContent = 'Aplicar débitos'; b.disabled = false; b.classList.remove('btn-done'); }
+  var c = document.getElementById('pamiDebitCancel'); if (c) c.textContent = 'Cancelar';
+}
 
 // ===== Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno) =====
 var DEBITO_REGLAS = [];
@@ -2135,7 +2141,7 @@ async function aplicarDebitosPami(){
   resEl.className = aplicados ? 'pami-ok' : 'msg err';
   // Botones: dejar claro que ya se aplicó.
   var applyBtn = document.getElementById('pamiDebitApply');
-  if (applyBtn && aplicados) applyBtn.textContent = '✓ Débitos aplicados';
+  if (applyBtn && aplicados){ applyBtn.textContent = '✓ Débitos aplicados'; applyBtn.disabled = true; applyBtn.classList.add('btn-done'); }
   var cancelBtn = document.getElementById('pamiDebitCancel');
   if (cancelBtn && aplicados) cancelBtn.textContent = 'Cerrar';
   // Alerta de umbrales: el % varía por módulo → hay que cotejar contra PAMI.
