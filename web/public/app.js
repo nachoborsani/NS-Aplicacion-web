@@ -2242,7 +2242,14 @@ function updateClientReportSummary(){
   if (unmatched) meta += ' - ' + unmatched + ' sin valor';
   document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
-  if (clearBtn) clearBtn.disabled = !totalRows;
+  if (clearBtn){
+    // El tacho "descartar" solo tiene sentido en borrador/edición (tira el trabajo
+    // sin guardar). En un reporte cerrado NO elimina —solo cierra la vista— así que
+    // se oculta: para borrar un reporte guardado está el tacho de la fila de arriba.
+    var editableNow = CLIENT_REPORT_MODE === 'draft' || CLIENT_REPORT_MODE === 'edit';
+    clearBtn.style.display = editableNow ? '' : 'none';
+    clearBtn.disabled = !totalRows;
+  }
   updateClientReportFormState();
   var sortIcon = document.getElementById('clientReportPracticeSortIcon');
   if (sortIcon) sortIcon.textContent = CLIENT_REPORT_SORT === 'practice-desc' ? 'Z-A' : 'A-Z';
