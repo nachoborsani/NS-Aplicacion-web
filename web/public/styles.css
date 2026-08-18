@@ -706,9 +706,9 @@
   .report-summary-grid b{font-size:17px}
   .report-summary-grid span{font-size:11.5px;color:var(--text-2);margin-top:2px}
   .report-summary-grid small{font-size:11px;color:var(--warning);font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
-  .debit-breakdown{margin-top:5px;display:flex;flex-direction:column;gap:1px}
-  .debit-breakdown span{font-size:10.5px;color:var(--text-2);display:flex;justify-content:space-between;gap:8px}
-  .debit-breakdown b{color:var(--text-2);font-weight:700;font-variant-numeric:tabular-nums}
+  .debit-breakdown{margin-top:5px;display:flex;flex-direction:column;gap:0}
+  .debit-breakdown span{font-size:9.5px;line-height:1.5;color:var(--text-2);display:flex;justify-content:space-between;gap:8px;font-weight:600}
+  .debit-breakdown b{font-size:9.5px;color:var(--text-2);font-weight:750;font-variant-numeric:tabular-nums}
   .report-summary-card.filterable{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
   .report-summary-card.filterable:hover,.report-summary-card.filterable.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(18,184,177,.16)}
   .report-summary-card.filterable.active{background:#effefd}
