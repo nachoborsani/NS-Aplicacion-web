@@ -1703,9 +1703,12 @@ function buildBandejaResumen(slug) {
     const estadoDe = (s) => s.transmitted ? "Transmitida" : (s.validated ? "Validada" : "Turno asignado");
     const ruleCodes = String(r.autoDebitRuleCodes || "").split("/").map((c) => cleanIdentifier(c)).filter(Boolean);
     const grupo = grupoMap.get(r.benefit + "|" + r.appointmentAt) || [];
+    // Incluimos el turno de la OME con la que cruza (la que se debita ya lo tiene
+    // en su columna). Hoy siempre es el mismo día, pero deja ver ambas fechas por
+    // si a futuro hay una regla de cruce que no sea mismo día.
     const cruce = grupo
       .filter((g) => g !== r && (ruleCodes.length ? ruleCodes.includes(g.practiceCode) : true))
-      .map((g) => g._practica + " · " + estadoDe(g))
+      .map((g) => g._practica + (g._turno ? " · " + g._turno : "") + " · " + estadoDe(g))
       .filter(Boolean);
     if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
       benef: r.benefit,
