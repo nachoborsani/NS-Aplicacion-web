@@ -2048,6 +2048,10 @@ function calcularAjusteUmbrales(oficial){
     var group = porMod[m];
     var umbrales = group.filter(function(r){ return r.debitMotivo === 'umbral' && reportBaseGross(r) > 0; });
     if (!umbrales.length) return;
+    // Si el módulo YA cuadra (diferencia de redondeo), no hay nada que ajustar:
+    // no lo listamos (así el botón desaparece cuando ya está todo aplicado).
+    var miNeto = group.reduce(function(s, r){ return s + reportNetAmount(r); }, 0);
+    if (Math.abs(miNeto - oficial[m]) < 50) return;
     var netOther = 0; group.forEach(function(r){ if (r.debitMotivo !== 'umbral') netOther += reportNetAmount(r); });
     var bUmbral = umbrales.reduce(function(s, r){ return s + reportBaseGross(r); }, 0);
     if (bUmbral <= 0) return;
