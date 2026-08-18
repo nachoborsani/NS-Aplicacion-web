@@ -1936,7 +1936,11 @@ function reportTieneUmbrales(){ return (CLIENT_REPORT_ROWS || []).some(function(
 function updateCotejoPending(){
   var btn = document.getElementById('clientReportCotejoBtn');
   if (!btn) return;
-  var pend = reportTieneUmbrales() && !CLIENT_REPORT_COTEJO_HECHO;
+  // "Cotejar por módulo" es solo para ajustar umbrales: se muestra únicamente si el
+  // reporte está afectado (tiene filas con umbral). Sin umbrales, no aparece.
+  var tiene = reportTieneUmbrales();
+  btn.style.display = tiene ? '' : 'none';
+  var pend = tiene && !CLIENT_REPORT_COTEJO_HECHO;
   btn.classList.toggle('cotejo-pendiente', pend);
   btn.innerHTML = pend ? 'Cotejar por módulo <small>⚠ pendiente</small>' : 'Cotejar por módulo';
 }
@@ -2679,13 +2683,17 @@ async function uploadClientReport(files){
   var wasClosed = CLIENT_REPORT_MODE === 'closed';
   var st = document.getElementById('clientReportStatus');
   st.textContent = 'Procesando bandeja...';
+  setReportUploading(true, 'Procesando “' + (files[0].name || 'bandeja') + '”… puede tardar unos segundos.');
   var period = document.getElementById('clientReportPeriod').value || '';
   var form = new FormData();
   form.append('file', files[0]);
-  var res = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/preview' + (period ? '?period=' + encodeURIComponent(period) : ''), { method:'POST', body:form });
-  var data = {};
-  try { data = await res.json(); } catch (e) {}
+  var res, data = {};
+  try {
+    res = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/preview' + (period ? '?period=' + encodeURIComponent(period) : ''), { method:'POST', body:form });
+    try { data = await res.json(); } catch (e) {}
+  } catch (e) { setReportUploading(false); st.textContent = 'No se pudo procesar la bandeja (error de red).'; return; }
   if (!res.ok){
+    setReportUploading(false);
     st.textContent = data.error || 'No se pudo procesar la bandeja.';
     return;
   }
@@ -2734,6 +2742,13 @@ async function uploadClientReport(files){
   st.textContent = data.filename + ' - ' + data.rowCount + ' practicas - nomenclador ' + data.nomencladorLabel;
   renderClientReportRows();
   saveClientReportDraft();
+  setReportUploading(false);
+}
+function setReportUploading(on, text){
+  var box = document.getElementById('clientReportUploading');
+  if (box) box.style.display = on ? '' : 'none';
+  var t = document.getElementById('clientReportUploadingText');
+  if (t && text) t.textContent = text;
 }
 function setDefaultUploadPeriod(){
   var el = document.getElementById('nomUploadPeriod');
