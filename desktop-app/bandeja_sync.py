@@ -32,10 +32,20 @@ def _current_period() -> str:
 
 
 def month_range(period: str) -> tuple[str, str, str]:
-    """'2026-07' -> ('01/07/2026', '31/07/2026', 'Julio 2026'). Fechas en formato PAMI."""
+    """'2026-07' -> ('01/07/2026', '31/07/2026', 'Julio 2026'). Fechas en formato PAMI.
+
+    Para el MES EN CURSO cortamos en AYER (días cerrados), no en fin de mes: así no
+    traemos turnos futuros ya agendados que todavía no pasaron. Los meses pasados
+    se bajan completos. (Idea a futuro: informar también la proyección del mes
+    completo — ver memoria ns-bandeja-sync-mes-en-curso.)
+    """
     year, month = int(period[:4]), int(period[5:7])
     last = calendar.monthrange(year, month)[1]
-    return f"01/{month:02d}/{year}", f"{last:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
+    hasta_dia = last
+    hoy = date.today()
+    if (year, month) == (hoy.year, hoy.month):
+        hasta_dia = max(1, hoy.day - 1)  # hasta ayer (clamp al día 1)
+    return f"01/{month:02d}/{year}", f"{hasta_dia:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
 
 
 def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
