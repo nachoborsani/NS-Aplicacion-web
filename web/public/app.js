@@ -1932,6 +1932,7 @@ async function openDebitoReglasModal(){
 function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasScrim'); }
 
 // ===== Cotejar neto por módulo contra los montos oficiales de PAMI =====
+var COTEJO_OFICIAL = null;   // último detalle PAMI parseado (para el ajuste automático)
 function openCotejoModal(){
   if (!(CLIENT_REPORT_ROWS || []).length){ alert('Abrí o armá un reporte primero.'); return; }
   document.getElementById('cotejoError').textContent = '';
@@ -2006,12 +2007,68 @@ function correrCotejo(){
       + '<td class="nom-money ' + (gap ? (f.dif > 0 ? 'pos' : 'neg') : '') + '"><b>' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + '</b></td></tr>';
   }).join('');
   var difTotal = totalMio - totalOf;
+  COTEJO_OFICIAL = parsed.porModulo;   // guardo el detalle PAMI para el ajuste automático
+  var ajustes = calcularAjusteUmbrales(parsed.porModulo);
+  var ajusteBox = '';
+  if (ajustes.length){
+    ajusteBox = '<div class="cotejo-ajuste"><button type="button" class="btn btn-navy" onclick="ajustarUmbralesPorCotejo()">⚡ Ajustar umbrales automáticamente</button>'
+      + '<span class="nom-muted">Pone cada módulo con umbral en el % que hace coincidir con PAMI: <b>' + ajustes.map(function(a){ return a.mod + ' → ' + a.pct + '%'; }).join(' · ') + '</b>.</span></div>';
+  }
   res.innerHTML = '<div class="cotejo-tablewrap"><table class="cotejo-table"><thead><tr><th>Módulo</th><th class="nom-money">Mi neto</th><th class="nom-money">PAMI</th><th class="nom-money">Diferencia</th></tr></thead>'
     + '<tbody>' + body + '</tbody>'
     + '<tfoot><tr><td><b>TOTAL</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalMio)) + '</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalOf)) + '</b></td><td class="nom-money ' + (Math.abs(difTotal) > 5 ? (difTotal > 0 ? 'pos' : 'neg') : '') + '"><b>' + (difTotal >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(difTotal))) + '</b></td></tr></tfoot></table></div>'
-    + '<p class="nom-muted cotejo-hint"><b>Tocá un módulo</b> para ver sus prácticas en la tabla y ajustar. Los módulos en rojo no coinciden. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más.</p>';
+    + ajusteBox
+    + '<p class="nom-muted cotejo-hint"><b>Tocá un módulo</b> para ver sus prácticas y ajustar a mano. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más. Lo que no sea umbral (ej. excluyentes) se ajusta desde la fila.</p>';
   CLIENT_REPORT_COTEJO_HECHO = true;   // ya cotejó → saca el "pendiente"
   updateCotejoPending();
+}
+// Calcula, por módulo con umbrales, el % que hace que mi neto coincida con PAMI.
+function calcularAjusteUmbrales(oficial){
+  var rows = CLIENT_REPORT_ROWS || [];
+  var porMod = {};
+  rows.forEach(function(r){ var m = cotejoModuloDeFila(r); if (m) (porMod[m] = porMod[m] || []).push(r); });
+  var ajustes = [];
+  Object.keys(porMod).forEach(function(m){
+    if (!(m in oficial)) return;
+    var group = porMod[m];
+    var umbrales = group.filter(function(r){ return r.debitMotivo === 'umbral' && reportBaseGross(r) > 0; });
+    if (!umbrales.length) return;
+    var netOther = 0; group.forEach(function(r){ if (r.debitMotivo !== 'umbral') netOther += reportNetAmount(r); });
+    var bUmbral = umbrales.reduce(function(s, r){ return s + reportBaseGross(r); }, 0);
+    if (bUmbral <= 0) return;
+    var pct = Math.max(0, Math.min(100, (oficial[m] - netOther) / bUmbral * 100));
+    // PAMI usa tiers 40/60/80/100 → si estamos cerca, snap; si no, dejamos el exacto.
+    var snapped = [40, 60, 80, 100].reduce(function(b, v){ return Math.abs(v - pct) < Math.abs(b - pct) ? v : b; }, 40);
+    var usar = Math.abs(snapped - pct) <= 3 ? snapped : Math.round(pct);
+    ajustes.push({ mod: m, pct: usar, n: umbrales.length });
+  });
+  return ajustes;
+}
+// Aplica el ajuste: umbrales al % por módulo + excluyentes/incluyentes/inactivos a total.
+function ajustarUmbralesPorCotejo(){
+  if (!COTEJO_OFICIAL) return;
+  var rows = CLIENT_REPORT_ROWS || [];
+  rows.forEach(function(r){
+    if (['excluyente','incluyente','inactivo'].indexOf(r.debitMotivo) >= 0 && r.debitSource === 'validacion' && r.debitType !== 'total'){ r.debitType = 'total'; r.debitAmount = 0; r.manualDebit = true; }
+  });
+  var ajustes = calcularAjusteUmbrales(COTEJO_OFICIAL);
+  var porMod = {}; rows.forEach(function(r){ var m = cotejoModuloDeFila(r); if (m) (porMod[m] = porMod[m] || []).push(r); });
+  ajustes.forEach(function(a){
+    (porMod[a.mod] || []).filter(function(r){ return r.debitMotivo === 'umbral' && reportBaseGross(r) > 0; }).forEach(function(r){
+      var p = a.pct;
+      if (p >= 100){ r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0; }
+      else { r.manualDebit = true; r.debitAmount = 0;
+        if (p === 40) r.debitType = 'pay40';
+        else if (p === 60) r.debitType = 'pay60';
+        else if (p === 80) r.debitType = 'pay80';
+        else { r.debitType = 'partial'; r.debitAmount = reportBaseGross(r) * (1 - p / 100); }
+      }
+    });
+  });
+  renderClientReportRows();
+  updateClientReportSummary();
+  saveClientReportDraft();
+  correrCotejo();   // re-cotejar para mostrar cómo cerró
 }
 function renderDebitoReglas(){
   var box = document.getElementById('debitoReglasList');
