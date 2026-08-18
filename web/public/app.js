@@ -2139,7 +2139,10 @@ function updateClientReportSummary(){
   if (grossCard) grossCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'facturable');
   if (netCard) netCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'neto');
   if (absentCard) absentCard.classList.toggle('active', CLIENT_REPORT_QUICK_FILTER === 'ausentes');
-  updateExpectedAmountStatus(net);
+  // La "Diferencia" cruza SIEMPRE contra el neto TOTAL (todas las filas), no el
+  // filtrado — así cambiar filtros no altera el control contra el monto esperado.
+  var netoTotal = (CLIENT_REPORT_ROWS || []).reduce(function(s, row){ return s + reportNetAmount(row); }, 0);
+  updateExpectedAmountStatus(netoTotal);
   var totalRows = (CLIENT_REPORT_ROWS || []).length;
   var meta = rows.length + ' de ' + totalRows + ' practicas - ' + rows.filter(function(row){ return row.billable; }).length + ' facturables';
   if (outside) meta += ' - ' + outside + ' fuera de corte';
