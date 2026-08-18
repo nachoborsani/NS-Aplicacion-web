@@ -449,6 +449,17 @@
   .dashboard-module-sort{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11.5px;color:var(--text-2)}
   .dashboard-module-sort button{border:1px solid var(--border);background:var(--surface);color:var(--text-2);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:650;cursor:pointer}
   .dashboard-module-sort button.active{background:var(--turq);border-color:var(--turq);color:#fff}
+  /* Cotejo por módulo vs PAMI */
+  .cotejo-tablewrap{margin-top:12px;overflow-x:auto}
+  .cotejo-table{width:100%;border-collapse:collapse;font-size:13px}
+  .cotejo-table th{text-align:left;font-size:11px;color:var(--text-2);font-weight:700;padding:6px 10px;border-bottom:1px solid var(--border)}
+  .cotejo-table th.nom-money,.cotejo-table td.nom-money{text-align:right;font-variant-numeric:tabular-nums}
+  .cotejo-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
+  .cotejo-table tr.cotejo-gap{background:var(--error-bg)}
+  .cotejo-table td.pos{color:var(--success)}
+  .cotejo-table td.neg{color:var(--error)}
+  .cotejo-table tfoot td{border-top:2px solid var(--border);border-bottom:0;padding-top:8px}
+  .cotejo-hint{font-size:11.5px;margin-top:8px}
   /* Estado de débitos por reporte (falta confirmar / confirmados) */
   .report-badges{margin-top:6px}
   .debit-status{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;border:1px solid transparent;cursor:pointer;line-height:1.2}

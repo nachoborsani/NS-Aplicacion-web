@@ -1919,6 +1919,68 @@ async function openDebitoReglasModal(){
   renderDebitoReglas();
 }
 function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasScrim'); }
+
+// ===== Cotejar neto por módulo contra los montos oficiales de PAMI =====
+function openCotejoModal(){
+  if (!(CLIENT_REPORT_ROWS || []).length){ alert('Abrí o armá un reporte primero.'); return; }
+  document.getElementById('cotejoError').textContent = '';
+  showModal('cotejoModal', 'cotejoScrim');
+}
+function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
+// Módulo de una fila, remapeando los códigos viejos a su módulo (por si la vista
+// todavía no tomó el remap del server).
+function cotejoModuloDeFila(r){
+  var c = String(r.practiceCode || '');
+  if (['570123','570124','570126','820113'].indexOf(c) >= 0) return '543';
+  if (c === '607137') return '552';
+  return (String(r.moduleCode || '').match(/^\d+/) || [''])[0];
+}
+// Parsea el detalle de PAMI por módulo: por línea saca el módulo (1-3 díg) y el
+// monto (el número más grande). Las líneas sin módulo (subtotal) son el total.
+function parseCotejoPami(text){
+  var porModulo = {}, total = 0;
+  (text || '').split(/\r?\n/).forEach(function(line){
+    var fields = line.split(/\t/).map(function(s){ return s.trim(); });
+    if (fields.length < 2) fields = line.trim().split(/\s{2,}/);
+    var amt = 0, modu = '';
+    fields.forEach(function(f){
+      var n = Number(String(f).replace(/\s/g,'').replace(',', '.'));
+      if (isFinite(n) && n > 1000 && n > amt) amt = n;
+      if (/^\d{1,3}$/.test(f)) modu = f;
+    });
+    if (amt <= 0) return;
+    if (modu) porModulo[modu] = (porModulo[modu] || 0) + amt;
+    else if (amt > total) total = amt;   // línea de subtotal
+  });
+  return { porModulo: porModulo, total: total };
+}
+function correrCotejo(){
+  var err = document.getElementById('cotejoError'); err.textContent = '';
+  var res = document.getElementById('cotejoResult'); res.innerHTML = '';
+  var parsed = parseCotejoPami(document.getElementById('cotejoText').value);
+  if (!Object.keys(parsed.porModulo).length){ err.textContent = 'No detecté módulos con monto. Pegá el detalle de PAMI (módulo + monto por línea).'; return; }
+  var mio = {};
+  (CLIENT_REPORT_ROWS || []).forEach(function(r){ var m = cotejoModuloDeFila(r); if (!m) return; mio[m] = (mio[m] || 0) + reportNetAmount(r); });
+  var keys = {}; Object.keys(parsed.porModulo).forEach(function(k){ keys[k] = 1; }); Object.keys(mio).forEach(function(k){ keys[k] = 1; });
+  var filas = Object.keys(keys).map(function(m){
+    var of = parsed.porModulo[m] || 0, mi = mio[m] || 0;
+    return { mod: m, oficial: of, mio: mi, dif: mi - of };
+  }).sort(function(a, b){ return Math.abs(b.dif) - Math.abs(a.dif); });
+  var totalMio = Object.values(mio).reduce(function(s, v){ return s + v; }, 0);
+  var totalOf = parsed.total || Object.values(parsed.porModulo).reduce(function(s, v){ return s + v; }, 0);
+  var body = filas.map(function(f){
+    var gap = Math.abs(f.dif) > 5;
+    return '<tr class="' + (gap ? 'cotejo-gap' : '') + '"><td><span class="nom-code">' + esc(f.mod) + '</span></td>'
+      + '<td class="nom-money">' + esc(moneyFmt(f.mio)) + '</td>'
+      + '<td class="nom-money">' + (f.oficial ? esc(moneyFmt(f.oficial)) : '<span class="nom-muted">—</span>') + '</td>'
+      + '<td class="nom-money ' + (gap ? (f.dif > 0 ? 'pos' : 'neg') : '') + '"><b>' + (f.dif >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(f.dif))) + '</b></td></tr>';
+  }).join('');
+  var difTotal = totalMio - totalOf;
+  res.innerHTML = '<div class="cotejo-tablewrap"><table class="cotejo-table"><thead><tr><th>Módulo</th><th class="nom-money">Mi neto</th><th class="nom-money">PAMI</th><th class="nom-money">Diferencia</th></tr></thead>'
+    + '<tbody>' + body + '</tbody>'
+    + '<tfoot><tr><td><b>TOTAL</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalMio)) + '</b></td><td class="nom-money"><b>' + esc(moneyFmt(totalOf)) + '</b></td><td class="nom-money ' + (Math.abs(difTotal) > 5 ? (difTotal > 0 ? 'pos' : 'neg') : '') + '"><b>' + (difTotal >= 0 ? '+' : '−') + esc(moneyFmt(Math.abs(difTotal))) + '</b></td></tr></tfoot></table></div>'
+    + '<p class="nom-muted cotejo-hint">Los módulos en rojo son los que no coinciden. Diferencia <b>positiva</b> = pagás de más (debitaste de menos); <b>negativa</b> = debitaste de más.</p>';
+}
 function renderDebitoReglas(){
   var box = document.getElementById('debitoReglasList');
   if (!DEBITO_REGLAS.length){ box.innerHTML = '<div class="nom-muted">No hay reglas cargadas.</div>'; return; }

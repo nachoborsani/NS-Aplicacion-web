@@ -362,6 +362,7 @@
                       <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
                       <button class="btn btn-ghost" id="clientReportEditBtn" onclick="unlockClientReport()" type="button" disabled>Editar</button>
                       <button class="btn btn-ghost" id="clientReportPamiBtn" onclick="openPamiDebitModal()" type="button" disabled>Débitos PAMI</button>
+                      <button class="btn btn-ghost" id="clientReportCotejoBtn" onclick="openCotejoModal()" type="button">Cotejar por módulo</button>
                       <button class="btn btn-ghost" id="clientReportDiscardBtn" onclick="discardClientReportDraft()" type="button" disabled>Descartar reporte</button>
                       <button class="icon-danger-btn mini" id="clientReportClearBtn" onclick="discardClientReportDraft()" type="button" title="Descartar reporte" aria-label="Descartar reporte" disabled>
                         <svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -792,6 +793,22 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closePamiDebitModal()">Cancelar</button>
         <button class="btn btn-primary" id="pamiDebitApply" onclick="aplicarDebitosPami()">Aplicar débitos</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: cotejar neto por módulo vs PAMI ===== -->
+    <div class="scrim" id="cotejoScrim" onclick="closeCotejoModal()"></div>
+    <div class="modal wide" id="cotejoModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Cotejar por módulo</h3><button class="x" onclick="closeCotejoModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-note">Pegá el detalle de PAMI por módulo (lo que paga cada uno — "PAGO POR PRESTACION"). El sistema cruza tu neto por módulo contra el oficial y te muestra dónde está la diferencia. Ideal para encontrar qué módulo quedó con el débito/umbral mal aplicado.</p>
+        <textarea class="inp" id="cotejoText" rows="6" placeholder="Pegá acá las filas de PAMI por módulo (módulo + monto por línea)..." style="height:auto;min-height:110px;resize:vertical;font-family:monospace;font-size:12px;white-space:pre;overflow:auto"></textarea>
+        <div class="msg err" id="cotejoError"></div>
+        <div id="cotejoResult"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeCotejoModal()">Cerrar</button>
+        <button class="btn btn-primary" onclick="correrCotejo()">Cotejar</button>
       </div>
     </div>
 
