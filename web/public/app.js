@@ -3213,3 +3213,26 @@ async function doLogout(){
     showLogin();
   }
 })();
+
+// ---- Aviso de versión nueva (la SPA no recarga el index.html al navegar por hash,
+// así que un deploy nuevo no se toma hasta recargar. Chequeamos y avisamos). ----
+var __appVerBase = (function(){
+  var s = document.querySelector('script[src*="app.js"]');
+  var m = s && s.src.match(/[?&]v=(\d+)/);
+  return m ? m[1] : '';
+})();
+async function checkAppVersion(){
+  if (!__appVerBase) return;
+  try {
+    var r = await fetch('/api/version', { cache: 'no-store' });
+    if (!r.ok) return;
+    var d = await r.json();
+    if (d && d.version && String(d.version) !== String(__appVerBase)){
+      var b = document.getElementById('appUpdateBanner');
+      if (b) b.style.display = 'flex';
+    }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) checkAppVersion(); });
+setTimeout(checkAppVersion, 3000);
+setInterval(checkAppVersion, 5 * 60 * 1000);

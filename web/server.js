@@ -2186,6 +2186,10 @@ const server = http.createServer(async (req, res) => {
 
   if (p === "/health") return json(res, 200, { ok: true, service: "ns-web" });
 
+  // Versión de los assets (para avisar "hay versión nueva, recargá" sin depender
+  // de que el usuario recargue el index.html — la SPA no lo hace al navegar por hash).
+  if (p === "/api/version") return json(res, 200, { version: String(ASSET_VER) });
+
   // ---- API ----
   if (p === "/api/me") {
     const u = getSessionUser(req);
