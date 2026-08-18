@@ -1229,6 +1229,14 @@ function mesCursoFechaCorta(iso){
     return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
   } catch (e){ return ''; }
 }
+// Fecha + hora local (día y horario de la última actualización de la app).
+function mesCursoFechaHora(iso){
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    return mesCursoFechaCorta(iso) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' hs';
+  } catch (e){ return ''; }
+}
 function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
@@ -1274,7 +1282,8 @@ function mesCursoCardMesEnCurso(r){
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + faltanClick + '"><span>Faltan informes' + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
     + '</div>'
-    + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + (r.uploadedAt ? ' · actualizada ' + esc(mesCursoFechaCorta(r.uploadedAt)) : '') + '</div>'
+    + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
+    + (r.uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización de la app</span><b>' + esc(mesCursoFechaHora(r.uploadedAt)) + '</b></div>' : '')
     + '</div>';
 }
 // Card derecha cuando NO hay reporte del mes anterior: cartel "falta reporte".
