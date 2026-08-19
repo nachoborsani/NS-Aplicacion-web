@@ -317,6 +317,11 @@ function modeloRequiereLado(key){
   var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; });
   return !!(m && m.requiereLado);
 }
+// Campo Sexo del modelo (desplegable), si lo tiene. Para el lote.
+function modeloSexoCampo(key){
+  return modeloCampos(key).find(function(c){ return c.key === 'sexo' && c.tipo === 'select'; }) || null;
+}
+function modeloRequiereSexo(key){ var c = modeloSexoCampo(key); return !!(c && c.requerido); }
 function presetById(id){ return (INFORMES_CFG.descripciones || []).find(function(d){ return d.id === id; }); }
 function presetLabel(d){ if (d.nombre) return d.nombre; var t = String(d.texto || ''); return t.length > 60 ? t.slice(0, 58) + '…' : t; }
 // Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
@@ -1033,7 +1038,7 @@ function loteDetectar(){
     var modelo = r.modeloForzado || loteModeloPorCodigo(r.codigo, centro);
     var presets = modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, modelo); }) : [];
     return { nombre: r.nombre, benef: r.benef, fecha: r.fecha, documento: '', codigo: r.codigo, practicaTxt: r.practica,
-      modelo: modelo, presetId: presets.length ? presets[0].id : '', lado: 'noesp', medicoId: modelo ? loteMedicoParaModelo(modelo, medDef) : '' };
+      modelo: modelo, presetId: presets.length ? presets[0].id : '', lado: 'noesp', sexo: '', medicoId: modelo ? loteMedicoParaModelo(modelo, medDef) : '' };
   });
   loteLlenarMedicos(); // ahora que hay lote, acota el "por defecto" a los médicos de esas prácticas
   loteRender();
@@ -1058,7 +1063,8 @@ function loteRender(){
   var ok = 0;
   body.innerHTML = LOTE_ROWS.map(function(row, i){
     var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === row.modelo; });
-    if (row.modelo) ok++;
+    var listo = row.modelo && (!modeloRequiereSexo(row.modelo) || row.sexo);
+    if (listo) ok++;
     var pracSel = '<select class="inp lote-inp" onchange="loteSetPractica(' + i + ',this.value)"><option value="">— sin plantilla —</option>'
       + modelosCentro.map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === row.modelo ? ' selected' : '') + '>' + esc(x.short) + '</option>'; }).join('') + '</select>';
     var presets = row.modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, row.modelo); }) : [];
@@ -1071,6 +1077,11 @@ function loteRender(){
       ? '<select class="inp lote-inp" onchange="loteSetLado(' + i + ',this.value)">'
         + LOTE_LADOS.map(function(l){ return '<option value="' + l.v + '"' + (l.v === row.lado ? ' selected' : '') + '>' + l.t + '</option>'; }).join('') + '</select>'
       : '<span class="lote-muted">—</span>';
+    var sexoCampo = row.modelo ? modeloSexoCampo(row.modelo) : null;
+    var sexoSel = sexoCampo
+      ? '<select class="inp lote-inp' + ((sexoCampo.requerido && !row.sexo) ? ' lote-req' : '') + '" onchange="loteSetSexo(' + i + ',this.value)"><option value="">Elegí…</option>'
+        + (sexoCampo.opciones || []).map(function(o){ return '<option value="' + esc(o) + '"' + (o === row.sexo ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>'
+      : '<span class="lote-muted">—</span>';
     var meds = row.modelo ? (INFORMES_CFG.medicos || []).filter(function(mm){ return scopeAplica(mm.modelos, row.modelo); }) : (INFORMES_CFG.medicos || []);
     var medSel = '<select class="inp lote-inp" onchange="loteSetMedico(' + i + ',this.value)">'
       + meds.map(function(mm){ return '<option value="' + esc(mm.id) + '"' + (mm.id === row.medicoId ? ' selected' : '') + '>' + esc(mm.nombre) + (mm.hasFirma ? '' : ' (s/f)') + '</option>'; }).join('')
@@ -1079,9 +1090,9 @@ function loteRender(){
     return '<tr' + (row.modelo ? '' : ' class="lote-row-off"') + '>'
       + '<td><div class="lote-nom">' + esc(row.nombre || '—') + '</div><div class="lote-muted">' + esc(row.benef || '') + ' · ' + esc(row.fecha || '—') + '</div></td>'
       + '<td>' + pracSel + '<div class="lote-muted">' + esc(row.codigo || '') + '</div></td>'
-      + '<td>' + presetSel + '</td><td>' + ladoSel + '</td><td>' + medSel + '</td>'
+      + '<td>' + presetSel + '</td><td>' + sexoSel + '</td><td>' + ladoSel + '</td><td>' + medSel + '</td>'
       + '<td style="text-align:right">' + dl + '</td></tr>';
-  }).join('') || '<tr><td colspan="6" class="lote-muted" style="padding:14px">No se detectaron pacientes.</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="lote-muted" style="padding:14px">No se detectaron pacientes.</td></tr>';
   document.getElementById('loteCount').textContent = LOTE_ROWS.length;
   document.getElementById('loteOkCount').textContent = ok;
   document.getElementById('loteResultCard').style.display = LOTE_ROWS.length ? '' : 'none';
@@ -1097,21 +1108,37 @@ function loteSetPractica(i, key){
 function loteSetPreset(i, id){ LOTE_ROWS[i].presetId = id; }
 function loteSetLado(i, v){ LOTE_ROWS[i].lado = v; }
 function loteSetMedico(i, id){ LOTE_ROWS[i].medicoId = id; }
+function loteSetSexo(i, v){ LOTE_ROWS[i].sexo = v; loteRender(); }
 function loteTextoDe(row){
   if (row.presetId === '__custom__') return row.texto || '';
   var p = presetById(row.presetId); if (!p) return '';
   if (row.lado && p.ladoTextos && p.ladoTextos[row.lado]) return p.ladoTextos[row.lado];
+  var sx = String(row.sexo || '').toLowerCase();
+  if (sx && p.textoPorSexo && p.textoPorSexo[sx]) return p.textoPorSexo[sx];
   return p.texto || '';
 }
 function loteItemPayload(row){
   if (!row.modelo) return null;
+  if (modeloRequiereSexo(row.modelo) && !row.sexo) return null;  // falta el sexo obligatorio
   var p = presetById(row.presetId);
+  var modelo = (INFORMES_CFG.modelos || []).find(function(m){ return m.key === row.modelo; }) || {};
+  // Base: defaults del modelo → valores del preset → overlay por sexo (diagnóstico).
+  var valores = {};
+  (modelo.campos || []).forEach(function(c){ if (c.default) valores[c.key] = c.default; });
+  if (p && p.valores) Object.keys(p.valores).forEach(function(k){ valores[k] = p.valores[k]; });
+  if (row.sexo){
+    valores.sexo = row.sexo;
+    var over = (p && p.valoresPorSexo && p.valoresPorSexo[String(row.sexo).toLowerCase()]) || {};
+    Object.keys(over).forEach(function(k){ valores[k] = over[k]; });
+  }
   return { modelo: row.modelo,
     paciente: { nombre: row.nombre, benef: row.benef, fecha: row.fecha, documento: row.documento || '' },
-    textoInforme: loteTextoDe(row), medicoId: row.medicoId || '', valores: (p && p.valores) ? p.valores : {} };
+    textoInforme: loteTextoDe(row), medicoId: row.medicoId || '', valores: valores };
 }
 async function loteDescargarFila(i){
-  var payload = loteItemPayload(LOTE_ROWS[i]); if (!payload) return;
+  var row = LOTE_ROWS[i];
+  if (row && row.modelo && modeloRequiereSexo(row.modelo) && !row.sexo){ alert('Elegí el sexo de ' + (row.nombre || 'este paciente') + ' antes de generar.'); return; }
+  var payload = loteItemPayload(row); if (!payload) return;
   var r = await fetch('/api/informes/generar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
   if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar.'); return; }
   var blob = await r.blob(); var cd = r.headers.get('content-disposition') || ''; var m = cd.match(/filename="([^"]+)"/);
@@ -1119,8 +1146,11 @@ async function loteDescargarFila(i){
 }
 async function loteGenerarZip(){
   var err = document.getElementById('loteError'); err.textContent = '';
+  // Filas con plantilla que no van a generar por falta del sexo obligatorio.
+  var faltanSexo = LOTE_ROWS.filter(function(r){ return r.modelo && modeloRequiereSexo(r.modelo) && !r.sexo; });
   var items = LOTE_ROWS.map(loteItemPayload).filter(Boolean);
-  if (!items.length){ err.textContent = 'No hay pacientes con plantilla para generar.'; return; }
+  if (!items.length){ err.textContent = faltanSexo.length ? 'Elegí el sexo de los pacientes marcados antes de generar.' : 'No hay pacientes con plantilla para generar.'; return; }
+  if (faltanSexo.length && !confirm(faltanSexo.length + ' paciente(s) sin sexo elegido no se van a incluir. ¿Generar el resto igual?')) return;
   var btn = document.getElementById('loteZipBtn'); btn.disabled = true; var t = btn.textContent; btn.textContent = 'Generando…';
   try {
     var r = await fetch('/api/informes/lote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: items }) });

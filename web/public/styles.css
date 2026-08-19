@@ -568,6 +568,7 @@
   .lote-muted{font-size:11px;color:var(--text-2)}
   .lote-inp{height:30px;padding:0 8px;border-radius:7px;font-size:12px;min-width:118px;max-width:200px}
   select.lote-inp{padding-right:26px;background-position:right 8px center}
+  .lote-inp.lote-req{border-color:var(--error);box-shadow:0 0 0 2px var(--error-bg)}
   .lote-row-off td{background:var(--surface-2);opacity:.7}
   .cfg-textoprev{font-size:11.5px;color:var(--text-2);padding:5px 2px 0;line-height:1.35}
   .inf-gen-layout{display:grid;grid-template-columns:minmax(0,560px) minmax(0,560px);gap:18px;align-items:start;justify-content:start}
