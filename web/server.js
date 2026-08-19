@@ -232,6 +232,26 @@ const CRED_SCHEFE = {
   cols: { nombre: 1, sexo: 2, benef: 3, dni: 5, tramite: 6, credencial: 8 },
 };
 const gcreds = require("./google_creds.js");
+const telegram = require("./telegram.js");
+// Config de Telegram: solo el chat_id (a quién le escribe el bot). El token vive
+// en la variable de entorno TELEGRAM_BOT_TOKEN. Nunca guardamos el token en disco.
+const telegramFile = path.join(dataDir, "telegram.json");
+function loadTelegramCfg() {
+  try { const j = JSON.parse(fs.readFileSync(telegramFile, "utf8")); return { chatId: j.chatId || "", nombre: j.nombre || "" }; }
+  catch { return { chatId: "", nombre: "" }; }
+}
+function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramFile, JSON.stringify(cfg, null, 2)); }
+// Manda un aviso al chat configurado. NUNCA lanza: un aviso que falla no puede
+// tumbar el proceso que lo reportaba.
+async function avisarTelegram(texto) {
+  try {
+    if (!telegram.hayToken()) return false;
+    const cfg = loadTelegramCfg();
+    if (!cfg.chatId) return false;
+    await telegram.enviar(cfg.chatId, texto);
+    return true;
+  } catch (e) { try { console.error("[telegram] no pude avisar:", (e && e.message) || e); } catch {} return false; }
+}
 // Lee las filas pendientes de la planilla de Scheffelaar (con datos y sin
 // credencial), opcionalmente desde una fila.
 async function leerPendientesScheffelaar(auth, desde) {
@@ -4007,6 +4027,40 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     CRED_RUN_STATE.stop = true;
     return json(res, 200, { ok: true, corriendo: CRED_RUN_STATE.corriendo });
+  }
+  // --- Telegram (avisos) ---
+  // Estado: si el token llegó al entorno, datos del bot y chat configurado.
+  if (p === "/api/admin/telegram/estado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const cfg = loadTelegramCfg();
+    let bot = null, errorBot = "";
+    if (telegram.hayToken()) { try { const m = await telegram.getMe(); bot = { usuario: m.username, nombre: m.first_name }; } catch (e) { errorBot = String((e && e.message) || e); } }
+    return json(res, 200, { tokenPresente: telegram.hayToken(), bot, errorBot, chatId: cfg.chatId, nombre: cfg.nombre });
+  }
+  // Detecta a quién le escribió el bot (para tomar el chat_id).
+  if (p === "/api/admin/telegram/detectar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    try { const chats = await telegram.chatsRecientes(); return json(res, 200, { ok: true, chats }); }
+    catch (e) { return json(res, 200, { ok: false, error: String((e && e.message) || e) }); }
+  }
+  // Guarda el chat_id destino.
+  if (p === "/api/admin/telegram/guardar-chat" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const chatId = String((b && b.chatId) || "").trim();
+    if (!chatId) return json(res, 400, { error: "falta chatId" });
+    saveTelegramCfg({ chatId, nombre: String((b && b.nombre) || "") });
+    return json(res, 200, { ok: true });
+  }
+  // Manda un mensaje de prueba al chat guardado.
+  if (p === "/api/admin/telegram/probar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const ok = await avisarTelegram("✅ NS Salud: aviso de prueba. El bot está conectado.");
+    return json(res, 200, { ok });
   }
 
   // Filas con DNI y sin benef (para el barrido de la app: buscar el benef).
