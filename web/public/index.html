@@ -672,6 +672,26 @@
             <div class="msg err" id="credError" style="display:none"></div>
             <div class="cred-result" id="credResult" style="display:none"></div>
           </div>
+
+          <div class="card cred-card" id="credLoteCard" style="margin-top:16px">
+            <div class="cred-head">
+              <h3>📄 Lote Scheffelaar (planilla)</h3>
+              <span class="nom-muted">Baja las credenciales pendientes de la planilla de Scheffelaar, las sube a Drive (CREDENCIALES SCHEFE) y marca la planilla. Elegí desde qué fila arrancar.</span>
+            </div>
+            <div class="cred-lote-controls">
+              <label>Desde fila<input class="inp" id="credLoteDesde" inputmode="numeric" value="4575" style="max-width:110px"></label>
+              <button class="btn btn-navy" type="button" id="credLoteCargarBtn" onclick="credLoteCargar()">Ver pendientes</button>
+              <button class="btn btn-primary" type="button" id="credLoteProcBtn" onclick="credLoteProcesar()" style="display:none">Procesar</button>
+              <button class="btn btn-ghost" type="button" id="credLoteStopBtn" onclick="credLoteStop()" style="display:none">Detener</button>
+            </div>
+            <div class="msg err" id="credLoteError" style="display:none"></div>
+            <div id="credLoteResumen" class="nom-muted" style="margin:10px 0"></div>
+            <div id="credLoteProgress" style="display:none;margin:8px 0">
+              <div class="cred-lote-bar"><div id="credLoteBarFill"></div></div>
+              <div id="credLoteBarTxt" class="nom-muted" style="margin-top:4px"></div>
+            </div>
+            <div class="table-scroll" style="max-height:360px"><table class="bandeja-table" id="credLoteTable" style="display:none"><thead><tr><th>Fila</th><th>Nombre</th><th>DNI</th><th>Trámite</th><th>Estado</th></tr></thead><tbody id="credLoteBody"></tbody></table></div>
+          </div>
         </section>
 
         <section id="view-soon" style="display:none">

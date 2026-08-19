@@ -123,6 +123,61 @@ async function descargarCredencial(){
     btn.disabled = false; btn.textContent = textoOrig;
   }
 }
+// ===== Lote Scheffelaar (planilla de Google) =====
+var CRED_LOTE_ROWS = [], CRED_LOTE_STOP = false, CRED_LOTE_RUNNING = false;
+async function credLoteCargar(){
+  var err = document.getElementById('credLoteError'); err.style.display = 'none'; err.textContent = '';
+  var desde = parseInt(document.getElementById('credLoteDesde').value, 10) || 2;
+  var btn = document.getElementById('credLoteCargarBtn'); btn.disabled = true; var t = btn.textContent; btn.textContent = 'Cargando…';
+  var res = await req('GET', '/api/credenciales/scheffelaar/pendientes');
+  btn.disabled = false; btn.textContent = t;
+  if (!res.ok){ err.style.display = 'block'; err.textContent = (res.data && res.data.error) || 'No se pudo leer la planilla.'; return; }
+  var all = res.data.pendientes || [];
+  CRED_LOTE_ROWS = all.filter(function(x){ return x.sheetRow >= desde; }).map(function(x){ return Object.assign({ estado: 'pendiente' }, x); });
+  document.getElementById('credLoteResumen').innerHTML = 'Planilla: <b>' + (res.data.hechas || 0) + '</b> ya hechas · <b>' + (res.data.faltanDatos || 0) + '</b> incompletas · <b>' + all.length + '</b> pendientes en total. Desde la fila ' + desde + ': <b>' + CRED_LOTE_ROWS.length + '</b> para procesar.';
+  credLoteRender();
+  document.getElementById('credLoteProcBtn').style.display = CRED_LOTE_ROWS.length ? '' : 'none';
+}
+function credLoteRender(){
+  var tb = document.getElementById('credLoteBody'), tbl = document.getElementById('credLoteTable');
+  if (!CRED_LOTE_ROWS.length){ tbl.style.display = 'none'; tb.innerHTML = ''; return; }
+  tbl.style.display = '';
+  tb.innerHTML = CRED_LOTE_ROWS.map(function(x){
+    var est = x.estado === 'ok' ? '<span style="color:#0f9d63;font-weight:600">✓ ' + esc(x.archivo || 'subida') + '</span>'
+      : x.estado === 'error' ? '<span style="color:var(--error)">✕ ' + esc(x.error || 'error') + '</span>'
+      : x.estado === 'procesando' ? '⏳…' : '<span class="nom-muted">pendiente</span>';
+    return '<tr><td>' + x.sheetRow + '</td><td>' + esc(x.nombre || '') + '</td><td>' + esc(x.dni || '') + '</td><td>' + esc(x.tramite || '') + '</td><td>' + est + '</td></tr>';
+  }).join('');
+}
+function credLoteStop(){ CRED_LOTE_STOP = true; }
+async function credLoteProcesar(){
+  if (CRED_LOTE_RUNNING) return;
+  CRED_LOTE_RUNNING = true; CRED_LOTE_STOP = false;
+  var proc = document.getElementById('credLoteProcBtn'), stop = document.getElementById('credLoteStopBtn'), cargar = document.getElementById('credLoteCargarBtn');
+  proc.style.display = 'none'; stop.style.display = ''; cargar.disabled = true;
+  document.getElementById('credLoteProgress').style.display = '';
+  var total = CRED_LOTE_ROWS.length, done = 0, okN = 0, errN = 0;
+  for (var i = 0; i < CRED_LOTE_ROWS.length; i++){
+    if (CRED_LOTE_STOP) break;
+    var row = CRED_LOTE_ROWS[i];
+    if (row.estado === 'ok'){ done++; continue; }
+    row.estado = 'procesando'; credLoteRender();
+    var res = await req('POST', '/api/credenciales/scheffelaar/procesar-fila',
+      { sheetRow: row.sheetRow, benef: row.benef, dni: row.dni, tramite: row.tramite, sexo: row.sexo, nombre: row.nombre });
+    if (res.ok && res.data && res.data.ok){ row.estado = 'ok'; row.archivo = res.data.archivo; okN++; }
+    else { row.estado = 'error'; row.error = (res.data && res.data.error) || 'falló'; errN++; }
+    done++;
+    var pct = Math.round(done / total * 100);
+    document.getElementById('credLoteBarFill').style.width = pct + '%';
+    document.getElementById('credLoteBarTxt').textContent = done + '/' + total + ' · ' + okN + ' ok · ' + errN + ' con error';
+    credLoteRender();
+    await new Promise(function(r){ setTimeout(r, 400); }); // no martillar PAMI
+  }
+  CRED_LOTE_RUNNING = false;
+  stop.style.display = 'none'; cargar.disabled = false;
+  proc.style.display = CRED_LOTE_STOP ? '' : 'none';  // si se detuvo, permitir reanudar
+  document.getElementById('credLoteBarTxt').textContent += CRED_LOTE_STOP ? ' — detenido' : ' — listo ✅';
+}
 // ---------- ruteo por URL (hash): que F5 recargue la misma sección ----------
 // Cada sección refleja su estado en la URL (#nomencladores, #clientes/<slug>).
 // Al recargar (F5) se restaura desde el hash, y el botón "atrás" vuelve a andar.
