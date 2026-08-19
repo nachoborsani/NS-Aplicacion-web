@@ -164,6 +164,24 @@ async function credConsultarPami(benef, dni, tramite, genero) {
   const buf = Buffer.from(await resp.arrayBuffer());
   return { ok: ct.includes("application/pdf") && buf.slice(0, 5).toString("latin1") === "%PDF-", status: resp.status, ct, buf };
 }
+// PAMI devuelve la credencial chica arriba de un A4 casi vacío. Recortamos la hoja
+// a la franja superior (donde vive el contenido) para que se vea grande en la
+// vista previa. Si algo falla, devolvemos el PDF original (nunca romper la descarga).
+async function credRecortarCredencial(buf) {
+  try {
+    const { PDFDocument } = require("pdf-lib");
+    const doc = await PDFDocument.load(buf);
+    const page = doc.getPages()[0];
+    if (!page) return buf;
+    const { width, height } = page.getSize();
+    const alto = 112; // franja superior donde está la credencial (~13% del A4)
+    const y = Math.max(0, height - alto);
+    page.setCropBox(0, y, width, height - y);
+    return Buffer.from(await doc.save());
+  } catch (e) {
+    return buf;
+  }
+}
 // Resultado del último sync de bandeja por cliente (para el indicador de salud
 // en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
 function loadBandejaEstado() {
@@ -3661,13 +3679,15 @@ const server = http.createServer(async (req, res) => {
         const r = await credConsultarPami(benef, dni, tramite, g);
         last = r;
         if (r.ok) {
+          const pdf = await credRecortarCredencial(r.buf);
           res.writeHead(200, {
             "content-type": "application/pdf",
             "content-disposition": `inline; filename="credencial_${dni}.pdf"`,
+            "content-length": pdf.length,
             "cache-control": "no-store",
             "x-genero": g,
           });
-          return res.end(r.buf);
+          return res.end(pdf);
         }
       } catch (e) {
         last = { error: String((e && e.message) || e) };
