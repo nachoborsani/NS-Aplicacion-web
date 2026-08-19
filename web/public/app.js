@@ -1279,8 +1279,13 @@ function mesCursoSaludHtml(estado, uploadedAt){
     return '<div class="mescurso-salud err">⚠ No se pudo actualizar' + esc(cuando) + esc(motivo) + '</div>';
   }
   if (estado && (estado.transmitErrores || 0) > 0){
-    return '<div class="mescurso-salud err">⚠ ' + esc(numberFmt(estado.transmitErrores)) + ' OME(s) no se pudieron transmitir hoy'
-      + (estado.transmitError ? ': ' + esc(estado.transmitError) : '') + '</div>';
+    var detalle = (estado.omitidosDetalle || []).filter(function(d){ return d && (d.nroOrden || d.motivo); });
+    var lista = detalle.length
+      ? '<div class="mescurso-salud-detalle">' + detalle.slice(0, 8).map(function(d){
+          return '<div>OME <b>' + esc(d.nroOrden || '-') + '</b>' + (d.motivo ? ' — ' + esc(d.motivo) : '') + '</div>';
+        }).join('') + (detalle.length > 8 ? '<div>… y ' + (detalle.length - 8) + ' más</div>' : '') + '</div>'
+      : (estado.transmitError ? ': ' + esc(estado.transmitError) : '');
+    return '<div class="mescurso-salud err">⚠ ' + esc(numberFmt(estado.transmitErrores)) + ' OME(s) no se pudieron transmitir hoy' + lista + '</div>';
   }
   if (uploadedAt){
     try {

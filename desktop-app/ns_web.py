@@ -201,15 +201,22 @@ class NSWebClient:
     def report_bandeja_estado(self, slug: str, ok: bool, count: int | None = None,
                               error: str = "", transmitidas: int | None = None,
                               transmit_errores: int | None = None,
-                              transmit_error: str = "") -> dict:
+                              transmit_error: str = "",
+                              omitidos_detalle: list | None = None) -> dict:
         """Reporta el resultado del último sync (para el indicador de salud).
 
-        Incluye la info de transmisión si se corrió (transmitidas / errores)."""
+        Incluye la info de transmisión si se corrió (transmitidas / errores) y el
+        detalle de las OMEs que no se pudieron transmitir con su leyenda/motivo."""
         body = {"ok": bool(ok), "count": int(count or 0), "error": str(error or "")[:300]}
         if transmitidas is not None or transmit_errores is not None or transmit_error:
             body["transmitidas"] = int(transmitidas or 0)
             body["transmitErrores"] = int(transmit_errores or 0)
             body["transmitError"] = str(transmit_error or "")[:300]
+        if omitidos_detalle:
+            body["omitidosDetalle"] = [
+                {"nroOrden": str(d.get("nroOrden", ""))[:20], "motivo": str(d.get("motivo", ""))[:200]}
+                for d in list(omitidos_detalle)[:100] if isinstance(d, dict)
+            ]
         return self._request(
             "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado", body=body,
         )

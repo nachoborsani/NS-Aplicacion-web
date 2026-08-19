@@ -99,6 +99,7 @@ BOT_SCRIPT = r"""
     procesados: 0,
     errores: 0,
     omitidos: [],
+    omitidosDetalle: [],
     lastError: '',
     timestamp: null,
     paginaObjetivo: 1,
@@ -145,6 +146,7 @@ BOT_SCRIPT = r"""
       if (!raw) return { ...ESTADO_INICIAL };
       const e = JSON.parse(raw);
       e.omitidos = Array.isArray(e.omitidos) ? e.omitidos : [];
+      e.omitidosDetalle = Array.isArray(e.omitidosDetalle) ? e.omitidosDetalle : [];
       e.paginaObjetivo = Number(e.paginaObjetivo || 1);
       e.paginaDetectada = Number(e.paginaDetectada || 1);
       e.filtros = {
@@ -177,6 +179,19 @@ BOT_SCRIPT = r"""
 
   function clearLastError() {
     setLastError('');
+  }
+
+  // Registra una OME que no se pudo transmitir junto con el motivo (la leyenda
+  // que tiró PAMI, ej. "afiliado inactivo"). El motivo sale del último error
+  // capturado por la alerta; si no hay, usa el fallback del punto de falla.
+  function registrarOmitido(estado, nro, motivoFallback) {
+    if (!estado.omitidos.includes(nro)) estado.omitidos.push(nro);
+    estado.omitidosDetalle = Array.isArray(estado.omitidosDetalle) ? estado.omitidosDetalle : [];
+    const motivo = (estado.lastError || motivoFallback || '').toString().trim();
+    const yaEsta = estado.omitidosDetalle.find((d) => d && d.nroOrden === nro);
+    if (yaEsta) yaEsta.motivo = motivo || yaEsta.motivo;
+    else estado.omitidosDetalle.push({ nroOrden: nro, motivo: motivo });
+    estado.errores++;
   }
 
   function estaPausado() {
@@ -694,9 +709,8 @@ BOT_SCRIPT = r"""
           WARN(`[${nro}] sigue en tabla. Intento ${estado.intentosPendiente}/${MAX_RETRIES}.`);
 
           if (estado.intentosPendiente >= MAX_RETRIES) {
-            ERR(`[${nro}] agotó retries. Omitiendo.`);
-            estado.omitidos.push(nro);
-            estado.errores++;
+            ERR(`[${nro}] agotó retries. Omitiendo. Motivo: ${estado.lastError || 'sin detalle'}`);
+            registrarOmitido(estado, nro, `No se pudo transmitir [${nro}] tras ${MAX_RETRIES} intentos`);
             estado.pendienteNroOrden = null;
             estado.intentosPendiente = 0;
           }
@@ -748,9 +762,8 @@ BOT_SCRIPT = r"""
     if (!modalOk) {
       estado.intentosPendiente = (estado.intentosPendiente || 0) + 1;
       if (estado.intentosPendiente >= MAX_RETRIES) {
-        estado.omitidos.push(fila.nroOrden);
-        estado.errores++;
         estado.lastError = estado.lastError || `No se pudo abrir el modal para [${fila.nroOrden}]`;
+        registrarOmitido(estado, fila.nroOrden, `No se pudo abrir el modal para [${fila.nroOrden}]`);
         estado.intentosPendiente = 0;
       }
       guardarEstado(estado);
@@ -762,9 +775,8 @@ BOT_SCRIPT = r"""
     if (!confirmOk) {
       estado.intentosPendiente = (estado.intentosPendiente || 0) + 1;
       if (estado.intentosPendiente >= MAX_RETRIES) {
-        estado.omitidos.push(fila.nroOrden);
-        estado.errores++;
         estado.lastError = estado.lastError || `No se pudo confirmar la transmisi?n para [${fila.nroOrden}]`;
+        registrarOmitido(estado, fila.nroOrden, `No se pudo confirmar la transmisi?n para [${fila.nroOrden}]`);
         estado.intentosPendiente = 0;
       }
       estado.pendienteNroOrden = null;
@@ -803,6 +815,7 @@ BOT_SCRIPT = r"""
       barridoActual: 1,
       transmitidosEnBarrido: 0,
       omitidos: previo.omitidos || [],
+      omitidosDetalle: previo.omitidosDetalle || [],
       filtros: filtrosActuales,
       paginaObjetivo: 1,
       paginaDetectada: 1
@@ -858,6 +871,7 @@ BOT_SCRIPT = r"""
       intentosPendiente: e.intentosPendiente ?? 0,
       ultimoExitoso: e.ultimoExitoso ?? '—',
       omitidos: e.omitidos.join(', ') || '—',
+      omitidosDetalle: Array.isArray(e.omitidosDetalle) ? e.omitidosDetalle : [],
       paginaObjetivo: e.paginaObjetivo ?? 1,
       paginaDetectada: e.paginaDetectada ?? 1,
       lastError: e.lastError || '',

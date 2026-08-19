@@ -93,12 +93,16 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
             completo = True
             break
         time.sleep(3)
+    detalle = estado.get("omitidosDetalle")
+    detalle = detalle if isinstance(detalle, list) else []
     return {
         "transmitidas": int(estado.get("procesados") or 0),
         "errores": int(estado.get("errores") or 0),
         "lastError": str(estado.get("lastError") or ""),
         "status": str(estado.get("status") or "TIMEOUT"),
         "completo": completo,  # False = cortó por timeout, quedaron pendientes
+        # OMEs que no se pudieron transmitir + la leyenda de PAMI (ej. inactivo).
+        "omitidosDetalle": detalle,
     }
 
 
@@ -237,6 +241,7 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
                 res.get("slug", ""), res.get("ok"), res.get("count"), res.get("error", ""),
                 transmitidas=t.get("transmitidas"), transmit_errores=t.get("errores"),
                 transmit_error=t.get("lastError"),
+                omitidos_detalle=t.get("omitidosDetalle"),
             )
         except Exception:  # noqa: BLE001 - un fallo del reporte no corta el sync
             pass

@@ -1681,6 +1681,19 @@ function buildBandejaResumen(slug) {
   const kBenef = findKey(/BENEFICIO/);
   const kTurno = findKey(/TURNO/);
   const kNombre = findKey(/APELLIDO/);
+  const kOme = findKey(/ORDEN/);
+  // Afiliados inactivos: OMEs que el bot no pudo transmitir porque PAMI las
+  // rechazó (afiliado dado de baja/inactivo al momento de la prestación). Esas
+  // NO se cobran → son débito del 100%. Las tomamos de la última corrida de
+  // transmisión (client_bandeja_estado) y las cruzamos por NRO. ORDEN.
+  const estadoSync = (loadBandejaEstado() || {})[slug] || {};
+  const esMotivoInactivo = (m) =>
+    /INACTIV|NO ?ACTIV|DE BAJA|\bBAJA\b|NO VIGENTE|SIN COBERTURA|DESAFILIAD|FALLEC|NO AFILIAD/.test(normalizeText(m || ""));
+  const inactivoByOme = new Map();
+  for (const d of (Array.isArray(estadoSync.omitidosDetalle) ? estadoSync.omitidosDetalle : [])) {
+    const ome = cleanIdentifier(d && d.nroOrden);
+    if (ome && esMotivoInactivo(d && d.motivo)) inactivoByOme.set(ome, String((d && d.motivo) || "").trim());
+  }
   let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
   let matched = 0, unmatched = 0, grossEstimado = 0;
   // Desglose por estado: transmitido (cobro real), falta informe (validado sin
@@ -1702,6 +1715,8 @@ function buildBandejaResumen(slug) {
     else practices++;
     const esValidada = String(row[kValid] || "").trim().toUpperCase() === "S";
     const esTransmitida = String(row[kTrasm] || "").trim().toUpperCase() === "S";
+    const ome = kOme ? cleanIdentifier(row[kOme]) : "";
+    const esInactivo = ome && inactivoByOme.has(ome);
     if (esTransmitida) transmitted++;
     if (esValidada) validated++;
     else {
@@ -1715,8 +1730,10 @@ function buildBandejaResumen(slug) {
     else unmatched++;
     if (esTransmitida) grossTransmitido += valueGross;
     else if (!esValidada) grossTurno += valueGross; // el caso validada+sin-transmitir va a missingInformeAmount
-    // Falta informe: validada pero NO transmitida (le debemos el informe).
-    if (esValidada && !esTransmitida) {
+    // Falta informe: validada pero NO transmitida (le debemos el informe). Un
+    // afiliado inactivo NO es falta de informe (el informe está): es débito, va
+    // aparte en posibles débitos.
+    if (esValidada && !esTransmitida && !esInactivo) {
       missingInforme++;
       missingInformeAmount += valueGross;
       if (missingInformeRows.length < 2000) missingInformeRows.push({
@@ -1749,6 +1766,8 @@ function buildBandejaResumen(slug) {
       _nombre: String(row[kNombre] || "").trim(),
       _practica: pracRaw,
       _turno: String(row[kTurno] || "").trim(),
+      _inactivo: !!esInactivo,
+      _inactivoMotivo: esInactivo ? (inactivoByOme.get(ome) || "") : "",
     });
   }
   // Posibles débitos: proyección de las reglas de cruce mismo-día (Panel Débitos).
@@ -1790,6 +1809,28 @@ function buildBandejaResumen(slug) {
       monto: money(d),
     });
   }
+  // Débitos por afiliado inactivo (100% de la práctica). No es un cruce mismo-día:
+  // PAMI rechazó la transmisión porque el afiliado estaba inactivo. Se suma acá y
+  // se evita doble conteo si además cayó en un cruce.
+  let inactivosCount = 0;
+  for (const r of synth) {
+    if (!r._inactivo || reportRowDebit(r) > 0) continue;
+    const monto = Number(r.valueGross || 0);
+    if (monto <= 0) continue;
+    posiblesDebitos += monto;
+    posiblesDebitosCount++;
+    inactivosCount++;
+    if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
+      benef: r.benefit,
+      nombre: r._nombre || "",
+      turno: r._turno || "",
+      practica: r._practica || "",
+      estado: "Afiliado inactivo",
+      cruce: r._inactivoMotivo || "Afiliado inactivo al momento de la prestación",
+      motivo: "Afiliado inactivo",
+      monto: money(monto),
+    });
+  }
   return {
     period: bandeja.month || "",
     label: bandeja.monthLabel || periodLabel(bandeja.month) || "",
@@ -1802,7 +1843,7 @@ function buildBandejaResumen(slug) {
     missingInforme, missingInformeAmount: money(missingInformeAmount),
     missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
-    posiblesDebitosRows,
+    posiblesDebitosRows, inactivosCount,
     nomencladorPeriod: nom ? (nom.period || "") : "",
     nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
     uploadedAt: bandeja.uploadedAt || "",
@@ -2885,11 +2926,19 @@ const server = http.createServer(async (req, res) => {
       estado.transmitErrores = Number(body.transmitErrores) || 0;
       estado.transmitError = String(body.transmitError || "").slice(0, 300);
       estado.transmitAt = estado.at;
+      // Detalle de las OMEs que no se pudieron transmitir + su leyenda de PAMI.
+      estado.omitidosDetalle = Array.isArray(body.omitidosDetalle)
+        ? body.omitidosDetalle.slice(0, 100).map((d) => ({
+            nroOrden: String((d && d.nroOrden) || "").slice(0, 20),
+            motivo: String((d && d.motivo) || "").slice(0, 200),
+          }))
+        : [];
     } else if (prev.transmitAt) {
       estado.transmitidas = prev.transmitidas || 0;
       estado.transmitErrores = prev.transmitErrores || 0;
       estado.transmitError = prev.transmitError || "";
       estado.transmitAt = prev.transmitAt;
+      estado.omitidosDetalle = Array.isArray(prev.omitidosDetalle) ? prev.omitidosDetalle : [];
     }
     store[slug] = estado;
     saveBandejaEstado(store);

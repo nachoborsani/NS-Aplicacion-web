@@ -761,6 +761,8 @@
   .mescurso-salud{margin:0 0 10px;padding:8px 11px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.4}
   .mescurso-salud.err{background:var(--error-bg);border:1px solid var(--error);color:var(--error)}
   .mescurso-salud.warn{background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning)}
+  .mescurso-salud-detalle{margin-top:6px;font-size:11px;font-weight:500;line-height:1.5;opacity:.92}
+  .mescurso-salud-detalle b{font-weight:700}
   .mescurso-empty{padding:16px 4px 6px;text-align:center}
   .mescurso-empty b{display:block;font-size:14px;color:var(--text);margin-bottom:4px}
   .mescurso-empty span{font-size:12px;color:var(--text-2);line-height:1.5}
