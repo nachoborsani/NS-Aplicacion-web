@@ -760,7 +760,7 @@
      la derecha: tope de ancho en las celdas del medio (sirve para TODOS los
      clientes, no importa cuán larga sea la descripción). BENEF y el monto (1ra y
      última) quedan en una línea. */
-  .mescurso-panel td{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-word;overflow-wrap:anywhere;max-width:240px}
+  .mescurso-panel td{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;white-space:normal;word-break:break-word;overflow-wrap:anywhere;max-width:240px}
   .mescurso-panel td:first-child,.mescurso-panel td:last-child{white-space:nowrap;max-width:none}
   .mescurso-salud{margin:0 0 10px;padding:8px 11px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.4}
   .mescurso-salud.err{background:var(--error-bg);border:1px solid var(--error);color:var(--error)}
