@@ -189,12 +189,23 @@ async function credDescargar(benef, dni, tramite, generoExplicito) {
   const bN = credNormBenef(benef), dN = credNormDni(dni), tN = credNormTramite(tramite);
   const exp = credGeneroForm(generoExplicito);
   const cands = [...new Set([exp, "m", "f", "o"].filter(Boolean))];
-  let last = null;
+  let last = null, hubo200 = false, huboError = false;
   for (const g of cands) {
-    try { const r = await credConsultarPami(bN, dN, tN, g); last = r; if (r.ok) return { ok: true, buf: r.buf, genero: g }; }
-    catch (e) { last = { error: String((e && e.message) || e) }; }
+    try {
+      const r = await credConsultarPami(bN, dN, tN, g);
+      last = r;
+      if (r.ok) return { ok: true, buf: r.buf, genero: g };
+      if (r.status === 200) hubo200 = true; else huboError = true;
+    } catch (e) { huboError = true; last = { error: String((e && e.message) || e) }; }
   }
-  return { ok: false, error: (last && (last.error || ("PAMI HTTP " + last.status))) || "PAMI no devolvió la credencial." };
+  // Definitivo = PAMI respondió 200 en todos los géneros pero nunca dio PDF → no
+  // hay credencial provisoria con esos datos (o los datos están mal). Eso se marca
+  // en la planilla para no reintentarlo. Un error de red/PAMI caído NO es definitivo.
+  const definitivo = hubo200 && !huboError;
+  const error = definitivo
+    ? "Sin credencial en PAMI (datos incorrectos o no tiene provisoria)"
+    : ((last && last.error) || ("PAMI respondió " + (last && last.status) + " (reintentable)"));
+  return { ok: false, error, definitivo };
 }
 function credNombreArchivo(nombre, dni) {
   const clean = String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -3848,12 +3859,21 @@ const server = http.createServer(async (req, res) => {
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
     const sheetRow = Number(body.sheetRow) || 0;
     const C = CRED_SCHEFE;
+    const auth = gcreds.makeAuth(cfg);
+    const marcar = async (texto) => {
+      if (!sheetRow) return;
+      try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, texto); } catch {}
+    };
     let dl;
     try { dl = await credDescargar(body.benef, body.dni, body.tramite, body.sexo); }
-    catch (e) { return json(res, 200, { ok: false, sheetRow, error: e.message }); }
-    if (!dl.ok) return json(res, 200, { ok: false, sheetRow, error: dl.error });
+    catch (e) { await marcar("DATOS INVÁLIDOS"); return json(res, 200, { ok: false, sheetRow, error: e.message, definitivo: true }); }
+    if (!dl.ok) {
+      // Solo los definitivos (PAMI sin credencial) se marcan en la planilla, para
+      // no reintentarlos. Los transitorios quedan pendientes para el próximo intento.
+      if (dl.definitivo) await marcar("SIN CREDENCIAL");
+      return json(res, 200, { ok: false, sheetRow, error: dl.error, definitivo: !!dl.definitivo });
+    }
     try {
-      const auth = gcreds.makeAuth(cfg);
       const fname = credNombreArchivo(body.nombre, credNormDni(body.dni));
       const up = await gcreds.uploadPdf(auth, C.folderId, fname, dl.buf);
       if (sheetRow) {

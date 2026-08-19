@@ -144,7 +144,7 @@ function credLoteRender(){
   tbl.style.display = '';
   tb.innerHTML = CRED_LOTE_ROWS.map(function(x){
     var est = x.estado === 'ok' ? '<span style="color:#0f9d63;font-weight:600">✓ ' + esc(x.archivo || 'subida') + '</span>'
-      : x.estado === 'error' ? '<span style="color:var(--error)">✕ ' + esc(x.error || 'error') + '</span>'
+      : x.estado === 'error' ? '<span style="color:' + (x.definitivo ? '#b7791f' : 'var(--error)') + '">' + (x.definitivo ? '⚠' : '✕') + ' ' + esc(x.error || 'error') + '</span>'
       : x.estado === 'procesando' ? '⏳…' : '<span class="nom-muted">pendiente</span>';
     return '<tr><td>' + x.sheetRow + '</td><td>' + esc(x.nombre || '') + '</td><td>' + esc(x.dni || '') + '</td><td>' + esc(x.tramite || '') + '</td><td>' + est + '</td></tr>';
   }).join('');
@@ -156,7 +156,7 @@ async function credLoteProcesar(){
   var proc = document.getElementById('credLoteProcBtn'), stop = document.getElementById('credLoteStopBtn'), cargar = document.getElementById('credLoteCargarBtn');
   proc.style.display = 'none'; stop.style.display = ''; cargar.disabled = true;
   document.getElementById('credLoteProgress').style.display = '';
-  var total = CRED_LOTE_ROWS.length, done = 0, okN = 0, errN = 0;
+  var total = CRED_LOTE_ROWS.length, done = 0, okN = 0, sinCredN = 0, errN = 0;
   for (var i = 0; i < CRED_LOTE_ROWS.length; i++){
     if (CRED_LOTE_STOP) break;
     var row = CRED_LOTE_ROWS[i];
@@ -165,11 +165,11 @@ async function credLoteProcesar(){
     var res = await req('POST', '/api/credenciales/scheffelaar/procesar-fila',
       { sheetRow: row.sheetRow, benef: row.benef, dni: row.dni, tramite: row.tramite, sexo: row.sexo, nombre: row.nombre });
     if (res.ok && res.data && res.data.ok){ row.estado = 'ok'; row.archivo = res.data.archivo; okN++; }
-    else { row.estado = 'error'; row.error = (res.data && res.data.error) || 'falló'; errN++; }
+    else { row.estado = 'error'; row.error = (res.data && res.data.error) || 'falló'; row.definitivo = !!(res.data && res.data.definitivo); if (row.definitivo) sinCredN++; else errN++; }
     done++;
     var pct = Math.round(done / total * 100);
     document.getElementById('credLoteBarFill').style.width = pct + '%';
-    document.getElementById('credLoteBarTxt').textContent = done + '/' + total + ' · ' + okN + ' ok · ' + errN + ' con error';
+    document.getElementById('credLoteBarTxt').textContent = done + '/' + total + ' · ' + okN + ' ok · ' + sinCredN + ' sin credencial · ' + errN + ' error';
     credLoteRender();
     await new Promise(function(r){ setTimeout(r, 400); }); // no martillar PAMI
   }
