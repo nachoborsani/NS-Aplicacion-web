@@ -317,7 +317,10 @@ function ahoraAR() {
   return { fecha: `${parts.year}-${parts.month}-${parts.day}`, hhmm: `${parts.hour}:${parts.minute}` };
 }
 const CRED_RUN_STATE = { corriendo: false, stop: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
-async function correrLoteCredenciales(origen) {
+// origen: etiqueta para el log. soloFilas: si viene un array de sheetRow, baja
+// SOLO esas filas (modo quirúrgico, para lo recién completado por el barrido). Sin
+// eso, recorre todo el backlog pendiente desde desdeFila (puesta al día).
+async function correrLoteCredenciales(origen, soloFilas) {
   if (CRED_RUN_STATE.corriendo) return;
   const cfg = loadGoogleCfg();
   if (!cfg) { const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(s); return; }
@@ -325,7 +328,9 @@ async function correrLoteCredenciales(origen) {
   try {
     const auth = gcreds.makeAuth(cfg);
     const sch = loadCredSchedule();
-    const { pendientes } = await leerPendientesScheffelaar(auth, sch.desdeFila || 2);
+    const filtro = Array.isArray(soloFilas) && soloFilas.length ? new Set(soloFilas.map(Number)) : null;
+    let { pendientes } = await leerPendientesScheffelaar(auth, filtro ? 0 : (sch.desdeFila || 2));
+    if (filtro) pendientes = pendientes.filter((p) => filtro.has(Number(p.sheetRow)));
     CRED_RUN_STATE.total = pendientes.length;
     for (const row of pendientes) {
       if (CRED_RUN_STATE.stop) break;   // parada manual
@@ -4020,6 +4025,18 @@ const server = http.createServer(async (req, res) => {
     if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
     correrLoteCredenciales("manual");
     return json(res, 200, { ok: true });
+  }
+  // Baja credenciales SOLO de filas puntuales (las que el barrido acaba de
+  // completar). Modo quirúrgico: no toca el resto de la planilla.
+  if (p === "/api/credenciales/scheffelaar/correr-filas" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const rows = Array.isArray(b && b.rows) ? b.rows.map(Number).filter((n) => n > 0) : [];
+    if (!rows.length) return json(res, 400, { error: "sin filas" });
+    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+    correrLoteCredenciales("barrido", rows);
+    return json(res, 200, { ok: true, filas: rows.length });
   }
   // Detener la corrida de credenciales en curso.
   if (p === "/api/credenciales/scheffelaar/detener" && req.method === "POST") {

@@ -30,7 +30,7 @@ def log(m: str) -> None:
 
 
 async def _procesar(web, user: str, clave: str, faltan: list[dict], progress=None) -> dict:
-    resumen = {"faltan": len(faltan), "completados": 0, "sin_benef": 0, "errores": 0}
+    resumen = {"faltan": len(faltan), "completados": 0, "sin_benef": 0, "errores": 0, "filas_ok": []}
     total = len(faltan)
     # headless=True: sin ventana. El auto-login pasa el reCAPTCHA como navegador real.
     async with PamiOmeGenerator(user=user, password=clave, headless=True) as gen:
@@ -53,6 +53,8 @@ async def _procesar(web, user: str, clave: str, faltan: list[dict], progress=Non
                     try:
                         web.set_benef_scheffelaar(row, benef)
                         resumen["completados"] += 1
+                        if row:
+                            resumen["filas_ok"].append(int(row))
                         log(f"    benef {benef} → escrito en la planilla")
                     except Exception as e:  # noqa: BLE001
                         resumen["errores"] += 1
@@ -101,11 +103,13 @@ def run(progress=None) -> dict:
         log(f"No pude reportar el estado del barrido: {e!r}")
 
     # Cierra el círculo: si completamos benef nuevos, disparamos la descarga de
-    # credenciales en la web (que ahora ve esas filas listas).
-    if resumen["completados"] > 0:
+    # credenciales en la web SOLO de esas filas (modo quirúrgico: no toca el resto
+    # de la planilla ni el backlog histórico).
+    filas_ok = resumen.get("filas_ok") or []
+    if filas_ok:
         try:
-            web.correr_credenciales_scheffelaar()
-            log(f"→ Disparada la descarga de credenciales en la web ({resumen['completados']} filas nuevas).")
+            web.correr_credenciales_scheffelaar(rows=filas_ok)
+            log(f"→ Disparada la descarga de credenciales en la web (solo {len(filas_ok)} filas nuevas).")
         except Exception as e:  # noqa: BLE001
             log(f"→ No pude disparar la descarga de credenciales: {e!r}")
 

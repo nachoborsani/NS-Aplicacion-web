@@ -193,8 +193,15 @@ class NSWebClient:
         return self._request("POST", "/api/credenciales/scheffelaar/set-benef",
                              body={"sheetRow": int(sheet_row), "benef": str(benef)})
 
-    def correr_credenciales_scheffelaar(self) -> dict:
-        """Dispara la corrida de credenciales de Scheffelaar en la web (server-side)."""
+    def correr_credenciales_scheffelaar(self, rows: list[int] | None = None) -> dict:
+        """Dispara la descarga de credenciales de Scheffelaar en la web (server-side).
+
+        Si se pasan `rows` (las filas que el barrido acaba de completar), baja SOLO
+        esas (modo quirúrgico). Sin `rows`, corre todo el backlog pendiente.
+        """
+        if rows:
+            return self._request("POST", "/api/credenciales/scheffelaar/correr-filas",
+                                 body={"rows": [int(r) for r in rows]})
         return self._request("POST", "/api/credenciales/scheffelaar/correr-ahora", body={})
 
     def reportar_benef_estado(self, completados: int, sin_benef: int, errores: int,
