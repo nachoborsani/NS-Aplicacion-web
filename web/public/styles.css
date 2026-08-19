@@ -116,8 +116,7 @@
   .client-new-btn{display:none;align-items:center;justify-content:center;margin:6px 0 2px 38px;width:calc(100% - 38px);height:34px;border:1px dashed rgba(24,183,178,.55);border-radius:9px;background:rgba(24,183,178,.08);color:#8df0ed;font-weight:800;font-size:12px;cursor:pointer}
   .client-new-btn.is-admin{display:flex}
   .client-new-btn:hover{background:rgba(24,183,178,.15);border-color:#18B7B2;color:#fff}
-  .client-nav-group{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#6b8199;padding:8px 9px 2px}
-  .client-nav-group:first-child{padding-top:2px}
+  .nav-section{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5c7189;padding:10px 12px 2px}
   .client-nav-item{border:0;background:transparent;color:#9db2c8;border-radius:8px;padding:6px 9px;text-align:left;font-size:12.5px;font-weight:600}
   .client-nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
   .client-nav-item.active{background:rgba(24,183,178,.14);color:#dff8f7}
@@ -155,6 +154,7 @@
   body.sidebar-collapsed .nav-parent span,
   body.sidebar-collapsed .nav-caret,
   body.sidebar-collapsed .nav-sub,
+  body.sidebar-collapsed .nav-section,
   body.sidebar-collapsed .client-new-btn,
   body.sidebar-collapsed .nav a .chip,
   body.sidebar-collapsed .side-config a .chip,

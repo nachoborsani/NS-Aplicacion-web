@@ -90,15 +90,24 @@
         <a class="active" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
         <a onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V4a1 1 0 011-1zM7.5 14H10l1.5-3 2 5 1.5-2h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
         <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2zM9 7h7M9 11h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
-        <div class="nav-group" id="clientsNavGroup">
-          <button class="nav-parent" id="clientsNavToggle" type="button" onclick="toggleClientsNav(this)">
+        <div class="nav-section">clientes</div>
+        <div class="nav-group" id="navGroupConsultorios">
+          <button class="nav-parent" type="button" onclick="toggleClientGroup('consultorios', this)">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2zM9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M2 13h20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>Clientes</span>
+            <span>Consultorios</span>
             <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <div class="nav-sub" id="clientNavList"></div>
-          <button class="client-new-btn" id="clientNewBtn" type="button" onclick="openClientCreateModal()">+ Nuevo cliente</button>
+          <div class="nav-sub" id="clientNavListConsultorios"></div>
         </div>
+        <div class="nav-group" id="navGroupMedCab" style="display:none">
+          <button class="nav-parent" type="button" onclick="toggleClientGroup('medcab', this)">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v6m0 0v6m0-6h6m-6 0H6M6 21h12a2 2 0 002-2V7a2 2 0 00-2-2h-2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Médicos de cabecera</span>
+            <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="nav-sub" id="clientNavListMedCab"></div>
+        </div>
+        <button class="client-new-btn" id="clientNewBtn" type="button" onclick="openClientCreateModal()">+ Nuevo cliente</button>
       </nav>
       <div class="side-foot">
         <div class="side-user">

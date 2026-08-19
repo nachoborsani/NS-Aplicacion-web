@@ -31,15 +31,13 @@ function toggleSidebar(){
 }
 // Click en el padre "Clientes": si ya estás en Clientes con el submenú abierto,
 // lo cierra (colapsa la lista); si no, entra a Clientes y lo abre.
-function toggleClientsNav(el){
-  var group = document.getElementById('clientsNavGroup');
+function toggleClientGroup(tipo, el){
+  var group = document.getElementById(tipo === 'medcab' ? 'navGroupMedCab' : 'navGroupConsultorios');
   var enClientes = document.getElementById('view-clientes').style.display !== 'none';
   var colapsado = document.body.classList.contains('sidebar-collapsed');
-  if (enClientes && !colapsado && group && group.classList.contains('open')){
-    group.classList.remove('open');
-    return;
-  }
-  go('clientes', el);
+  if (!enClientes || colapsado){ go('clientes', el); return; }  // entra a Clientes (abre ambos)
+  if (group) group.classList.toggle('open');                    // ya adentro: colapsa/expande este grupo
+  if (el) el.classList.add('active');
 }
 // La lista de clientes vive en la barra: si está colapsada no se ve. Al entrar
 // a Clientes la expandimos para poder elegir un cliente.
@@ -70,11 +68,10 @@ function go(v, el){
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
-  var clientsGroup = document.getElementById('clientsNavGroup');
-  if (clientsGroup) {
-    clientsGroup.classList.toggle('open', v === 'clientes');
-    clientsGroup.classList.toggle('active', v === 'clientes');
-  }
+  ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
+    var g = document.getElementById(id);
+    if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
+  });
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
   if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
@@ -1048,23 +1045,22 @@ async function loadClients(options){
   renderActiveClient();
 }
 function renderClientList(){
-  var list = document.getElementById('clientNavList');
-  if (!list) return;
+  var cons = document.getElementById('clientNavListConsultorios');
+  var med = document.getElementById('clientNavListMedCab');
+  var medGroup = document.getElementById('navGroupMedCab');
+  if (!cons) return;
   var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
   };
   var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera'; });
   var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera'; });
-  if (medCab.length){
-    list.innerHTML = '<div class="client-nav-group">Consultorios</div>' + consultorios.map(itemHtml).join('')
-      + '<div class="client-nav-group">Médicos de cabecera</div>' + medCab.map(itemHtml).join('');
-  } else {
-    list.innerHTML = consultorios.map(itemHtml).join(''); // sin MC: lista plana, sin headers
-  }
-  list.querySelectorAll('[data-client-slug]').forEach(function(button){
+  cons.innerHTML = consultorios.map(itemHtml).join('');
+  if (med) med.innerHTML = medCab.map(itemHtml).join('');
+  if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
+  document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
-      go('clientes', document.getElementById('clientsNavToggle'));
+      go('clientes');
       selectClient(button.getAttribute('data-client-slug'));
     });
   });
@@ -1579,7 +1575,7 @@ async function saveClientCreate(){
   if (!res.ok){ if (err) err.textContent = res.data.error || 'No se pudo crear el cliente.'; return; }
   CLIENTS = res.data.clients || CLIENTS;
   closeClientCreateModal();
-  go('clientes', document.getElementById('clientsNavToggle'));
+  go('clientes');
   selectClient((res.data.client || {}).slug);
 }
 async function openClientModulesModal(){
