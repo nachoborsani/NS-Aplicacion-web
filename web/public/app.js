@@ -211,6 +211,24 @@ function construirPayloadInforme(){
 // ---- Vista previa en vivo (mientras se completa el formulario) ----
 var PREVIEW_TIMER = null, PREVIEW_SEQ = 0;
 function programarPreviewVivo(){ clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = setTimeout(actualizarPreviewVivo, 500); }
+// Aplica los defaults que dependen del sexo (posición, diagnóstico) según el preset
+// elegido. Los valores numéricos NO cambian con el sexo. Se llama al aplicar un
+// preset y cada vez que se cambia el sexo. Solo pisa los campos que el preset
+// define por sexo, respetando el resto.
+function aplicarDefaultsPorSexo(){
+  var preset = presetById((document.getElementById('infDescripcion') || {}).value);
+  var porSexo = (preset && preset.valoresPorSexo) || null;
+  var sexoEl = document.querySelector('#infCampos [data-key="sexo"]');
+  var sx = String(sexoEl && sexoEl.value || '').trim().toLowerCase(); // masculino/femenino/otro
+  if (!porSexo || !sx || !porSexo[sx]) return;
+  var over = porSexo[sx];
+  Object.keys(over).forEach(function(k){
+    var inp = document.querySelector('#infCampos [data-key="' + k + '"]');
+    if (inp) inp.value = over[k];
+  });
+}
+// Cambió el sexo: recargar posición/diagnóstico del preset y refrescar la vista.
+function onInformeSexoChange(){ aplicarDefaultsPorSexo(); programarPreviewVivo(); }
 async function actualizarPreviewVivo(){
   var frame = document.getElementById('infLiveFrame'), ph = document.getElementById('infLivePlaceholder');
   if (!frame) return;
@@ -311,7 +329,9 @@ function renderCampos(key){
       // Obligatorio sin default: arranca vacío ("Elegí…") para forzar la elección.
       if (c.requerido && !(c.default || '')) opts += '<option value="">Elegí…</option>';
       opts += c.opciones.map(function(o){ return opt(o, o, o === (c.default || '')); }).join('');
-      control = '<select class="inp" data-key="' + esc(c.key) + '"' + req + '>' + opts + '</select>';
+      // El sexo dispara la recarga de posición/diagnóstico por sexo.
+      var hook = c.key === 'sexo' ? ' onchange="onInformeSexoChange()"' : '';
+      control = '<select class="inp" data-key="' + esc(c.key) + '"' + req + hook + '>' + opts + '</select>';
     } else {
       control = '<input class="inp" data-key="' + esc(c.key) + '"' + req + ' value="' + esc(c.default || '') + '" spellcheck="false">';
     }
@@ -340,6 +360,7 @@ function aplicarPreset(){
     var k = inp.getAttribute('data-key');
     if (valores[k] != null && String(valores[k]).trim() !== '') inp.value = valores[k];
   });
+  aplicarDefaultsPorSexo();   // posición/diagnóstico según el sexo elegido
   programarPreviewVivo();
 }
 // El textarea del informe crece solo con el contenido (arranca chico).

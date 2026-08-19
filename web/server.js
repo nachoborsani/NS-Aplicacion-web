@@ -305,25 +305,38 @@ const ORL_SEED_PRESETS = [
 ];
 // Presets de la Flujometría urinaria (ECUD / Urología Caballito). Cada uno pisa
 // los 12 valores de uroflujometría + posición (y el diag. clínico en el normal).
+// Los valores NUMÉRICOS son iguales para hombre y mujer. Lo que cambia con el sexo
+// es la posición (hombre parado / mujer sentada) y el diagnóstico clínico
+// (Prostatismo en el hombre; Síndrome miccional en la mujer) → van en valoresPorSexo.
 const FLUJO_SEED_PRESETS = [
   {
     id: "flujo-normal", modelo: "caballito-flujometria", nombre: "Flujometría normal",
-    texto: "Pte parado\nMicción espontánea\nCurva de forma y amplitud normal\n\nEstudio normal",
+    texto: "Micción espontánea\nCurva de forma y amplitud normal\n\nEstudio normal",
     valores: {
-      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz", posicion: "Pte parado", diagClinico: "Prostatismo",
+      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz",
       qMax: "25.4 ml/s", qMed90: "18.2 ml/s", qProm: "12.3 ml/s", qA2s: "22.4 ml/s",
       tAQmax: "3.4 seg", t90: "15.8 seg", volTotal: "319.8 ml", volQmax: "73.2 ml",
       tiempoTotal: "25.9 seg", tiempoNeto: "22.3 seg", tiempoDescenso: "22.5 seg", tiempoEntrePausas: "3.6 seg",
     },
+    valoresPorSexo: {
+      masculino: { posicion: "Pte parado", diagClinico: "Prostatismo" },
+      femenino: { posicion: "Pte sentada", diagClinico: "Síndrome miccional" },
+      otro: { posicion: "Pte parado" },
+    },
   },
   {
     id: "flujo-oiv", modelo: "caballito-flujometria", nombre: "Flujometría con retardo / compatible con OIV",
-    texto: "Pte parado\nRetardo en el inicio\nCurva prolongada con intermitencia.\n\nCompatible con OIV",
+    texto: "Retardo en el inicio\nCurva prolongada con intermitencia.\n\nCompatible con OIV",
     valores: {
-      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz", posicion: "Pte parado",
+      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz",
       qMax: "10.4 ml/s", qMed90: "3.1 ml/s", qProm: "3.1 ml/s", qA2s: "5.0 ml/s",
       tAQmax: "52.3 seg", t90: "63.5 seg", volTotal: "216.8 ml", volQmax: "105.5 ml",
       tiempoTotal: "70.2 seg", tiempoNeto: "36.7 seg", tiempoDescenso: "17.9 seg", tiempoEntrePausas: "33.5 seg",
+    },
+    valoresPorSexo: {
+      masculino: { posicion: "Pte parado" },
+      femenino: { posicion: "Pte sentada" },
+      otro: { posicion: "Pte parado" },
     },
   },
 ];
@@ -340,7 +353,7 @@ function loadInformesConfig() {
       { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} })),
-      ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
+      ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
     ];
   }
   return cfg;
@@ -4187,15 +4200,30 @@ function ensureNombresPresets() {
 }
 ensureNombresPresets();
 
-// Precarga los presets de Flujometría en configs ya existentes (idempotente).
+// Precarga/migra los presets de Flujometría (idempotente). Agrega los que faltan
+// y, en los ya sembrados sin valoresPorSexo, los completa moviendo posición y
+// diagnóstico (que antes iban fijos en `valores`) al esquema por sexo.
 function ensureFlujoSeed() {
   try {
     const cfg = loadInformesConfig();
     if (!Array.isArray(cfg.descripciones)) return;
     let cambio = false;
     for (const s of FLUJO_SEED_PRESETS) {
-      if (!cfg.descripciones.some((d) => d.id === s.id)) {
-        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores });
+      const existente = cfg.descripciones.find((d) => d.id === s.id);
+      if (!existente) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} });
+        cambio = true;
+        continue;
+      }
+      // Migración: si no tiene el esquema por sexo, cargarlo y sacar posición/
+      // diagnóstico de los valores fijos (para que no queden pisando al sexo).
+      if (!existente.valoresPorSexo || !Object.keys(existente.valoresPorSexo).length) {
+        existente.valoresPorSexo = s.valoresPorSexo || {};
+        if (existente.valores && typeof existente.valores === "object") {
+          delete existente.valores.posicion;
+          delete existente.valores.diagClinico;
+        }
+        if (!existente.texto || /^Pte /i.test(existente.texto)) existente.texto = s.texto;
         cambio = true;
       }
     }
