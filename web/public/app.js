@@ -1299,6 +1299,15 @@ function setClientSection(section){
   // La bandeja (puede ser grande) se carga recién al abrir su solapa, no en cada
   // cambio de cliente.
   if (CLIENT_SECTION === 'mescurso') loadClientMesCurso();
+  if (CLIENT_SECTION === 'general') renderClientGeneral();
+}
+// El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
+// se muestra solo para ese cliente; el resto ve el placeholder.
+function renderClientGeneral(){
+  var card = document.getElementById('credLoteCard'), ph = document.getElementById('generalPlaceholder');
+  var esSchefe = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'scheffelaar-mc');
+  if (card) card.style.display = esSchefe ? '' : 'none';
+  if (ph) ph.style.display = esSchefe ? 'none' : '';
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
 async function loadClientPami(){
