@@ -20,7 +20,10 @@ from app_paths import get_base_dir, get_data_dir, get_logs_dir
 
 TASK_NAME = "NS - Refrescar bandeja mes en curso"
 CONFIG_FILE = "refresco_config.json"
-DEFAULT_HORARIOS = ["13:00", "20:00"]
+# Una sola corrida a la noche: a las 13:00 el día está a medio trabajar, no sirve.
+# A las 20:00 los consultorios ya cerraron → transmite + baja mes en curso (hasta
+# hoy) + baja la bandeja de adelante (desde mañana).
+DEFAULT_HORARIOS = ["20:00"]
 CREATE_NO_WINDOW = 0x08000000  # que subprocess no abra ventanas de consola
 
 

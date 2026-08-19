@@ -32,7 +32,8 @@ _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 # en segundos. Si vence, seguimos con la descarga igual y reportamos lo que haya.
 _TRANSMIT_TIMEOUT_S = 1800
 # Corridas a partir de esta hora se consideran "fin del día": transmiten y bajan
-# hasta hoy. Antes de esa hora: read-only, hasta ayer. (13:00 = mediodía; 20:00 = tarde.)
+# hasta hoy. Antes de esa hora (ej. una corrida manual al mediodía): read-only,
+# hasta ayer. El schedule por defecto es una sola corrida a las 20:00.
 _HORA_FIN_DIA_H = 19
 
 
