@@ -67,6 +67,7 @@ function go(v, el){
   if (v === 'dash') updateDashClientsTile();
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
+  if (v === 'soon') loadGeneralDebitos();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
     var g = document.getElementById(id);
@@ -1080,9 +1081,26 @@ var CLIENT_SECTIONS = [
   { key:'mescurso',  sec:'client-section-mescurso',  tab:'clientTabMescurso',  crumb:'Dashboard mes en curso' },
   { key:'basica',    sec:'client-section-basica',    tab:'clientTabBasica',    crumb:'Informacion basica' },
   { key:'dashboard', sec:'client-section-dashboard', tab:'clientTabDashboard', crumb:'Dashboard de reportes' },
-  { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' }
+  { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
+  { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' }
 ];
+// Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
+// tienen reportes ni mes en curso: solo Info básica + Dashboard general.
+function clientSeccionesPermitidas(){
+  var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
+  return esMC ? ['basica', 'general'] : ['mescurso', 'basica', 'dashboard', 'reportes'];
+}
+// Muestra/oculta las pestañas según el tipo de cliente.
+function aplicarPestanasCliente(){
+  var permitidas = clientSeccionesPermitidas();
+  CLIENT_SECTIONS.forEach(function(s){
+    var tab = document.getElementById(s.tab);
+    if (tab) tab.style.display = permitidas.indexOf(s.key) >= 0 ? '' : 'none';
+  });
+}
 function setClientSection(section){
+  var permitidas = clientSeccionesPermitidas();
+  if (permitidas.indexOf(section) < 0) section = permitidas[0];
   var found = null;
   for (var i = 0; i < CLIENT_SECTIONS.length; i++){ if (CLIENT_SECTIONS[i].key === section){ found = CLIENT_SECTIONS[i]; break; } }
   if (!found) found = CLIENT_SECTIONS[2]; // por defecto: Dashboard de reportes
@@ -1465,6 +1483,7 @@ async function renderActiveClient(){
   if (!client) return;
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
+  aplicarPestanasCliente();
   setClientSection(CLIENT_SECTION);
   renderClientNomencladorPanel();
   loadClientPami();
@@ -2232,6 +2251,28 @@ async function fetchDebitoConfig(){
   }
   return r;
 }
+// Resumen (solo lectura) de las reglas de débito en la vista "General".
+async function loadGeneralDebitos(){
+  var box = document.getElementById('generalDebitosResumen');
+  if (!box) return;
+  box.innerHTML = '<div class="nom-muted">Cargando…</div>';
+  await fetchDebitoConfig();
+  var reglas = DEBITO_REGLAS || [];
+  var activas = reglas.filter(function(r){ return r.activa; }).length;
+  if (!reglas.length){ box.innerHTML = '<div class="nom-muted">Todavía no hay reglas de débito cargadas.</div>'; return; }
+  box.innerHTML = '<div class="general-debitos-meta">' + reglas.length + ' regla' + (reglas.length === 1 ? '' : 's') + ' · ' + activas + ' activa' + (activas === 1 ? '' : 's') + '</div>'
+    + '<div class="debito-reglas-list">' + reglas.map(function(rg){
+      var esPar = rg.tipo === 'par';
+      var cuando = rg.alcance === 'periodo' ? 'en el mes' : 'el mismo día';
+      var titulo = esPar ? (rg.codigosNombre || (rg.codigos||[]).join(' + ')) : (rg.debitaNombre || rg.debita);
+      var detalle = esPar
+        ? '<span class="nom-code">' + esc((rg.codigos||[]).join(' + ')) + '</span> ' + esc(cuando) + ' → uno paga <b>40%</b>'
+        : 'Se debita <span class="nom-code">' + esc(rg.debita) + '</span> al <b>100%</b> si ' + esc(cuando) + ' hay <span class="nom-code">' + esc((rg.conCodigos||[]).join('/')) + '</span> ' + esc(rg.conNombre || '');
+      return '<div class="debito-regla-item' + (rg.activa ? '' : ' off') + '"><div class="debito-regla-txt"><b>' + esc(titulo) + '</b>'
+        + '<div class="nom-muted">' + detalle + '</div></div>'
+        + '<span class="general-debito-estado">' + (rg.activa ? 'Activa' : 'Apagada') + '</span></div>';
+    }).join('') + '</div>';
+}
 async function openDebitoReglasModal(){
   document.getElementById('debitoReglasError').textContent = '';
   document.getElementById('debitoReglasList').innerHTML = '<div class="nom-muted">Cargando…</div>';
@@ -2433,13 +2474,14 @@ function renderDebitoReglas(){
   if (!DEBITO_REGLAS.length){ box.innerHTML = '<div class="nom-muted">No hay reglas cargadas.</div>'; return; }
   box.innerHTML = DEBITO_REGLAS.map(function(rg, i){
     var esPar = rg.tipo === 'par';
+    var cuando = rg.alcance === 'periodo' ? 'en el mes' : 'el mismo día';
     var titulo, detalle;
     if (esPar){
       titulo = esc(rg.codigosNombre || (rg.codigos||[]).join(' + '));
-      detalle = '<span class="nom-code">' + esc((rg.codigos||[]).join(' + ')) + '</span> el mismo día → uno paga <b>40%</b>';
+      detalle = '<span class="nom-code">' + esc((rg.codigos||[]).join(' + ')) + '</span> ' + esc(cuando) + ' → uno paga <b>40%</b>';
     } else {
       titulo = esc(rg.debitaNombre || rg.debita);
-      detalle = 'Se debita <span class="nom-code">' + esc(rg.debita) + '</span> al <b>100%</b> si el mismo día hay <span class="nom-code">' + esc((rg.conCodigos||[]).join('/')) + '</span> ' + esc(rg.conNombre || '');
+      detalle = 'Se debita <span class="nom-code">' + esc(rg.debita) + '</span> al <b>100%</b> si ' + esc(cuando) + ' hay <span class="nom-code">' + esc((rg.conCodigos||[]).join('/')) + '</span> ' + esc(rg.conNombre || '');
     }
     return '<div class="debito-regla-item">'
       + '<label class="debito-regla-toggle"><input type="checkbox" ' + (rg.activa ? 'checked' : '') + ' onchange="toggleReglaDebito(' + i + ', this.checked)"><span></span></label>'
@@ -2461,15 +2503,16 @@ function agregarReglaDebito(){
   var err = document.getElementById('debitoReglasError'); err.textContent = '';
   var tipo = document.getElementById('nuevaReglaTipo').value;
   var regla;
+  var alcance = (document.getElementById('nuevaReglaAlcance') || {}).value === 'periodo' ? 'periodo' : 'dia';
   if (tipo === 'par'){
     var cods = splitCodigos(document.getElementById('nuevaReglaCodigos').value);
     if (cods.length < 2){ err.textContent = 'Poné los dos códigos del par.'; return; }
-    regla = { activa: true, tipo: 'par', monto: 'pay40', codigos: cods, codigosNombre: document.getElementById('nuevaReglaCodigosNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
+    regla = { activa: true, tipo: 'par', monto: 'pay40', alcance: alcance, codigos: cods, codigosNombre: document.getElementById('nuevaReglaCodigosNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
   } else {
     var debita = document.getElementById('nuevaReglaDebita').value.trim();
     var con = splitCodigos(document.getElementById('nuevaReglaCon').value);
     if (!debita || !con.length){ err.textContent = 'Poné el código que se debita y al menos uno que lo incluye.'; return; }
-    regla = { activa: true, tipo: 'inclusion', monto: 'total', debita: debita, debitaNombre: document.getElementById('nuevaReglaDebitaNombre').value.trim(), conCodigos: con, conNombre: document.getElementById('nuevaReglaConNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
+    regla = { activa: true, tipo: 'inclusion', monto: 'total', alcance: alcance, debita: debita, debitaNombre: document.getElementById('nuevaReglaDebitaNombre').value.trim(), conCodigos: con, conNombre: document.getElementById('nuevaReglaConNombre').value.trim(), nota: document.getElementById('nuevaReglaNota').value.trim() };
   }
   DEBITO_REGLAS.push(regla);
   ['nuevaReglaDebita','nuevaReglaDebitaNombre','nuevaReglaCon','nuevaReglaConNombre','nuevaReglaCodigos','nuevaReglaCodigosNombre','nuevaReglaNota'].forEach(function(id){ document.getElementById(id).value=''; });
@@ -2484,6 +2527,8 @@ async function guardarReglasDebito(){
   DEBITO_REGLAS = r.data.reglas || DEBITO_REGLAS;
   renderDebitoReglas();
   closeDebitoReglasModal();
+  var gv = document.getElementById('view-soon');
+  if (gv && gv.style.display !== 'none') loadGeneralDebitos();
 }
 // Parsea las filas pegadas de la validación de PAMI: afiliado + código + tipo.
 function parsePamiValidacion(text){

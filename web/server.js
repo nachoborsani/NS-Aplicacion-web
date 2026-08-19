@@ -274,8 +274,11 @@ function normalizarReglaDebito(r) {
   if (!r || typeof r !== "object") return null;
   const tipo = r.tipo === "par" ? "par" : "inclusion";
   const monto = r.monto === "pay40" ? "pay40" : "total";
+  // Alcance del cruce: 'dia' (mismo día, default) o 'periodo' (en cualquier
+  // momento del mes). PAMI debita algunos cruces aunque no sean el mismo día.
+  const alcance = r.alcance === "periodo" ? "periodo" : "dia";
   const base = { id: slugId(r.id || r.debitaNombre || r.codigosNombre || "regla") || `regla-${Math.abs(String(r.id||"").length)}`,
-    activa: r.activa !== false, tipo, monto, nota: String(r.nota || "").trim() };
+    activa: r.activa !== false, tipo, monto, alcance, nota: String(r.nota || "").trim() };
   if (tipo === "par") {
     base.codigos = (Array.isArray(r.codigos) ? r.codigos : []).map((c) => cleanIdentifier(c)).filter(Boolean).slice(0, 4);
     base.codigosNombre = String(r.codigosNombre || "").trim();
@@ -945,15 +948,18 @@ function applyAutomaticExclusionDebits(rows) {
   });
   const reglas = loadDebitoReglas().filter((r) => r && r.activa);
   if (!reglas.length) return rows || [];
-  const groups = new Map();
+  // Dos agrupaciones: por afiliado+día (reglas de "mismo día") y por afiliado
+  // solo (reglas de "mismo período"/mes). Cada regla se aplica en la que le toca.
+  const dayGroups = new Map();
+  const periodGroups = new Map();
+  const push = (map, key, row) => { if (!map.has(key)) map.set(key, []); map.get(key).push(row); };
   (rows || []).forEach((row) => {
     if (!row.billable || !cleanIdentifier(row.practiceCode) || reportRowGross(row) <= 0) return;
     const benefit = cleanIdentifier(row.benefit);
+    if (!benefit) return;
     const day = reportRowDay(row);
-    if (!benefit || !day) return;
-    const key = `${benefit}|${day}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(row);
+    if (day) push(dayGroups, `${benefit}|${day}`, row);
+    push(periodGroups, benefit, row);
   });
   const yaCargado = (row) => row.debitSource === "validacion" || row.debitSource === "manual";
   const marcar = (row, monto, regla, reason, pairCodes) => {
@@ -968,28 +974,33 @@ function applyAutomaticExclusionDebits(rows) {
     row.debitSource = "regla";
     return true;
   };
-  for (const groupRows of groups.values()) {
-    const codes = new Set(groupRows.map((r) => cleanIdentifier(r.practiceCode)));
-    for (const regla of reglas) {
-      if (regla.tipo === "inclusion") {
-        const hayGrande = (regla.conCodigos || []).some((c) => codes.has(cleanIdentifier(c)));
-        if (!hayGrande) continue;
-        const dc = cleanIdentifier(regla.debita);
-        const reason = `${regla.debitaNombre || dc} debitada: el mismo día se hizo ${regla.conNombre || (regla.conCodigos || []).join("/")}.`;
-        groupRows.filter((r) => cleanIdentifier(r.practiceCode) === dc)
-          .forEach((r) => marcar(r, "total", regla, reason, (regla.conCodigos || []).join("/")));
-      } else if (regla.tipo === "par") {
-        const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
-        const presentes = new Set(cods.filter((c) => codes.has(c)));
-        if (presentes.size < 2) continue;
-        const candidatos = groupRows.filter((r) => cods.includes(cleanIdentifier(r.practiceCode)) && !yaCargado(r));
-        if (candidatos.length < 2) continue;
-        // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
-        const reason = `${regla.codigosNombre || "Par de estudios"} el mismo día: PAMI paga uno al 40%.`;
-        marcar(candidatos[candidatos.length - 1], regla.monto || "pay40", regla, reason, cods.join("/"));
+  const aplicar = (groups, reglasSet) => {
+    for (const groupRows of groups.values()) {
+      const codes = new Set(groupRows.map((r) => cleanIdentifier(r.practiceCode)));
+      for (const regla of reglasSet) {
+        const cuando = regla.alcance === "periodo" ? "en el mes" : "el mismo día";
+        if (regla.tipo === "inclusion") {
+          const hayGrande = (regla.conCodigos || []).some((c) => codes.has(cleanIdentifier(c)));
+          if (!hayGrande) continue;
+          const dc = cleanIdentifier(regla.debita);
+          const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || (regla.conCodigos || []).join("/")}.`;
+          groupRows.filter((r) => cleanIdentifier(r.practiceCode) === dc)
+            .forEach((r) => marcar(r, "total", regla, reason, (regla.conCodigos || []).join("/")));
+        } else if (regla.tipo === "par") {
+          const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
+          const presentes = new Set(cods.filter((c) => codes.has(c)));
+          if (presentes.size < 2) continue;
+          const candidatos = groupRows.filter((r) => cods.includes(cleanIdentifier(r.practiceCode)) && !yaCargado(r));
+          if (candidatos.length < 2) continue;
+          // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
+          const reason = `${regla.codigosNombre || "Par de estudios"} ${cuando}: PAMI paga uno al 40%.`;
+          marcar(candidatos[candidatos.length - 1], regla.monto || "pay40", regla, reason, cods.join("/"));
+        }
       }
     }
-  }
+  };
+  aplicar(dayGroups, reglas.filter((r) => r.alcance !== "periodo"));
+  aplicar(periodGroups, reglas.filter((r) => r.alcance === "periodo"));
   return rows || [];
 }
 function getRowValue(row, aliases) {

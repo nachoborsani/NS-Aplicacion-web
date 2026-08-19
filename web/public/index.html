@@ -116,7 +116,7 @@
         </div>
         <div class="side-config">
           <a onclick="go('users',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M11 11a4 4 0 100-8 4 4 0 000 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Usuarios</a>
-          <a onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>General <span class="chip">pronto</span></a>
+          <a onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>General</a>
           <a onclick="openChange()"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="11" width="16" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cambiar contraseña</a>
           <a class="logout" onclick="doLogout()"><svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Cerrar sesión</a>
         </div>
@@ -192,10 +192,18 @@
                 <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
                 <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
                 <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
+                <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
                 <div id="clientMesCurso"></div>
+              </section>
+
+              <section id="client-section-general" class="client-section" style="display:none">
+                <div class="client-card">
+                  <h3>Dashboard general</h3>
+                  <p class="nom-muted">Acá vamos a ir sumando la información del médico de cabecera (avances según su Drive, etc.). Por ahora está en preparación.</p>
+                </div>
               </section>
 
               <section id="client-section-basica" class="client-section" style="display:none">
@@ -645,7 +653,16 @@
         </section>
 
         <section id="view-soon" style="display:none">
-          <div class="card" style="text-align:center;padding:50px"><div class="empty" style="padding:0"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.5"/></svg></div><b>Próximamente</b><span>Configuración general del sistema.</span></div></div>
+          <div class="card general-card">
+            <div class="general-card-head">
+              <div>
+                <h3>⚖️ Débitos automáticos</h3>
+                <span class="nom-muted">Reglas de cruce que aplican a <b>todos los clientes por igual</b>. Cuando dos códigos se hacen juntos (el mismo día o en el mes), PAMI debita uno: acá se proyectan.</span>
+              </div>
+              <button class="btn btn-primary" type="button" onclick="openDebitoReglasModal()">Administrar reglas</button>
+            </div>
+            <div id="generalDebitosResumen"><div class="nom-muted">Cargando…</div></div>
+          </div>
         </section>
       </div>
     </div>
@@ -850,6 +867,12 @@
               <select class="inp" id="nuevaReglaTipo" onchange="onNuevaReglaTipo()">
                 <option value="inclusion">Inclusión (un estudio incluido en otro → débito 100%)</option>
                 <option value="par">Par (dos estudios juntos → uno paga 40%)</option>
+              </select>
+            </label>
+            <label class="field"><span>Cuándo cruzan</span>
+              <select class="inp" id="nuevaReglaAlcance">
+                <option value="dia">El mismo día</option>
+                <option value="periodo">En cualquier momento del mes (período)</option>
               </select>
             </label>
             <div id="nuevaReglaInclusion">
