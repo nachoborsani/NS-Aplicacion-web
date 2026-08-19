@@ -96,20 +96,31 @@ class RefrescoAutomaticoFrame(ctk.CTkFrame):
                 row=0, column=i, padx=(0, 8)
             )
 
+        self.transmitir_var = ctk.BooleanVar(value=bool(self.cfg.get("transmitir")))
+        ctk.CTkCheckBox(
+            card, text="Transmitir automáticamente (1 vez al día, en el primer refresco)",
+            variable=self.transmitir_var, font=small_font(11),
+        ).grid(row=3, column=0, columnspan=4, padx=12, pady=(2, 2), sticky="w")
+        ctk.CTkLabel(
+            card,
+            text="La transmisión solo envía OMEs que ya tienen el informe cargado; las que les falta informe quedan como están. Si algo falla, te avisa en el estado del cliente.",
+            font=small_font(11), text_color=TEXT_SOFT, wraplength=560, justify="left",
+        ).grid(row=4, column=0, columnspan=4, padx=(34, 12), pady=(0, 4), sticky="w")
+
         ctk.CTkLabel(
             card,
             text="Si la PC estaba apagada a esa hora, corre apenas prende. Tiene que estar prendida y con sesión iniciada.",
-            font=small_font(11), text_color=TEXT_SOFT, wraplength=520, justify="left",
-        ).grid(row=3, column=0, columnspan=4, padx=12, pady=(2, 6), sticky="w")
+            font=small_font(11), text_color=TEXT_SOFT, wraplength=560, justify="left",
+        ).grid(row=5, column=0, columnspan=4, padx=12, pady=(2, 6), sticky="w")
 
         self.guardar_btn = ctk.CTkButton(
             card, text="Guardar programación", height=30, width=180,
             fg_color=PRIMARY, hover_color=PRIMARY_HOVER, font=small_font(12, bold=True),
             command=self._on_guardar,
         )
-        self.guardar_btn.grid(row=4, column=0, padx=(12, 8), pady=(6, 12), sticky="w")
+        self.guardar_btn.grid(row=6, column=0, padx=(12, 8), pady=(6, 12), sticky="w")
         self.guardar_status = ctk.CTkLabel(card, text="", font=small_font(11), text_color=TEXT_SOFT)
-        self.guardar_status.grid(row=4, column=1, columnspan=3, padx=(0, 12), pady=(6, 12), sticky="w")
+        self.guardar_status.grid(row=6, column=1, columnspan=3, padx=(0, 12), pady=(6, 12), sticky="w")
 
     def _build_estado_card(self, parent) -> None:
         card = self._card(parent, 1, "Estado y prueba")
@@ -172,11 +183,12 @@ class RefrescoAutomaticoFrame(ctk.CTkFrame):
     def _on_guardar(self) -> None:
         horarios = [v.get().strip() for v in self.hora_vars if v.get().strip()]
         enabled = bool(self.enabled_var.get())
+        transmitir = bool(self.transmitir_var.get())
         self.guardar_status.configure(text="Guardando…", text_color=TEXT_SOFT)
         self._set_busy(True)
 
         def work():
-            ok, msg = sched.apply_schedule(horarios, enabled)
+            ok, msg = sched.apply_schedule(horarios, enabled, transmitir)
             def done():
                 self._set_busy(False)
                 self.guardar_status.configure(text=msg, text_color=SUCCESS if ok else DANGER)

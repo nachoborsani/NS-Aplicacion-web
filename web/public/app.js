@@ -1248,6 +1248,10 @@ function mesCursoSaludHtml(estado, uploadedAt){
     var motivo = estado.error ? (': ' + estado.error) : '';
     return '<div class="mescurso-salud err">⚠ No se pudo actualizar' + esc(cuando) + esc(motivo) + '</div>';
   }
+  if (estado && (estado.transmitErrores || 0) > 0){
+    return '<div class="mescurso-salud err">⚠ ' + esc(numberFmt(estado.transmitErrores)) + ' OME(s) no se pudieron transmitir hoy'
+      + (estado.transmitError ? ': ' + esc(estado.transmitError) : '') + '</div>';
+  }
   if (uploadedAt){
     try {
       var horas = (Date.now() - new Date(uploadedAt).getTime()) / 3600000;
@@ -1318,6 +1322,7 @@ function mesCursoCardMesEnCurso(r, estado){
     + '</div>'
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
     + (r.uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización de la app</span><b>' + esc(mesCursoFechaHora(r.uploadedAt)) + '</b></div>' : '')
+    + (estado && estado.transmitAt ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(estado.transmitidas || 0)) + ((estado.transmitErrores || 0) > 0 ? ' · ' + esc(numberFmt(estado.transmitErrores)) + ' con error' : '') + '</b></div>' : '')
     + '</div>';
 }
 // Card derecha cuando NO hay reporte del mes anterior: cartel "falta reporte".

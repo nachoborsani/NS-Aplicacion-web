@@ -12,8 +12,10 @@ solo exporta y sube. Uso manual:  python bandeja_sync.py [2026-07] [slug1,slug2]
 from __future__ import annotations
 
 import calendar
+import json
 import sys
 import tempfile
+import time
 import traceback
 from datetime import date
 from pathlib import Path
@@ -25,10 +27,72 @@ from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
 _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
           "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
+# Techo de espera para la transmisión de un cliente (el bot puede hacer varios
+# barridos). Si vence, seguimos con la descarga igual y reportamos lo que haya.
+_TRANSMIT_TIMEOUT_S = 900
+
 
 def _current_period() -> str:
     t = date.today()
     return f"{t.year}-{t.month:02d}"
+
+
+# --------------------------------------------------------------------------- #
+# Transmisión automática (1 vez por día por cliente)
+# --------------------------------------------------------------------------- #
+def _transmit_state_path() -> Path:
+    try:
+        from app_paths import get_data_dir
+        return get_data_dir() / "transmit_state.json"
+    except Exception:
+        return Path(tempfile.gettempdir()) / "transmit_state.json"
+
+
+def _load_transmit_state() -> dict:
+    try:
+        return json.loads(_transmit_state_path().read_text("utf-8"))
+    except Exception:
+        return {}
+
+
+def _ya_transmitido_hoy(slug: str) -> bool:
+    return _load_transmit_state().get(slug) == date.today().isoformat()
+
+
+def _marcar_transmitido_hoy(slug: str) -> None:
+    st = _load_transmit_state()
+    st[slug] = date.today().isoformat()
+    try:
+        p = _transmit_state_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(st, ensure_ascii=False, indent=2), "utf-8")
+    except Exception:
+        pass
+
+
+def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
+    """Corre el bot de transmisión (solo valida=Sí, transmitida=No) y espera a que
+    termine. El bot solo transmite OMEs con informe cargado; las que les falta
+    informe las saltea. Devuelve {transmitidas, errores, lastError, status}."""
+    bot.iniciar_bot({
+        "fecha_desde": desde, "fecha_hasta": hasta,
+        "validada": "Si", "transmitida": "No",
+    })
+    estado: dict = {}
+    fin = time.monotonic() + _TRANSMIT_TIMEOUT_S
+    while time.monotonic() < fin:
+        estado = bot.obtener_estado() or {}
+        if progress:
+            progress(f"transmitiendo… {estado.get('procesados', 0)} enviadas")
+        if estado.get("status") in ("DONE", "ERROR"):
+            break
+        time.sleep(3)
+    return {
+        "transmitidas": int(estado.get("procesados") or 0),
+        "errores": int(estado.get("errores") or 0),
+        "lastError": str(estado.get("lastError") or ""),
+        "status": str(estado.get("status") or "TIMEOUT"),
+    }
 
 
 def month_range(period: str) -> tuple[str, str, str]:
@@ -78,12 +142,13 @@ def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     return data, columns
 
 
-def sync_client(web: NSWebClient, client: dict, period: str, progress=None) -> dict:
-    """Baja la bandeja de un cliente y la sube. Nunca lanza: devuelve el resultado."""
+def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
+                transmitir: bool = False) -> dict:
+    """Baja la bandeja de un cliente y la sube. Si transmitir=True y todavía no se
+    transmitió hoy, corre el bot de transmisión ANTES de exportar (1x/día). Nunca
+    lanza: devuelve el resultado."""
     slug = client.get("slug", "")
     name = client.get("name", slug)
-    if progress:
-        progress(f"{name}: bajando bandeja…")
     try:
         cred = web.client_pami(slug)
     except Exception as exc:  # noqa: BLE001
@@ -93,13 +158,23 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None) -> d
 
     desde, hasta, label = month_range(period)
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
+    transmit_info = None
     try:
         from pami_transmision import PamiTransmisionController
 
         bot = PamiTransmisionController()
         try:
             bot.abrir_pami(usuario=cred["pamiUser"], clave=cred["pamiPassword"], headless=True)
-            # validada/transmitida vacías -> toda la bandeja del mes, sin transmitir.
+            # 1) Transmitir pendientes del rango (1x/día). El bot solo transmite las
+            #    que tienen informe cargado; el resto queda para "faltan informes".
+            if transmitir and not _ya_transmitido_hoy(slug):
+                if progress:
+                    progress(f"{name}: transmitiendo pendientes…")
+                transmit_info = _correr_transmision(bot, desde, hasta, progress=progress)
+                _marcar_transmitido_hoy(slug)
+            # 2) Exportar la bandeja completa (validada/transmitida vacías).
+            if progress:
+                progress(f"{name}: bajando bandeja…")
             exported = bot.exportar_excel_panel(str(tmp), {"fecha_desde": desde, "fecha_hasta": hasta})
         finally:
             try:
@@ -110,7 +185,10 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None) -> d
         rows, columns = parse_bandeja_excel(exported)
         web.upload_bandeja(slug, period, rows, columns=columns, month_label=label,
                            generated_at=date.today().isoformat())
-        return {"slug": slug, "name": name, "ok": True, "count": len(rows)}
+        res = {"slug": slug, "name": name, "ok": True, "count": len(rows)}
+        if transmit_info is not None:
+            res["transmit"] = transmit_info
+        return res
     except Exception as exc:  # noqa: BLE001
         return {"slug": slug, "name": name, "ok": False, "error": str(exc),
                 "trace": traceback.format_exc()}
@@ -118,26 +196,37 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None) -> d
 
 def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
              base_url: str = "", admin_user: str = "", admin_pass: str = "",
-             progress=None) -> list[dict]:
+             progress=None, transmitir: bool | None = None) -> list[dict]:
     """Recorre los clientes de la web y sincroniza la bandeja de cada uno.
 
     Se conecta con una cuenta ADMIN (el endpoint de credenciales es admin-only).
-    Por defecto usa la conexión guardada en 'Conexión con NS'.
+    Por defecto usa la conexión guardada en 'Conexión con NS'. Si transmitir es
+    None, lo lee de la config del panel 'Refresco automático'.
     """
     cfg = load_config()
     web = NSWebClient(base_url or cfg.get("base_url") or DEFAULT_BASE_URL)
     web.login(admin_user or cfg.get("username", ""), admin_pass or cfg.get("password", ""))
     period = period or _current_period()
+    if transmitir is None:
+        try:
+            import bandeja_schedule
+            transmitir = bool(bandeja_schedule.load_config().get("transmitir"))
+        except Exception:  # noqa: BLE001
+            transmitir = False
 
     results: list[dict] = []
     for client in web.list_clients():
         if only_slugs and client.get("slug") not in only_slugs:
             continue
-        res = sync_client(web, client, period, progress=progress)
-        # Reportamos el resultado (ok/error) para el indicador de salud de la card.
+        res = sync_client(web, client, period, progress=progress, transmitir=transmitir)
+        # Reportamos el resultado (ok/error + transmisión) para el indicador de salud.
         try:
-            web.report_bandeja_estado(res.get("slug", ""), res.get("ok"),
-                                      res.get("count"), res.get("error", ""))
+            t = res.get("transmit") or {}
+            web.report_bandeja_estado(
+                res.get("slug", ""), res.get("ok"), res.get("count"), res.get("error", ""),
+                transmitidas=t.get("transmitidas"), transmit_errores=t.get("errores"),
+                transmit_error=t.get("lastError"),
+            )
         except Exception:  # noqa: BLE001 - un fallo del reporte no corta el sync
             pass
         results.append(res)

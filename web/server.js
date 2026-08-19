@@ -2757,12 +2757,27 @@ const server = http.createServer(async (req, res) => {
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
     const store = loadBandejaEstado();
-    store[slug] = {
+    const prev = store[slug] || {};
+    const estado = {
       ok: !!body.ok,
       count: Number(body.count) || 0,
       error: String(body.error || "").slice(0, 300),
       at: new Date().toISOString(),
     };
+    // Info de transmisión: solo se incluye en la corrida que transmite (1x/día);
+    // en las otras corridas se conserva la última conocida.
+    if (body.transmitidas !== undefined || body.transmitErrores !== undefined || body.transmitError) {
+      estado.transmitidas = Number(body.transmitidas) || 0;
+      estado.transmitErrores = Number(body.transmitErrores) || 0;
+      estado.transmitError = String(body.transmitError || "").slice(0, 300);
+      estado.transmitAt = estado.at;
+    } else if (prev.transmitAt) {
+      estado.transmitidas = prev.transmitidas || 0;
+      estado.transmitErrores = prev.transmitErrores || 0;
+      estado.transmitError = prev.transmitError || "";
+      estado.transmitAt = prev.transmitAt;
+    }
+    store[slug] = estado;
     saveBandejaEstado(store);
     return json(res, 200, { ok: true });
   }

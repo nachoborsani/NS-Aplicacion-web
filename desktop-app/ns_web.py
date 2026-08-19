@@ -199,11 +199,19 @@ class NSWebClient:
         )
 
     def report_bandeja_estado(self, slug: str, ok: bool, count: int | None = None,
-                              error: str = "") -> dict:
-        """Reporta el resultado del último sync (para el indicador de salud)."""
+                              error: str = "", transmitidas: int | None = None,
+                              transmit_errores: int | None = None,
+                              transmit_error: str = "") -> dict:
+        """Reporta el resultado del último sync (para el indicador de salud).
+
+        Incluye la info de transmisión si se corrió (transmitidas / errores)."""
+        body = {"ok": bool(ok), "count": int(count or 0), "error": str(error or "")[:300]}
+        if transmitidas is not None or transmit_errores is not None or transmit_error:
+            body["transmitidas"] = int(transmitidas or 0)
+            body["transmitErrores"] = int(transmit_errores or 0)
+            body["transmitError"] = str(transmit_error or "")[:300]
         return self._request(
-            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado",
-            body={"ok": bool(ok), "count": int(count or 0), "error": str(error or "")[:300]},
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado", body=body,
         )
 
     # --- Nomencladores ------------------------------------------------------

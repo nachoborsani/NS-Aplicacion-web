@@ -49,10 +49,15 @@ def load_config() -> dict:
         data = json.loads(_config_path().read_text("utf-8"))
         if isinstance(data, dict):
             hs = [_norm_hora(h) for h in (data.get("horarios") or []) if valid_hora(h)]
-            return {"enabled": bool(data.get("enabled")), "horarios": hs or list(DEFAULT_HORARIOS)}
+            return {
+                "enabled": bool(data.get("enabled")),
+                "horarios": hs or list(DEFAULT_HORARIOS),
+                # Transmitir automáticamente 1 vez al día (en el primer refresco).
+                "transmitir": bool(data.get("transmitir")),
+            }
     except Exception:
         pass
-    return {"enabled": False, "horarios": list(DEFAULT_HORARIOS)}
+    return {"enabled": False, "horarios": list(DEFAULT_HORARIOS), "transmitir": False}
 
 
 def save_config(cfg: dict) -> None:
@@ -124,7 +129,7 @@ def _build_xml(horarios: list[str]) -> str:
         "    <RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>\n"
         "    <AllowStartOnDemand>true</AllowStartOnDemand>\n"
         "    <Enabled>true</Enabled>\n"
-        "    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>\n"
+        "    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>\n"
         "    <Priority>7</Priority>\n"
         "  </Settings>\n"
         f"  <Actions Context=\"Author\"><Exec><Command>{bat}</Command></Exec></Actions>\n"
@@ -136,14 +141,14 @@ def _run(args) -> subprocess.CompletedProcess:
     return subprocess.run(args, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
 
 
-def apply_schedule(horarios: list[str], enabled: bool) -> tuple[bool, str]:
+def apply_schedule(horarios: list[str], enabled: bool, transmitir: bool = False) -> tuple[bool, str]:
     """Crea/actualiza (o borra) la tarea de Windows. Devuelve (ok, mensaje)."""
     horarios = [_norm_hora(h) for h in horarios if valid_hora(h)]
     # sin duplicados, ordenados
     horarios = sorted(dict.fromkeys(horarios))
     if enabled and not horarios:
         return False, "Poné al menos un horario válido (HH:MM)."
-    save_config({"enabled": enabled, "horarios": horarios or list(DEFAULT_HORARIOS)})
+    save_config({"enabled": enabled, "horarios": horarios or list(DEFAULT_HORARIOS), "transmitir": bool(transmitir)})
     if not enabled:
         _run(["schtasks", "/delete", "/tn", TASK_NAME, "/f"])
         return True, "Refresco automático desactivado."
