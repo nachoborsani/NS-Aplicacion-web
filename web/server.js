@@ -4036,7 +4036,7 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadTelegramCfg();
     let bot = null, errorBot = "";
     if (telegram.hayToken()) { try { const m = await telegram.getMe(); bot = { usuario: m.username, nombre: m.first_name }; } catch (e) { errorBot = String((e && e.message) || e); } }
-    return json(res, 200, { tokenPresente: telegram.hayToken(), bot, errorBot, chatId: cfg.chatId, nombre: cfg.nombre });
+    return json(res, 200, { tokenPresente: telegram.hayToken(), varUsada: telegram.nombreVarUsada(), bot, errorBot, chatId: cfg.chatId, nombre: cfg.nombre });
   }
   // Detecta a quién le escribió el bot (para tomar el chat_id).
   if (p === "/api/admin/telegram/detectar" && req.method === "POST") {

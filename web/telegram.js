@@ -3,11 +3,20 @@
 // le escribe el bot) se guarda en el volumen.
 "use strict";
 
+// Nombre canónico primero; toleramos variantes comunes por si se cargó con otro
+// nombre en Railway.
+const NOMBRES_TOKEN = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "BOT_TOKEN", "TG_BOT_TOKEN", "TELEGRAM_API_TOKEN"];
 function token() {
-  return String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+  for (const n of NOMBRES_TOKEN) { const v = String(process.env[n] || "").trim(); if (v) return v; }
+  return "";
 }
 function hayToken() {
   return token().length > 0;
+}
+// Qué nombre de variable encontró (para diagnóstico; nunca devuelve el valor).
+function nombreVarUsada() {
+  for (const n of NOMBRES_TOKEN) { if (String(process.env[n] || "").trim()) return n; }
+  return "";
 }
 
 async function api(metodo, params) {
@@ -53,4 +62,4 @@ async function enviar(chatId, texto) {
   return api("sendMessage", { chat_id: chatId, text: texto, parse_mode: "HTML", disable_web_page_preview: true });
 }
 
-module.exports = { hayToken, getMe, chatsRecientes, enviar };
+module.exports = { hayToken, nombreVarUsada, getMe, chatsRecientes, enviar };
