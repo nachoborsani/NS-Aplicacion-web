@@ -1624,9 +1624,11 @@ function buildBandejaResumen(slug) {
   const kNombre = findKey(/APELLIDO/);
   let consultations = 0, practices = 0, validated = 0, transmitted = 0, absent = 0;
   let matched = 0, unmatched = 0, grossEstimado = 0;
-  // Desglose del estimado por estado: transmitido (en cobro), falta informe
-  // (validado sin transmitir = missingInformeAmount) y turno asignado (proyectado).
+  // Desglose por estado: transmitido (cobro real), falta informe (validado sin
+  // transmitir) y ausentes (con turno pero SIN validar → el paciente no vino;
+  // no facturan, van aparte, no suman al estimado).
   let grossTransmitido = 0, grossTurno = 0;
+  let ausentesConsultas = 0, ausentesPracticas = 0;
   let missingInforme = 0, missingInformeAmount = 0;
   // Detalle copiable de las que faltan informe (validadas sin transmitir).
   const missingInformeRows = [];
@@ -1636,13 +1638,18 @@ function buildBandejaResumen(slug) {
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
-    if (code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA")) consultations++;
+    const esConsulta = code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA");
+    if (esConsulta) consultations++;
     else practices++;
     const esValidada = String(row[kValid] || "").trim().toUpperCase() === "S";
     const esTransmitida = String(row[kTrasm] || "").trim().toUpperCase() === "S";
     if (esTransmitida) transmitted++;
     if (esValidada) validated++;
-    else absent++;
+    else {
+      absent++;
+      if (esConsulta) ausentesConsultas++;
+      else ausentesPracticas++;
+    }
     const nomRow = code ? byCode.get(code) : null;
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
     if (nomRow) { matched++; grossEstimado += valueGross; }
@@ -1732,6 +1739,7 @@ function buildBandejaResumen(slug) {
     matched, unmatched,
     grossEstimado: money(grossEstimado),
     grossTransmitido: money(grossTransmitido), grossTurno: money(grossTurno),
+    ausentesConsultas, ausentesPracticas,
     missingInforme, missingInformeAmount: money(missingInformeAmount),
     missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,

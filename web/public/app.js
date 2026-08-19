@@ -1309,17 +1309,24 @@ function mesCursoCardMesEnCurso(r, estado){
   var faltanCaret = (r.missingInforme > 0) ? ' <span class="mescurso-caret" id="mescursoInformesCaret">▸</span>' : '';
   var debitosClick = (r.posiblesDebitosCount > 0) ? ' mescurso-click" onclick="togglePosiblesDebitos()' : '';
   var debitosCaret = (r.posiblesDebitosCount > 0) ? ' <span class="mescurso-caret" id="mescursoDebitosCaret">▸</span>' : '';
+  var cobroReal = r.grossTransmitido || 0;
+  var faltaInf = r.missingInformeAmount || 0;
+  var estimado = cobroReal + faltaInf;
+  var ausTot = r.absent || 0;
+  var ausentesHtml = (ausTot > 0)
+    ? '<div class="mescurso-ausentes"><span>Ausentes <b>' + esc(numberFmt(ausTot)) + '</b> · ' + esc(numberFmt(r.ausentesConsultas || 0)) + ' consultas · ' + esc(numberFmt(r.ausentesPracticas || 0)) + ' prácticas</span><b>' + (r.grossTurno ? esc(moneyFmt(r.grossTurno)) : '') + '</b></div>'
+    : '';
   return '<div class="mescurso-card">' + head + salud
-    + '<div class="mescurso-val-lbl">Facturación estimada</div>'
-    + '<div class="mescurso-val">' + esc(moneyFmt(r.grossEstimado || 0)) + '</div>'
-    + '<div class="mescurso-val-note">' + esc(nomNota) + ' · sin débitos</div>'
-    + mesCursoDesgloseHtml(r)
+    + '<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
+    + '<div class="mescurso-val-note">+ Falta informe <b>' + esc(moneyFmt(faltaInf)) + '</b> → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + faltanClick + '"><span>Faltan informes' + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
     + '</div>'
+    + ausentesHtml
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
     + (r.uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización de la app</span><b>' + esc(mesCursoFechaHora(r.uploadedAt)) + '</b></div>' : '')
     + (estado && estado.transmitAt ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(estado.transmitidas || 0)) + ((estado.transmitErrores || 0) > 0 ? ' · ' + esc(numberFmt(estado.transmitErrores)) + ' con error' : '') + '</b></div>' : '')
