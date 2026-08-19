@@ -232,6 +232,92 @@ const CRED_SCHEFE = {
   cols: { nombre: 1, sexo: 2, benef: 3, dni: 5, tramite: 6, credencial: 8 },
 };
 const gcreds = require("./google_creds.js");
+// Lee las filas pendientes de la planilla de Scheffelaar (con datos y sin
+// credencial), opcionalmente desde una fila.
+async function leerPendientesScheffelaar(auth, desde) {
+  const C = CRED_SCHEFE, cc = C.cols;
+  const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
+  const pendientes = []; let hechas = 0, faltanDatos = 0;
+  rows.forEach((r, i) => {
+    const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
+    const nombre = g(cc.nombre), sexo = g(cc.sexo), benef = g(cc.benef), dni = g(cc.dni), tramite = g(cc.tramite), cred = g(cc.credencial);
+    if (!nombre && !benef && !dni && !tramite) return;
+    if (cred) { hechas++; return; }
+    if (!benef || !dni || !tramite) { faltanDatos++; return; }
+    const sheetRow = C.startRow + i;
+    if (desde && sheetRow < desde) return;
+    pendientes.push({ sheetRow, nombre, sexo, benef, dni, tramite });
+  });
+  return { pendientes, hechas, faltanDatos };
+}
+// Procesa UNA fila: baja, sube a Drive, marca la planilla (o marca el error
+// definitivo). Reusado por el endpoint manual y por la corrida programada.
+async function procesarCredencialFila(auth, row) {
+  const C = CRED_SCHEFE;
+  const sheetRow = Number(row.sheetRow) || 0;
+  const marcar = async (t) => { if (sheetRow) { try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, t); } catch {} } };
+  let dl;
+  try { dl = await credDescargar(row.benef, row.dni, row.tramite, row.sexo); }
+  catch (e) { await marcar("DATOS INVÁLIDOS"); return { ok: false, sheetRow, error: e.message, definitivo: true }; }
+  if (!dl.ok) { if (dl.definitivo) await marcar("SIN CREDENCIAL"); return { ok: false, sheetRow, error: dl.error, definitivo: !!dl.definitivo }; }
+  try {
+    const fname = credNombreArchivo(row.nombre, credNormDni(row.dni));
+    const up = await gcreds.uploadPdf(auth, C.folderId, fname, dl.buf);
+    if (sheetRow) await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, `=HYPERLINK("${up.webViewLink}";"DESCARGADA")`);
+    return { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero };
+  } catch (e) { return { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) }; }
+}
+// Programador de la corrida diaria de credenciales (hora Argentina). Config en el
+// volumen; corre en el server (no depende de la app ni de la PC).
+const credScheduleFile = path.join(dataDir, "cred_schedule.json");
+function loadCredSchedule() {
+  try {
+    const j = JSON.parse(fs.readFileSync(credScheduleFile, "utf8"));
+    return { enabled: !!j.enabled, hora: String(j.hora || ""), desdeFila: Number(j.desdeFila) || 2, lastRunDate: j.lastRunDate || "", lastRun: j.lastRun || null };
+  } catch { return { enabled: false, hora: "", desdeFila: 2, lastRunDate: "", lastRun: null }; }
+}
+function saveCredSchedule(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(credScheduleFile, JSON.stringify(cfg, null, 2)); }
+function ahoraAR() {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  const parts = {}; for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
+  return { fecha: `${parts.year}-${parts.month}-${parts.day}`, hhmm: `${parts.hour}:${parts.minute}` };
+}
+const CRED_RUN_STATE = { corriendo: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
+async function correrLoteCredenciales(origen) {
+  if (CRED_RUN_STATE.corriendo) return;
+  const cfg = loadGoogleCfg();
+  if (!cfg) { const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(s); return; }
+  Object.assign(CRED_RUN_STATE, { corriendo: true, origen, inicio: new Date().toISOString(), total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 });
+  try {
+    const auth = gcreds.makeAuth(cfg);
+    const sch = loadCredSchedule();
+    const { pendientes } = await leerPendientesScheffelaar(auth, sch.desdeFila || 2);
+    CRED_RUN_STATE.total = pendientes.length;
+    for (const row of pendientes) {
+      const r = await procesarCredencialFila(auth, row);
+      if (r.ok) CRED_RUN_STATE.ok++; else if (r.definitivo) CRED_RUN_STATE.sinCred++; else CRED_RUN_STATE.err++;
+      CRED_RUN_STATE.hechas = CRED_RUN_STATE.ok + CRED_RUN_STATE.sinCred + CRED_RUN_STATE.err;
+      await new Promise((rs) => setTimeout(rs, 400));
+    }
+    const s = loadCredSchedule();
+    s.lastRun = { at: new Date().toISOString(), origen, total: CRED_RUN_STATE.total, ok: CRED_RUN_STATE.ok, sinCred: CRED_RUN_STATE.sinCred, err: CRED_RUN_STATE.err };
+    saveCredSchedule(s);
+  } catch (e) {
+    const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: String((e && e.message) || e) }; saveCredSchedule(s);
+  } finally { CRED_RUN_STATE.corriendo = false; }
+}
+setInterval(() => {
+  try {
+    const sch = loadCredSchedule();
+    if (!sch.enabled || !sch.hora || CRED_RUN_STATE.corriendo) return;
+    const { fecha, hhmm } = ahoraAR();
+    if (sch.lastRunDate === fecha) return;             // ya corrió hoy
+    if (hhmm >= sch.hora) {                             // hora alcanzada (con catch-up)
+      sch.lastRunDate = fecha; saveCredSchedule(sch);   // marcar antes de correr (evita doble disparo)
+      correrLoteCredenciales("programada");
+    }
+  } catch {}
+}, 60000);
 // Resultado del último sync de bandeja por cliente (para el indicador de salud
 // en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
 function loadBandejaEstado() {
@@ -3831,19 +3917,8 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadGoogleCfg();
     if (!cfg) return json(res, 400, { error: "Google no está conectado (falta cargar el token, admin)." });
     try {
-      const auth = gcreds.makeAuth(cfg);
-      const C = CRED_SCHEFE, cc = C.cols;
-      const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
-      const pendientes = []; let hechas = 0, faltanDatos = 0;
-      rows.forEach((r, i) => {
-        const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
-        const nombre = g(cc.nombre), sexo = g(cc.sexo), benef = g(cc.benef), dni = g(cc.dni), tramite = g(cc.tramite), cred = g(cc.credencial);
-        if (!nombre && !benef && !dni && !tramite) return;               // fila vacía
-        if (cred) { hechas++; return; }                                   // ya descargada
-        if (!benef || !dni || !tramite) { faltanDatos++; return; }        // incompleta
-        pendientes.push({ sheetRow: C.startRow + i, nombre, sexo, benef, dni, tramite });
-      });
-      return json(res, 200, { pendientes, hechas, faltanDatos });
+      const r = await leerPendientesScheffelaar(gcreds.makeAuth(cfg), 0);
+      return json(res, 200, r);
     } catch (e) {
       return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) });
     }
@@ -3857,33 +3932,41 @@ const server = http.createServer(async (req, res) => {
     if (!cfg) return json(res, 400, { error: "Google no está conectado." });
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
-    const sheetRow = Number(body.sheetRow) || 0;
-    const C = CRED_SCHEFE;
-    const auth = gcreds.makeAuth(cfg);
-    const marcar = async (texto) => {
-      if (!sheetRow) return;
-      try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, texto); } catch {}
-    };
-    let dl;
-    try { dl = await credDescargar(body.benef, body.dni, body.tramite, body.sexo); }
-    catch (e) { await marcar("DATOS INVÁLIDOS"); return json(res, 200, { ok: false, sheetRow, error: e.message, definitivo: true }); }
-    if (!dl.ok) {
-      // Solo los definitivos (PAMI sin credencial) se marcan en la planilla, para
-      // no reintentarlos. Los transitorios quedan pendientes para el próximo intento.
-      if (dl.definitivo) await marcar("SIN CREDENCIAL");
-      return json(res, 200, { ok: false, sheetRow, error: dl.error, definitivo: !!dl.definitivo });
-    }
-    try {
-      const fname = credNombreArchivo(body.nombre, credNormDni(body.dni));
-      const up = await gcreds.uploadPdf(auth, C.folderId, fname, dl.buf);
-      if (sheetRow) {
-        const cell = gcreds.indexToCol(C.cols.credencial) + sheetRow;
-        await gcreds.writeCell(auth, C.spreadsheetId, C.tab, cell, `=HYPERLINK("${up.webViewLink}";"DESCARGADA")`);
-      }
-      return json(res, 200, { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero });
-    } catch (e) {
-      return json(res, 200, { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) });
-    }
+    const r = await procesarCredencialFila(gcreds.makeAuth(cfg), body);
+    return json(res, 200, r);
+  }
+
+  // Corrida diaria de credenciales: leer/guardar la config + estado de la última.
+  if (p === "/api/credenciales/scheffelaar/schedule" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const s = loadCredSchedule();
+    return json(res, 200, {
+      enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila, lastRun: s.lastRun,
+      corriendo: CRED_RUN_STATE.corriendo,
+      progreso: CRED_RUN_STATE.corriendo ? { total: CRED_RUN_STATE.total, hechas: CRED_RUN_STATE.hechas, ok: CRED_RUN_STATE.ok, sinCred: CRED_RUN_STATE.sinCred, err: CRED_RUN_STATE.err } : null,
+    });
+  }
+  if (p === "/api/credenciales/scheffelaar/schedule" && req.method === "PUT") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede configurar la corrida." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const s = loadCredSchedule();
+    s.enabled = !!body.enabled;
+    if (typeof body.hora === "string" && /^\d{1,2}:\d{2}$/.test(body.hora.trim())) { const [h, m] = body.hora.trim().split(":"); s.hora = String(h).padStart(2, "0") + ":" + m; }
+    if (body.desdeFila !== undefined) s.desdeFila = Math.max(2, Number(body.desdeFila) || 2);
+    saveCredSchedule(s);
+    return json(res, 200, { ok: true, enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila });
+  }
+  // Correr el lote ahora (en segundo plano).
+  if (p === "/api/credenciales/scheffelaar/correr-ahora" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+    correrLoteCredenciales("manual");
+    return json(res, 200, { ok: true });
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----

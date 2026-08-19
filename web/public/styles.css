@@ -794,6 +794,9 @@
   .cred-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
   .cred-preview{width:100%;height:540px;border:1px solid var(--border);border-radius:10px;background:#fff}
   @media(max-width:640px){.cred-form{grid-template-columns:1fr}.cred-preview{height:420px}}
+  .cred-sched{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:10px 12px;background:var(--surface-2);border-radius:10px;margin-bottom:6px}
+  .cred-sched label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--text-2)}
+  .cred-sched-chk{flex-direction:row!important;align-items:center;gap:7px;font-size:13px;color:var(--text)}
   .cred-lote-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:6px}
   .cred-lote-controls label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--text-2)}
   .cred-lote-bar{height:10px;border-radius:6px;background:var(--surface-2);overflow:hidden}

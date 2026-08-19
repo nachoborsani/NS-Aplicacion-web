@@ -178,6 +178,59 @@ async function credLoteProcesar(){
   proc.style.display = CRED_LOTE_STOP ? '' : 'none';  // si se detuvo, permitir reanudar
   document.getElementById('credLoteBarTxt').textContent += CRED_LOTE_STOP ? ' — detenido' : ' — listo ✅';
 }
+// ===== Corrida automática diaria (server-side) =====
+var CRED_SCHED_POLL = null;
+async function credSchedCargar(){
+  var r = await req('GET', '/api/credenciales/scheffelaar/schedule');
+  if (!r.ok) return;
+  var d = r.data || {};
+  var chk = document.getElementById('credSchedEnabled'); if (chk) chk.checked = !!d.enabled;
+  var hora = document.getElementById('credSchedHora'); if (hora && d.hora) hora.value = d.hora;
+  var desde = document.getElementById('credLoteDesde'); if (desde && d.desdeFila) desde.value = d.desdeFila;
+  credSchedInfoRender(d);
+  if (d.corriendo) credSchedPoll();
+}
+function credSchedInfoRender(d){
+  var el = document.getElementById('credSchedInfo'); if (!el || !d) return;
+  if (d.corriendo && d.progreso){
+    var pr = d.progreso;
+    el.innerHTML = '⏳ Corriendo… <b>' + pr.hechas + '/' + pr.total + '</b> · ' + pr.ok + ' ok · ' + pr.sinCred + ' sin cred · ' + pr.err + ' error';
+    return;
+  }
+  var partes = [];
+  partes.push((d.enabled && d.hora) ? ('🕒 Programada todos los días a las <b>' + esc(d.hora) + '</b> (hora Argentina)') : 'Corrida automática apagada');
+  if (d.lastRun){
+    var lr = d.lastRun, cuando = lr.at ? new Date(lr.at).toLocaleString('es-AR') : '';
+    if (lr.error) partes.push('última: ' + esc(cuando) + ' — <span style="color:var(--error)">' + esc(lr.error) + '</span>');
+    else partes.push('última: ' + esc(cuando) + ' — <b>' + (lr.ok || 0) + '</b> ok · ' + (lr.sinCred || 0) + ' sin cred · ' + (lr.err || 0) + ' error');
+  }
+  el.innerHTML = partes.join(' · ');
+}
+async function credSchedGuardar(){
+  var payload = {
+    enabled: document.getElementById('credSchedEnabled').checked,
+    hora: document.getElementById('credSchedHora').value,
+    desdeFila: parseInt(document.getElementById('credLoteDesde').value, 10) || 2
+  };
+  await req('PUT', '/api/credenciales/scheffelaar/schedule', payload);
+  credSchedCargar();
+}
+async function credCorrerAhora(){
+  var btn = document.getElementById('credCorrerBtn'); btn.disabled = true;
+  var r = await req('POST', '/api/credenciales/scheffelaar/correr-ahora', {});
+  btn.disabled = false;
+  if (r.ok && r.data && r.data.ok === false){ alert(r.data.error || 'No se pudo iniciar.'); return; }
+  credSchedPoll();
+}
+function credSchedPoll(){
+  if (CRED_SCHED_POLL) clearInterval(CRED_SCHED_POLL);
+  CRED_SCHED_POLL = setInterval(async function(){
+    var r = await req('GET', '/api/credenciales/scheffelaar/schedule');
+    if (!r.ok) return;
+    credSchedInfoRender(r.data);
+    if (!r.data.corriendo){ clearInterval(CRED_SCHED_POLL); CRED_SCHED_POLL = null; }
+  }, 3000);
+}
 // ---------- ruteo por URL (hash): que F5 recargue la misma sección ----------
 // Cada sección refleja su estado en la URL (#nomencladores, #clientes/<slug>).
 // Al recargar (F5) se restaura desde el hash, y el botón "atrás" vuelve a andar.
@@ -1308,6 +1361,7 @@ function renderClientGeneral(){
   var esSchefe = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'scheffelaar-mc');
   if (card) card.style.display = esSchefe ? '' : 'none';
   if (ph) ph.style.display = esSchefe ? 'none' : '';
+  if (esSchefe) credSchedCargar();
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
 async function loadClientPami(){
