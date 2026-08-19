@@ -1811,6 +1811,7 @@ function emptyDashboardPeriod(period) {
     nextPeriodCutoff: 0,
     missingInforme: 0,
     missingInformeAmount: 0,
+    missingInformeRows: [],
     unmatched: 0,
     gross: 0,
     debit: 0,
@@ -1850,7 +1851,17 @@ function addRowToDashboardPeriod(target, row) {
   if (row.absent) { target.absent += 1; target.absentAmount += money(row.valueGross); }
   if (row.outsideCutoff) target.outsideCutoff += 1;
   target.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
-  if (reportRowMissingInforme(row)) { target.missingInforme += 1; target.missingInformeAmount += reportRowMissingInformeAmount(row); }
+  if (reportRowMissingInforme(row)) {
+    target.missingInforme += 1;
+    target.missingInformeAmount += reportRowMissingInformeAmount(row);
+    if (target.missingInformeRows.length < 2000) target.missingInformeRows.push({
+      benef: String(row.benefit || ""),
+      nombre: String(row.patientName || ""),
+      practica: [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - "),
+      turno: String(row.appointmentLabel || row.appointmentAt || ""),
+      valor: money(row.valueGross),
+    });
+  }
   if (!row.matchFound && !row.valueEdited) target.unmatched += 1;
   const gross = reportRowGross(row);
   const debit = reportRowDebit(row);
