@@ -17,7 +17,7 @@ import sys
 import tempfile
 import time
 import traceback
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -31,6 +31,9 @@ _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 # barridos). Generoso para el backlog de la 1ra corrida; las diarias terminan
 # en segundos. Si vence, seguimos con la descarga igual y reportamos lo que haya.
 _TRANSMIT_TIMEOUT_S = 1800
+# Corridas a partir de esta hora se consideran "fin del día": transmiten y bajan
+# hasta hoy. Antes de esa hora: read-only, hasta ayer. (13:00 = mediodía; 20:00 = tarde.)
+_HORA_FIN_DIA_H = 19
 
 
 def _current_period() -> str:
@@ -99,20 +102,20 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
     }
 
 
-def month_range(period: str) -> tuple[str, str, str]:
+def month_range(period: str, hasta_hoy: bool = False) -> tuple[str, str, str]:
     """'2026-07' -> ('01/07/2026', '31/07/2026', 'Julio 2026'). Fechas en formato PAMI.
 
     Para el MES EN CURSO cortamos en AYER (días cerrados), no en fin de mes: así no
-    traemos turnos futuros ya agendados que todavía no pasaron. Los meses pasados
-    se bajan completos. (Idea a futuro: informar también la proyección del mes
-    completo — ver memoria ns-bandeja-sync-mes-en-curso.)
+    traemos turnos futuros ya agendados que todavía no pasaron. En la corrida de la
+    tarde (fin del día, hasta_hoy=True) sí incluimos HOY, porque los consultorios
+    ya cerraron. Los meses pasados se bajan completos.
     """
     year, month = int(period[:4]), int(period[5:7])
     last = calendar.monthrange(year, month)[1]
     hasta_dia = last
     hoy = date.today()
     if (year, month) == (hoy.year, hoy.month):
-        hasta_dia = max(1, hoy.day - 1)  # hasta ayer (clamp al día 1)
+        hasta_dia = hoy.day if hasta_hoy else max(1, hoy.day - 1)  # hasta hoy / hasta ayer
     return f"01/{month:02d}/{year}", f"{hasta_dia:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
 
 
@@ -160,7 +163,10 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
     if not cred.get("pamiUser") or not cred.get("pamiPassword"):
         return {"slug": slug, "name": name, "ok": False, "error": "sin usuario/clave PAMI cargados en la web"}
 
-    desde, hasta, label = month_range(period)
+    # La corrida de la tarde (fin del día) transmite y baja HASTA HOY (los
+    # consultorios ya cerraron); la del mediodía es read-only y hasta ayer.
+    es_fin_dia = datetime.now().hour >= _HORA_FIN_DIA_H
+    desde, hasta, label = month_range(period, hasta_hoy=es_fin_dia)
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
     transmit_info = None
     try:
@@ -169,9 +175,10 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         bot = PamiTransmisionController()
         try:
             bot.abrir_pami(usuario=cred["pamiUser"], clave=cred["pamiPassword"], headless=True)
-            # 1) Transmitir pendientes del rango (1x/día). El bot solo transmite las
-            #    que tienen informe cargado; el resto queda para "faltan informes".
-            if transmitir and not _ya_transmitido_hoy(slug):
+            # 1) Transmitir pendientes SOLO en la corrida de la tarde (1x/día). El bot
+            #    solo transmite las que tienen informe cargado; el resto queda para
+            #    "faltan informes".
+            if transmitir and es_fin_dia and not _ya_transmitido_hoy(slug):
                 if progress:
                     progress(f"{name}: transmitiendo pendientes…")
                 transmit_info = _correr_transmision(bot, desde, hasta, progress=progress)
