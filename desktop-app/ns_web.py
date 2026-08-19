@@ -183,6 +183,16 @@ class NSWebClient:
         """Usuario + clave PAMI del cliente (desencriptada). Requiere sesión admin."""
         return self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/pami/credenciales")
 
+    def faltan_benef_scheffelaar(self) -> list[dict]:
+        """Filas de la planilla de Scheffelaar con DNI y sin benef (para buscarlo)."""
+        data = self._request("GET", "/api/credenciales/scheffelaar/faltan-benef")
+        return data.get("faltan", []) if isinstance(data, dict) else []
+
+    def set_benef_scheffelaar(self, sheet_row: int, benef: str) -> dict:
+        """Escribe el benef encontrado en la planilla de Scheffelaar."""
+        return self._request("POST", "/api/credenciales/scheffelaar/set-benef",
+                             body={"sheetRow": int(sheet_row), "benef": str(benef)})
+
     def upload_bandeja(self, slug: str, month: str, rows: list[dict],
                        columns: list[str] | None = None, month_label: str = "",
                        generated_at: str = "") -> dict:
