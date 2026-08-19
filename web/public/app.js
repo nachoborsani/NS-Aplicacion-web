@@ -217,12 +217,16 @@ function programarPreviewVivo(){ clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = se
 // define por sexo, respetando el resto.
 function aplicarDefaultsPorSexo(){
   var preset = presetById((document.getElementById('infDescripcion') || {}).value);
-  var porSexo = (preset && preset.valoresPorSexo) || null;
+  if (!preset) return;
   var sexoEl = document.querySelector('#infCampos [data-key="sexo"]');
   var sx = String(sexoEl && sexoEl.value || '').trim().toLowerCase(); // masculino/femenino/otro
-  if (!porSexo || !sx || !porSexo[sx]) return;
-  var over = porSexo[sx];
-  Object.keys(over).forEach(function(k){
+  if (!sx) return;
+  // Texto del informe por sexo (la posición: Pte parado / Pte sentada).
+  var txt = document.getElementById('infTexto');
+  if (txt && preset.textoPorSexo && preset.textoPorSexo[sx]){ txt.value = preset.textoPorSexo[sx]; autoGrow(txt); }
+  // Campos por sexo (el diagnóstico clínico).
+  var over = (preset.valoresPorSexo && preset.valoresPorSexo[sx]) || null;
+  if (over) Object.keys(over).forEach(function(k){
     var inp = document.querySelector('#infCampos [data-key="' + k + '"]');
     if (inp) inp.value = over[k];
   });

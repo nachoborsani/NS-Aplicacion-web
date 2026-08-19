@@ -127,7 +127,6 @@ const FLUJO_CAMPOS = [
   { key: "operador", label: "Operador", default: "Dr. Lisandro Veliz", wide: true },
   { key: "motivo", label: "Motivo", default: "", wide: true },
   { key: "requeridoPor", label: "Requerido por", default: "", wide: true },
-  { key: "posicion", label: "Posición del paciente", default: "Pte parado", tipo: "select", opciones: ["Pte parado", "Pte sentada", "Otro"] },
   { key: "diagClinico", label: "Diagnóstico clínico", default: "" },
   { key: "diagUrodinamico", label: "Diagnóstico urodinámico", default: "", wide: true },
   { key: "qMax", label: "Q máximo", default: "" },
@@ -770,11 +769,10 @@ async function buildSiboPdf(modelo, input, lib) {
 // Ficha del paciente + datos del estudio + tabla de resultados de uroflujometría +
 // curva de flujo (sintética a partir de Qmax/T a Qmax/Tiempo total) + informe.
 async function buildFlujoPdf(modelo, input) {
-  const { PDFDocument, StandardFonts, rgb, degrees } = require("./vendor/pdf-lib.min.js");
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
   const p = input.paciente || {};
   const val = input.valores || {};
   const num = (v) => { const n = parseFloat(String(v == null ? "" : v).replace(",", ".").replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; };
-  const has = (v) => String(v == null ? "" : v).trim() !== "";
   const informe = ((input.textoInforme || "").trim()) || modelo.textoDefault || "";
 
   const doc = await PDFDocument.create();
@@ -782,130 +780,98 @@ async function buildFlujoPdf(modelo, input) {
   const W = 595.28, H = 841.89, M = 40;
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const ink = rgb(0.12, 0.12, 0.12), line = rgb(0.25, 0.25, 0.25), grid = rgb(0.85, 0.85, 0.85);
-  const blue = rgb(0.15, 0.2, 0.85), muted = rgb(0.42, 0.42, 0.42);
+  const boldItal = await doc.embedFont(StandardFonts.HelveticaBoldOblique);
+  const black = rgb(0.1, 0.1, 0.1);
+  const blue = rgb(0.12, 0.16, 0.78);        // valores (estilo ECUD)
+  const red = rgb(0.85, 0.12, 0.12);         // "Uroflujometría:" y curva de flujo
+  const green = rgb(0.2, 0.6, 0.28);         // grilla del gráfico
+  const axis = rgb(0.15, 0.15, 0.15);
 
-  const T = (t, x, y, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 9, font: o.bold ? bold : font, color: o.color || ink }); };
+  const T = (t, x, y, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 10, font: o.font || (o.bold ? bold : font), color: o.color || black }); };
   const wsize = (t, f, s) => f.widthOfTextAtSize(String(t == null ? "" : t), s);
-  const centerIn = (t, x1, x2, y, o) => { o = o || {}; const f = o.bold ? bold : font, s = o.size || 9; T(t, x1 + (x2 - x1 - wsize(t, f, s)) / 2, y, o); };
   const wrapLine = (text, f, s, maxW) => {
     const words = String(text || "").split(/\s+/).filter(Boolean); const lines = []; let cur = "";
     for (const w of words) { const test = cur ? cur + " " + w : w; if (wsize(test, f, s) > maxW && cur) { lines.push(cur); cur = w; } else cur = test; }
     if (cur) lines.push(cur); return lines.length ? lines : [""];
   };
-  const fieldset = (x, topY, w, h, title) => {
-    page.drawRectangle({ x, y: topY - h, width: w, height: h, borderColor: line, borderWidth: 1 });
-    const s = 9, tw = wsize(title, bold, s);
-    page.drawRectangle({ x: x + 10, y: topY - s / 2 - 3, width: tw + 8, height: s + 2, color: rgb(1, 1, 1) });
-    T(title, x + 14, topY - s + 1, { bold: true, size: s });
-  };
+  // Etiqueta (negra) + valor (azul), estilo Ficha ECUD.
+  const kv = (label, value, x, y, labelW, size) => { size = size || 10.5; T(label, x, y, { size }); if (String(value == null ? "" : value).trim()) T(value, x + labelW, y, { size, color: blue }); };
 
-  let y = H - M;
-  // Encabezado ECUD
-  centerIn("ECUD", M, W - M, y - 16, { bold: true, size: 22 });
-  centerIn("Estudio Computarizado de Urodinamia", M, W - M, y - 30, { size: 10, color: muted });
-  y -= 42;
-  centerIn("SERVICIO DE UROLOGÍA — Centro Médico Caballito", M, W - M, y - 10, { bold: true, size: 11 });
-  y -= 20;
-  page.drawLine({ start: { x: M, y }, end: { x: W - M, y }, thickness: 1, color: line });
-  y -= 14;
+  // ===== Arriba: gráfico (izq) + Resultados (der) =====
+  const volTot = num(val.volTotal), qMax = num(val.qMax), tPeak = num(val.tAQmax), tTot = Math.max(num(val.tiempoTotal), 1);
+  const Vmax = Math.max(100, Math.ceil(volTot / 100) * 100);
+  const Qs = 50;
+  const Tmax = Math.max(20, Math.ceil(tTot * 2 / 20) * 20);
 
-  // Fila 1: Ficha del paciente (izq) + Datos del estudio (der)
-  const colGap = 20, colW = (W - 2 * M - colGap) / 2, c1 = M, c2 = M + colW + colGap;
-  const boxH = 104, rowTop = y;
-  fieldset(c1, rowTop, colW, boxH, "Ficha del paciente");
-  {
-    let iy = rowTop - 24;
-    T(p.nombre || "—", c1 + 10, iy, { bold: true, size: 10 }); iy -= 15;
-    if (has(p.documento)) { T("Documento: " + p.documento, c1 + 10, iy); iy -= 13; }
-    if (has(p.benef)) { T("N° Beneficiario: " + p.benef, c1 + 10, iy); iy -= 13; }
-    if (has(p.fecha)) { T("Fecha: " + p.fecha, c1 + 10, iy); iy -= 13; }
-    if (has(val.sexo)) { T("Sexo: " + val.sexo, c1 + 10, iy); iy -= 13; }
-    if (has(val.edad)) { T("Edad: " + val.edad, c1 + 10, iy); iy -= 13; }
-  }
-  fieldset(c2, rowTop, colW, boxH, "Datos del estudio");
-  {
-    let iy = rowTop - 24;
-    T("Tipo de estudio: " + (val.tipoEstudio || "Uroflujometría"), c2 + 10, iy); iy -= 13;
-    if (has(val.numeroEstudio)) { T("N° de estudio: " + val.numeroEstudio, c2 + 10, iy); iy -= 13; }
-    T("Operador: " + (val.operador || "Dr. Lisandro Veliz"), c2 + 10, iy); iy -= 13;
-    T("Posición: " + (val.posicion || "Pte parado"), c2 + 10, iy); iy -= 13;
-    if (has(val.motivo)) { T("Motivo: " + val.motivo, c2 + 10, iy); iy -= 13; }
-    if (has(val.requeridoPor)) { T("Requerido por: " + val.requeridoPor, c2 + 10, iy); iy -= 13; }
-  }
-  y = rowTop - boxH - 14;
-
-  // Fila 2: Resultados de Uroflujometría (tabla de 2 columnas × 6 filas)
-  const resItems = [
-    ["Q máximo", val.qMax], ["Q medio 90%", val.qMed90],
-    ["Q promedio", val.qProm], ["Q a 2 seg", val.qA2s],
-    ["T a Qmax", val.tAQmax], ["T de 90%", val.t90],
-    ["Volumen total", val.volTotal], ["Volumen hasta Qmax", val.volQmax],
-    ["Tiempo total", val.tiempoTotal], ["Tiempo neto", val.tiempoNeto],
-    ["Tiempo de descenso", val.tiempoDescenso], ["Tiempo entre pausas", val.tiempoEntrePausas],
-  ];
-  const rowH2 = 16, nRows = 6, resH = 22 + nRows * rowH2 + 6, resTop = y;
-  fieldset(M, resTop, W - 2 * M, resH, "Resultados de Uroflujometría");
-  {
-    const half = (W - 2 * M) / 2;
-    for (let i = 0; i < resItems.length; i++) {
-      const col = Math.floor(i / nRows), rr = i % nRows;
-      const bx = M + col * half + 12, by = resTop - 24 - rr * rowH2;
-      T(resItems[i][0] + ":", bx, by, { size: 9, color: muted });
-      T(has(resItems[i][1]) ? String(resItems[i][1]) : "—", bx + 118, by, { size: 9, bold: true });
-    }
-  }
-  y = resTop - resH - 14;
-
-  // Fila 3: Curva de flujo (sintética a partir de los valores cargados)
-  const gTop = y, gH = 138, gBottom = gTop - gH;
-  fieldset(M, gTop, W - 2 * M, gH, "Curva de flujo");
-  const px0 = M + 42, px1 = W - M - 16, py0 = gBottom + 26, py1 = gTop - 18;
-  const qMax = num(val.qMax), tPeak = num(val.tAQmax), tTot = Math.max(num(val.tiempoTotal), tPeak + 1, 1);
-  let qScale = Math.ceil((Math.max(qMax, 5) * 1.2) / 5) * 5; if (qScale < 10) qScale = 10;
-  let tScale = Math.ceil(tTot / 5) * 5; if (tScale < 5) tScale = 5;
-  const xFor = (t) => px0 + (px1 - px0) * (Math.max(0, Math.min(t, tScale)) / tScale);
-  const yFor = (q) => py0 + (Math.max(0, Math.min(q, qScale)) / qScale) * (py1 - py0);
-  const stepQ = Math.max(5, Math.round(qScale / 4));
-  for (let q = 0; q <= qScale; q += stepQ) { const gy = yFor(q); page.drawLine({ start: { x: px0, y: gy }, end: { x: px1, y: gy }, thickness: 0.4, color: grid }); T(String(q), px0 - 8 - wsize(String(q), font, 7), gy - 3, { size: 7, color: muted }); }
-  page.drawLine({ start: { x: px0, y: py0 }, end: { x: px1, y: py0 }, thickness: 0.8, color: line });
-  page.drawLine({ start: { x: px0, y: py0 }, end: { x: px0, y: py1 }, thickness: 0.8, color: line });
+  const GX = M, GW = 250, topLbl = H - M;
+  T("Q:" + Qs + " ml/s", GX, topLbl - 8, { size: 9 });
+  const vLbl = "V:" + Vmax + " ml"; T(vLbl, GX + GW - wsize(vLbl, font, 9), topLbl - 8, { size: 9 });
+  const gTop = topLbl - 22, GH = 220, gBot = gTop - GH;
+  page.drawRectangle({ x: GX, y: gBot, width: GW, height: GH, borderColor: axis, borderWidth: 1 });
+  for (let i = 1; i < 10; i++) page.drawLine({ start: { x: GX + GW * i / 10, y: gBot }, end: { x: GX + GW * i / 10, y: gTop }, thickness: 0.4, color: green });
+  for (let i = 1; i < 5; i++) page.drawLine({ start: { x: GX, y: gBot + GH * i / 5 }, end: { x: GX + GW, y: gBot + GH * i / 5 }, thickness: 0.4, color: green });
+  const tLbl = "T:" + Tmax + " s"; T(tLbl, GX + GW - wsize(tLbl, font, 9), gBot - 12, { size: 9 });
+  // Curvas: azul = volumen acumulado (a V), roja = flujo representativo (a Q).
+  const pad = 3, ax0 = GX + pad, ax1 = GX + GW - pad, ay0 = gBot + pad, ay1 = gTop - pad;
+  const xForT = (t) => ax0 + (ax1 - ax0) * Math.max(0, Math.min(t, Tmax)) / Tmax;
+  const yForQ = (q) => ay0 + (ay1 - ay0) * Math.max(0, Math.min(q, Qs)) / Qs;
+  const yForV = (v) => ay0 + (ay1 - ay0) * Math.max(0, Math.min(v, Vmax)) / Vmax;
   if (qMax > 0) {
-    const pts = []; const N = 44;
-    for (let i = 0; i <= N; i++) {
-      const t = tTot * (i / N); let q;
-      if (t <= tPeak && tPeak > 0) { const u = t / tPeak; q = qMax * Math.pow(u, 1.4) * (2 - Math.pow(u, 1.4)); }
-      else { const u = (t - tPeak) / Math.max(tTot - tPeak, 0.001); q = qMax * (1 - u) * (1 - u * 0.3); }
-      pts.push([t, Math.max(0, q)]);
+    const t1 = Math.max(Tmax * 0.08, Math.min((Tmax - tTot) / 2, Tmax * 0.5));
+    const redAt = (t) => {
+      if (t < t1 || t > t1 + tTot) return 0;
+      const u = (t - t1) / tTot, up = tPeak > 0 ? Math.min(tPeak / tTot, 0.95) : 0.2;
+      if (u <= up && up > 0) { const r = u / up; return qMax * Math.pow(r, 1.3) * (2 - Math.pow(r, 1.3)); }
+      const r = (u - up) / Math.max(1 - up, 0.001); return qMax * (1 - r) * (1 - r * 0.25);
+    };
+    const N = 120, ts = [], fl = [];
+    for (let i = 0; i <= N; i++) { const t = Tmax * i / N; ts.push(t); fl.push(Math.max(0, redAt(t))); }
+    const cum = [0];
+    for (let i = 1; i <= N; i++) cum.push(cum[i - 1] + (fl[i] + fl[i - 1]) / 2 * (ts[i] - ts[i - 1]));
+    const sc = (cum[N] > 0 && volTot > 0) ? volTot / cum[N] : 0;
+    for (let i = 0; i < N; i++) {
+      page.drawLine({ start: { x: xForT(ts[i]), y: yForV(cum[i] * sc) }, end: { x: xForT(ts[i + 1]), y: yForV(cum[i + 1] * sc) }, thickness: 1.2, color: blue });
+      page.drawLine({ start: { x: xForT(ts[i]), y: yForQ(fl[i]) }, end: { x: xForT(ts[i + 1]), y: yForQ(fl[i + 1]) }, thickness: 1, color: red });
     }
-    for (let i = 0; i < pts.length - 1; i++) page.drawLine({ start: { x: xFor(pts[i][0]), y: yFor(pts[i][1]) }, end: { x: xFor(pts[i + 1][0]), y: yFor(pts[i + 1][1]) }, thickness: 1.4, color: blue });
-  } else {
-    centerIn("(cargá Q máximo y tiempos para ver la curva)", px0, px1, (py0 + py1) / 2, { size: 8, color: muted });
   }
-  const stepT = Math.max(5, Math.round(tScale / 5));
-  for (let t = 0; t <= tScale; t += stepT) { const lx = xFor(t); T(String(t), lx - wsize(String(t), font, 7) / 2, py0 - 11, { size: 7, color: muted }); }
-  centerIn("Tiempo (seg)", px0, px1, gBottom + 5, { size: 7.5, color: muted });
-  page.drawText("Flujo (ml/s)", { x: M + 8, y: (py0 + py1) / 2 - 20, size: 7.5, font, color: muted, rotate: degrees(90) });
-  y = gBottom - 16;
 
-  // Diagnósticos (si hay)
-  if (has(val.diagClinico)) { T("Diagnóstico clínico: ", M, y, { bold: true, size: 9.5 }); T(val.diagClinico, M + wsize("Diagnóstico clínico: ", bold, 9.5), y, { size: 9.5 }); y -= 15; }
-  if (has(val.diagUrodinamico)) { T("Diagnóstico urodinámico: ", M, y, { bold: true, size: 9.5 }); T(val.diagUrodinamico, M + wsize("Diagnóstico urodinámico: ", bold, 9.5), y, { size: 9.5 }); y -= 15; }
-  if (has(val.diagClinico) || has(val.diagUrodinamico)) y -= 4;
+  // Resultados (derecha del gráfico)
+  const RX = GX + GW + 24;
+  T("Resultados:", RX, topLbl - 10, { bold: true, size: 12 });
+  T("Uroflujometría:", RX, topLbl - 28, { size: 11, color: red });
+  const resL = [["Q Máximo:", val.qMax], ["Q Medio 90%:", val.qMed90], ["Q Promedio:", val.qProm], ["Q a 2 seg:", val.qA2s], ["T a Qmax:", val.tAQmax], ["T de 90%:", val.t90]];
+  const resR = [["Volumen Total:", val.volTotal], ["Vol hasta Qmax:", val.volQmax], ["Tiempo Total:", val.tiempoTotal], ["Tiempo Neto:", val.tiempoNeto], ["T de descenso:", val.tiempoDescenso], ["T entre pausas:", val.tiempoEntrePausas]];
+  const rTop = topLbl - 48, rStep = 17, cLx = RX, cRx = RX + 130;
+  for (let i = 0; i < 6; i++) {
+    kv(resL[i][0], resL[i][1], cLx, rTop - i * rStep, 74, 9.5);
+    kv(resR[i][0], resR[i][1], cRx, rTop - i * rStep, 80, 9.5);
+  }
 
-  // Informe final
-  T("Informe", M, y, { bold: true, size: 10 }); y -= 16;
+  // ===== Ficha =====
+  let y = gBot - 28;
+  T("Ficha:", M, y, { bold: true, size: 12 }); y -= 20;
+  const PX = M, EX = M + 300, fLabelW = 92;
+  const pac = [["Nombre:", p.nombre], ["Dirección:", ""], ["Ciudad:", ""], ["Teléfono:", ""], ["H.Clínica:", ""], ["Mutual:", ""], ["Edad:", val.edad], ["Sexo:", val.sexo]];
+  const est = [["Tipo:", val.tipoEstudio || "Uroflujometría"], ["Fecha:", p.fecha], ["Número:", val.numeroEstudio], ["Motivo:", val.motivo], ["Requerido por:", val.requeridoPor], ["Operador:", val.operador || "Dr. Lisandro Veliz"], ["Diag.Clínico:", val.diagClinico], ["Diag.Urodin:", val.diagUrodinamico]];
+  T("Datos del Paciente:", PX, y, { size: 10.5 });
+  T("Datos del Estudio:", EX, y, { size: 10.5 });
+  let fy = y - 20;
+  for (let i = 0; i < 8; i++) { kv(pac[i][0], pac[i][1], PX, fy, fLabelW); kv(est[i][0], est[i][1], EX, fy, fLabelW); fy -= 17; }
+  T("Observaciones:", PX, fy - 2, { size: 10.5 });
+  y = fy - 32;
+
+  // ===== Informe =====
+  T("Informe:", M, y, { bold: true, size: 12 }); y -= 22;
   for (const para of String(informe).split(/\n/)) {
-    if (para.trim() === "") { y -= 7; continue; }
-    for (const ln of wrapLine(para, font, 9.5, W - 2 * M)) { T(ln, M, y, { size: 9.5 }); y -= 13; }
+    if (para.trim() === "") { y -= 9; continue; }
+    for (const ln of wrapLine(para, font, 12.5, W - 2 * M)) { T(ln, M, y, { size: 12.5 }); y -= 17; }
   }
 
-  // Pie: logo (izq) + datos del centro (der)
-  const pieY = 50;
-  const logoBuf = readAsset(modelo.logo);
-  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const lw = 60, lh = (img.height / img.width) * lw; page.drawImage(img, { x: M, y: pieY - lh + 12, width: lw, height: lh }); } catch {} }
-  { let py = pieY; (modelo.pie || []).forEach((ln) => { T(ln, W - M - wsize(ln, font, 8), py, { size: 8, color: muted }); py -= 11; }); }
-  page.drawLine({ start: { x: M, y: pieY + 18 }, end: { x: W - M, y: pieY + 18 }, thickness: 0.5, color: grid });
+  // ===== Pie: ECUD (azul cursiva) =====
+  const eY = 56, eSize = 22, ew = boldItal.widthOfTextAtSize("ECUD", eSize);
+  T("ECUD", W - M - ew, eY, { font: boldItal, size: eSize, color: blue });
+  const sub = "Estudio Computarizado de Urodinamia", ss = 8.5;
+  T(sub, W - M - wsize(sub, font, ss), eY - 12, { size: ss });
 
   return await doc.save();
 }
