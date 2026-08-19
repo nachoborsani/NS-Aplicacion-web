@@ -182,6 +182,45 @@ async function credRecortarCredencial(buf) {
     return buf;
   }
 }
+// Descarga la credencial probando géneros (el explícito primero, luego m/f/o).
+// La planilla de Scheffelaar suele traer el sexo vacío → hay que probar. Lanza si
+// los datos son inválidos; devuelve { ok, buf, genero } o { ok:false, error }.
+async function credDescargar(benef, dni, tramite, generoExplicito) {
+  const bN = credNormBenef(benef), dN = credNormDni(dni), tN = credNormTramite(tramite);
+  const exp = credGeneroForm(generoExplicito);
+  const cands = [...new Set([exp, "m", "f", "o"].filter(Boolean))];
+  let last = null;
+  for (const g of cands) {
+    try { const r = await credConsultarPami(bN, dN, tN, g); last = r; if (r.ok) return { ok: true, buf: r.buf, genero: g }; }
+    catch (e) { last = { error: String((e && e.message) || e) }; }
+  }
+  return { ok: false, error: (last && (last.error || ("PAMI HTTP " + last.status))) || "PAMI no devolvió la credencial." };
+}
+function credNombreArchivo(nombre, dni) {
+  const clean = String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim();
+  return (clean ? clean + "_" + dni : "credencial_" + dni) + ".pdf";
+}
+// Token de Google (Sheets+Drive) de gestion.nssalud, guardado ENCRIPTADO en el
+// volumen: { client_id, client_secret, refresh_token }.
+const googleOauthFile = path.join(dataDir, "google_oauth.json");
+function loadGoogleCfg() {
+  try { const raw = JSON.parse(fs.readFileSync(googleOauthFile, "utf8")); const dec = decryptSecret(raw.enc); return dec ? JSON.parse(dec) : null; } catch { return null; }
+}
+function saveGoogleCfg(cfg) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(googleOauthFile, JSON.stringify({ enc: encryptSecret(JSON.stringify(cfg)) }, null, 2));
+}
+// Planilla + carpeta de Scheffelaar (columnas 0-based: B=1 nombre, C=2 sexo,
+// D=3 benef, F=5 dni, G=6 trámite, I=8 credencial/resultado).
+const CRED_SCHEFE = {
+  spreadsheetId: "1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334",
+  tab: "Schefelar",
+  folderId: "1dVeF4i89jbGlZqu_7qrajUgonDFWMoGJ",
+  startRow: 2,
+  cols: { nombre: 1, sexo: 2, benef: 3, dni: 5, tramite: 6, credencial: 8 },
+};
+const gcreds = require("./google_creds.js");
 // Resultado del último sync de bandeja por cliente (para el indicador de salud
 // en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
 function loadBandejaEstado() {
@@ -3740,6 +3779,91 @@ const server = http.createServer(async (req, res) => {
       error: "PAMI no devolvió la credencial. Revisá los datos, o puede que PAMI bloquee la consulta desde el servidor.",
       detalle,
     });
+  }
+
+  // Guardar el token de Google (admin). Body: { client_id, client_secret, refresh_token }.
+  if (p === "/api/admin/google/token" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    if (!body.client_id || !body.client_secret || !body.refresh_token) return json(res, 400, { error: "Faltan client_id, client_secret o refresh_token." });
+    saveGoogleCfg({ client_id: String(body.client_id), client_secret: String(body.client_secret), refresh_token: String(body.refresh_token) });
+    try {
+      const email = await gcreds.connectedEmail(gcreds.makeAuth(loadGoogleCfg()));
+      return json(res, 200, { ok: true, email });
+    } catch (e) {
+      return json(res, 200, { ok: true, email: "", aviso: "Guardado, pero no pude confirmar el email: " + ((e && e.message) || e) });
+    }
+  }
+
+  // Estado de la conexión con Google (admin).
+  if (p === "/api/admin/google/estado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const cfg = loadGoogleCfg();
+    if (!cfg) return json(res, 200, { connected: false });
+    try {
+      const email = await gcreds.connectedEmail(gcreds.makeAuth(cfg));
+      return json(res, 200, { connected: true, email });
+    } catch (e) {
+      return json(res, 200, { connected: true, email: "", error: (e && e.message) || String(e) });
+    }
+  }
+
+  // Credenciales Scheffelaar: filas pendientes de la planilla.
+  if (p === "/api/credenciales/scheffelaar/pendientes" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const cfg = loadGoogleCfg();
+    if (!cfg) return json(res, 400, { error: "Google no está conectado (falta cargar el token, admin)." });
+    try {
+      const auth = gcreds.makeAuth(cfg);
+      const C = CRED_SCHEFE, cc = C.cols;
+      const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
+      const pendientes = []; let hechas = 0, faltanDatos = 0;
+      rows.forEach((r, i) => {
+        const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
+        const nombre = g(cc.nombre), sexo = g(cc.sexo), benef = g(cc.benef), dni = g(cc.dni), tramite = g(cc.tramite), cred = g(cc.credencial);
+        if (!nombre && !benef && !dni && !tramite) return;               // fila vacía
+        if (cred) { hechas++; return; }                                   // ya descargada
+        if (!benef || !dni || !tramite) { faltanDatos++; return; }        // incompleta
+        pendientes.push({ sheetRow: C.startRow + i, nombre, sexo, benef, dni, tramite });
+      });
+      return json(res, 200, { pendientes, hechas, faltanDatos });
+    } catch (e) {
+      return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) });
+    }
+  }
+
+  // Credenciales Scheffelaar: procesar UNA fila (baja, sube a Drive, marca la planilla).
+  if (p === "/api/credenciales/scheffelaar/procesar-fila" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const cfg = loadGoogleCfg();
+    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const sheetRow = Number(body.sheetRow) || 0;
+    const C = CRED_SCHEFE;
+    let dl;
+    try { dl = await credDescargar(body.benef, body.dni, body.tramite, body.sexo); }
+    catch (e) { return json(res, 200, { ok: false, sheetRow, error: e.message }); }
+    if (!dl.ok) return json(res, 200, { ok: false, sheetRow, error: dl.error });
+    try {
+      const auth = gcreds.makeAuth(cfg);
+      const fname = credNombreArchivo(body.nombre, credNormDni(body.dni));
+      const up = await gcreds.uploadPdf(auth, C.folderId, fname, dl.buf);
+      if (sheetRow) {
+        const cell = gcreds.indexToCol(C.cols.credencial) + sheetRow;
+        await gcreds.writeCell(auth, C.spreadsheetId, C.tab, cell, `=HYPERLINK("${up.webViewLink}";"DESCARGADA")`);
+      }
+      return json(res, 200, { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero });
+    } catch (e) {
+      return json(res, 200, { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) });
+    }
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----
