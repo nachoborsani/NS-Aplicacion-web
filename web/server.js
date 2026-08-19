@@ -1485,6 +1485,41 @@ function reportRowDebit(row) {
 function reportRowNet(row) {
   return Math.max(0, money(reportRowGross(row) - reportRowDebit(row)));
 }
+// Detalle de posibles débitos de un reporte (para el desplegable del mes anterior):
+// por cada fila con débito, arma el cruce (otra OME del mismo afiliado y día).
+function buildDebitoDetalle(rows) {
+  const grupo = new Map();
+  for (const r of rows) {
+    const benef = cleanIdentifier(r.benefit);
+    const day = reportRowDay(r);
+    if (!benef || !day) continue;
+    const k = benef + "|" + day;
+    if (!grupo.has(k)) grupo.set(k, []);
+    grupo.get(k).push(r);
+  }
+  const estadoDe = (r) => r.transmitted ? "Transmitida" : (r.validated ? "Validada" : "Turno asignado");
+  const out = [];
+  for (const r of rows) {
+    const d = reportRowDebit(r);
+    if (d <= 0) continue;
+    const ruleCodes = String(r.autoDebitRuleCodes || "").split("/").map((c) => cleanIdentifier(c)).filter(Boolean);
+    const g = grupo.get(cleanIdentifier(r.benefit) + "|" + reportRowDay(r)) || [];
+    const cruce = g
+      .filter((x) => x !== r && (ruleCodes.length ? ruleCodes.includes(cleanIdentifier(x.practiceCode)) : true))
+      .map((x) => [x.practiceCode, x.practiceDescription].filter(Boolean).join(" - ") + (x.appointmentLabel ? " · " + x.appointmentLabel : "") + " · " + estadoDe(x))
+      .filter(Boolean);
+    if (out.length < 2000) out.push({
+      benef: String(r.benefit || ""),
+      nombre: String(r.patientName || ""),
+      turno: String(r.appointmentLabel || r.appointmentAt || ""),
+      practica: [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
+      estado: estadoDe(r),
+      cruce: cruce.join(" + "),
+      monto: money(d),
+    });
+  }
+  return out;
+}
 function reportRowNextPeriodCutoff(row) {
   return row && row.outsideCutoff ? money(row.valueGross) : 0;
 }
@@ -1836,6 +1871,7 @@ function emptyDashboardPeriod(period) {
     missingInforme: 0,
     missingInformeAmount: 0,
     missingInformeRows: [],
+    posiblesDebitosRows: [],
     unmatched: 0,
     gross: 0,
     debit: 0,
@@ -1996,7 +2032,9 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     for (const row of reportRows(report)) target._rowsByKey.set(dashboardRowKey(row), row);
   }
   for (const item of byPeriod.values()) {
-    for (const row of item._rowsByKey.values()) addRowToDashboardPeriod(item, row);
+    const periodRows = [...item._rowsByKey.values()];
+    for (const row of periodRows) addRowToDashboardPeriod(item, row);
+    item.posiblesDebitosRows = buildDebitoDetalle(periodRows);
     delete item._rowsByKey;
   }
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
