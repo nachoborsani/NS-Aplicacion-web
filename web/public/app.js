@@ -1198,19 +1198,19 @@ function mesCursoTogglePanel(tipo){
   if (tipo === 'informes'){
     var fi = MESCURSO_FALTAN_INFORMES || [];
     if (!fi.length) return;
-    html = mesCursoTablaHtml('Faltan informes · ' + fi.length, 'error', 'copiarFaltanInformes', cols, fi.map(mapInformes));
+    html = mesCursoTablaHtml('Faltan informes · ' + fi.length, 'error', 'copiarFaltanInformes', cols, fi.map(mapInformes), 'informes');
   } else if (tipo === 'informes-julio'){
     var fj = MESCURSO_FALTAN_INFORMES_JULIO || [];
     if (!fj.length) return;
-    html = mesCursoTablaHtml('Faltan informes (mes anterior) · ' + fj.length, 'error', 'copiarFaltanInformesJulio', cols, fj.map(mapInformes));
+    html = mesCursoTablaHtml('Faltan informes (mes anterior) · ' + fj.length, 'error', 'copiarFaltanInformesJulio', cols, fj.map(mapInformes), 'informes-julio');
   } else if (tipo === 'debitos-julio'){
     var dj = MESCURSO_POSIBLES_DEBITOS_JULIO || [];
     if (!dj.length) return;
-    html = mesCursoTablaHtml('Posibles débitos (mes anterior) · ' + dj.length, 'warn', 'copiarPosiblesDebitosJulio', debCols, dj.map(mapDebitos));
+    html = mesCursoTablaHtml('Posibles débitos (mes anterior) · ' + dj.length, 'warn', 'copiarPosiblesDebitosJulio', debCols, dj.map(mapDebitos), 'debitos-julio');
   } else {
     var pd = MESCURSO_POSIBLES_DEBITOS || [];
     if (!pd.length) return;
-    html = mesCursoTablaHtml('Posibles débitos · ' + pd.length, 'warn', 'copiarPosiblesDebitos', debCols, pd.map(mapDebitos));
+    html = mesCursoTablaHtml('Posibles débitos · ' + pd.length, 'warn', 'copiarPosiblesDebitos', debCols, pd.map(mapDebitos), 'debitos');
   }
   panel.innerHTML = html;
   MESCURSO_PANEL_ABIERTO = tipo;
@@ -1220,16 +1220,59 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoInformesJulioCaret', tipo === 'informes-julio');
   mesCursoSetCaret('mescursoDebitosJulioCaret', tipo === 'debitos-julio');
 }
-function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas){
+function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId){
   var thead = '<tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>';
   var tbody = filas.map(function(f){
     return '<tr>' + f.map(function(c){ return '<td>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('') + '</tr>';
   }).join('');
+  var acciones = '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
+  if (panelId){
+    acciones += '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'' + panelId + '\',this)">📄 PDF</button>'
+      + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'' + panelId + '\',this)">📊 Excel</button>';
+  }
   return '<div class="mescurso-panel ' + esc(tono) + '">'
     + '<div class="mescurso-panel-head"><b>' + esc(titulo) + '</b>'
-    + '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button></div>'
+    + '<div class="mescurso-panel-actions">' + acciones + '</div></div>'
     + '<div class="table-scroll"><table class="bandeja-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>'
     + '</div>';
+}
+// Datos crudos (encabezados en mayúscula + valores numéricos de $) para exportar
+// un panel. Reusa los mismos globales que "copiar".
+function mesCursoDescargarDatos(panelId){
+  var infoCols = ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'];
+  var debCols = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'SE CRUZA CON', 'DEBITO'];
+  var mapInfo = function(x){ return [x.benef, x.nombre, x.practica, x.turno, Number(x.valor) || 0]; };
+  var mapDeb = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.cruce, Number(x.monto) || 0]; };
+  var cli = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
+  if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'debitos-julio') return { titulo: 'Posibles debitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [6] };
+  return { titulo: 'Posibles debitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [6] };
+}
+async function mesCursoDescargar(fmt, panelId, btn){
+  var d = mesCursoDescargarDatos(panelId);
+  if (!d.filas.length) return;
+  d.fmt = fmt;
+  var prev = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = '…'; }
+  try {
+    var resp = await fetch('/api/mescurso/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin', body: JSON.stringify(d)
+    });
+    if (!resp.ok) throw new Error('export');
+    var blob = await resp.blob();
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = d.titulo.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') + (fmt === 'pdf' ? '.pdf' : '.xlsx');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  } catch (e){
+    alert('No se pudo generar el archivo.');
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = prev; }
+  }
 }
 // Copian el listado (con encabezado) separado por tabs, para pegar en Excel.
 function copiarFaltanInformes(btn){

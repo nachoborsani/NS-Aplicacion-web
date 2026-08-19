@@ -2510,6 +2510,54 @@ function buildGeneralReportPdf(report) {
     summaryText: `Resumen: cardio ${pdfMoney(cardioSummary.net)} - traumato ${pdfMoney(traumatoSummary.net)} - proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)} - total ${pdfMoney(total)}`,
   });
 }
+// PDF genérico de una tabla (título + columnas + filas). Reparte el ancho en
+// partes iguales, envuelve el texto largo y formatea como $ las columnas de
+// dinero (moneyCols). Lo usan las descargas del detalle de "Mes en curso".
+function buildGenericTablePdf(titulo, columnas, filas, moneyCols) {
+  const width = 842, height = 595, margin = 28;
+  const money = new Set((moneyCols || []).map(Number));
+  const n = Math.max(1, columnas.length);
+  const colW = (width - margin * 2) / n;
+  const chars = Math.max(6, Math.floor(colW / 3.4));
+  const xs = columnas.map((_, i) => margin + i * colW + 2);
+  const fmtCell = (v, i) => money.has(i) ? pdfMoney(Number(v) || 0) : asciiText(String(v == null ? "" : v));
+  const pageStreams = [];
+  let commands = [], y = 0;
+  const footer = () => {
+    commands.push(pdfLineCommand(margin, 26, width - margin, 26, 0.3));
+    commands.push(pdfTextCommand(margin, 16, PDF_PIE_CONTACTO, 7, "F1"));
+  };
+  const drawHead = () => {
+    commands.push(pdfLineCommand(margin, y + 8, width - margin, y + 8));
+    columnas.forEach((c, i) => commands.push(pdfTextCommand(xs[i], y, asciiText(String(c)), 7, "F2")));
+    commands.push(pdfLineCommand(margin, y - 5, width - margin, y - 5));
+    y -= 16;
+  };
+  const newPage = () => {
+    if (commands.length) pageStreams.push(commands.join("\n"));
+    commands = [];
+    footer();
+    y = height - 34;
+    commands.push(pdfTextCommand(margin, y, asciiText(String(titulo || "Detalle")), 12, "F2"));
+    y -= 18;
+    drawHead();
+  };
+  newPage();
+  (filas || []).forEach((fila) => {
+    const cellLines = columnas.map((_, i) => wrapPdfText(fmtCell((fila || [])[i], i), chars).slice(0, 4));
+    const lc = Math.max(1, ...cellLines.map((l) => l.length));
+    const rh = 8 + (lc - 1) * 7;
+    if (y - rh < 34) newPage();
+    cellLines.forEach((lines, i) => lines.forEach((ln, li) =>
+      commands.push(pdfTextCommand(xs[i], y - li * 7, ln, 6.5, money.has(i) ? "F2" : "F1"))));
+    y -= rh + 3;
+  });
+  commands.push(pdfLineCommand(margin, y, width - margin, y, 0.5));
+  y -= 12;
+  commands.push(pdfTextCommand(margin, y, `Total de filas: ${(filas || []).length}`, 8, "F2"));
+  pageStreams.push(commands.join("\n"));
+  return buildPdfBuffer(pageStreams, width, height);
+}
 function readBuffer(req, limit = 25 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -3590,6 +3638,32 @@ const server = http.createServer(async (req, res) => {
     if (!body || !Array.isArray(body.reglas)) return json(res, 400, { error: "Falta la lista de reglas." });
     const guardado = saveDebitoStore(body.reglas, body.umbralPagaPct);
     return json(res, 200, guardado);
+  }
+  // Descarga genérica del detalle de "Mes en curso" (faltan informes / posibles
+  // débitos) en PDF o Excel. Recibe columnas + filas ya armadas por el front.
+  if (p === "/api/mescurso/export" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const body = await readBody(req);
+    const titulo = String((body && body.titulo) || "Detalle").slice(0, 120);
+    const columnas = Array.isArray(body && body.columnas) ? body.columnas.map((c) => String(c).slice(0, 60)) : [];
+    const filas = Array.isArray(body && body.filas) ? body.filas.slice(0, 5000).map((f) => Array.isArray(f) ? f : []) : [];
+    const moneyCols = Array.isArray(body && body.moneyCols) ? body.moneyCols.map(Number).filter((n) => n >= 0) : [];
+    const fmt = (body && body.fmt) === "pdf" ? "pdf" : "xlsx";
+    if (!columnas.length) return json(res, 400, { error: "Sin columnas para exportar." });
+    const base = downloadName(titulo) || "detalle";
+    if (fmt === "pdf") {
+      const buf = buildGenericTablePdf(titulo, columnas, filas, moneyCols);
+      res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="${base}.pdf"`, "cache-control": "no-store" });
+      return res.end(buf);
+    }
+    const aoa = [[titulo], [], columnas].concat(filas);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Detalle");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.writeHead(200, { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="${base}.xlsx"`, "cache-control": "no-store" });
+    return res.end(buf);
   }
   if (p === "/api/informes/config" && req.method === "GET") {
     const me = getSessionUser(req);
