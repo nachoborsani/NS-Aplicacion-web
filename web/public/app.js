@@ -1228,9 +1228,14 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoDebitosAdelanteCaret', tipo === 'debitos-adelante');
 }
 function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId){
-  var thead = '<tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>';
+  // Columnas que absorben el ancho sobrante (las de texto largo): así la tabla
+  // llena el panel sin dejar un bloque vacío a la derecha ni abrir huecos entre
+  // las columnas cortas. El resto se ajusta al contenido.
+  var expand = /informes/.test(String(panelId || '')) ? [1, 2] : [1, 3, 5];
+  var clase = function(i){ return expand.indexOf(i) >= 0 ? ' class="mc-exp"' : ''; };
+  var thead = '<tr>' + headers.map(function(h, i){ return '<th' + clase(i) + '>' + esc(h) + '</th>'; }).join('') + '</tr>';
   var tbody = filas.map(function(f){
-    return '<tr>' + f.map(function(c){ return '<td>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('') + '</tr>';
+    return '<tr>' + f.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('') + '</tr>';
   }).join('');
   var acciones = '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
   if (panelId){
