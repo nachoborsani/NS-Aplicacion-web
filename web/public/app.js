@@ -2205,6 +2205,9 @@ function debitoCategoria(r, tieneMotivos){
     if (r.debitMotivo === 'excluyente' || r.debitMotivo === 'incluyente') return 'excluyente';
     return 'otro';
   }
+  // Débito de REGLA (cruce mismo día, ej. ecodoppler art+ven al 40%): NO es umbral
+  // aunque sea pay40. El umbral es otra cosa (Resol 2713).
+  if (r.debitSource === 'regla') return 'otro';
   // Reporte sin motivos (código viejo): umbral = débito parcial; el resto = otro.
   return ['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0 ? 'umbral' : 'otro';
 }

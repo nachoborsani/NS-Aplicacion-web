@@ -1830,6 +1830,9 @@ function debitoCategoria(row) {
   if (m === "umbral") return "umbral";
   if (m === "excluyente" || m === "incluyente") return "excluyente";
   if (m) return "otro";
+  // Débito de REGLA (cruce mismo día, ej. ecodoppler art+ven al 40%): NO es umbral
+  // aunque sea pay40. El umbral es otra cosa (Resol 2713).
+  if (row && row.debitSource === "regla") return "otro";
   // Sin motivo (reporte viejo): parcial = umbral, total = otro.
   return ["pay40", "pay60", "pay80"].includes(row && row.debitType) ? "umbral" : "otro";
 }
