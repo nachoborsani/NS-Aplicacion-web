@@ -1556,7 +1556,7 @@ async function loadClientMesCurso(){
 
   var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
   var cardAdel = mesCursoCardAdelante(adelante);
-  box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + (cardAdel || '') + '</div>'
+  box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + (cardAdel || '') + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + '</div>'
     + '<div id="mescursoInformesPanel"></div>';
 }
 async function renderActiveClient(){
