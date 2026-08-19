@@ -2179,7 +2179,13 @@ const reportSpecialPdfSections = {
     label: "FALTA INFORME",
     filename: "FALTA-INFORME",
   },
+  debitos: {
+    label: "DEBITOS",
+    filename: "DEBITOS",
+  },
 };
+// Pie fijo en cada hoja de todos los PDF: identifica a la gestora.
+const PDF_PIE_CONTACTO = "N&S Salud - Gestion de prestaciones  |  gestion.nssalud@gmail.com";
 function wrapPdfText(text, maxChars) {
   const words = asciiText(text).split(" ").filter(Boolean);
   const lines = [];
@@ -2286,6 +2292,9 @@ function buildRowsPdf(options) {
   function newPage(withTableHeader = true) {
     if (commands.length) pageStreams.push(commands.join("\n"));
     commands = [];
+    // Pie con el mail de la gestora, fijo abajo de cada hoja.
+    commands.push(pdfLineCommand(margin, 26, width - margin, 26, 0.3));
+    commands.push(pdfTextCommand(margin, 16, PDF_PIE_CONTACTO, 7, "F1"));
     y = height - 30;
     commands.push(pdfTextCommand(margin, y, options.heading || "SALA MILLON - INFORME", 13, "F2"));
     commands.push(pdfTextCommand(610, y, `${options.totalLabel || "Total"}: ${pdfMoney(total)}`, 12, "F2"));
@@ -2357,6 +2366,22 @@ function buildSpecialReportPdf(report, section) {
       amountForRow: reportRowNextPeriodCutoff,
       emptyText: "No hay practicas fuera de corte para el proximo periodo.",
       summaryText: `Resumen: prestaciones ${rows.length} - a cobrar proximo periodo ${pdfMoney(total)}`,
+    });
+  }
+  if (section === "debitos") {
+    const rows = reportRows(report).filter((row) => reportRowDebit(row) > 0);
+    const total = rows.reduce((acc, row) => acc + reportRowDebit(row), 0);
+    return buildRowsPdf({
+      heading: "SALA MILLON - DEBITOS",
+      title: report.title || "Reporte",
+      rows,
+      total,
+      totalLabel: "Total debitado",
+      detailText: `Practicas debitadas - Prestaciones: ${rows.length}`,
+      statusForRow: professionalReportStatus,
+      amountForRow: reportRowDebit,
+      emptyText: "No hay debitos en este reporte.",
+      summaryText: `Resumen: practicas debitadas ${rows.length} - total debitado ${pdfMoney(total)}`,
     });
   }
   const rows = reportRows(report).filter((row) => reportRowMissingInforme(row));
