@@ -640,7 +640,18 @@ const DEFAULT_CLIENTS = [
     sap: "116986",
     status: "Activo",
     tipo: "med_cabecera",
-    activeModules: [],
+    activeModules: [{ code: "1", name: "MEDICO CABECERA" }],
+  },
+  {
+    slug: "navarro-mc",
+    name: "Navarro",
+    businessName: "NAVARRO VIOLINTZIS OSVALDO DANIEL",
+    cuit: "20211389592",
+    ugl: "",
+    sap: "115673",
+    status: "Activo",
+    tipo: "med_cabecera",
+    activeModules: [{ code: "1", name: "MEDICO CABECERA" }],
   },
 ];
 // Slugs que vienen por código (seed). Borrar uno de estos deja un "tombstone"

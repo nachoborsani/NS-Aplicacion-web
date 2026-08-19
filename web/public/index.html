@@ -735,8 +735,9 @@
           <label>Nombre<input class="inp" id="clientCreateName" placeholder="Ej: Sala Millon"></label>
           <label>CUIT<input class="inp" id="clientCreateCuit" placeholder="Ej: 30545942123"></label>
           <label class="span-2">Razon social<input class="inp" id="clientCreateBusinessName" placeholder="Ej: SALA DE AUXILIO DE LOMAS DEL MILLON"></label>
-          <label>UGL<input class="inp" id="clientCreateUgl" placeholder="Ej: UGL XXXV"></label>
+          <label>UGL<input class="inp" id="clientCreateUgl" placeholder="Ej: UGL XXXV (opcional)"></label>
           <label>SAP<input class="inp" id="clientCreateSap" placeholder="Ej: 110853"></label>
+          <label class="span-2">Tipo de cliente<select class="inp" id="clientCreateTipo" onchange="onClientCreateTipoChange()"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
         </div>
         <p class="modal-note">Modulos activos</p>
         <div class="module-edit-list" id="clientCreateModulesOptions"></div>

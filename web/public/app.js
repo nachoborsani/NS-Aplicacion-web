@@ -1544,6 +1544,12 @@ function selectedClientModulesFrom(boxId){
     return { code:input.value, name:input.getAttribute('data-name') || '' };
   });
 }
+// Al elegir "Médico de cabecera" auto-tildamos su módulo (código 1).
+function onClientCreateTipoChange(){
+  if ((document.getElementById('clientCreateTipo') || {}).value !== 'med_cabecera') return;
+  var cb = document.querySelector('#clientCreateModulesOptions input[value="1"]');
+  if (cb) cb.checked = true;
+}
 async function openClientCreateModal(){
   var err = document.getElementById('clientCreateError');
   if (err) err.textContent = '';
@@ -1551,6 +1557,8 @@ async function openClientCreateModal(){
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+  var tipoSel = document.getElementById('clientCreateTipo');
+  if (tipoSel) tipoSel.value = 'consultorio';
   showModal('clientCreateModal','ccScrim');
   await renderClientModuleOptions('clientCreateModulesOptions', []);
 }
@@ -1566,6 +1574,7 @@ async function saveClientCreate(){
     cuit: (document.getElementById('clientCreateCuit') || {}).value || '',
     ugl: (document.getElementById('clientCreateUgl') || {}).value || '',
     sap: (document.getElementById('clientCreateSap') || {}).value || '',
+    tipo: (document.getElementById('clientCreateTipo') || {}).value || 'consultorio',
     activeModules: selected
   };
   var btn = document.getElementById('clientCreateSave');
