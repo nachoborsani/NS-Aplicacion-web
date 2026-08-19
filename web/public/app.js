@@ -178,6 +178,7 @@ async function pedirInformePdf(){
   if (!nombre) faltan.push('el nombre');
   if (!benef) faltan.push('el N° de beneficiario');
   if (!fecha) faltan.push('la fecha');
+  faltan = faltan.concat(camposObligatoriosFaltantes());
   if (faltan.length){ err.textContent = 'Falta completar ' + faltan.join(', ') + '.'; return null; }
   var b2 = document.getElementById('infDescargarDirecto');
   if (b2) b2.disabled = true;
@@ -218,7 +219,8 @@ async function actualizarPreviewVivo(){
   var nombre = document.getElementById('infNombre').value.trim();
   var benef = document.getElementById('infBenef').value.trim();
   var fecha = document.getElementById('infFecha').value.trim();
-  if (!nombre || !benef || !fecha){ frame.style.display = 'none'; if (ph) ph.style.display = ''; return; }
+  // Sin datos base o con obligatorios vacíos (ej. Sexo), no mostramos vista previa.
+  if (!nombre || !benef || !fecha || camposObligatoriosFaltantes().length){ frame.style.display = 'none'; if (ph) ph.style.display = ''; return; }
   var seq = ++PREVIEW_SEQ;
   try {
     var r = await fetch('/api/informes/generar', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(construirPayloadInforme()) });
@@ -302,7 +304,18 @@ function renderCampos(key){
   var campos = modeloCampos(key);
   if (!campos.length){ wrap.style.display = 'none'; box.innerHTML = ''; return; }
   box.innerHTML = campos.map(function(c){
-    return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + '</span><input class="inp" data-key="' + esc(c.key) + '" value="' + esc(c.default || '') + '" spellcheck="false"></label>';
+    var req = c.requerido ? ' data-req="1"' : '';
+    var control;
+    if (c.tipo === 'select' && Array.isArray(c.opciones)){
+      var opts = '';
+      // Obligatorio sin default: arranca vacío ("Elegí…") para forzar la elección.
+      if (c.requerido && !(c.default || '')) opts += '<option value="">Elegí…</option>';
+      opts += c.opciones.map(function(o){ return opt(o, o, o === (c.default || '')); }).join('');
+      control = '<select class="inp" data-key="' + esc(c.key) + '"' + req + '>' + opts + '</select>';
+    } else {
+      control = '<input class="inp" data-key="' + esc(c.key) + '"' + req + ' value="' + esc(c.default || '') + '" spellcheck="false">';
+    }
+    return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + (c.requerido ? ' <b style="color:var(--error)">*</b>' : '') + '</span>' + control + '</label>';
   }).join('');
   wrap.style.display = '';
 }
@@ -323,7 +336,7 @@ function aplicarPreset(){
     autoGrow(txt);
   }
   var valores = (preset && preset.valores) || {};
-  document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
+  document.querySelectorAll('#infCampos [data-key]').forEach(function(inp){
     var k = inp.getAttribute('data-key');
     if (valores[k] != null && String(valores[k]).trim() !== '') inp.value = valores[k];
   });
@@ -333,11 +346,23 @@ function aplicarPreset(){
 function autoGrow(el){ if (!el) return; el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 function recolectarCampos(){
   var v = {};
-  document.querySelectorAll('#infCampos input[data-key]').forEach(function(inp){
-    var val = inp.value.trim();
+  document.querySelectorAll('#infCampos [data-key]').forEach(function(inp){
+    var val = String(inp.value || '').trim();
     if (val) v[inp.getAttribute('data-key')] = val;
   });
   return v;
+}
+// Campos obligatorios del modelo (data-req) que quedaron vacíos → sus etiquetas.
+function camposObligatoriosFaltantes(){
+  var faltan = [];
+  document.querySelectorAll('#infCampos [data-req="1"]').forEach(function(inp){
+    if (!String(inp.value || '').trim()){
+      var lbl = inp.closest('.inf-campo');
+      var span = lbl && lbl.querySelector('span');
+      faltan.push(span ? span.textContent.replace('*', '').trim() : inp.getAttribute('data-key'));
+    }
+  });
+  return faltan;
 }
 function filtrarPorModelo(){
   var key = modeloActualKey();

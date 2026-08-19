@@ -118,14 +118,16 @@ const ERGO_CAMPOS = [
 // Datos de ficha + estudio + los 12 valores de uroflujometría. Los presets pisan
 // los numéricos; nombre/fecha/sexo se cargan por paciente.
 const FLUJO_CAMPOS = [
-  { key: "sexo", label: "Sexo", default: "" },
+  // Sexo obligatorio (desplegable): evita, ej., un diagnóstico de próstata en una
+  // paciente mujer. Sin sexo elegido, el front no genera la vista previa ni el PDF.
+  { key: "sexo", label: "Sexo", default: "", tipo: "select", opciones: ["Masculino", "Femenino", "Otro"], requerido: true },
   { key: "edad", label: "Edad", default: "" },
   { key: "tipoEstudio", label: "Tipo de estudio", default: "Uroflujometría" },
   { key: "numeroEstudio", label: "N° de estudio", default: "" },
   { key: "operador", label: "Operador", default: "Dr. Lisandro Veliz", wide: true },
   { key: "motivo", label: "Motivo", default: "", wide: true },
   { key: "requeridoPor", label: "Requerido por", default: "", wide: true },
-  { key: "posicion", label: "Posición del paciente", default: "Pte parado" },
+  { key: "posicion", label: "Posición del paciente", default: "Pte parado", tipo: "select", opciones: ["Pte parado", "Pte sentada", "Otro"] },
   { key: "diagClinico", label: "Diagnóstico clínico", default: "" },
   { key: "diagUrodinamico", label: "Diagnóstico urodinámico", default: "", wide: true },
   { key: "qMax", label: "Q máximo", default: "" },
