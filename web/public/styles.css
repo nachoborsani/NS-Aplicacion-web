@@ -292,7 +292,8 @@
   .debito-regla-item{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
   .debito-regla-item.off{opacity:.55}
   .general-card{padding:20px}
-  .general-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+  .general-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+  .general-card-head>button{flex-shrink:0}
   .general-card-head h3{margin:0 0 4px}
   .general-card-head .nom-muted{display:block;max-width:640px}
   .general-debitos-meta{font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px}
@@ -386,8 +387,9 @@
   .client-top h2{margin:0;font-size:19px;line-height:1.2}
   .client-status{background:var(--success-bg);color:var(--success);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:750;white-space:nowrap}
   .client-status.muted{background:var(--hover);color:var(--text-2)}
-  .client-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border)}
-  .client-tabs button{border:0;background:transparent;color:var(--text-2);font-size:13px;font-weight:700;padding:9px 12px;border-radius:9px 9px 0 0}
+  .client-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .client-tabs::-webkit-scrollbar{display:none}
+  .client-tabs button{border:0;background:transparent;color:var(--text-2);font-size:13px;font-weight:700;padding:9px 12px;border-radius:9px 9px 0 0;flex-shrink:0;white-space:nowrap}
   .client-tabs button:hover{background:var(--hover);color:var(--text)}
   .client-tabs button.active{color:var(--turq);box-shadow:inset 0 -2px 0 var(--turq)}
   .client-section{display:block}
@@ -760,8 +762,8 @@
   .mescurso-line.alert.mescurso-click:hover{border-color:var(--error)}
   .mescurso-caret{font-size:10px;opacity:.8}
   .mescurso-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:14px}
-  .mescurso-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-  .mescurso-panel-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+  .mescurso-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .mescurso-panel-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap}
   .mescurso-panel-actions .btn{padding:5px 9px;font-size:12px}
   .mescurso-panel-head b{font-size:13px;color:var(--text)}
   .mescurso-panel.error .mescurso-panel-head b{color:var(--error)}
