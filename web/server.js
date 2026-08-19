@@ -303,6 +303,30 @@ const ORL_SEED_PRESETS = [
     valores: { protocolo: "Astrand", fcPrevMax: "135 lpm", fcPrevSub: "115 lpm", fcAlcanzada: "82 lpm", pctFcMax: "61%", pctFcSub: "71%", taSis: "140 mmHg", taDia: "80 mmHg", mets: "4.6", dobleProd: "11480", vo2: "16.1", carga: "300 KGM", motivoDeten: "Fatiga muscular / baja tolerancia al esfuerzo" },
   },
 ];
+// Presets de la Flujometría urinaria (ECUD / Urología Caballito). Cada uno pisa
+// los 12 valores de uroflujometría + posición (y el diag. clínico en el normal).
+const FLUJO_SEED_PRESETS = [
+  {
+    id: "flujo-normal", modelo: "caballito-flujometria", nombre: "Flujometría normal",
+    texto: "Pte parado\nMicción espontánea\nCurva de forma y amplitud normal\n\nEstudio normal",
+    valores: {
+      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz", posicion: "Pte parado", diagClinico: "Prostatismo",
+      qMax: "25.4 ml/s", qMed90: "18.2 ml/s", qProm: "12.3 ml/s", qA2s: "22.4 ml/s",
+      tAQmax: "3.4 seg", t90: "15.8 seg", volTotal: "319.8 ml", volQmax: "73.2 ml",
+      tiempoTotal: "25.9 seg", tiempoNeto: "22.3 seg", tiempoDescenso: "22.5 seg", tiempoEntrePausas: "3.6 seg",
+    },
+  },
+  {
+    id: "flujo-oiv", modelo: "caballito-flujometria", nombre: "Flujometría con retardo / compatible con OIV",
+    texto: "Pte parado\nRetardo en el inicio\nCurva prolongada con intermitencia.\n\nCompatible con OIV",
+    valores: {
+      tipoEstudio: "Uroflujometría", operador: "Dr. Lisandro Veliz", posicion: "Pte parado",
+      qMax: "10.4 ml/s", qMed90: "3.1 ml/s", qProm: "3.1 ml/s", qA2s: "5.0 ml/s",
+      tAQmax: "52.3 seg", t90: "63.5 seg", volTotal: "216.8 ml", volQmax: "105.5 ml",
+      tiempoTotal: "70.2 seg", tiempoNeto: "36.7 seg", tiempoDescenso: "17.9 seg", tiempoEntrePausas: "33.5 seg",
+    },
+  },
+];
 function loadInformesConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
@@ -316,6 +340,7 @@ function loadInformesConfig() {
       { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} })),
+      ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
     ];
   }
   return cfg;
@@ -4161,6 +4186,23 @@ function ensureNombresPresets() {
   } catch (e) { console.log("[nombres-seed] omitido:", e && e.message); }
 }
 ensureNombresPresets();
+
+// Precarga los presets de Flujometría en configs ya existentes (idempotente).
+function ensureFlujoSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of FLUJO_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores });
+        cambio = true;
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[flujo-seed] omitido:", e && e.message); }
+}
+ensureFlujoSeed();
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);
