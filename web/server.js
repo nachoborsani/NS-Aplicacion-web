@@ -123,6 +123,47 @@ function saveClientBandejasAdelante(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasAdelanteFile, JSON.stringify(store, null, 2));
 }
+
+// ---------- Credencial provisoria de PAMI (consulta en vivo) ----------
+// Replica el POST al formulario público de PAMI (el mismo que hace la app de
+// escritorio): 4 datos → PDF. Sin login. Ver desktop-app/credencial_scraper.py.
+const CRED_PROV_URL = "https://www.pami.org.ar/credencial-provisoria";
+function credNormBenef(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  if (d.length < 13 || d.length > 14) throw new Error("El beneficio debe tener 13 o 14 dígitos.");
+  return d;
+}
+function credNormDni(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  if (d.length < 5 || d.length > 8) throw new Error("El DNI debe tener entre 5 y 8 dígitos.");
+  return d;
+}
+function credNormTramite(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  if (!d) throw new Error("El número de trámite es obligatorio.");
+  return d.slice(0, 11).padStart(11, "0");
+}
+function credGeneroForm(v) {
+  const t = String(v || "").trim().toUpperCase();
+  if (["M", "MASC", "MASCULINO"].includes(t)) return "m";
+  if (["F", "FEM", "FEMENINO"].includes(t)) return "f";
+  if (["O", "OTRO"].includes(t)) return "o";
+  return "";
+}
+async function credConsultarPami(benef, dni, tramite, genero) {
+  const body = new URLSearchParams({
+    el_afiliacion: benef, el_dni: dni, el_tramite: tramite, el_genero: genero,
+  }).toString();
+  const resp = await fetch(CRED_PROV_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" },
+    body,
+    signal: AbortSignal.timeout(45000),
+  });
+  const ct = (resp.headers.get("content-type") || "").toLowerCase();
+  const buf = Buffer.from(await resp.arrayBuffer());
+  return { ok: ct.includes("application/pdf") && buf.slice(0, 5).toString("latin1") === "%PDF-", status: resp.status, ct, buf };
+}
 // Resultado del último sync de bandeja por cliente (para el indicador de salud
 // en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
 function loadBandejaEstado() {
@@ -3594,6 +3635,49 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el nomenclador." });
     }
+  }
+
+  // ---- Credencial provisoria: consulta en vivo a PAMI y devuelve el PDF ----
+  if (p === "/api/credencial-provisoria" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    let benef, dni, tramite;
+    try {
+      benef = credNormBenef(body.benef);
+      dni = credNormDni(body.dni);
+      tramite = credNormTramite(body.tramite);
+    } catch (e) {
+      return json(res, 400, { error: e.message });
+    }
+    // Género: el que mandan primero; si falla, probamos los otros (PAMI lo exige
+    // exacto). Así no hace falta saberlo con certeza.
+    const explicit = credGeneroForm(body.genero);
+    const candidatos = [...new Set([explicit, "m", "f", "o"].filter(Boolean))];
+    let last = null;
+    for (const g of candidatos) {
+      try {
+        const r = await credConsultarPami(benef, dni, tramite, g);
+        last = r;
+        if (r.ok) {
+          res.writeHead(200, {
+            "content-type": "application/pdf",
+            "content-disposition": `inline; filename="credencial_${dni}.pdf"`,
+            "cache-control": "no-store",
+            "x-genero": g,
+          });
+          return res.end(r.buf);
+        }
+      } catch (e) {
+        last = { error: String((e && e.message) || e) };
+      }
+    }
+    const detalle = last && (last.error || `HTTP ${last.status} (${last.ct || "sin tipo"})`);
+    return json(res, 502, {
+      error: "PAMI no devolvió la credencial. Revisá los datos, o puede que PAMI bloquee la consulta desde el servidor.",
+      detalle,
+    });
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----

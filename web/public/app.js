@@ -56,9 +56,9 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', soon:'Configuración general' };
 function go(v, el){
-  ['dash','users','clientes','nomencladores','informes','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','clientes','nomencladores','informes','credencial','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -78,6 +78,49 @@ function go(v, el){
   if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
 }
 
+// ---------- Credencial provisoria: consulta en vivo a PAMI ----------
+async function descargarCredencial(){
+  var btn = document.getElementById('credBtn');
+  var err = document.getElementById('credError');
+  var result = document.getElementById('credResult');
+  err.style.display = 'none'; result.style.display = 'none'; result.innerHTML = '';
+  var payload = {
+    benef: (document.getElementById('credBenef').value || '').trim(),
+    dni: (document.getElementById('credDni').value || '').trim(),
+    tramite: (document.getElementById('credTramite').value || '').trim(),
+    genero: (document.getElementById('credGenero').value || '').trim()
+  };
+  if (!payload.benef || !payload.dni || !payload.tramite){
+    err.textContent = 'Completá BENEF, DNI y N° trámite.'; err.style.display = 'block'; return;
+  }
+  btn.disabled = true; var textoOrig = btn.textContent; btn.textContent = 'Consultando PAMI…';
+  try {
+    var resp = await fetch('/api/credencial-provisoria', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    var ct = (resp.headers.get('content-type') || '').toLowerCase();
+    if (resp.ok && ct.indexOf('application/pdf') >= 0){
+      var blob = await resp.blob();
+      var urlpdf = URL.createObjectURL(blob);
+      var nombre = 'credencial_' + payload.dni + '.pdf';
+      result.innerHTML = '<div class="cred-ok">✅ Credencial encontrada.</div>'
+        + '<div class="cred-buttons"><a class="btn btn-primary" href="' + urlpdf + '" download="' + nombre + '">Guardar PDF</a>'
+        + '<a class="btn btn-ghost" href="' + urlpdf + '" target="_blank" rel="noopener">Abrir en pestaña</a></div>'
+        + '<iframe class="cred-preview" src="' + urlpdf + '"></iframe>';
+      result.style.display = 'block';
+    } else {
+      var data = {}; try { data = await resp.json(); } catch (e){}
+      err.textContent = (data && data.error) || 'No se pudo traer la credencial.';
+      if (data && data.detalle) err.textContent += ' — ' + data.detalle;
+      err.style.display = 'block';
+    }
+  } catch (e){
+    err.textContent = 'Error de conexión: ' + ((e && e.message) || e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = textoOrig;
+  }
+}
 // ---------- ruteo por URL (hash): que F5 recargue la misma sección ----------
 // Cada sección refleja su estado en la URL (#nomencladores, #clientes/<slug>).
 // Al recargar (F5) se restaura desde el hash, y el botón "atrás" vuelve a andar.
@@ -93,7 +136,7 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
