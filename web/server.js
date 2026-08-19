@@ -296,18 +296,19 @@ function ahoraAR() {
   const parts = {}; for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
   return { fecha: `${parts.year}-${parts.month}-${parts.day}`, hhmm: `${parts.hour}:${parts.minute}` };
 }
-const CRED_RUN_STATE = { corriendo: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
+const CRED_RUN_STATE = { corriendo: false, stop: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
 async function correrLoteCredenciales(origen) {
   if (CRED_RUN_STATE.corriendo) return;
   const cfg = loadGoogleCfg();
   if (!cfg) { const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(s); return; }
-  Object.assign(CRED_RUN_STATE, { corriendo: true, origen, inicio: new Date().toISOString(), total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 });
+  Object.assign(CRED_RUN_STATE, { corriendo: true, stop: false, origen, inicio: new Date().toISOString(), total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 });
   try {
     const auth = gcreds.makeAuth(cfg);
     const sch = loadCredSchedule();
     const { pendientes } = await leerPendientesScheffelaar(auth, sch.desdeFila || 2);
     CRED_RUN_STATE.total = pendientes.length;
     for (const row of pendientes) {
+      if (CRED_RUN_STATE.stop) break;   // parada manual
       const r = await procesarCredencialFila(auth, row);
       if (r.ok) CRED_RUN_STATE.ok++; else if (r.definitivo) CRED_RUN_STATE.sinCred++; else CRED_RUN_STATE.err++;
       CRED_RUN_STATE.hechas = CRED_RUN_STATE.ok + CRED_RUN_STATE.sinCred + CRED_RUN_STATE.err;
@@ -3999,6 +4000,13 @@ const server = http.createServer(async (req, res) => {
     if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
     correrLoteCredenciales("manual");
     return json(res, 200, { ok: true });
+  }
+  // Detener la corrida de credenciales en curso.
+  if (p === "/api/credenciales/scheffelaar/detener" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    CRED_RUN_STATE.stop = true;
+    return json(res, 200, { ok: true, corriendo: CRED_RUN_STATE.corriendo });
   }
 
   // Filas con DNI y sin benef (para el barrido de la app: buscar el benef).
