@@ -631,6 +631,17 @@ const DEFAULT_CLIENTS = [
       { code: "433", name: "REUMATOLOGIA" },
     ],
   },
+  {
+    slug: "scheffelaar-mc",
+    name: "SCHEFFELAAR MC",
+    businessName: "SCHEFFELAAR KLOTZ SABRINA ALEJANDRA",
+    cuit: "20281907531",
+    ugl: "UGL XXIX",
+    sap: "116986",
+    status: "Activo",
+    tipo: "med_cabecera",
+    activeModules: [],
+  },
 ];
 // Slugs que vienen por código (seed). Borrar uno de estos deja un "tombstone"
 // (status: "deleted") en el volumen para que no reaparezca al re-seedear.
@@ -681,6 +692,8 @@ function normalizeClient(client, fallback) {
     ugl: String(client.ugl || base.ugl || "").trim(),
     sap: String(client.sap || base.sap || "").trim(),
     status: String(client.status || base.status || "Activo").trim() || "Activo",
+    // Tipo de cliente: "consultorio" (default) o "med_cabecera" (médico de cabecera).
+    tipo: (String(client.tipo || base.tipo || "consultorio").trim() === "med_cabecera") ? "med_cabecera" : "consultorio",
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
   };
 }
@@ -2585,6 +2598,7 @@ const server = http.createServer(async (req, res) => {
     const cuit = normalizeCuit(body.cuit);
     const ugl = String(body.ugl || "").replace(/\s+/g, " ").trim();
     const sap = String(body.sap || "").replace(/\s+/g, " ").trim();
+    const tipo = String(body.tipo || "consultorio").trim();
     const slug = clientSlugFromName(name);
     const modules = normalizeClientModules(body.activeModules);
     if (!name) return json(res, 400, { error: "Ingresa el nombre del cliente." });
@@ -2594,7 +2608,7 @@ const server = http.createServer(async (req, res) => {
     if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
     const clients = loadClientsStore();
     if (clients.some((client) => client.slug === slug)) return json(res, 409, { error: "Ya existe un cliente con ese nombre." });
-    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", activeModules: modules });
+    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", tipo, activeModules: modules });
     clients.push(client);
     saveClientsStore(clients);
     return json(res, 201, { client, clients });

@@ -1050,10 +1050,18 @@ async function loadClients(options){
 function renderClientList(){
   var list = document.getElementById('clientNavList');
   if (!list) return;
-  list.innerHTML = CLIENTS.map(function(client){
+  var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
-  }).join('');
+  };
+  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera'; });
+  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera'; });
+  if (medCab.length){
+    list.innerHTML = '<div class="client-nav-group">Consultorios</div>' + consultorios.map(itemHtml).join('')
+      + '<div class="client-nav-group">Médicos de cabecera</div>' + medCab.map(itemHtml).join('');
+  } else {
+    list.innerHTML = consultorios.map(itemHtml).join(''); // sin MC: lista plana, sin headers
+  }
   list.querySelectorAll('[data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
       go('clientes', document.getElementById('clientsNavToggle'));
