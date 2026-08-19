@@ -174,7 +174,7 @@ async function credRecortarCredencial(buf) {
     const page = doc.getPages()[0];
     if (!page) return buf;
     const { width, height } = page.getSize();
-    const alto = 112; // franja superior donde está la credencial (~13% del A4)
+    const alto = 255; // franja superior con las tarjetas completas (contenido en Y 600-842)
     const y = Math.max(0, height - alto);
     page.setCropBox(0, y, width, height - y);
     return Buffer.from(await doc.save());
