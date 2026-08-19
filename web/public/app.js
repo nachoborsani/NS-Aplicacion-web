@@ -1540,6 +1540,8 @@ function mesCursoCardSinCerrar(current, reporte){
   var ausMonto = current.absentAmount || 0;
   var debCount = current.debitCount || 0;
   var debMonto = current.debit || 0;
+  var fueraCorte = current.outsideCutoff || 0;
+  var fueraCorteMonto = current.nextPeriodCutoff || 0;
   var clickable = MESCURSO_REPORTE_ID ? ' mescurso-click' : '';
   var onclick = MESCURSO_REPORTE_ID ? ' onclick="irAReporteSinCerrar()"' : '';
   // "Faltan informes" y "Posibles débitos" abren el detalle inline abajo (no navegan).
@@ -1565,6 +1567,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + clickable + '"' + onclick + '><span>Ausentes sin activar</span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
+    + (fueraCorte > 0 ? '<div class="mescurso-line"><span>A facturar fuera de corte</span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
     + '</div>' + foot + '</div>';
 }
 function irAReporteSinCerrar(){
