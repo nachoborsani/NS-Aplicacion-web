@@ -80,6 +80,10 @@ def run(progress=None) -> dict:
         return {"faltan": 0, "completados": 0, "sin_benef": 0, "errores": 0, "error": "sin clave PAMI"}
 
     faltan = web.faltan_benef_scheffelaar()
+    # Límite opcional para pruebas: python benef_sweep.py 1  → procesa solo 1 fila.
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        faltan = faltan[: int(sys.argv[1])]
+        log(f"(modo prueba: solo {len(faltan)} fila/s)")
     log(f"Filas con DNI y sin benef: {len(faltan)}")
     if not faltan:
         web.reportar_benef_estado(0, 0, 0)
