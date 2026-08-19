@@ -193,6 +193,16 @@ class NSWebClient:
         return self._request("POST", "/api/credenciales/scheffelaar/set-benef",
                              body={"sheetRow": int(sheet_row), "benef": str(benef)})
 
+    def correr_credenciales_scheffelaar(self) -> dict:
+        """Dispara la corrida de credenciales de Scheffelaar en la web (server-side)."""
+        return self._request("POST", "/api/credenciales/scheffelaar/correr-ahora", body={})
+
+    def reportar_benef_estado(self, completados: int, sin_benef: int, errores: int, error: str = "") -> dict:
+        """Reporta el resultado del barrido de benef (para el tablero de la web)."""
+        return self._request("POST", "/api/credenciales/scheffelaar/benef-estado",
+                             body={"completados": int(completados), "sinBenef": int(sin_benef),
+                                   "errores": int(errores), "error": str(error or "")})
+
     def upload_bandeja(self, slug: str, month: str, rows: list[dict],
                        columns: list[str] | None = None, month_label: str = "",
                        generated_at: str = "") -> dict:

@@ -287,8 +287,8 @@ const credScheduleFile = path.join(dataDir, "cred_schedule.json");
 function loadCredSchedule() {
   try {
     const j = JSON.parse(fs.readFileSync(credScheduleFile, "utf8"));
-    return { enabled: !!j.enabled, hora: String(j.hora || ""), desdeFila: Number(j.desdeFila) || 2, lastRunDate: j.lastRunDate || "", lastRun: j.lastRun || null };
-  } catch { return { enabled: false, hora: "", desdeFila: 2, lastRunDate: "", lastRun: null }; }
+    return { enabled: !!j.enabled, hora: String(j.hora || ""), desdeFila: Number(j.desdeFila) || 2, lastRunDate: j.lastRunDate || "", lastRun: j.lastRun || null, benefRun: j.benefRun || null };
+  } catch { return { enabled: false, hora: "", desdeFila: 2, lastRunDate: "", lastRun: null, benefRun: null }; }
 }
 function saveCredSchedule(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(credScheduleFile, JSON.stringify(cfg, null, 2)); }
 function ahoraAR() {
@@ -3956,10 +3956,27 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     const s = loadCredSchedule();
     return json(res, 200, {
-      enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila, lastRun: s.lastRun,
+      enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila, lastRun: s.lastRun, benefRun: s.benefRun,
       corriendo: CRED_RUN_STATE.corriendo,
       progreso: CRED_RUN_STATE.corriendo ? { total: CRED_RUN_STATE.total, hechas: CRED_RUN_STATE.hechas, ok: CRED_RUN_STATE.ok, sinCred: CRED_RUN_STATE.sinCred, err: CRED_RUN_STATE.err } : null,
     });
+  }
+  // El barrido de benef de la app reporta su resultado (para el tablero de salud).
+  if (p === "/api/credenciales/scheffelaar/benef-estado" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const s = loadCredSchedule();
+    s.benefRun = {
+      at: new Date().toISOString(),
+      completados: Number(body.completados) || 0,
+      sinBenef: Number(body.sinBenef) || 0,
+      errores: Number(body.errores) || 0,
+      error: body.error ? String(body.error).slice(0, 200) : "",
+    };
+    saveCredSchedule(s);
+    return json(res, 200, { ok: true });
   }
   if (p === "/api/credenciales/scheffelaar/schedule" && req.method === "PUT") {
     const me = getSessionUser(req);

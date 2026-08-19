@@ -1,45 +1,39 @@
-"""Barrido diario del benef (Scheffelaar).
+"""Barrido diario del benef (Scheffelaar) — vía el panel autenticado de PAMI.
 
-Busca en el padrón de PAMI el N° de beneficio de las filas de la planilla de
-Scheffelaar que tienen DNI pero todavía no tienen benef, y lo escribe en la
-planilla (a través de la web, que es la que tiene la conexión a Google). Después,
-la corrida de credenciales de la web les baja la credencial.
+Completa el N° de beneficio de las filas de la planilla de Scheffelaar que tienen
+DNI pero no benef. Usa el MISMO motor que el botón "Completar BENEF" del módulo
+OME Med Cabecera (PamiOmeGenerator, headless): entra al CUP con la clave del
+profesional, busca el afiliado por DNI en el panel autenticado (sin captcha) y
+trae el benef.
 
-La app hace SOLO la parte de navegador (buscar en el padrón, con su captcha); la
-lectura/escritura de la planilla va por la web. Solo lectura del padrón, no
-transmite nada. Pensado para correr programado (tarea de Windows) a las 19:00.
+Reparto: la app hace SOLO la parte de navegador (login + lookup del benef); la
+lectura/escritura de la planilla va por la web (que tiene la conexión a Google y
+es la fuente de verdad). La clave PAMI también se lee de la web (así se actualiza
+en un solo lugar). Al terminar, dispara la descarga de credenciales en la web.
 
-Uso manual:  python benef_sweep.py
+Pensado para correr programado (tarea de Windows) a las 19:00. Uso manual:
+  python benef_sweep.py
 """
 from __future__ import annotations
 
+import asyncio
 import sys
-import time
 
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
-import pami_scraper as ps
+from pami_ome_generator import PamiOmeGenerator, PatientInput
+
+CLIENTE_SLUG = "scheffelaar-mc"
 
 
 def log(m: str) -> None:
     print(m, flush=True)
 
 
-def run(progress=None) -> dict:
-    resumen = {"faltan": 0, "escritos": 0, "sin_benef": 0, "errores": 0}
-    cfg = load_config()
-    web = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
-    web.login(cfg.get("username", ""), cfg.get("password", ""))
-
-    faltan = web.faltan_benef_scheffelaar()
-    resumen["faltan"] = len(faltan)
-    log(f"Filas con DNI y sin benef: {len(faltan)}")
-    if not faltan:
-        log("Nada para buscar.")
-        return resumen
-
-    sesion = ps.iniciar_sesion(headless=True)
-    try:
-        total = len(faltan)
+async def _procesar(web, user: str, clave: str, faltan: list[dict], progress=None) -> dict:
+    resumen = {"faltan": len(faltan), "completados": 0, "sin_benef": 0, "errores": 0}
+    total = len(faltan)
+    # headless=True: sin ventana. El auto-login pasa el reCAPTCHA como navegador real.
+    async with PamiOmeGenerator(user=user, password=clave, headless=True) as gen:
         for i, fila in enumerate(faltan, 1):
             dni = str(fila.get("dni", "")).strip()
             row = fila.get("sheetRow")
@@ -50,30 +44,66 @@ def run(progress=None) -> dict:
                 progress(f"{i}/{total} · {nombre or dni}")
             log(f"[{i}/{total}] fila {row} · {nombre} · DNI {dni} …")
             try:
-                r = ps.procesar_afiliado(dni, sesion.page, modo_busqueda=ps.MODO_DNI)
-                benef = str(r.get("beneficio_encontrado", "")).strip()
-                if benef:
+                res = await gen.process_patient(PatientInput(
+                    modo="DNI", afiliado=dni, diagnostico="", practica="",
+                    dni=dni, nombre=nombre, completar_benef=True,
+                ))
+                benef = str(getattr(res, "beneficio", "") or "").strip()
+                if getattr(res, "resultado", "") == "BENEF_COMPLETADO" and benef:
                     try:
                         web.set_benef_scheffelaar(row, benef)
-                        resumen["escritos"] += 1
+                        resumen["completados"] += 1
                         log(f"    benef {benef} → escrito en la planilla")
                     except Exception as e:  # noqa: BLE001
                         resumen["errores"] += 1
                         log(f"    encontró {benef} pero falló al escribir: {e!r}")
                 else:
                     resumen["sin_benef"] += 1
-                    log(f"    sin benef en el padrón ({r.get('clasificacion', '')})")
+                    log(f"    sin benef ({getattr(res, 'resultado', '') or 'no encontrado'})")
             except Exception as e:  # noqa: BLE001
                 resumen["errores"] += 1
-                log(f"    error en el padrón: {e!r}")
-            time.sleep(1)  # no martillar PAMI
-    finally:
-        try:
-            ps.cerrar_sesion(sesion)
-        except Exception:  # noqa: BLE001
-            pass
+                log(f"    error en el panel: {e!r}")
+    return resumen
 
-    log(f"=== listo: {resumen['escritos']} escritos · {resumen['sin_benef']} sin benef · {resumen['errores']} errores ===")
+
+def run(progress=None) -> dict:
+    cfg = load_config()
+    web = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
+    web.login(cfg.get("username", ""), cfg.get("password", ""))
+
+    # Clave PAMI del cliente desde la web (fuente de verdad, admin-only).
+    cred = web.client_pami(CLIENTE_SLUG)
+    user = str(cred.get("pamiUser", "")).strip()
+    clave = str(cred.get("pamiPassword", "") or "")
+    if not user or not clave:
+        log("Scheffelaar no tiene usuario/clave PAMI cargados en la web.")
+        return {"faltan": 0, "completados": 0, "sin_benef": 0, "errores": 0, "error": "sin clave PAMI"}
+
+    faltan = web.faltan_benef_scheffelaar()
+    log(f"Filas con DNI y sin benef: {len(faltan)}")
+    if not faltan:
+        web.reportar_benef_estado(0, 0, 0)
+        log("Nada para buscar.")
+        return {"faltan": 0, "completados": 0, "sin_benef": 0, "errores": 0}
+
+    resumen = asyncio.run(_procesar(web, user, clave, faltan, progress=progress))
+    log(f"=== listo: {resumen['completados']} completados · {resumen['sin_benef']} sin benef · {resumen['errores']} errores ===")
+
+    # Reporta al tablero de la web.
+    try:
+        web.reportar_benef_estado(resumen["completados"], resumen["sin_benef"], resumen["errores"])
+    except Exception as e:  # noqa: BLE001
+        log(f"No pude reportar el estado del barrido: {e!r}")
+
+    # Cierra el círculo: si completamos benef nuevos, disparamos la descarga de
+    # credenciales en la web (que ahora ve esas filas listas).
+    if resumen["completados"] > 0:
+        try:
+            web.correr_credenciales_scheffelaar()
+            log(f"→ Disparada la descarga de credenciales en la web ({resumen['completados']} filas nuevas).")
+        except Exception as e:  # noqa: BLE001
+            log(f"→ No pude disparar la descarga de credenciales: {e!r}")
+
     return resumen
 
 
@@ -84,4 +114,12 @@ if __name__ == "__main__":  # pragma: no cover
         import traceback
         log(f"FALLO: {exc!r}")
         log(traceback.format_exc())
+        # Reporta el fallo al tablero si se puede.
+        try:
+            cfg = load_config()
+            web = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
+            web.login(cfg.get("username", ""), cfg.get("password", ""))
+            web.reportar_benef_estado(0, 0, 0, error=str(exc)[:200])
+        except Exception:
+            pass
         sys.exit(1)

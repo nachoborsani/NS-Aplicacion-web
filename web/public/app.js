@@ -188,7 +188,25 @@ async function credSchedCargar(){
   var hora = document.getElementById('credSchedHora'); if (hora && d.hora) hora.value = d.hora;
   var desde = document.getElementById('credLoteDesde'); if (desde && d.desdeFila) desde.value = d.desdeFila;
   credSchedInfoRender(d);
+  credSaludRender(d);
   if (d.corriendo) credSchedPoll();
+}
+// Tablero de salud: benef (barrido app) + credenciales (web), con estado ✓/⚠/✕.
+function credFechaHora(iso){ if (!iso) return ''; try { var d = new Date(iso); return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+function credHorasDesde(iso){ if (!iso) return 999; try { return (Date.now() - new Date(iso).getTime()) / 3600000; } catch (e) { return 999; } }
+function credSaludRender(d){
+  var el = document.getElementById('credSalud'); if (!el) return;
+  function fila(icon, titulo, obj, campoOk, labelOk){
+    if (!obj || !obj.at) return '<div class="cred-salud-fila"><span>' + icon + ' ' + titulo + '</span><b class="nom-muted">sin corridas aún</b></div>';
+    var reciente = credHorasDesde(obj.at) < 26;
+    var errs = (obj.errores || obj.err || 0);
+    var estado = obj.error ? '✕' : (reciente ? '✓' : '⚠');
+    var color = obj.error ? 'var(--error)' : (reciente && !errs ? '#0f9d63' : 'var(--warning)');
+    var txt = obj.error ? esc(obj.error) : ((obj[campoOk] || 0) + ' ' + labelOk + (errs ? ' · ' + errs + ' error' : '') + ' · ' + credFechaHora(obj.at));
+    return '<div class="cred-salud-fila"><span>' + icon + ' ' + titulo + '</span><b style="color:' + color + '">' + estado + ' ' + txt + '</b></div>';
+  }
+  el.innerHTML = fila('🔎', 'Benef (barrido app)', d.benefRun, 'completados', 'completados')
+    + fila('🪪', 'Credenciales (web)', d.lastRun, 'ok', 'descargadas');
 }
 function credSchedInfoRender(d){
   var el = document.getElementById('credSchedInfo'); if (!el || !d) return;
