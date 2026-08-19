@@ -95,7 +95,8 @@ def run(progress=None) -> dict:
 
     # Reporta al tablero de la web.
     try:
-        web.reportar_benef_estado(resumen["completados"], resumen["sin_benef"], resumen["errores"])
+        web.reportar_benef_estado(resumen["completados"], resumen["sin_benef"], resumen["errores"],
+                                  revisadas=resumen["faltan"])
     except Exception as e:  # noqa: BLE001
         log(f"No pude reportar el estado del barrido: {e!r}")
 

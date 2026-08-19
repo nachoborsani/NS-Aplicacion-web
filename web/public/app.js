@@ -194,19 +194,31 @@ async function credSchedCargar(){
 // Tablero de salud: benef (barrido app) + credenciales (web), con estado ✓/⚠/✕.
 function credFechaHora(iso){ if (!iso) return ''; try { var d = new Date(iso); return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
 function credHorasDesde(iso){ if (!iso) return 999; try { return (Date.now() - new Date(iso).getTime()) / 3600000; } catch (e) { return 999; } }
+function credSaludFila(icon, titulo, txt, color, estado){
+  var b = color === 'muted' ? '<b class="nom-muted">' + txt + '</b>' : '<b style="color:' + color + '">' + (estado ? estado + ' ' : '') + txt + '</b>';
+  return '<div class="cred-salud-fila"><span>' + icon + ' ' + titulo + '</span>' + b + '</div>';
+}
 function credSaludRender(d){
   var el = document.getElementById('credSalud'); if (!el) return;
-  function fila(icon, titulo, obj, campoOk, labelOk){
-    if (!obj || !obj.at) return '<div class="cred-salud-fila"><span>' + icon + ' ' + titulo + '</span><b class="nom-muted">sin corridas aún</b></div>';
-    var reciente = credHorasDesde(obj.at) < 26;
-    var errs = (obj.errores || obj.err || 0);
-    var estado = obj.error ? '✕' : (reciente ? '✓' : '⚠');
-    var color = obj.error ? 'var(--error)' : (reciente && !errs ? '#0f9d63' : 'var(--warning)');
-    var txt = obj.error ? esc(obj.error) : ((obj[campoOk] || 0) + ' ' + labelOk + (errs ? ' · ' + errs + ' error' : '') + ' · ' + credFechaHora(obj.at));
-    return '<div class="cred-salud-fila"><span>' + icon + ' ' + titulo + '</span><b style="color:' + color + '">' + estado + ' ' + txt + '</b></div>';
+  var html = '';
+  // 🔎 Benef (barrido de la app)
+  var b = d.benefRun;
+  if (!b || !b.at) html += credSaludFila('🔎', 'Benef (barrido app)', 'sin corridas aún', 'muted');
+  else {
+    var recB = credHorasDesde(b.at) < 26, eB = (b.errores || 0), okB = recB && !eB;
+    if (b.error) html += credSaludFila('🔎', 'Benef (barrido app)', esc(b.error) + ' · ' + credFechaHora(b.at), 'var(--error)', '✕');
+    else if ((b.completados || 0) > 0) html += credSaludFila('🔎', 'Benef (barrido app)', b.completados + ' completados' + (eB ? ' · ' + eB + ' error' : '') + ' · ' + credFechaHora(b.at), okB ? '#0f9d63' : 'var(--warning)', okB ? '✓' : '⚠');
+    else html += credSaludFila('🔎', 'Benef (barrido app)', 'recorrió ' + (b.revisadas || 0) + ' · sin benef nuevos' + (eB ? ' · ' + eB + ' error' : '') + ' · ' + credFechaHora(b.at), okB ? '#0f9d63' : 'var(--warning)', okB ? '✓' : '⚠');
   }
-  el.innerHTML = fila('🔎', 'Benef (barrido app)', d.benefRun, 'completados', 'completados')
-    + fila('🪪', 'Credenciales (web)', d.lastRun, 'ok', 'descargadas');
+  // 🪪 Credenciales (web)
+  var c = d.lastRun;
+  if (!c || !c.at) html += credSaludFila('🪪', 'Credenciales (web)', 'sin corridas aún', 'muted');
+  else {
+    var recC = credHorasDesde(c.at) < 26, eC = (c.err || 0), okC = recC && !eC;
+    if (c.error) html += credSaludFila('🪪', 'Credenciales (web)', esc(c.error) + ' · ' + credFechaHora(c.at), 'var(--error)', '✕');
+    else html += credSaludFila('🪪', 'Credenciales (web)', (c.ok || 0) + ' descargadas' + (eC ? ' · ' + eC + ' error' : '') + ' · ' + credFechaHora(c.at), okC ? '#0f9d63' : 'var(--warning)', okC ? '✓' : '⚠');
+  }
+  el.innerHTML = html;
 }
 function credSchedInfoRender(d){
   var el = document.getElementById('credSchedInfo'); if (!el || !d) return;

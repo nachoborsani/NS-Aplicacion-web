@@ -3970,6 +3970,7 @@ const server = http.createServer(async (req, res) => {
     const s = loadCredSchedule();
     s.benefRun = {
       at: new Date().toISOString(),
+      revisadas: Number(body.revisadas) || 0,
       completados: Number(body.completados) || 0,
       sinBenef: Number(body.sinBenef) || 0,
       errores: Number(body.errores) || 0,
