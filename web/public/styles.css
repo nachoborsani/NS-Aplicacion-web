@@ -719,9 +719,12 @@
   .debit-breakdown span{font-size:9.5px;line-height:1.5;color:var(--text-2);display:flex;justify-content:space-between;gap:8px;font-weight:600}
   .debit-breakdown b{font-size:9.5px;color:var(--text-2);font-weight:750;font-variant-numeric:tabular-nums}
   .mescurso-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-  @media(max-width:640px){ .mescurso-cards{grid-template-columns:1fr} }
+  .mescurso-cards.tres{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:1100px){ .mescurso-cards.tres{grid-template-columns:1fr 1fr} }
+  @media(max-width:640px){ .mescurso-cards, .mescurso-cards.tres{grid-template-columns:1fr} }
   .mescurso-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm);padding:15px 16px;min-width:0}
   .mescurso-card.sincerrar{border-color:var(--warning)}
+  .mescurso-card.adelante{border-color:var(--accent, #6c5ce7);border-style:dashed}
   .mescurso-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
   .mescurso-title{font-size:14px;font-weight:700;color:var(--text)}
   .mescurso-abarca{font-size:11px;font-weight:600;color:var(--text-2);margin-left:6px}
@@ -729,6 +732,7 @@
   .mescurso-chip.warn{background:var(--warning-bg);color:var(--warning)}
   .mescurso-val-lbl{font-size:11px;color:var(--text-2);margin-bottom:1px}
   .mescurso-val{font-size:30px;font-weight:750;line-height:1.05;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
+  .mescurso-val.chico{font-size:24px}
   .mescurso-val-note{font-size:10.5px;color:var(--text-2);margin-top:3px}
   .mescurso-desglose{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .mescurso-desglose span{font-size:11px;border-radius:999px;padding:3px 9px;color:var(--text-2);background:var(--hover)}

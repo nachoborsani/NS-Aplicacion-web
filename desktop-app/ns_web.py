@@ -198,6 +198,21 @@ class NSWebClient:
             },
         )
 
+    def upload_bandeja_adelante(self, slug: str, month: str, rows: list[dict],
+                                columns: list[str] | None = None, month_label: str = "",
+                                generated_at: str = "") -> dict:
+        """Sube la bandeja de turnos futuros (hacia adelante) de un cliente."""
+        return self._request(
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja-adelante",
+            body={
+                "month": month,
+                "monthLabel": month_label,
+                "generatedAt": generated_at,
+                "columns": columns or [],
+                "rows": rows,
+            },
+        )
+
     def report_bandeja_estado(self, slug: str, ok: bool, count: int | None = None,
                               error: str = "", transmitidas: int | None = None,
                               transmit_errores: int | None = None,

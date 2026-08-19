@@ -31,6 +31,9 @@ const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
 const clientCredsFile = path.join(dataDir, "client_credentials.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
+// Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
+// detectar posibles débitos por adelantado. Separada de la del mes en curso.
+const clientBandejasAdelanteFile = path.join(dataDir, "client_bandejas_adelante.json");
 const clientBandejaEstadoFile = path.join(dataDir, "client_bandeja_estado.json");
 const clientPracticeValuesFile = path.join(dataDir, "client_practice_values.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
@@ -107,6 +110,18 @@ function loadClientBandejas() {
 function saveClientBandejas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasFile, JSON.stringify(store, null, 2));
+}
+function loadClientBandejasAdelante() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(clientBandejasAdelanteFile, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function saveClientBandejasAdelante(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientBandejasAdelanteFile, JSON.stringify(store, null, 2));
 }
 // Resultado del último sync de bandeja por cliente (para el indicador de salud
 // en la card: avisa solo cuando falla o queda desactualizada, sin ruido).
@@ -1869,6 +1884,82 @@ function buildBandejaResumen(slug) {
     uploadedAt: bandeja.uploadedAt || "",
   };
 }
+// Resumen "hacia adelante": bandeja de turnos futuros (día siguiente al corte del
+// mes en curso → fin de mes). El objetivo es DETECTAR POSIBLES DÉBITOS por
+// adelantado, no estimar facturación (los turnos futuros no deberían faltar pero
+// faltan → un estimado sería irreal). Es el ÚNICO caso donde el cruce se proyecta
+// sobre turnos ASIGNADOS (sin validar); la lógica del mes en curso no cambia.
+function buildBandejaAdelanteResumen(slug) {
+  const bandeja = loadClientBandejasAdelante()[slug];
+  if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
+  const nomStore = loadNomencladorStore();
+  let nom = (nomStore.items || {})[bandeja.month] || null;
+  if (!nom) {
+    const periodos = Object.keys(nomStore.items || {}).sort();
+    const noPosteriores = periodos.filter((p) => p <= String(bandeja.month || ""));
+    const elegido = noPosteriores.length ? noPosteriores[noPosteriores.length - 1] : periodos[periodos.length - 1];
+    nom = elegido ? nomStore.items[elegido] : null;
+  }
+  const byCode = new Map();
+  if (nom && Array.isArray(nom.rows)) for (const r of nom.rows) { const c = cleanIdentifier(r.practiceCode); if (c && !byCode.has(c)) byCode.set(c, r); }
+  const keys = Object.keys(bandeja.rows[0] || {});
+  const findKey = (re) => keys.find((k) => re.test(normalizeText(k))) || "";
+  const kPrac = findKey(/PRACTICA/);
+  const kBenef = findKey(/BENEFICIO/);
+  const kTurno = findKey(/TURNO/);
+  const kNombre = findKey(/APELLIDO/);
+  let consultations = 0, practices = 0;
+  let coversMin = "", coversMax = "";
+  const synth = [];
+  for (const row of bandeja.rows) {
+    const pracRaw = String(row[kPrac] || "");
+    const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
+    const esConsulta = code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA");
+    if (esConsulta) consultations++; else practices++;
+    const nomRow = code ? byCode.get(code) : null;
+    const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
+    const md = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(row[kTurno] || ""));
+    if (md) { const iso = `${md[3]}-${md[2]}-${md[1]}`; if (!coversMin || iso < coversMin) coversMin = iso; if (!coversMax || iso > coversMax) coversMax = iso; }
+    synth.push({
+      practiceCode: code, valueGross,
+      // Turnos futuros: se proyecta el cruce aunque NO estén validados (solo acá).
+      billable: valueGross > 0,
+      benefit: String(row[kBenef] || "").trim(),
+      appointmentAt: md ? `${md[3]}-${md[2]}-${md[1]}` : "",
+      debitSource: "", manualDebit: false, debitType: "total", debitAmount: 0,
+      _nombre: String(row[kNombre] || "").trim(),
+      _practica: pracRaw,
+      _turno: String(row[kTurno] || "").trim(),
+    });
+  }
+  applyAutomaticExclusionDebits(synth);
+  const grupoMap = new Map();
+  for (const s of synth) { if (!s.benefit || !s.appointmentAt) continue; const k = s.benefit + "|" + s.appointmentAt; if (!grupoMap.has(k)) grupoMap.set(k, []); grupoMap.get(k).push(s); }
+  let posiblesDebitos = 0, posiblesDebitosCount = 0;
+  const posiblesDebitosRows = [];
+  for (const r of synth) {
+    const d = reportRowDebit(r);
+    if (d <= 0) continue;
+    posiblesDebitos += d; posiblesDebitosCount++;
+    const ruleCodes = String(r.autoDebitRuleCodes || "").split("/").map((c) => cleanIdentifier(c)).filter(Boolean);
+    const grupo = grupoMap.get(r.benefit + "|" + r.appointmentAt) || [];
+    const cruce = grupo.filter((g) => g !== r && (ruleCodes.length ? ruleCodes.includes(g.practiceCode) : true))
+      .map((g) => g._practica + (g._turno ? " · " + g._turno : "")).filter(Boolean);
+    if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
+      benef: r.benefit, nombre: r._nombre || "", turno: r._turno || "", practica: r._practica || "",
+      estado: "Turno asignado", cruce: cruce.join(" + "), motivo: r.autoDebitReason || "", monto: money(d),
+    });
+  }
+  return {
+    period: bandeja.month || "", label: bandeja.monthLabel || periodLabel(bandeja.month) || "",
+    count: bandeja.rows.length, consultations, practices,
+    posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount, posiblesDebitosRows,
+    coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
+    coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
+    nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
+    uploadedAt: bandeja.uploadedAt || "",
+  };
+}
 // Módulo de nivel 1 del nomenclador PAMI (ej. "RADIOLOGIA AMBULATORIA DE NIVEL 1").
 // Acepta "NIVEL 1" y "NIVEL I", sin confundir con NIVEL 2/3 ni II/III.
 function isNivel1Module(moduleDescription) {
@@ -2971,7 +3062,7 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(clientBandejaResumenMatch[1]);
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
-    return json(res, 200, { resumen: buildBandejaResumen(slug), estado: loadBandejaEstado()[slug] || null });
+    return json(res, 200, { resumen: buildBandejaResumen(slug), adelante: buildBandejaAdelanteResumen(slug), estado: loadBandejaEstado()[slug] || null });
   }
 
   // La app reporta el resultado del último sync de cada cliente (ok/error + hora).
@@ -3052,6 +3143,36 @@ const server = http.createServer(async (req, res) => {
       rows,
     };
     saveClientBandejas(store);
+    return json(res, 200, { ok: true, count: rows.length });
+  }
+
+  // Bandeja "hacia adelante" (turnos futuros) — la sube la app, la lee la card
+  // "Hacia adelante" del Dashboard mes en curso vía /bandeja/resumen (adelante).
+  const clientBandejaAdelanteMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja-adelante$/);
+  if (clientBandejaAdelanteMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientBandejaAdelanteMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 20000) : [];
+    const columns = Array.isArray(body.columns) && body.columns.length
+      ? body.columns.map(String)
+      : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
+    const store = loadClientBandejasAdelante();
+    store[slug] = {
+      month: String(body.month || "").trim(),
+      monthLabel: String(body.monthLabel || "").trim(),
+      generatedAt: String(body.generatedAt || "").trim(),
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: me.username,
+      count: rows.length,
+      columns,
+      rows,
+    };
+    saveClientBandejasAdelante(store);
     return json(res, 200, { ok: true, count: rows.length });
   }
 

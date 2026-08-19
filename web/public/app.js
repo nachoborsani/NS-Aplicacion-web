@@ -1172,18 +1172,20 @@ var MESCURSO_FALTAN_INFORMES = []; // detalle copiable de las que faltan informe
 var MESCURSO_POSIBLES_DEBITOS = []; // detalle copiable de los cruces que debitan (mes en curso)
 var MESCURSO_FALTAN_INFORMES_JULIO = []; // faltan informe del reporte "sin cerrar"
 var MESCURSO_POSIBLES_DEBITOS_JULIO = []; // posibles débitos del reporte "sin cerrar"
-var MESCURSO_PANEL_ABIERTO = '';    // '' | 'informes' | 'debitos' | 'informes-julio' | 'debitos-julio'
+var MESCURSO_POSIBLES_DEBITOS_ADELANTE = []; // posibles débitos de turnos futuros (hacia adelante)
+var MESCURSO_PANEL_ABIERTO = '';    // '' | 'informes' | 'debitos' | 'informes-julio' | 'debitos-julio' | 'debitos-adelante'
 function mesCursoSetCaret(id, abierto){ var c = document.getElementById(id); if (c) c.textContent = abierto ? '▾' : '▸'; }
 function toggleFaltanInformes(){ mesCursoTogglePanel('informes'); }
 function togglePosiblesDebitos(){ mesCursoTogglePanel('debitos'); }
 function toggleFaltanInformesJulio(){ mesCursoTogglePanel('informes-julio'); }
 function toggleDebitosJulio(){ mesCursoTogglePanel('debitos-julio'); }
+function toggleDebitosAdelante(){ mesCursoTogglePanel('debitos-adelante'); }
 // Abre/cierra debajo de los cuadros el detalle copiable.
 function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
   if (!panel) return;
   var apagarCarets = function(){
-    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret']
+    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosAdelanteCaret']
       .forEach(function(id){ mesCursoSetCaret(id, false); });
   };
   if (MESCURSO_PANEL_ABIERTO === tipo){
@@ -1207,6 +1209,10 @@ function mesCursoTogglePanel(tipo){
     var dj = MESCURSO_POSIBLES_DEBITOS_JULIO || [];
     if (!dj.length) return;
     html = mesCursoTablaHtml('Posibles débitos (mes anterior) · ' + dj.length, 'warn', 'copiarPosiblesDebitosJulio', debCols, dj.map(mapDebitos), 'debitos-julio');
+  } else if (tipo === 'debitos-adelante'){
+    var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
+    if (!da.length) return;
+    html = mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante');
   } else {
     var pd = MESCURSO_POSIBLES_DEBITOS || [];
     if (!pd.length) return;
@@ -1219,6 +1225,7 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoDebitosCaret', tipo === 'debitos');
   mesCursoSetCaret('mescursoInformesJulioCaret', tipo === 'informes-julio');
   mesCursoSetCaret('mescursoDebitosJulioCaret', tipo === 'debitos-julio');
+  mesCursoSetCaret('mescursoDebitosAdelanteCaret', tipo === 'debitos-adelante');
 }
 function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId){
   var thead = '<tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>';
@@ -1247,6 +1254,7 @@ function mesCursoDescargarDatos(panelId){
   if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'debitos-julio') return { titulo: 'Posibles debitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [6] };
+  if (panelId === 'debitos-adelante') return { titulo: 'Posibles debitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [6] };
   return { titulo: 'Posibles debitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [6] };
 }
 async function mesCursoDescargar(fmt, panelId, btn){
@@ -1290,6 +1298,10 @@ function copiarPosiblesDebitos(btn){
 function copiarPosiblesDebitosJulio(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'SE CRUZA CON', 'DEBITO'],
     (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.cruce, x.monto]; }));
+}
+function copiarPosiblesDebitosAdelante(btn){
+  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'SE CRUZA CON', 'DEBITO'],
+    (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.cruce, x.monto]; }));
 }
 function mesCursoCopiar(btn, headers, filas){
   var tsv = [headers.join('\t')].concat(filas.map(function(f){ return f.join('\t'); })).join('\n');
@@ -1431,6 +1443,29 @@ function mesCursoCardMesEnCurso(r, estado){
     + (estado && estado.transmitAt ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(estado.transmitidas || 0)) + ((estado.transmitErrores || 0) > 0 ? ' · ' + esc(numberFmt(estado.transmitErrores)) + ' con error' : '') + '</b></div>' : '')
     + '</div>';
 }
+// Card "Hacia adelante": turnos futuros (día siguiente al corte → fin de mes).
+// Objetivo: detectar posibles débitos ANTES de que ocurran. No estima $ (los
+// turnos futuros no deberían faltar pero faltan → un estimado sería irreal).
+function mesCursoCardAdelante(a){
+  if (!a || !a.count) return '';
+  var abarca = (a.coversFrom && a.coversTo) ? (a.coversFrom + ' al ' + a.coversTo) : '';
+  var debCount = a.posiblesDebitosCount || 0;
+  var djClick = (debCount > 0) ? ' mescurso-click" onclick="toggleDebitosAdelante()' : '';
+  var djCaret = (debCount > 0) ? ' <span class="mescurso-caret" id="mescursoDebitosAdelanteCaret">▸</span>' : '';
+  var head = '<div class="mescurso-head"><span class="mescurso-title">Hacia adelante'
+    + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
+    + '<span class="mescurso-chip">' + esc(a.label || '') + '</span></div>';
+  return '<div class="mescurso-card adelante">' + head
+    + '<div class="mescurso-val-lbl">Turnos agendados</div>'
+    + '<div class="mescurso-val chico">' + esc(numberFmt(a.count || 0)) + '</div>'
+    + '<div class="mescurso-val-note">' + esc(numberFmt(a.consultations || 0)) + ' consultas · ' + esc(numberFmt(a.practices || 0)) + ' prácticas · para detectar débitos antes de que pasen</div>'
+    + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line warn' + djClick + '"><span>Posibles débitos por adelantado' + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (a.posiblesDebitos ? ' · ' + esc(moneyFmt(a.posiblesDebitos)) : '') + '</b></div>'
+    + '</div>'
+    + '<div class="mescurso-foot">Turnos futuros del mes · no suman a facturación</div>'
+    + (a.uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(a.uploadedAt)) + '</b></div>' : '')
+    + '</div>';
+}
 // Card derecha cuando NO hay reporte del mes anterior: cartel "falta reporte".
 function mesCursoCardFaltaReporte(period){
   var label = mesCursoLabelPeriodo(period);
@@ -1504,8 +1539,10 @@ async function loadClientMesCurso(){
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var estadoSync = (results[0].ok && results[0].data) ? results[0].data.estado : null;
+  var adelante = (results[0].ok && results[0].data) ? results[0].data.adelante : null;
   MESCURSO_FALTAN_INFORMES = (resumen && resumen.missingInformeRows) || [];
   MESCURSO_POSIBLES_DEBITOS = (resumen && resumen.posiblesDebitosRows) || [];
+  MESCURSO_POSIBLES_DEBITOS_ADELANTE = (adelante && adelante.posiblesDebitosRows) || [];
   MESCURSO_PANEL_ABIERTO = '';
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
@@ -1518,7 +1555,8 @@ async function loadClientMesCurso(){
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
   var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
-  box.innerHTML = '<div class="mescurso-cards">' + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + '</div>'
+  var cardAdel = mesCursoCardAdelante(adelante);
+  box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + (cardAdel || '') + '</div>'
     + '<div id="mescursoInformesPanel"></div>';
 }
 async function renderActiveClient(){

@@ -123,6 +123,25 @@ def month_range(period: str, hasta_hoy: bool = False) -> tuple[str, str, str]:
     return f"01/{month:02d}/{year}", f"{hasta_dia:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
 
 
+def forward_range(period: str, hasta_hoy: bool = False) -> tuple[str, str, str] | None:
+    """Rango 'hacia adelante': del día SIGUIENTE al corte del mes en curso hasta fin
+    de mes. Ej: si el mes en curso corta el 18/08 (corrida de la tarde), adelante
+    va del 19/08 al 31/08. Así el día que pasa de futuro a presente se mete solo en
+    el mes en curso y no se solapa. Devuelve None si no quedan días futuros.
+    """
+    year, month = int(period[:4]), int(period[5:7])
+    last = calendar.monthrange(year, month)[1]
+    hoy = date.today()
+    if (year, month) == (hoy.year, hoy.month):
+        corte = hoy.day if hasta_hoy else max(1, hoy.day - 1)
+    else:
+        corte = last  # meses pasados: no hay futuro
+    desde_dia = corte + 1
+    if desde_dia > last:
+        return None
+    return f"{desde_dia:02d}/{month:02d}/{year}", f"{last:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
+
+
 def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     """Lee el Excel exportado y devuelve (filas como dicts, columnas). La primera
     fila no vacía se toma como encabezado."""
@@ -191,6 +210,18 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
             if progress:
                 progress(f"{name}: bajando bandeja…")
             exported = bot.exportar_excel_panel(str(tmp), {"fecha_desde": desde, "fecha_hasta": hasta})
+            # 3) Bandeja "hacia adelante": turnos del día siguiente al corte hasta
+            #    fin de mes (para detectar posibles débitos por adelantado).
+            fut = forward_range(period, hasta_hoy=es_fin_dia)
+            exported_adelante = None
+            fut_range = None
+            if fut is not None:
+                desde_f, hasta_f, _ = fut
+                fut_range = (desde_f, hasta_f)
+                if progress:
+                    progress(f"{name}: bajando turnos futuros ({desde_f} a {hasta_f})…")
+                tmp_f = Path(tempfile.gettempdir()) / f"bandeja_adelante_{slug}_{period}.xlsx"
+                exported_adelante = bot.exportar_excel_panel(str(tmp_f), {"fecha_desde": desde_f, "fecha_hasta": hasta_f})
         finally:
             try:
                 bot.cerrar()
@@ -200,7 +231,20 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         rows, columns = parse_bandeja_excel(exported)
         web.upload_bandeja(slug, period, rows, columns=columns, month_label=label,
                            generated_at=date.today().isoformat())
+        # Subir la bandeja de adelante (si había días futuros). Un fallo acá no
+        # tumba el sync del mes en curso.
+        adelante_count = None
+        try:
+            if exported_adelante is not None:
+                rows_f, cols_f = parse_bandeja_excel(exported_adelante)
+                web.upload_bandeja_adelante(slug, period, rows_f, columns=cols_f, month_label=label,
+                                            generated_at=date.today().isoformat())
+                adelante_count = len(rows_f)
+        except Exception:  # noqa: BLE001
+            pass
         res = {"slug": slug, "name": name, "ok": True, "count": len(rows)}
+        if adelante_count is not None:
+            res["adelante"] = adelante_count
         if transmit_info is not None:
             res["transmit"] = transmit_info
         return res
