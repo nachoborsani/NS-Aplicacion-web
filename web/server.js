@@ -3938,7 +3938,7 @@ const server = http.createServer(async (req, res) => {
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), modelos: m.modelos || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {},
+        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {},
       })),
     });
   }
