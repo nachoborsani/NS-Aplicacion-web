@@ -1323,7 +1323,10 @@ function mesCursoLabelPeriodo(period){
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 function mesCursoCardMesEnCurso(r, estado){
   var chip = (r && r.label) || mesCursoMesActualLabel();
-  var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso</span>'
+  // Rango de días que abarca la bandeja (ej. "01/08 al 18/08"), por las dudas.
+  var abarca = (r && r.coversFrom && r.coversTo) ? (r.coversFrom + ' al ' + r.coversTo) : '';
+  var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso'
+    + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
     + '<span class="mescurso-chip">' + esc(chip) + '</span></div>';
   if (!r){
     if (estado && estado.ok === false){
@@ -1407,7 +1410,8 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
-    + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)</div>'
+    + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
+    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de posibles débitos descontados' : '') + '</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + djClick + '"><span>Posibles débitos' + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
@@ -1640,6 +1644,7 @@ function openClientEditModal(){
   set('clientEditCuit', ACTIVE_CLIENT.cuit);
   set('clientEditUgl', ACTIVE_CLIENT.ugl);
   set('clientEditSap', ACTIVE_CLIENT.sap);
+  set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
   showModal('clientEditModal', 'ceScrim');
 }
 function closeClientEditModal(){ hideModal('clientEditModal', 'ceScrim'); }
@@ -1651,7 +1656,8 @@ async function saveClientEdit(){
     businessName: (document.getElementById('clientEditBusinessName') || {}).value || '',
     cuit: (document.getElementById('clientEditCuit') || {}).value || '',
     ugl: (document.getElementById('clientEditUgl') || {}).value || '',
-    sap: (document.getElementById('clientEditSap') || {}).value || ''
+    sap: (document.getElementById('clientEditSap') || {}).value || '',
+    tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio'
   };
   var btn = document.getElementById('clientEditSave'); if (btn) btn.disabled = true;
   var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug), payload);

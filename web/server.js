@@ -1702,6 +1702,8 @@ function buildBandejaResumen(slug) {
   let grossTransmitido = 0, grossTurno = 0;
   let ausentesConsultas = 0, ausentesPracticas = 0;
   let missingInforme = 0, missingInformeAmount = 0;
+  // Rango de fechas que abarca la bandeja (del 01 al último turno con datos).
+  let coversMin = "", coversMax = "";
   // Detalle copiable de las que faltan informe (validadas sin transmitir).
   const missingInformeRows = [];
   // Filas sintéticas con el shape que esperan las reglas de débito
@@ -1746,6 +1748,11 @@ function buildBandejaResumen(slug) {
     }
     // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
     const md = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(row[kTurno] || ""));
+    if (md) {
+      const iso = `${md[3]}-${md[2]}-${md[1]}`;
+      if (!coversMin || iso < coversMin) coversMin = iso;
+      if (!coversMax || iso > coversMax) coversMax = iso;
+    }
     synth.push({
       practiceCode: code,
       valueGross,
@@ -1844,6 +1851,8 @@ function buildBandejaResumen(slug) {
     missingInformeRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
+    coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
+    coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
     nomencladorPeriod: nom ? (nom.period || "") : "",
     nomencladorLabel: nom ? (nom.label || periodLabel(nom.period)) : "",
     uploadedAt: bandeja.uploadedAt || "",
@@ -2769,6 +2778,9 @@ const server = http.createServer(async (req, res) => {
       ugl: String(body.ugl || "").replace(/\s+/g, " ").trim(),
       sap: String(body.sap || "").replace(/\s+/g, " ").trim(),
       status: clients[idx].status,
+      // Si la edición no manda tipo, conservamos el que tenía (no forzar a
+      // "consultorio", que fue el bug que devolvía a la dra a Consultorios).
+      tipo: body.tipo !== undefined ? body.tipo : clients[idx].tipo,
       activeModules: clients[idx].activeModules,
     });
     saveClientsStore(clients);

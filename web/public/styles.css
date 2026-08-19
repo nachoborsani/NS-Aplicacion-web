@@ -717,6 +717,7 @@
   .mescurso-card.sincerrar{border-color:var(--warning)}
   .mescurso-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
   .mescurso-title{font-size:14px;font-weight:700;color:var(--text)}
+  .mescurso-abarca{font-size:11px;font-weight:600;color:var(--text-2);margin-left:6px}
   .mescurso-chip{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--hover);color:var(--text-2)}
   .mescurso-chip.warn{background:var(--warning-bg);color:var(--warning)}
   .mescurso-val-lbl{font-size:11px;color:var(--text-2);margin-bottom:1px}
@@ -755,9 +756,12 @@
   .mescurso-panel .table-scroll{max-height:340px;overflow:auto}
   .mescurso-panel table{width:100%;border-collapse:collapse;font-size:11px;table-layout:auto}
   .mescurso-panel th{position:sticky;top:0;background:var(--surface);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2);font-weight:700;white-space:nowrap}
-  /* Las prácticas largas envuelven (2+ filas) en vez de estirar la tabla a la derecha. */
-  .mescurso-panel td{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-word}
-  .mescurso-panel td:first-child,.mescurso-panel td:last-child{white-space:nowrap}
+  /* Las prácticas/nombres largos envuelven (2+ filas) en vez de estirar la tabla a
+     la derecha: tope de ancho en las celdas del medio (sirve para TODOS los
+     clientes, no importa cuán larga sea la descripción). BENEF y el monto (1ra y
+     última) quedan en una línea. */
+  .mescurso-panel td{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;word-break:break-word;overflow-wrap:anywhere;max-width:240px}
+  .mescurso-panel td:first-child,.mescurso-panel td:last-child{white-space:nowrap;max-width:none}
   .mescurso-salud{margin:0 0 10px;padding:8px 11px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.4}
   .mescurso-salud.err{background:var(--error-bg);border:1px solid var(--error);color:var(--error)}
   .mescurso-salud.warn{background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning)}
