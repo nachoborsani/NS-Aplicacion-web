@@ -776,8 +776,10 @@
   .mescurso-panel th{position:sticky;top:0;background:var(--surface);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2);font-weight:700;white-space:nowrap}
   /* Columnas cortas: se ajustan al contenido en una línea. */
   .mescurso-panel td,.mescurso-panel th{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;white-space:nowrap;width:1%}
-  /* Columnas de texto largo: toman el ancho sobrante y envuelven si hace falta. */
-  .mescurso-panel td.mc-exp,.mescurso-panel th.mc-exp{white-space:normal;width:auto;word-break:break-word;overflow-wrap:anywhere}
+  /* Columnas de texto largo: toman el ancho sobrante y envuelven por palabra si
+     hace falta. overflow-wrap:break-word (no 'anywhere') para que NO se colapsen a
+     una letra cuando el espacio aprieta: su mínimo es la palabra más larga. */
+  .mescurso-panel td.mc-exp,.mescurso-panel th.mc-exp{white-space:normal;width:auto;min-width:80px;overflow-wrap:break-word}
   .mescurso-salud{margin:0 0 10px;padding:8px 11px;border-radius:9px;font-size:12px;font-weight:600;line-height:1.4}
   .mescurso-salud.err{background:var(--error-bg);border:1px solid var(--error);color:var(--error)}
   .mescurso-salud.warn{background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning)}
