@@ -3895,6 +3895,28 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // TEMPORAL: prueba de alcance a PAMI desde la IP de Railway (admin). Solo GETs,
+  // sin login. Sirve para saber si el panel autenticado sería viable server-side.
+  if (p === "/api/admin/pami-iptest" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const urls = [
+      "https://cup.pami.org.ar/controllers/loginController.php?redirect=https://pe.pami.org.ar",
+      "https://pe.pami.org.ar/controllers/transmision.php",
+      "https://www.pami.org.ar/credencial-provisoria",
+    ];
+    const out = {};
+    for (const u of urls) {
+      try {
+        const r = await fetch(u, { headers: { "User-Agent": "Mozilla/5.0" }, redirect: "manual", signal: AbortSignal.timeout(15000) });
+        const body = await r.text().catch(() => "");
+        out[u] = { status: r.status, location: r.headers.get("location") || "", server: r.headers.get("server") || "", bytes: body.length, snippet: body.slice(0, 160).replace(/\s+/g, " ") };
+      } catch (e) { out[u] = { error: String((e && e.message) || e) }; }
+    }
+    return json(res, 200, out);
+  }
+
   // Estado de la conexión con Google (admin).
   if (p === "/api/admin/google/estado" && req.method === "GET") {
     const me = getSessionUser(req);
