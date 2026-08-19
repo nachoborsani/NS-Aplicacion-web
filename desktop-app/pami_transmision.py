@@ -1341,6 +1341,19 @@ class PamiTransmisionController:
                 return true;
               };
 
+              // Combos (validada/transmitida): vacío = "todas" (1ra opción "---").
+              // Siempre se setean, así el export NO arrastra un filtro que dejó una
+              // corrida anterior (ej. la transmisión con validada=S, transmitida=N).
+              const setSelect = (selector, valor) => {
+                const el = document.querySelector(selector);
+                if (!el) return false;
+                if (valor === '' || valor === undefined || valor === null) el.selectedIndex = 0;
+                else el.value = valor;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              };
+
               const getBuscarTrigger = () => {
                 const candidatos = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'));
                 return candidatos.find((el) => {
@@ -1353,8 +1366,8 @@ class PamiTransmisionController:
               let huboCambios = false;
               if (filtros.fecha_desde) huboCambios = setValor('input[name="f_turno_desde"]', filtros.fecha_desde) || huboCambios;
               if (filtros.fecha_hasta) huboCambios = setValor('input[name="f_turno_hasta"]', filtros.fecha_hasta) || huboCambios;
-              if (filtros.validada) huboCambios = setValor('select[name="c_validada"]', uiToDomSelectValue(filtros.validada)) || huboCambios;
-              if (filtros.transmitida) huboCambios = setValor('select[name="transmitida"]', uiToDomSelectValue(filtros.transmitida)) || huboCambios;
+              huboCambios = setSelect('select[name="c_validada"]', uiToDomSelectValue(filtros.validada || '')) || huboCambios;
+              huboCambios = setSelect('select[name="transmitida"]', uiToDomSelectValue(filtros.transmitida || '')) || huboCambios;
 
               if (huboCambios) {
                 const buscar = getBuscarTrigger();

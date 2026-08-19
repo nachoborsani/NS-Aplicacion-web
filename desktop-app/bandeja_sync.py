@@ -28,8 +28,9 @@ _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
           "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 
 # Techo de espera para la transmisión de un cliente (el bot puede hacer varios
-# barridos). Si vence, seguimos con la descarga igual y reportamos lo que haya.
-_TRANSMIT_TIMEOUT_S = 900
+# barridos). Generoso para el backlog de la 1ra corrida; las diarias terminan
+# en segundos. Si vence, seguimos con la descarga igual y reportamos lo que haya.
+_TRANSMIT_TIMEOUT_S = 1800
 
 
 def _current_period() -> str:
@@ -79,12 +80,14 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
         "validada": "Si", "transmitida": "No",
     })
     estado: dict = {}
+    completo = False
     fin = time.monotonic() + _TRANSMIT_TIMEOUT_S
     while time.monotonic() < fin:
         estado = bot.obtener_estado() or {}
         if progress:
             progress(f"transmitiendo… {estado.get('procesados', 0)} enviadas")
         if estado.get("status") in ("DONE", "ERROR"):
+            completo = True
             break
         time.sleep(3)
     return {
@@ -92,6 +95,7 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
         "errores": int(estado.get("errores") or 0),
         "lastError": str(estado.get("lastError") or ""),
         "status": str(estado.get("status") or "TIMEOUT"),
+        "completo": completo,  # False = cortó por timeout, quedaron pendientes
     }
 
 
