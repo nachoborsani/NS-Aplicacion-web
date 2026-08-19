@@ -236,6 +236,7 @@ async function buildPdf(client, data) {
   for (let i = 0; i < pages.length; i++) {
     const t = (i + 1) + " / " + pages.length;
     pages[i].drawText(t, { x: PW - M - font.widthOfTextAtSize(t, 8), y: 26, size: 8, font, color: soft });
+    pages[i].drawText("N&S Salud · gestion.nssalud@gmail.com", { x: M, y: 26, size: 8, font, color: soft });
   }
   return await doc.save();
 }

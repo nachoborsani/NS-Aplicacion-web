@@ -129,6 +129,7 @@ async function buildPdf(client, label, rows) {
     const pg = pages[i];
     const txt = (i + 1) + " / " + pages.length;
     pg.drawText(txt, { x: PW - M - font.widthOfTextAtSize(txt, 8), y: 26, size: 8, font, color: soft });
+    pg.drawText("N&S Salud · gestion.nssalud@gmail.com", { x: M, y: 26, size: 8, font, color: soft });
   }
   return await doc.save();
 }
