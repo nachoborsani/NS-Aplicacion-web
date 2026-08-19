@@ -1353,6 +1353,9 @@ function mesCursoCardSinCerrar(current, reporte){
   var faltan = current.missingInforme || 0;
   var faltanMonto = current.missingInformeAmount || 0;
   var ausentes = current.absent || 0;
+  var ausMonto = current.absentAmount || 0;
+  var debCount = current.debitCount || 0;
+  var debMonto = current.debit || 0;
   var clickable = MESCURSO_REPORTE_ID ? ' mescurso-click' : '';
   var onclick = MESCURSO_REPORTE_ID ? ' onclick="irAReporteSinCerrar()"' : '';
   var footParts = [];
@@ -1364,12 +1367,14 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
-    + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar</div>'
+    + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)</div>'
     + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
+    + '<div class="mescurso-line warn' + clickable + '"' + onclick + '><span>Posibles débitos</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + clickable + '"' + onclick + '><span>Faltan informes</span>'
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + clickable + '"' + onclick + '><span>Ausentes sin activar</span>'
-    + '<b>' + esc(numberFmt(ausentes)) + '</b></div>'
+    + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>' + foot + '</div>';
 }
 function irAReporteSinCerrar(){

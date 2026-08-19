@@ -1806,6 +1806,7 @@ function emptyDashboardPeriod(period) {
     facturable: 0,
     billable: 0,
     absent: 0,
+    absentAmount: 0,
     outsideCutoff: 0,
     nextPeriodCutoff: 0,
     missingInforme: 0,
@@ -1813,6 +1814,7 @@ function emptyDashboardPeriod(period) {
     unmatched: 0,
     gross: 0,
     debit: 0,
+    debitCount: 0,
     debitUmbral: 0,
     debitExcluyente: 0,
     debitOtros: 0,
@@ -1845,7 +1847,7 @@ function addRowToDashboardPeriod(target, row) {
   if (row.transmitted) target.transmitted += 1;
   if (row.facturable) target.facturable += 1;
   if (row.billable) target.billable += 1;
-  if (row.absent) target.absent += 1;
+  if (row.absent) { target.absent += 1; target.absentAmount += money(row.valueGross); }
   if (row.outsideCutoff) target.outsideCutoff += 1;
   target.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
   if (reportRowMissingInforme(row)) { target.missingInforme += 1; target.missingInformeAmount += reportRowMissingInformeAmount(row); }
@@ -1856,6 +1858,7 @@ function addRowToDashboardPeriod(target, row) {
   target.gross += gross;
   target.debit += debit;
   if (debit > 0) {
+    target.debitCount += 1;
     const cat = debitoCategoria(row);
     if (cat === "umbral") target.debitUmbral += debit;
     else if (cat === "excluyente") target.debitExcluyente += debit;
@@ -1902,6 +1905,7 @@ function addRowToDashboardPeriod(target, row) {
 }
 function finalizeDashboardPeriod(target) {
   target.gross = money(target.gross);
+  target.absentAmount = money(target.absentAmount);
   target.debit = money(target.debit);
   target.debitUmbral = money(target.debitUmbral);
   target.debitExcluyente = money(target.debitExcluyente);
