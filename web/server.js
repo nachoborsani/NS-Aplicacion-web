@@ -250,6 +250,20 @@ async function leerPendientesScheffelaar(auth, desde) {
   });
   return { pendientes, hechas, faltanDatos };
 }
+// Filas con DNI pero SIN benef (y sin credencial): las que el barrido de la app
+// tiene que resolver en el padrón. Devuelve DNI para buscar.
+async function leerFaltanBenefScheffelaar(auth) {
+  const C = CRED_SCHEFE, cc = C.cols;
+  const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
+  const faltan = [];
+  rows.forEach((r, i) => {
+    const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
+    const dni = g(cc.dni), benef = g(cc.benef), cred = g(cc.credencial), nombre = g(cc.nombre), tramite = g(cc.tramite);
+    if (cred || benef || !dni) return;   // ya hecha, ya tiene benef, o no hay DNI para buscar
+    faltan.push({ sheetRow: C.startRow + i, dni, nombre, tramite });
+  });
+  return faltan;
+}
 // Procesa UNA fila: baja, sube a Drive, marca la planilla (o marca el error
 // definitivo). Reusado por el endpoint manual y por la corrida programada.
 async function procesarCredencialFila(auth, row) {
@@ -3967,6 +3981,40 @@ const server = http.createServer(async (req, res) => {
     if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
     correrLoteCredenciales("manual");
     return json(res, 200, { ok: true });
+  }
+
+  // Filas con DNI y sin benef (para el barrido de la app: buscar el benef).
+  if (p === "/api/credenciales/scheffelaar/faltan-benef" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const cfg = loadGoogleCfg();
+    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
+    try {
+      const faltan = await leerFaltanBenefScheffelaar(gcreds.makeAuth(cfg));
+      return json(res, 200, { faltan });
+    } catch (e) {
+      return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) });
+    }
+  }
+  // Escribe el benef encontrado en la planilla (col. Num Benef). Lo llama el barrido.
+  if (p === "/api/credenciales/scheffelaar/set-benef" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const cfg = loadGoogleCfg();
+    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const sheetRow = Number(body.sheetRow) || 0;
+    let benef;
+    try { benef = credNormBenef(body.benef); } catch (e) { return json(res, 400, { error: e.message }); }
+    if (!sheetRow) return json(res, 400, { error: "Falta la fila." });
+    try {
+      const C = CRED_SCHEFE;
+      await gcreds.writeCell(gcreds.makeAuth(cfg), C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.benef) + sheetRow, benef);
+      return json(res, 200, { ok: true, sheetRow, benef });
+    } catch (e) {
+      return json(res, 502, { error: "No pude escribir la planilla: " + ((e && e.message) || e) });
+    }
   }
 
   // ---- Olvide mi contraseña: pedir enlace ----
