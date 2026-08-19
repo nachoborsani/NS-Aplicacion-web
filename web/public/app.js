@@ -106,7 +106,9 @@ async function descargarCredencial(){
       result.innerHTML = '<div class="cred-ok">✅ Credencial encontrada.</div>'
         + '<div class="cred-buttons"><a class="btn btn-primary" href="' + urlpdf + '" download="' + nombre + '">Guardar PDF</a>'
         + '<a class="btn btn-ghost" href="' + urlpdf + '" target="_blank" rel="noopener">Abrir en pestaña</a></div>'
-        + '<iframe class="cred-preview" src="' + urlpdf + '"></iframe>';
+        // #view=FitH → el visor ajusta al ANCHO (no a la hoja entera): la
+        // credencial (arriba de un A4 casi vacío) se ve al doble de grande.
+        + '<iframe class="cred-preview" src="' + urlpdf + '#view=FitH"></iframe>';
       result.style.display = 'block';
     } else {
       var data = {}; try { data = await resp.json(); } catch (e){}
