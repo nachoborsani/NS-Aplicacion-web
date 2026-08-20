@@ -33,9 +33,11 @@ const clientCredsFile = path.join(dataDir, "client_credentials.json");
 // Usuarios médicos por cliente consultorio (para generar OME de especialista más
 // adelante). La clave va encriptada, igual que las claves PAMI del cliente.
 const clientMedicosFile = path.join(dataDir, "client_medicos.json");
-// Facturación por cliente (panel Pagos → Facturas): % de comisión y nº de socios
-// por cliente, más los registros de facturas cargadas por período.
+// Facturación por cliente (panel Administración → Facturas): % de comisión y nº
+// de socios por cliente, más los registros de facturas cargadas por período.
 const facturasFile = path.join(dataDir, "facturas.json");
+// Gastos fijos de NS (panel Administración → Gastos).
+const gastosFile = path.join(dataDir, "gastos.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -130,6 +132,44 @@ function facturaConfigCliente(store, slug) {
   const c = store.config[slug] || {};
   const sociosDefault = slug === "caballito-pediatrico" ? 3 : 2;
   return { comisionPct: Number(c.comisionPct) || 0, socios: Number(c.socios) || sociosDefault };
+}
+// --- Gastos fijos de NS ---
+// Semilla inicial (se crea solo la primera vez): sueldo empleado (15 y 30) + Claude.
+const GASTOS_SEMILLA = [
+  { concepto: "Empleado (1ra quincena)", dia: 15, monto: 350000, moneda: "ARS" },
+  { concepto: "Empleado (2da quincena)", dia: 30, monto: 350000, moneda: "ARS" },
+  { concepto: "Claude (suscripción)", dia: 10, monto: 20, moneda: "USD" },
+];
+function loadGastos() {
+  try {
+    const j = JSON.parse(fs.readFileSync(gastosFile, "utf8"));
+    return { gastos: Array.isArray(j.gastos) ? j.gastos : [], pagos: j.pagos || {} };
+  } catch { return null; }
+}
+function saveGastos(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(gastosFile, JSON.stringify(store, null, 2));
+}
+// Devuelve el store, creándolo con la semilla la primera vez.
+function loadGastosOSemilla() {
+  const s = loadGastos();
+  if (s) return s;
+  const store = { gastos: GASTOS_SEMILLA.map((g) => ({ id: crypto.randomUUID(), ...g })), pagos: {} };
+  saveGastos(store);
+  return store;
+}
+// Cotización del dólar oficial (venta), cacheada 3h para no golpear la API.
+let _DOLAR_CACHE = { valor: 0, fecha: "", ts: 0 };
+async function getDolarOficial() {
+  const ahora = Date.now();
+  if (_DOLAR_CACHE.valor && ahora - _DOLAR_CACHE.ts < 3 * 3600 * 1000) return _DOLAR_CACHE;
+  try {
+    const resp = await fetch("https://dolarapi.com/v1/dolares/oficial", { signal: AbortSignal.timeout(8000) });
+    const j = await resp.json();
+    const valor = Number(j && (j.venta || j.compra)) || 0;
+    if (valor > 0) _DOLAR_CACHE = { valor, fecha: String((j && j.fechaActualizacion) || "").slice(0, 10), ts: ahora };
+  } catch (e) { /* si falla, devolvemos lo último que haya (aunque sea 0) */ }
+  return _DOLAR_CACHE;
 }
 // Bandeja del mes por cliente (la sube la app cada noche desde PAMI).
 function loadClientBandejas() {
@@ -270,19 +310,27 @@ const telegram = require("./telegram.js");
 // en la variable de entorno TELEGRAM_BOT_TOKEN. Nunca guardamos el token en disco.
 const telegramFile = path.join(dataDir, "telegram.json");
 function loadTelegramCfg() {
-  try { const j = JSON.parse(fs.readFileSync(telegramFile, "utf8")); return { chatId: j.chatId || "", nombre: j.nombre || "" }; }
-  catch { return { chatId: "", nombre: "" }; }
+  try {
+    const j = JSON.parse(fs.readFileSync(telegramFile, "utf8"));
+    let chats = Array.isArray(j.chats) ? j.chats.filter((c) => c && c.chatId) : [];
+    if (!chats.length && j.chatId) chats = [{ chatId: String(j.chatId), nombre: j.nombre || "" }]; // migra formato viejo
+    return { chats };
+  } catch { return { chats: [] }; }
 }
-function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramFile, JSON.stringify(cfg, null, 2)); }
-// Manda un aviso al chat configurado. NUNCA lanza: un aviso que falla no puede
-// tumbar el proceso que lo reportaba.
+function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramFile, JSON.stringify({ chats: cfg.chats || [] }, null, 2)); }
+// Manda un aviso a TODOS los destinatarios. NUNCA lanza: un aviso que falla no
+// puede tumbar el proceso que lo reportaba.
 async function avisarTelegram(texto) {
   try {
     if (!telegram.hayToken()) return false;
     const cfg = loadTelegramCfg();
-    if (!cfg.chatId) return false;
-    await telegram.enviar(cfg.chatId, texto);
-    return true;
+    if (!cfg.chats.length) return false;
+    let algo = false;
+    for (const c of cfg.chats) {
+      try { await telegram.enviar(c.chatId, texto); algo = true; }
+      catch (e) { try { console.error("[telegram] no pude avisar a", c.chatId, (e && e.message) || e); } catch {} }
+    }
+    return algo;
   } catch (e) { try { console.error("[telegram] no pude avisar:", (e && e.message) || e); } catch {} return false; }
 }
 // Lee las filas pendientes de la planilla de Scheffelaar (con datos y sin
@@ -3517,6 +3565,77 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, registros: store.registros });
   }
 
+  // --- Gastos fijos (panel Administración) — admin-only ---
+  if (p === "/api/gastos" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const store = loadGastosOSemilla();
+    const dolar = await getDolarOficial();
+    return json(res, 200, { gastos: store.gastos, pagos: store.pagos, dolar: { valor: dolar.valor, fecha: dolar.fecha } });
+  }
+  // Crear o actualizar un gasto.
+  if (p === "/api/gastos" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const concepto = String((b && b.concepto) || "").trim();
+    if (!concepto) return json(res, 400, { error: "Falta el concepto." });
+    const datos = {
+      concepto,
+      dia: Math.min(31, Math.max(1, Math.round(Number(b && b.dia) || 1))),
+      monto: Math.max(0, Number(b && b.monto) || 0),
+      moneda: (b && b.moneda) === "USD" ? "USD" : "ARS",
+    };
+    const store = loadGastosOSemilla();
+    const id = String((b && b.id) || "").trim();
+    if (id) {
+      const g = store.gastos.find((x) => x.id === id);
+      if (!g) return json(res, 404, { error: "Gasto no encontrado." });
+      Object.assign(g, datos);
+    } else {
+      store.gastos.push({ id: crypto.randomUUID(), ...datos });
+    }
+    saveGastos(store);
+    return json(res, 200, { ok: true, gastos: store.gastos });
+  }
+  // Borrar un gasto.
+  const gastoDelMatch = p.match(/^\/api\/gastos\/([^/]+)$/);
+  if (gastoDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const id = decodeURIComponent(gastoDelMatch[1]);
+    const store = loadGastosOSemilla();
+    const idx = store.gastos.findIndex((x) => x.id === id);
+    if (idx < 0) return json(res, 404, { error: "Gasto no encontrado." });
+    store.gastos.splice(idx, 1);
+    saveGastos(store);
+    return json(res, 200, { ok: true, gastos: store.gastos });
+  }
+  // Marcar un gasto como pagado/no pagado en un período (mes). Al pagar en USD,
+  // fija la cotización del dólar de ese momento para que el ARS quede histórico.
+  if (p === "/api/gastos/pagado" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const periodo = String((b && b.periodo) || "").trim();
+    const gastoId = String((b && b.gastoId) || "").trim();
+    if (!periodo || !gastoId) return json(res, 400, { error: "faltan datos" });
+    const store = loadGastosOSemilla();
+    const gasto = store.gastos.find((x) => x.id === gastoId);
+    if (!gasto) return json(res, 404, { error: "Gasto no encontrado." });
+    store.pagos = store.pagos || {};
+    store.pagos[periodo] = store.pagos[periodo] || {};
+    if (b && b.pagado) {
+      const reg = { pagado: true };
+      if (gasto.moneda === "USD") { const d = await getDolarOficial(); reg.rate = d.valor || 0; }
+      store.pagos[periodo][gastoId] = reg;
+    } else {
+      delete store.pagos[periodo][gastoId];
+    }
+    saveGastos(store);
+    return json(res, 200, { ok: true, pagos: store.pagos });
+  }
+
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
   // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las
   // filas crudas, solo los totales tipo Julio). Va ANTES del match de /bandeja.
@@ -4252,7 +4371,7 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadTelegramCfg();
     let bot = null, errorBot = "";
     if (telegram.hayToken()) { try { const m = await telegram.getMe(); bot = { usuario: m.username, nombre: m.first_name }; } catch (e) { errorBot = String((e && e.message) || e); } }
-    return json(res, 200, { tokenPresente: telegram.hayToken(), varUsada: telegram.nombreVarUsada(), bot, errorBot, chatId: cfg.chatId, nombre: cfg.nombre });
+    return json(res, 200, { tokenPresente: telegram.hayToken(), varUsada: telegram.nombreVarUsada(), bot, errorBot, chats: cfg.chats });
   }
   // Detecta a quién le escribió el bot (para tomar el chat_id).
   if (p === "/api/admin/telegram/detectar" && req.method === "POST") {
@@ -4261,15 +4380,31 @@ const server = http.createServer(async (req, res) => {
     try { const chats = await telegram.chatsRecientes(); return json(res, 200, { ok: true, chats }); }
     catch (e) { return json(res, 200, { ok: false, error: String((e && e.message) || e) }); }
   }
-  // Guarda el chat_id destino.
-  if (p === "/api/admin/telegram/guardar-chat" && req.method === "POST") {
+  // Agrega un destinatario a la lista (dedup) y opcionalmente le manda un saludo.
+  if ((p === "/api/admin/telegram/guardar-chat" || p === "/api/admin/telegram/agregar-chat") && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const b = await readBody(req);
     const chatId = String((b && b.chatId) || "").trim();
     if (!chatId) return json(res, 400, { error: "falta chatId" });
-    saveTelegramCfg({ chatId, nombre: String((b && b.nombre) || "") });
-    return json(res, 200, { ok: true });
+    const cfg = loadTelegramCfg();
+    if (!cfg.chats.find((c) => String(c.chatId) === chatId)) cfg.chats.push({ chatId, nombre: String((b && b.nombre) || "") });
+    else if (b && b.nombre) cfg.chats.find((c) => String(c.chatId) === chatId).nombre = String(b.nombre);
+    saveTelegramCfg(cfg);
+    let saludoOk = null;
+    if (b && b.saludo) { try { await telegram.enviar(chatId, String(b.saludo)); saludoOk = true; } catch (e) { saludoOk = false; } }
+    return json(res, 200, { ok: true, chats: cfg.chats, saludoOk });
+  }
+  // Quita un destinatario de la lista.
+  if (p === "/api/admin/telegram/quitar-chat" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const chatId = String((b && b.chatId) || "").trim();
+    const cfg = loadTelegramCfg();
+    cfg.chats = cfg.chats.filter((c) => String(c.chatId) !== chatId);
+    saveTelegramCfg(cfg);
+    return json(res, 200, { ok: true, chats: cfg.chats });
   }
   // Aviso genérico: cualquier proceso autenticado (ej. el barrido de bandeja de la
   // app) manda su resumen por Telegram sin conocer el token.

@@ -56,7 +56,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', facturas:'Facturas', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', facturas:'Facturas', gastos:'Gastos', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 function togglePagosGroup(el){
@@ -67,7 +67,7 @@ function togglePagosGroup(el){
   if (group) group.classList.toggle('open');
 }
 function go(v, el){
-  ['dash','users','clientes','nomencladores','informes','credencial','facturas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','clientes','nomencladores','informes','credencial','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -78,13 +78,15 @@ function go(v, el){
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'soon') loadGeneralDebitos();
   if (v === 'facturas') loadFacturas();
+  if (v === 'gastos') loadGastos();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
     var g = document.getElementById(id);
     if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
   });
   var gPagos = document.getElementById('navGroupPagos');
-  if (gPagos){ gPagos.classList.toggle('open', v === 'facturas'); gPagos.classList.toggle('active', v === 'facturas'); }
+  var enAdmin = (v === 'facturas' || v === 'gastos');
+  if (gPagos){ gPagos.classList.toggle('open', enAdmin); gPagos.classList.toggle('active', enAdmin); }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
   if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
@@ -288,7 +290,7 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'facturas', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -1644,6 +1646,92 @@ async function saveFacturaRow(slug){
   var subida = document.getElementById('facSub_' + slug).checked;
   var res = await req('POST', '/api/facturas', { slug: slug, periodo: periodo, items: items, subida: subida });
   if (res.ok){ FACTURAS.registros = res.data.registros || []; }
+}
+
+// ===== Administración → Gastos (solo admin) =====
+var GASTOS = { gastos: [], pagos: {}, dolar: { valor: 0, fecha: '' } };
+function gastosPeriodoActual(){
+  var el = document.getElementById('gastosPeriodo');
+  if (el && !el.value){ var d = new Date(); el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  return el ? el.value : '';
+}
+async function loadGastos(){
+  gastosPeriodoActual();
+  var err = document.getElementById('gastosError'); if (err) err.style.display = 'none';
+  var res = await api('/api/gastos');
+  if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
+  GASTOS = { gastos: res.data.gastos || [], pagos: res.data.pagos || {}, dolar: res.data.dolar || { valor: 0, fecha: '' } };
+  renderGastos();
+}
+function renderGastos(){
+  var body = document.getElementById('gastosBody'); if (!body) return;
+  var periodo = gastosPeriodoActual();
+  var pagosMes = GASTOS.pagos[periodo] || {};
+  var dolarTxt = document.getElementById('gastosDolar');
+  if (dolarTxt) dolarTxt.innerHTML = GASTOS.dolar.valor ? ('💵 Dólar oficial: <b>' + moneyFmt(GASTOS.dolar.valor) + '</b>' + (GASTOS.dolar.fecha ? ' (' + esc(GASTOS.dolar.fecha) + ')' : '')) : '<span class="nom-muted">No pude traer la cotización del dólar.</span>';
+  if (!GASTOS.gastos.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin gastos cargados.</td></tr>'; document.getElementById('gastosTotal').textContent = moneyFmt(0); return; }
+  var total = 0;
+  body.innerHTML = GASTOS.gastos.map(function(g){
+    var pago = pagosMes[g.id];
+    var pagado = !!(pago && pago.pagado);
+    var rate = (pago && pago.rate) ? pago.rate : GASTOS.dolar.valor;
+    var ars = g.moneda === 'USD' ? (Number(g.monto) || 0) * (Number(rate) || 0) : (Number(g.monto) || 0);
+    total += ars;
+    var montoTxt = g.moneda === 'USD' ? ('US$ ' + (Number(g.monto) || 0)) : moneyFmt(g.monto);
+    var arsTxt = moneyFmt(ars) + (g.moneda === 'USD' && rate ? ' <span class="nom-muted">×' + moneyFmt(rate) + '</span>' : '');
+    return '<tr>' +
+      '<td>' + esc(g.concepto) + '</td>' +
+      '<td class="num">' + (g.dia || '-') + '</td>' +
+      '<td class="num">' + montoTxt + '</td>' +
+      '<td class="num">' + arsTxt + '</td>' +
+      '<td class="num"><input type="checkbox" class="fac-chk" ' + (pagado ? 'checked' : '') + ' onchange="toggleGastoPagado(\'' + g.id + '\', this.checked)"></td>' +
+      '<td class="row-actions">' +
+        '<button class="icon-btn mini" type="button" title="Editar" onclick="openGastoModal(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+        '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteGasto(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('gastosTotal').textContent = moneyFmt(total);
+}
+function openGastoModal(id){
+  var g = id ? GASTOS.gastos.find(function(x){ return x.id === id; }) : null;
+  document.getElementById('gastoId').value = g ? g.id : '';
+  document.getElementById('gastoConcepto').value = g ? (g.concepto || '') : '';
+  document.getElementById('gastoDia').value = g ? (g.dia || '') : '';
+  document.getElementById('gastoMonto').value = g ? (g.monto || '') : '';
+  document.getElementById('gastoMoneda').value = g ? (g.moneda || 'ARS') : 'ARS';
+  document.getElementById('gastoTitle').textContent = g ? 'Editar gasto' : 'Nuevo gasto';
+  document.getElementById('gastoModalError').textContent = '';
+  showModal('gastoModal', 'gastoScrim');
+  document.getElementById('gastoConcepto').focus();
+}
+function closeGastoModal(){ hideModal('gastoModal', 'gastoScrim'); }
+async function saveGasto(){
+  var errBox = document.getElementById('gastoModalError'); errBox.textContent = '';
+  var concepto = document.getElementById('gastoConcepto').value.trim();
+  if (!concepto){ errBox.textContent = 'Poné un concepto.'; return; }
+  var btn = document.getElementById('gastoSaveBtn'); btn.disabled = true;
+  var res = await req('POST', '/api/gastos', {
+    id: document.getElementById('gastoId').value || '',
+    concepto: concepto,
+    dia: Number(document.getElementById('gastoDia').value) || 1,
+    monto: facturaParseMonto(document.getElementById('gastoMonto').value),
+    moneda: document.getElementById('gastoMoneda').value,
+  });
+  btn.disabled = false;
+  if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  GASTOS.gastos = res.data.gastos || [];
+  renderGastos();
+  closeGastoModal();
+}
+async function deleteGasto(id){
+  if (!confirm('¿Borrar este gasto fijo?')) return;
+  var res = await req('DELETE', '/api/gastos/' + encodeURIComponent(id));
+  if (res.ok){ GASTOS.gastos = res.data.gastos || []; renderGastos(); }
+}
+async function toggleGastoPagado(id, pagado){
+  var res = await req('POST', '/api/gastos/pagado', { periodo: gastosPeriodoActual(), gastoId: id, pagado: pagado });
+  if (res.ok){ GASTOS.pagos = res.data.pagos || {}; renderGastos(); }
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;
