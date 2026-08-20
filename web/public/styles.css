@@ -986,3 +986,9 @@
   .fac-cli-cfg{flex-direction:column;align-items:flex-start;gap:8px}
   .fac-cfg-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .fac-cli .fac-in{width:52px}
+
+  /* Facturas: topbar (buscar + mínimo + período) y archivados */
+  .fac-topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .fac-archivados-info{font-size:12.5px;color:var(--text-2);margin-top:14px;padding:8px 12px;background:var(--soft,rgba(0,0,0,.03));border-radius:8px}
+  .fac-arch-tag{font-size:10px;text-transform:uppercase;letter-spacing:.04em;background:var(--soft,rgba(0,0,0,.09));color:var(--text-2);padding:2px 6px;border-radius:5px;vertical-align:middle;margin-left:6px}
+  .factura-group.archivado>.factura-group-head{opacity:.75}

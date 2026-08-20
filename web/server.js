@@ -127,11 +127,12 @@ function loadFacturas() {
     let periodos = Array.isArray(j.periodos) ? j.periodos.filter(Boolean).map(String) : [];
     if (!periodos.length && j.periodo) periodos = [String(j.periodo)];
     if (!periodos.length && j.periodos && typeof j.periodos === "object") periodos = Object.values(j.periodos).filter(Boolean).map(String);
-    for (const r of registros) { if (r.periodo && periodos.indexOf(r.periodo) < 0) periodos.push(r.periodo); }
+    const archivados = Array.isArray(j.archivados) ? j.archivados.filter(Boolean).map(String) : [];
+    for (const r of registros) { if (r.periodo && periodos.indexOf(r.periodo) < 0 && archivados.indexOf(r.periodo) < 0) periodos.push(r.periodo); }
     // Mínimo no imponible mensual de Ganancias (se resta antes del 2%).
     const minimoGanancias = j.minimoGanancias != null ? Number(j.minimoGanancias) : 67170;
-    return { config: j.config || {}, registros, periodos, minimoGanancias };
-  } catch { return { config: {}, registros: [], periodos: [], minimoGanancias: 67170 }; }
+    return { config: j.config || {}, registros, periodos, archivados, minimoGanancias };
+  } catch { return { config: {}, registros: [], periodos: [], archivados: [], minimoGanancias: 67170 }; }
 }
 function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -3522,7 +3523,25 @@ const server = http.createServer(async (req, res) => {
     const store = loadFacturas();
     const creds = loadClientCreds();
     const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "", pamiUser: (creds[c.slug] || {}).pamiUser || "", tieneClave: !!(creds[c.slug] || {}).pamiPassEnc, ...facturaConfigCliente(store, c.slug) }));
-    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos, minimoGanancias: store.minimoGanancias });
+    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos, archivados: store.archivados, minimoGanancias: store.minimoGanancias });
+  }
+  // Archivar / desarchivar un período (lo saca de la lista activa).
+  if (p === "/api/facturas/periodo/archivar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const valor = String((b && b.valor) || "").trim();
+    const store = loadFacturas();
+    store.archivados = store.archivados || [];
+    if (b && b.archivar) {
+      store.periodos = store.periodos.filter((x) => x !== valor);
+      if (store.archivados.indexOf(valor) < 0) store.archivados.push(valor);
+    } else {
+      store.archivados = store.archivados.filter((x) => x !== valor);
+      if (store.periodos.indexOf(valor) < 0) store.periodos.push(valor);
+    }
+    saveFacturas(store);
+    return json(res, 200, { ok: true, periodos: store.periodos, archivados: store.archivados });
   }
   // Mínimo no imponible de Ganancias (global del panel).
   if (p === "/api/facturas/minimo" && req.method === "POST") {
@@ -3571,9 +3590,10 @@ const server = http.createServer(async (req, res) => {
     if (!nuevo) return json(res, 400, { error: "Poné un nombre." });
     const store = loadFacturas();
     store.periodos = store.periodos.map((x) => (x === viejo ? nuevo : x));
+    store.archivados = (store.archivados || []).map((x) => (x === viejo ? nuevo : x));
     store.registros.forEach((r) => { if (r.periodo === viejo) r.periodo = nuevo; });
     saveFacturas(store);
-    return json(res, 200, { ok: true, periodos: store.periodos, registros: store.registros });
+    return json(res, 200, { ok: true, periodos: store.periodos, archivados: store.archivados, registros: store.registros });
   }
   // Borrar un período (y sus facturas de ese período).
   if (p === "/api/facturas/periodo/borrar" && req.method === "POST") {
@@ -3583,9 +3603,10 @@ const server = http.createServer(async (req, res) => {
     const valor = String((b && b.valor) || "").trim();
     const store = loadFacturas();
     store.periodos = store.periodos.filter((x) => x !== valor);
+    store.archivados = (store.archivados || []).filter((x) => x !== valor);
     store.registros = store.registros.filter((r) => r.periodo !== valor);
     saveFacturas(store);
-    return json(res, 200, { ok: true, periodos: store.periodos, registros: store.registros });
+    return json(res, 200, { ok: true, periodos: store.periodos, archivados: store.archivados, registros: store.registros });
   }
   // Guardar la config de facturación de un cliente (% comisión, nº de socios).
   if (p === "/api/facturas/config" && req.method === "POST") {

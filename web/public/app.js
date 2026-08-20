@@ -1555,9 +1555,10 @@ function blanquearMedicoClave(id){
 }
 
 // ===== Administración → Facturas (solo admin) — períodos > clientes > facturas =====
-var FACTURAS = { clientes: [], registros: [], periodos: [], minimo: 67170 };
+var FACTURAS = { clientes: [], registros: [], periodos: [], archivados: [], minimo: 67170 };
 var FAC_PER_OPEN = {};   // qué períodos están abiertos (por nombre)
 var FAC_CLI_OPEN = {};   // qué clientes están abiertos (clave: pIdx + '_' + slug)
+var FAC_RENDER = [];     // nombres de período en el orden en que se renderizan
 function facturaParseMonto(v){
   // Acepta "2.678.400,00" o "2678400.00" o "2678400".
   var s = String(v == null ? '' : v).trim();
@@ -1571,7 +1572,7 @@ async function loadFacturas(){
   var err = document.getElementById('facturasError'); if (err) err.style.display = 'none';
   var res = await api('/api/facturas');
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
-  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || [], minimo: res.data.minimoGanancias != null ? res.data.minimoGanancias : 67170 };
+  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || [], archivados: res.data.archivados || [], minimo: res.data.minimoGanancias != null ? res.data.minimoGanancias : 67170 };
   var mEl = document.getElementById('facMinimo'); if (mEl) mEl.value = FACTURAS.minimo;
   // Por defecto abrimos el período más nuevo (último de la lista).
   if (!Object.keys(FAC_PER_OPEN).length && FACTURAS.periodos.length) FAC_PER_OPEN[FACTURAS.periodos[FACTURAS.periodos.length - 1]] = true;
@@ -1598,13 +1599,14 @@ async function agregarPeriodo(){
   }
 }
 async function renombrarPeriodo(pIdx){
-  var viejo = FACTURAS.periodos[pIdx];
+  var viejo = FAC_RENDER[pIdx];
   var nuevo = prompt('Nuevo nombre del período:', viejo);
   if (nuevo == null) return;
   nuevo = nuevo.trim(); if (!nuevo || nuevo === viejo) return;
   var res = await req('POST', '/api/facturas/periodo/renombrar', { viejo: viejo, nuevo: nuevo });
   if (res.ok){
     FACTURAS.periodos = res.data.periodos || [];
+    if (res.data.archivados) FACTURAS.archivados = res.data.archivados;
     if (res.data.registros) FACTURAS.registros = res.data.registros;
     if (FAC_PER_OPEN[viejo]){ delete FAC_PER_OPEN[viejo]; FAC_PER_OPEN[nuevo] = true; }
     renderFacturas();
@@ -1615,32 +1617,55 @@ var FAC_GRUPOS = [
   { key: 'medcab', titulo: 'Médicos de cabecera' },
 ];
 // clave única por (período, cliente) para los ids del DOM.
-function facParseKey(k){ var i = k.indexOf('_'); var pIdx = Number(k.substring(0, i)); var slug = k.substring(i + 1); return { pIdx: pIdx, slug: slug, periodo: FACTURAS.periodos[pIdx] }; }
+function facParseKey(k){ var i = k.indexOf('_'); var pIdx = Number(k.substring(0, i)); var slug = k.substring(i + 1); return { pIdx: pIdx, slug: slug, periodo: FAC_RENDER[pIdx] }; }
 function renderFacturas(){
   var box = document.getElementById('facturasBody'); if (!box) return;
-  if (!FACTURAS.periodos.length){ box.innerHTML = '<p class="nom-muted">No hay períodos todavía. Creá uno con “+ Período”.</p>'; return; }
-  var idxs = FACTURAS.periodos.map(function(_, i){ return i; }).reverse(); // más nuevo arriba
-  box.innerHTML = idxs.map(function(pIdx){ return facturaPeriodoSection(pIdx); }).join('');
+  var qEl = document.getElementById('facBuscar');
+  var q = (qEl ? qEl.value : '').toLowerCase().trim();
+  var activos = FACTURAS.periodos.slice().reverse();   // más nuevo arriba
+  var arch = FACTURAS.archivados.slice().reverse();
+  var actMostrar = q ? activos.filter(function(p){ return p.toLowerCase().indexOf(q) >= 0; }) : activos;
+  var archMostrar = q ? arch.filter(function(p){ return p.toLowerCase().indexOf(q) >= 0; }) : [];
+  FAC_RENDER = actMostrar.concat(archMostrar);
+  var html;
+  if (!FAC_RENDER.length){
+    html = q ? '<p class="nom-muted">Ningún período coincide con “' + esc(q) + '”.</p>'
+             : '<p class="nom-muted">No hay períodos todavía. Creá uno con “+ Período”.</p>';
+  } else {
+    html = FAC_RENDER.map(function(_, i){ return facturaPeriodoSection(i); }).join('');
+  }
+  if (!q && arch.length) html += '<div class="fac-archivados-info">📦 ' + arch.length + ' período(s) archivado(s). Buscalos por nombre arriba.</div>';
+  box.innerHTML = html;
 }
 function facturaPeriodoSection(pIdx){
-  var periodo = FACTURAS.periodos[pIdx];
+  var periodo = FAC_RENDER[pIdx];
+  var esArch = FACTURAS.archivados.indexOf(periodo) >= 0;
   var abierto = FAC_PER_OPEN[periodo] === true;
-  // Cada grupo (Consultorios / Médicos de cabecera): subtítulo + grilla de 2 por fila.
   var cuerpo = FAC_GRUPOS.map(function(g){
     var cls = FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; });
     if (!cls.length) return '';
     var grid = cls.map(function(c){ return facturaCliBlock(c, pIdx); }).join('');
     return '<div class="fac-subgrupo">' + g.titulo + '</div><div class="fac-grid">' + grid + '</div>';
   }).join('');
-  return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facPer_' + pIdx + '">' +
+  var svgArch = esArch
+    ? '<svg viewBox="0 0 24 24" fill="none"><path d="M3 8h18M4 8l1 12h14l1-12M9 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12v5m0 0l-2-2m2 2l2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="4" rx="1" stroke="currentColor" stroke-width="1.8"/><path d="M5 8v11a1 1 0 001 1h12a1 1 0 001-1V8M9 12h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return '<div class="factura-group' + (abierto ? ' open' : '') + (esArch ? ' archivado' : '') + '" id="facPer_' + pIdx + '">' +
     '<div class="factura-group-head" onclick="togglePeriodo(' + pIdx + ')">' +
       '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-      '<h4>' + esc(periodo) + '</h4>' +
+      '<h4>' + esc(periodo) + (esArch ? ' <span class="fac-arch-tag">archivado</span>' : '') + '</h4>' +
       '<button class="icon-btn mini" type="button" title="Renombrar período" onclick="event.stopPropagation();renombrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '<button class="icon-btn mini" type="button" title="' + (esArch ? 'Desarchivar' : 'Archivar') + '" onclick="event.stopPropagation();archivarPeriodo(' + pIdx + ')">' + svgArch + '</button>' +
       '<button class="icon-danger-btn mini" type="button" title="Borrar período" onclick="event.stopPropagation();borrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
     '</div>' +
     '<div class="factura-group-body">' + cuerpo + '</div>' +
   '</div>';
+}
+async function archivarPeriodo(pIdx){
+  var periodo = FAC_RENDER[pIdx];
+  var esArch = FACTURAS.archivados.indexOf(periodo) >= 0;
+  var res = await req('POST', '/api/facturas/periodo/archivar', { valor: periodo, archivar: !esArch });
+  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; FACTURAS.archivados = res.data.archivados || []; renderFacturas(); }
 }
 // Fila de una factura (descripción + monto + quitar). Sin ids: se leen por clase.
 function facItemRow(k, label, monto){
@@ -1652,7 +1677,7 @@ function facItemRow(k, label, monto){
 }
 // Bloque colapsable de un cliente dentro de un período.
 function facturaCliBlock(c, pIdx){
-  var periodo = FACTURAS.periodos[pIdx];
+  var periodo = FAC_RENDER[pIdx];
   var k = pIdx + '_' + c.slug;
   var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
   var items = (r && r.items && r.items.length) ? r.items : [{ label: '', monto: '' }];
@@ -1718,7 +1743,7 @@ function removeFacturaItem(btn, k){
   saveFacturaRow(k);
 }
 function togglePeriodo(pIdx){
-  var periodo = FACTURAS.periodos[pIdx];
+  var periodo = FAC_RENDER[pIdx];
   FAC_PER_OPEN[periodo] = !(FAC_PER_OPEN[periodo] === true);
   var el = document.getElementById('facPer_' + pIdx);
   if (el) el.classList.toggle('open', FAC_PER_OPEN[periodo]);
@@ -1730,10 +1755,10 @@ function toggleFacturaCli(k){
   if (el) el.classList.toggle('open', FAC_CLI_OPEN[k]);
 }
 async function borrarPeriodo(pIdx){
-  var periodo = FACTURAS.periodos[pIdx];
+  var periodo = FAC_RENDER[pIdx];
   if (!confirm('¿Borrar el período “' + periodo + '” y todas sus facturas?')) return;
   var res = await req('POST', '/api/facturas/periodo/borrar', { valor: periodo });
-  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; FACTURAS.registros = res.data.registros || []; delete FAC_PER_OPEN[periodo]; renderFacturas(); }
+  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; if (res.data.archivados) FACTURAS.archivados = res.data.archivados; FACTURAS.registros = res.data.registros || []; delete FAC_PER_OPEN[periodo]; renderFacturas(); }
 }
 async function saveFacturaConfig(k, slug){
   var pct = facturaParseMonto(document.getElementById('facPct_' + k).value);
