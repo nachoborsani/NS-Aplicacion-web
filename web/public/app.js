@@ -1577,15 +1577,20 @@ function renderFacturas(){
 function facturaPeriodoSection(pIdx){
   var periodo = FACTURAS.periodos[pIdx];
   var abierto = FAC_PER_OPEN[periodo] === true;
-  var orden = FAC_GRUPOS.reduce(function(acc, g){ return acc.concat(FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; })); }, []);
-  var bloques = orden.map(function(c){ return facturaCliBlock(c, pIdx); }).join('');
+  // Cada grupo (Consultorios / Médicos de cabecera): subtítulo + grilla de 2 por fila.
+  var cuerpo = FAC_GRUPOS.map(function(g){
+    var cls = FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; });
+    if (!cls.length) return '';
+    var grid = cls.map(function(c){ return facturaCliBlock(c, pIdx); }).join('');
+    return '<div class="fac-subgrupo">' + g.titulo + '</div><div class="fac-grid">' + grid + '</div>';
+  }).join('');
   return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facPer_' + pIdx + '">' +
     '<div class="factura-group-head" onclick="togglePeriodo(' + pIdx + ')">' +
       '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '<h4>' + esc(periodo) + '</h4>' +
       '<button class="icon-danger-btn mini" type="button" title="Borrar período" onclick="event.stopPropagation();borrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
     '</div>' +
-    '<div class="factura-group-body">' + bloques + '</div>' +
+    '<div class="factura-group-body">' + cuerpo + '</div>' +
   '</div>';
 }
 // Fila de una factura (descripción + monto + quitar). Sin ids: se leen por clase.

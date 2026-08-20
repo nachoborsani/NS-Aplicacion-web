@@ -963,3 +963,14 @@
   .fac-cli:not(.open) .fac-cli-body{display:none}
   .fac-cli-cfg{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 0 10px}
   .fac-cli-body{padding:2px 0 4px}
+
+  /* Facturas: 2 clientes por fila + tarjetas más compactas */
+  .fac-subgrupo{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);font-weight:700;margin:12px 2px 4px}
+  .fac-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .fac-cli{border:1px solid var(--line)!important;border-radius:10px;padding:10px 12px}
+  .fac-cli-head{gap:10px 12px;margin-bottom:4px}
+  .fac-cli-name{flex:1 1 100%;font-size:14px}
+  .fac-cli-head .fac-tot{font-size:12px}
+  .fac-cli-head .fac-tot b{font-size:12.5px}
+  .fac-cli-cfg{gap:10px 12px;margin:6px 0 8px;font-size:12px}
+  @media(max-width:900px){ .fac-grid{grid-template-columns:1fr} }
