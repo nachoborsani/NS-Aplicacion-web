@@ -119,8 +119,17 @@ function medicoPublico(m) {
   return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc };
 }
 function loadFacturas() {
-  try { const j = JSON.parse(fs.readFileSync(facturasFile, "utf8")); return { config: j.config || {}, registros: Array.isArray(j.registros) ? j.registros : [], periodo: String(j.periodo || "") }; }
-  catch { return { config: {}, registros: [], periodo: "" }; }
+  try {
+    const j = JSON.parse(fs.readFileSync(facturasFile, "utf8"));
+    const registros = Array.isArray(j.registros) ? j.registros : [];
+    // Lista ordenada de períodos. Migra formatos viejos (periodo string / periodos
+    // objeto) y suma cualquier período que aparezca en los registros.
+    let periodos = Array.isArray(j.periodos) ? j.periodos.filter(Boolean).map(String) : [];
+    if (!periodos.length && j.periodo) periodos = [String(j.periodo)];
+    if (!periodos.length && j.periodos && typeof j.periodos === "object") periodos = Object.values(j.periodos).filter(Boolean).map(String);
+    for (const r of registros) { if (r.periodo && periodos.indexOf(r.periodo) < 0) periodos.push(r.periodo); }
+    return { config: j.config || {}, registros, periodos };
+  } catch { return { config: {}, registros: [], periodos: [] }; }
 }
 function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -3490,17 +3499,31 @@ const server = http.createServer(async (req, res) => {
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const store = loadFacturas();
     const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "", ...facturaConfigCliente(store, c.slug) }));
-    return json(res, 200, { clientes, registros: store.registros, periodo: store.periodo || "" });
+    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos });
   }
-  // Guardar el período (único para todo el panel).
+  // Agregar un período nuevo a la lista.
   if (p === "/api/facturas/periodo" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const b = await readBody(req);
+    const valor = String((b && b.valor) || "").trim();
+    if (!valor) return json(res, 400, { error: "Poné un nombre de período." });
     const store = loadFacturas();
-    store.periodo = String((b && b.valor) || "").trim();
+    if (store.periodos.indexOf(valor) < 0) store.periodos.push(valor);
     saveFacturas(store);
-    return json(res, 200, { ok: true, periodo: store.periodo });
+    return json(res, 200, { ok: true, periodos: store.periodos });
+  }
+  // Borrar un período (y sus facturas de ese período).
+  if (p === "/api/facturas/periodo/borrar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const valor = String((b && b.valor) || "").trim();
+    const store = loadFacturas();
+    store.periodos = store.periodos.filter((x) => x !== valor);
+    store.registros = store.registros.filter((r) => r.periodo !== valor);
+    saveFacturas(store);
+    return json(res, 200, { ok: true, periodos: store.periodos, registros: store.registros });
   }
   // Guardar la config de facturación de un cliente (% comisión, nº de socios).
   if (p === "/api/facturas/config" && req.method === "POST") {
@@ -3535,6 +3558,7 @@ const server = http.createServer(async (req, res) => {
       subida: !!(b && b.subida),
     };
     const store = loadFacturas();
+    if (reg.periodo && store.periodos.indexOf(reg.periodo) < 0) store.periodos.push(reg.periodo);
     const id = String((b && b.id) || "").trim();
     if (id) {
       const r = store.registros.find((x) => x.id === id);

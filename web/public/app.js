@@ -1533,9 +1533,10 @@ function blanquearMedicoClave(id){
   window.open(PAMI_BLANQUEO_URL, '_blank', 'noopener');
 }
 
-// ===== Administración → Facturas (solo admin) — grilla inline tipo planilla =====
-var FACTURAS = { clientes: [], registros: [], periodo: '' };
-var FACTURAS_OPEN = { consultorios: true, medcab: true };
+// ===== Administración → Facturas (solo admin) — períodos > clientes > facturas =====
+var FACTURAS = { clientes: [], registros: [], periodos: [] };
+var FAC_PER_OPEN = {};   // qué períodos están abiertos (por nombre)
+var FAC_CLI_OPEN = {};   // qué clientes están abiertos (clave: pIdx + '_' + slug)
 function facturaParseMonto(v){
   // Acepta "2.678.400,00" o "2678400.00" o "2678400".
   var s = String(v == null ? '' : v).trim();
@@ -1549,122 +1550,150 @@ async function loadFacturas(){
   var err = document.getElementById('facturasError'); if (err) err.style.display = 'none';
   var res = await api('/api/facturas');
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
-  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodo: res.data.periodo || '' };
-  var pEl = document.getElementById('facPeriodo'); if (pEl) pEl.value = FACTURAS.periodo;
+  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || [] };
+  // Por defecto abrimos el período más nuevo (último de la lista).
+  if (!Object.keys(FAC_PER_OPEN).length && FACTURAS.periodos.length) FAC_PER_OPEN[FACTURAS.periodos[FACTURAS.periodos.length - 1]] = true;
   renderFacturas();
+}
+async function agregarPeriodo(){
+  var nombre = prompt('Nombre del nuevo período (ej: JULIO, AGOSTO, etc.):');
+  if (!nombre) return;
+  nombre = nombre.trim(); if (!nombre) return;
+  var res = await req('POST', '/api/facturas/periodo', { valor: nombre });
+  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; FAC_PER_OPEN[nombre] = true; renderFacturas(); }
 }
 var FAC_GRUPOS = [
   { key: 'consultorios', titulo: 'Consultorios' },
   { key: 'medcab', titulo: 'Médicos de cabecera' },
 ];
+// clave única por (período, cliente) para los ids del DOM.
+function facParseKey(k){ var i = k.indexOf('_'); var pIdx = Number(k.substring(0, i)); var slug = k.substring(i + 1); return { pIdx: pIdx, slug: slug, periodo: FACTURAS.periodos[pIdx] }; }
 function renderFacturas(){
   var box = document.getElementById('facturasBody'); if (!box) return;
-  if (!FACTURAS.clientes.length){ box.innerHTML = '<p class="nom-muted">No hay clientes.</p>'; return; }
-  var html = FAC_GRUPOS.map(function(g){
-    var cls = FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; });
-    if (!cls.length) return '';
-    var abierto = FACTURAS_OPEN[g.key] !== false;
-    var bloques = cls.map(function(c){ return facturaFila(c); }).join('');
-    return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facGrp_' + g.key + '">' +
-      '<div class="factura-group-head" onclick="toggleFacturaGroup(\'' + g.key + '\')">' +
-        '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        '<h4>' + g.titulo + '</h4>' +
-      '</div>' +
-      '<div class="factura-group-body">' + bloques + '</div>' +
-    '</div>';
-  }).join('');
-  box.innerHTML = html || '<p class="nom-muted">No hay clientes.</p>';
+  if (!FACTURAS.periodos.length){ box.innerHTML = '<p class="nom-muted">No hay períodos todavía. Creá uno con “+ Período”.</p>'; return; }
+  var idxs = FACTURAS.periodos.map(function(_, i){ return i; }).reverse(); // más nuevo arriba
+  box.innerHTML = idxs.map(function(pIdx){ return facturaPeriodoSection(pIdx); }).join('');
 }
-// Fila de una factura (descripción + monto + quitar). Sin ids: se leen por clase.
-function facItemRow(slug, label, monto){
-  return '<div class="fac-item-row">' +
-    '<input class="inp mini fac-desc" value="' + esc(label) + '" placeholder="Detalle (ej: FACTURA 06-26)" onchange="saveFacturaRow(\'' + slug + '\')">' +
-    '<input class="inp mini fac-monto" inputmode="decimal" value="' + esc(monto) + '" placeholder="Monto" oninput="facturaRecalcRow(\'' + slug + '\')" onchange="saveFacturaRow(\'' + slug + '\')">' +
-    '<button class="icon-danger-btn mini" type="button" title="Quitar" onclick="removeFacturaItem(this,\'' + slug + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+function facturaPeriodoSection(pIdx){
+  var periodo = FACTURAS.periodos[pIdx];
+  var abierto = FAC_PER_OPEN[periodo] === true;
+  var orden = FAC_GRUPOS.reduce(function(acc, g){ return acc.concat(FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; })); }, []);
+  var bloques = orden.map(function(c){ return facturaCliBlock(c, pIdx); }).join('');
+  return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facPer_' + pIdx + '">' +
+    '<div class="factura-group-head" onclick="togglePeriodo(' + pIdx + ')">' +
+      '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<h4>' + esc(periodo) + '</h4>' +
+      '<button class="icon-danger-btn mini" type="button" title="Borrar período" onclick="event.stopPropagation();borrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+    '</div>' +
+    '<div class="factura-group-body">' + bloques + '</div>' +
   '</div>';
 }
-// Bloque de un cliente: config + lista de facturas (N) + totales.
-function facturaFila(c){
-  var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === FACTURAS.periodo; });
+// Fila de una factura (descripción + monto + quitar). Sin ids: se leen por clase.
+function facItemRow(k, label, monto){
+  return '<div class="fac-item-row">' +
+    '<input class="inp mini fac-desc" value="' + esc(label) + '" placeholder="Detalle (ej: FACTURA 06-26)" onchange="saveFacturaRow(\'' + k + '\')">' +
+    '<input class="inp mini fac-monto" inputmode="decimal" value="' + esc(monto) + '" placeholder="Monto" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaRow(\'' + k + '\')">' +
+    '<button class="icon-danger-btn mini" type="button" title="Quitar" onclick="removeFacturaItem(this,\'' + k + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+  '</div>';
+}
+// Bloque colapsable de un cliente dentro de un período.
+function facturaCliBlock(c, pIdx){
+  var periodo = FACTURAS.periodos[pIdx];
+  var k = pIdx + '_' + c.slug;
+  var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
   var items = (r && r.items && r.items.length) ? r.items : [{ label: '', monto: '' }];
   var total = items.reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
   var com = total * (Number(c.comisionPct) || 0) / 100;
   var cad = com / (Number(c.socios) || 2);
-  var s = c.slug;
-  var itemsHtml = items.map(function(it){ return facItemRow(s, it.label || '', it.monto || ''); }).join('');
-  return '<div class="fac-cli">' +
-    '<div class="fac-cli-head">' +
+  var abierto = FAC_CLI_OPEN[k] !== false;
+  var itemsHtml = items.map(function(it){ return facItemRow(k, it.label || '', it.monto || ''); }).join('');
+  return '<div class="fac-cli' + (abierto ? ' open' : '') + '" id="facCli_' + k + '">' +
+    '<div class="fac-cli-head" onclick="toggleFacturaCli(\'' + k + '\')">' +
+      '<svg class="nav-caret mini-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '<b class="fac-cli-name">' + esc(c.name) + '</b>' +
-      '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + s + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')">%</label>' +
-      '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + s + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></label>' +
-      '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + s + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + s + '\')"></label>' +
-      '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + s + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + s + '\')"></label>' +
+      '<span class="fac-tot">Total <b id="facTot_' + k + '">' + moneyFmt(total) + '</b></span>' +
+      '<span class="fac-tot">Comisión <b id="facCom_' + k + '">' + moneyFmt(com) + '</b></span>' +
+      '<span class="fac-tot">C/socio <b id="facCad_' + k + '">' + moneyFmt(cad) + '</b></span>' +
     '</div>' +
-    '<div class="fac-items" id="facItems_' + s + '">' + itemsHtml + '</div>' +
-    '<div class="fac-cli-foot">' +
-      '<button class="btn btn-ghost btn-sm" type="button" onclick="addFacturaItem(\'' + s + '\')">+ Factura</button>' +
-      '<span class="fac-tot">Total <b id="facTot_' + s + '">' + moneyFmt(total) + '</b></span>' +
-      '<span class="fac-tot">Comisión <b id="facCom_' + s + '">' + moneyFmt(com) + '</b></span>' +
-      '<span class="fac-tot">C/socio (÷' + (c.socios || 2) + ') <b id="facCad_' + s + '">' + moneyFmt(cad) + '</b></span>' +
+    '<div class="fac-cli-body">' +
+      '<div class="fac-cli-cfg">' +
+        '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + k + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
+        '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + k + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"></label>' +
+        '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + k + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + k + '\')"></label>' +
+        '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + k + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + k + '\')"></label>' +
+      '</div>' +
+      '<div class="fac-items" id="facItems_' + k + '">' + itemsHtml + '</div>' +
+      '<button class="btn btn-ghost btn-sm" type="button" onclick="addFacturaItem(\'' + k + '\')">+ Factura</button>' +
     '</div>' +
   '</div>';
 }
 // Recalcula Total/Comisión/C-socio de un cliente en vivo (sin re-render).
-function facturaRecalcRow(slug){
-  var cont = document.getElementById('facItems_' + slug);
+function facturaRecalcRow(k){
+  var cont = document.getElementById('facItems_' + k);
   var total = 0;
   if (cont) cont.querySelectorAll('.fac-monto').forEach(function(inp){ total += facturaParseMonto(inp.value); });
-  var pct = facturaParseMonto(document.getElementById('facPct_' + slug).value);
-  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + slug).value) || 2));
+  var pct = facturaParseMonto(document.getElementById('facPct_' + k).value);
+  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + k).value) || 2));
   var com = total * pct / 100, cad = com / soc;
-  var set = function(id, v){ var e = document.getElementById(id + slug); if (e) e.textContent = moneyFmt(v); };
+  var set = function(id, v){ var e = document.getElementById(id + k); if (e) e.textContent = moneyFmt(v); };
   set('facTot_', total); set('facCom_', com); set('facCad_', cad);
 }
-// Agrega una fila de factura vacía a un cliente (sin re-render, no pierde foco).
-function addFacturaItem(slug){
-  var cont = document.getElementById('facItems_' + slug); if (!cont) return;
-  var tmp = document.createElement('div'); tmp.innerHTML = facItemRow(slug, '', '');
+function addFacturaItem(k){
+  var cont = document.getElementById('facItems_' + k); if (!cont) return;
+  var tmp = document.createElement('div'); tmp.innerHTML = facItemRow(k, '', '');
   var fila = tmp.firstChild; cont.appendChild(fila);
   var desc = fila.querySelector('.fac-desc'); if (desc) desc.focus();
 }
-function removeFacturaItem(btn, slug){
+function removeFacturaItem(btn, k){
   var fila = btn.closest('.fac-item-row'); if (fila) fila.remove();
-  saveFacturaRow(slug);
+  saveFacturaRow(k);
 }
-function toggleFacturaGroup(grupo){
-  var abierto = FACTURAS_OPEN[grupo] !== false;
-  FACTURAS_OPEN[grupo] = !abierto;
-  var elg = document.getElementById('facGrp_' + grupo);
-  if (elg) elg.classList.toggle('open', FACTURAS_OPEN[grupo]);
+function togglePeriodo(pIdx){
+  var periodo = FACTURAS.periodos[pIdx];
+  FAC_PER_OPEN[periodo] = !(FAC_PER_OPEN[periodo] === true);
+  var el = document.getElementById('facPer_' + pIdx);
+  if (el) el.classList.toggle('open', FAC_PER_OPEN[periodo]);
 }
-async function savePeriodo(){
-  var el = document.getElementById('facPeriodo');
-  var valor = el ? el.value.trim() : '';
-  FACTURAS.periodo = valor;
-  await req('POST', '/api/facturas/periodo', { valor: valor });
-  renderFacturas();  // muestra las facturas de ese período
+function toggleFacturaCli(k){
+  var abierto = FAC_CLI_OPEN[k] !== false;
+  FAC_CLI_OPEN[k] = !abierto;
+  var el = document.getElementById('facCli_' + k);
+  if (el) el.classList.toggle('open', FAC_CLI_OPEN[k]);
 }
-async function saveFacturaConfig(slug){
-  var pct = facturaParseMonto(document.getElementById('facPct_' + slug).value);
-  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + slug).value) || 2));
+async function borrarPeriodo(pIdx){
+  var periodo = FACTURAS.periodos[pIdx];
+  if (!confirm('¿Borrar el período “' + periodo + '” y todas sus facturas?')) return;
+  var res = await req('POST', '/api/facturas/periodo/borrar', { valor: periodo });
+  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; FACTURAS.registros = res.data.registros || []; delete FAC_PER_OPEN[periodo]; renderFacturas(); }
+}
+async function saveFacturaConfig(k, slug){
+  var pct = facturaParseMonto(document.getElementById('facPct_' + k).value);
+  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + k).value) || 2));
   var res = await req('POST', '/api/facturas/config', { slug: slug, comisionPct: pct, socios: soc });
   if (res.ok){
     var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
     if (c){ c.comisionPct = res.data.comisionPct; c.socios = res.data.socios; }
-    facturaRecalcRow(slug);
+    // Actualiza y recalcula el cliente en TODOS los períodos visibles (config global).
+    FACTURAS.periodos.forEach(function(_, i){
+      var kk = i + '_' + slug;
+      var pe = document.getElementById('facPct_' + kk); if (pe) pe.value = res.data.comisionPct;
+      var se = document.getElementById('facSoc_' + kk); if (se) se.value = res.data.socios;
+      if (document.getElementById('facItems_' + kk)) facturaRecalcRow(kk);
+    });
   }
 }
-async function saveFacturaRow(slug){
-  facturaRecalcRow(slug);
-  var cont = document.getElementById('facItems_' + slug);
+async function saveFacturaRow(k){
+  facturaRecalcRow(k);
+  var p = facParseKey(k);
+  var cont = document.getElementById('facItems_' + k);
   var items = [];
   if (cont) cont.querySelectorAll('.fac-item-row').forEach(function(row){
     items.push({ label: row.querySelector('.fac-desc').value.trim(), monto: facturaParseMonto(row.querySelector('.fac-monto').value) });
   });
   var res = await req('POST', '/api/facturas', {
-    slug: slug, periodo: FACTURAS.periodo, items: items,
-    fechaCobro: document.getElementById('facFec_' + slug).value,
-    subida: document.getElementById('facSub_' + slug).checked,
+    slug: p.slug, periodo: p.periodo, items: items,
+    fechaCobro: document.getElementById('facFec_' + k).value,
+    subida: document.getElementById('facSub_' + k).checked,
   });
   if (res.ok){ FACTURAS.registros = res.data.registros || []; }
 }

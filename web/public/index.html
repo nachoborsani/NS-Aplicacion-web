@@ -216,7 +216,6 @@
                 <!-- Accesos rápidos al Drive de Scheffelaar (se muestran por JS). -->
                 <div id="schefeLinks" style="display:none;gap:8px;margin-bottom:12px">
                   <a class="btn btn-navy" href="https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit" target="_blank" rel="noopener">📄 Ir a la planilla</a>
-                  <a class="btn btn-ghost" href="https://drive.google.com/drive/folders/1dVeF4i89jbGlZqu_7qrajUgonDFWMoGJ" target="_blank" rel="noopener">📁 Carpeta de credenciales</a>
                 </div>
                 <div class="client-card" id="generalPlaceholder">
                   <h3>Dashboard general</h3>
@@ -740,9 +739,9 @@
           <div class="card">
             <div class="client-card-head">
               <h3>Facturas por cliente</h3>
-              <label class="factura-cfg">Período <input class="inp mini" id="facPeriodo" placeholder="Ej: JUNIO" onchange="savePeriodo()" style="width:150px"></label>
+              <button class="btn btn-primary btn-sm" type="button" onclick="agregarPeriodo()">+ Período</button>
             </div>
-            <p class="nom-muted" style="margin:0 0 8px">Cargá la(s) factura(s) del mes de cada cliente (descripción + valor). El panel calcula la comisión y el reparto entre socios.</p>
+            <p class="nom-muted" style="margin:0 0 8px">Cada período agrupa las facturas del mes por cliente (descripción + valor). El panel calcula la comisión y el reparto entre socios.</p>
             <div class="msg err" id="facturasError" style="display:none"></div>
             <div id="facturasBody"><p class="nom-muted">Cargando…</p></div>
           </div>

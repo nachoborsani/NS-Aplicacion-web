@@ -955,3 +955,11 @@
   .fac-tot{font-size:13px;color:var(--text-2)}
   .fac-tot b{color:var(--text);font-size:14px}
   input.fac-fecha{width:150px}
+
+  /* Facturas v5: cliente colapsable dentro de período */
+  .fac-cli-head{cursor:pointer}
+  .fac-cli-head .mini-caret{width:15px;height:15px;flex:0 0 auto;transform:rotate(-90deg);transition:transform .18s}
+  .fac-cli.open .fac-cli-head .mini-caret{transform:rotate(0)}
+  .fac-cli:not(.open) .fac-cli-body{display:none}
+  .fac-cli-cfg{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 0 10px}
+  .fac-cli-body{padding:2px 0 4px}
