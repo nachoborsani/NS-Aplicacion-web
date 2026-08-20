@@ -940,3 +940,18 @@
   .fac-fact{display:flex;gap:6px;align-items:center}
   .facturas-table input.fac-desc{flex:1 1 auto;min-width:120px;text-align:left}
   .facturas-table input.fac-fecha{width:140px}
+
+  /* Facturas v4: bloque por cliente con N facturas */
+  .fac-cli{padding:12px 4px;border-bottom:1px solid var(--line)}
+  .fac-cli:last-child{border-bottom:none}
+  .fac-cli-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+  .fac-cli-name{font-size:14.5px;flex:1 1 160px}
+  .fac-cfg{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)}
+  .fac-items{display:flex;flex-direction:column;gap:6px;margin:0 0 8px}
+  .fac-item-row{display:flex;align-items:center;gap:8px}
+  .fac-item-row .fac-desc{flex:1 1 auto;min-width:140px;text-align:left}
+  .fac-item-row .fac-monto{flex:0 0 160px;text-align:right}
+  .fac-cli-foot{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .fac-tot{font-size:13px;color:var(--text-2)}
+  .fac-tot b{color:var(--text);font-size:14px}
+  input.fac-fecha{width:150px}

@@ -1564,58 +1564,72 @@ function renderFacturas(){
     var cls = FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; });
     if (!cls.length) return '';
     var abierto = FACTURAS_OPEN[g.key] !== false;
-    var filas = cls.map(function(c){ return facturaFila(c); }).join('');
+    var bloques = cls.map(function(c){ return facturaFila(c); }).join('');
     return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facGrp_' + g.key + '">' +
       '<div class="factura-group-head" onclick="toggleFacturaGroup(\'' + g.key + '\')">' +
         '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
         '<h4>' + g.titulo + '</h4>' +
       '</div>' +
-      '<div class="factura-group-body"><div class="table-scroll"><table class="saved-report-table facturas-table"><thead><tr>' +
-        '<th>Cliente</th><th class="num">Com.%</th><th class="num">Socios</th><th>Factura 1</th><th>Factura 2</th><th class="num">Total</th><th class="num">Comisión</th><th class="num">C/socio</th><th>Cobro est.</th><th class="num">Subida</th>' +
-      '</tr></thead><tbody>' + filas + '</tbody></table></div></div>' +
+      '<div class="factura-group-body">' + bloques + '</div>' +
     '</div>';
   }).join('');
   box.innerHTML = html || '<p class="nom-muted">No hay clientes.</p>';
 }
+// Fila de una factura (descripción + monto + quitar). Sin ids: se leen por clase.
+function facItemRow(slug, label, monto){
+  return '<div class="fac-item-row">' +
+    '<input class="inp mini fac-desc" value="' + esc(label) + '" placeholder="Detalle (ej: FACTURA 06-26)" onchange="saveFacturaRow(\'' + slug + '\')">' +
+    '<input class="inp mini fac-monto" inputmode="decimal" value="' + esc(monto) + '" placeholder="Monto" oninput="facturaRecalcRow(\'' + slug + '\')" onchange="saveFacturaRow(\'' + slug + '\')">' +
+    '<button class="icon-danger-btn mini" type="button" title="Quitar" onclick="removeFacturaItem(this,\'' + slug + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+  '</div>';
+}
+// Bloque de un cliente: config + lista de facturas (N) + totales.
 function facturaFila(c){
-  var periodo = FACTURAS.periodo;
-  var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
-  var it = (r && r.items) || [];
-  var l1 = it[0] ? (it[0].label || '') : '', m1 = it[0] ? (it[0].monto || '') : '';
-  var l2 = it[1] ? (it[1].label || '') : '', m2 = it[1] ? (it[1].monto || '') : '';
-  var total = (Number(m1) || 0) + (Number(m2) || 0);
+  var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === FACTURAS.periodo; });
+  var items = (r && r.items && r.items.length) ? r.items : [{ label: '', monto: '' }];
+  var total = items.reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
   var com = total * (Number(c.comisionPct) || 0) / 100;
   var cad = com / (Number(c.socios) || 2);
   var s = c.slug;
-  function factCell(n, lab, mon){
-    return '<div class="fac-fact">' +
-      '<input class="inp mini fac-desc" id="facL' + n + '_' + s + '" value="' + esc(lab) + '" placeholder="Detalle" onchange="saveFacturaRow(\'' + s + '\')">' +
-      '<input class="inp mini fac-monto" id="facM' + n + '_' + s + '" inputmode="decimal" value="' + esc(mon) + '" placeholder="Monto" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaRow(\'' + s + '\')">' +
-    '</div>';
-  }
-  return '<tr>' +
-    '<td>' + esc(c.name) + '</td>' +
-    '<td class="num"><input class="inp mini fac-in" id="facPct_' + s + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></td>' +
-    '<td class="num"><input class="inp mini fac-in" id="facSoc_' + s + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></td>' +
-    '<td>' + factCell('1', l1, m1) + '</td>' +
-    '<td>' + factCell('2', l2, m2) + '</td>' +
-    '<td class="num"><b id="facTot_' + s + '">' + moneyFmt(total) + '</b></td>' +
-    '<td class="num" id="facCom_' + s + '">' + moneyFmt(com) + '</td>' +
-    '<td class="num" id="facCad_' + s + '">' + moneyFmt(cad) + '</td>' +
-    '<td><input type="date" class="inp mini fac-fecha" id="facFec_' + s + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + s + '\')"></td>' +
-    '<td class="num"><input type="checkbox" class="fac-chk" id="facSub_' + s + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + s + '\')"></td>' +
-  '</tr>';
+  var itemsHtml = items.map(function(it){ return facItemRow(s, it.label || '', it.monto || ''); }).join('');
+  return '<div class="fac-cli">' +
+    '<div class="fac-cli-head">' +
+      '<b class="fac-cli-name">' + esc(c.name) + '</b>' +
+      '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + s + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')">%</label>' +
+      '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + s + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></label>' +
+      '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + s + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + s + '\')"></label>' +
+      '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + s + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + s + '\')"></label>' +
+    '</div>' +
+    '<div class="fac-items" id="facItems_' + s + '">' + itemsHtml + '</div>' +
+    '<div class="fac-cli-foot">' +
+      '<button class="btn btn-ghost btn-sm" type="button" onclick="addFacturaItem(\'' + s + '\')">+ Factura</button>' +
+      '<span class="fac-tot">Total <b id="facTot_' + s + '">' + moneyFmt(total) + '</b></span>' +
+      '<span class="fac-tot">Comisión <b id="facCom_' + s + '">' + moneyFmt(com) + '</b></span>' +
+      '<span class="fac-tot">C/socio (÷' + (c.socios || 2) + ') <b id="facCad_' + s + '">' + moneyFmt(cad) + '</b></span>' +
+    '</div>' +
+  '</div>';
 }
-// Recalcula Total/Comisión/C-socio de una fila en vivo (sin re-render, no pierde foco).
+// Recalcula Total/Comisión/C-socio de un cliente en vivo (sin re-render).
 function facturaRecalcRow(slug){
-  var g = function(id){ return document.getElementById(id + slug); };
-  var total = facturaParseMonto(g('facM1_').value) + facturaParseMonto(g('facM2_').value);
-  var pct = facturaParseMonto(g('facPct_').value);
-  var soc = Math.max(1, Math.round(Number(g('facSoc_').value) || 2));
+  var cont = document.getElementById('facItems_' + slug);
+  var total = 0;
+  if (cont) cont.querySelectorAll('.fac-monto').forEach(function(inp){ total += facturaParseMonto(inp.value); });
+  var pct = facturaParseMonto(document.getElementById('facPct_' + slug).value);
+  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + slug).value) || 2));
   var com = total * pct / 100, cad = com / soc;
-  if (g('facTot_')) g('facTot_').textContent = moneyFmt(total);
-  if (g('facCom_')) g('facCom_').textContent = moneyFmt(com);
-  if (g('facCad_')) g('facCad_').textContent = moneyFmt(cad);
+  var set = function(id, v){ var e = document.getElementById(id + slug); if (e) e.textContent = moneyFmt(v); };
+  set('facTot_', total); set('facCom_', com); set('facCad_', cad);
+}
+// Agrega una fila de factura vacía a un cliente (sin re-render, no pierde foco).
+function addFacturaItem(slug){
+  var cont = document.getElementById('facItems_' + slug); if (!cont) return;
+  var tmp = document.createElement('div'); tmp.innerHTML = facItemRow(slug, '', '');
+  var fila = tmp.firstChild; cont.appendChild(fila);
+  var desc = fila.querySelector('.fac-desc'); if (desc) desc.focus();
+}
+function removeFacturaItem(btn, slug){
+  var fila = btn.closest('.fac-item-row'); if (fila) fila.remove();
+  saveFacturaRow(slug);
 }
 function toggleFacturaGroup(grupo){
   var abierto = FACTURAS_OPEN[grupo] !== false;
@@ -1642,10 +1656,11 @@ async function saveFacturaConfig(slug){
 }
 async function saveFacturaRow(slug){
   facturaRecalcRow(slug);
-  var items = [
-    { label: document.getElementById('facL1_' + slug).value.trim(), monto: facturaParseMonto(document.getElementById('facM1_' + slug).value) },
-    { label: document.getElementById('facL2_' + slug).value.trim(), monto: facturaParseMonto(document.getElementById('facM2_' + slug).value) },
-  ];
+  var cont = document.getElementById('facItems_' + slug);
+  var items = [];
+  if (cont) cont.querySelectorAll('.fac-item-row').forEach(function(row){
+    items.push({ label: row.querySelector('.fac-desc').value.trim(), monto: facturaParseMonto(row.querySelector('.fac-monto').value) });
+  });
   var res = await req('POST', '/api/facturas', {
     slug: slug, periodo: FACTURAS.periodo, items: items,
     fechaCobro: document.getElementById('facFec_' + slug).value,
