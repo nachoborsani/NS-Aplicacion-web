@@ -189,12 +189,12 @@
         <section id="view-clientes" style="display:none">
           <section class="client-detail">
               <div class="client-tabs">
+                <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
                 <button id="clientTabMescurso" type="button" onclick="setClientSection('mescurso')">Dashboard mes en curso</button>
                 <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
                 <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
                 <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
                 <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios medicos</button>
-                <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
@@ -202,6 +202,11 @@
               </section>
 
               <section id="client-section-general" class="client-section" style="display:none">
+                <!-- Accesos rápidos al Drive de Scheffelaar (se muestran por JS). -->
+                <div id="schefeLinks" style="display:none;gap:8px;margin-bottom:12px">
+                  <a class="btn btn-navy" href="https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit" target="_blank" rel="noopener">📄 Ir a la planilla</a>
+                  <a class="btn btn-ghost" href="https://drive.google.com/drive/folders/1dVeF4i89jbGlZqu_7qrajUgonDFWMoGJ" target="_blank" rel="noopener">📁 Carpeta de credenciales</a>
+                </div>
                 <div class="client-card" id="generalPlaceholder">
                   <h3>Dashboard general</h3>
                   <p class="nom-muted">Acá vamos a ir sumando la información del médico de cabecera (avances según su Drive, etc.). Por ahora está en preparación.</p>

@@ -289,7 +289,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes'].indexOf(section) >= 0) setClientSection(section);
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -1353,7 +1353,7 @@ var CLIENT_SECTIONS = [
 // consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
-  if (esMC) return ['basica', 'general'];
+  if (esMC) return ['general', 'basica'];
   var base = ['mescurso', 'basica', 'dashboard', 'reportes'];
   if (ME && ME.role === 'admin') base.push('medicos');
   return base;
@@ -1394,9 +1394,11 @@ function setClientSection(section){
 // se muestra solo para ese cliente; el resto ve el placeholder.
 function renderClientGeneral(){
   var card = document.getElementById('credLoteCard'), ph = document.getElementById('generalPlaceholder');
+  var links = document.getElementById('schefeLinks');
   var esSchefe = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'scheffelaar-mc');
   if (card) card.style.display = esSchefe ? '' : 'none';
   if (ph) ph.style.display = esSchefe ? 'none' : '';
+  if (links) links.style.display = esSchefe ? 'flex' : 'none';
   if (esSchefe) credSchedCargar();
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
