@@ -282,11 +282,13 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
         slug = client.get("slug")
         if only_slugs and slug not in only_slugs:
             continue
-        # Clientes que NO se bajan en el barrido automático (por decisión del user).
-        # Si se piden explícitamente por only_slugs, igual se bajan.
-        if not only_slugs and slug in EXCLUIDOS_AUTO:
+        # Los médicos de cabecera NO bajan bandeja (su flujo es benef/credenciales,
+        # no tienen consultas/prácticas para transmitir). Se excluyen por tipo, así
+        # cualquier MC actual o futuro queda afuera solo. También se excluyen los
+        # slugs de EXCLUIDOS_AUTO. Si se piden por only_slugs, igual se bajan.
+        if not only_slugs and (client.get("tipo") == "med_cabecera" or slug in EXCLUIDOS_AUTO):
             if progress:
-                progress(f"{client.get('name', slug)}: omitido (excluido del automático)")
+                progress(f"{client.get('name', slug)}: omitido (no baja bandeja)")
             continue
         res = sync_client(web, client, period, progress=progress, transmitir=transmitir)
         # Reportamos el resultado (ok/error + transmisión) para el indicador de salud.
