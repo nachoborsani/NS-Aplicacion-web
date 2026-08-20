@@ -173,6 +173,24 @@
             <div class="card tile warn"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Pendientes</div><div class="v tnum">0</div><div class="m">sin observaciones</div></div>
             <div class="card tile"><div class="k"><span class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8"/></svg></span>Notificaciones</div><div class="v tnum">0</div><div class="m">nada configurado aún</div></div>
           </div>
+          <div class="card resultado-card" id="dashResultado" style="display:none;margin-top:16px">
+            <div class="client-card-head">
+              <h3 style="margin:0">💰 Resultado del mes — NS</h3>
+              <label class="factura-cfg">Mes <input class="inp mini" id="resMes" type="month" onchange="loadResultado()" style="width:150px"></label>
+            </div>
+            <p class="nom-muted" style="margin:2px 0 12px">Proyectado por fecha de cobro. Ingresos de NS (Nacho + Seba) menos los gastos fijos del mes.</p>
+            <div class="res-grid">
+              <div class="res-tile in"><div class="rk">Ingresos NS</div><div class="rv" id="resIngreso">—</div></div>
+              <div class="res-tile out"><div class="rk">Gastos</div><div class="rv" id="resGastos">—</div></div>
+              <div class="res-tile net"><div class="rk">En bolsillo</div><div class="rv" id="resBolsillo">—</div></div>
+            </div>
+            <div class="res-socios">
+              <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
+              <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
+            </div>
+            <div class="nom-muted" id="resDetalle" style="margin-top:10px"></div>
+          </div>
+
           <div class="card" style="margin-top:16px">
             <h3 style="margin:0 0 4px;font-size:15px">Actividad reciente</h3>
             <p style="margin:0;color:var(--text-2);font-size:13px">Todavía no hay actividad para mostrar. A medida que uses el sistema, acá vas a ver los últimos movimientos.</p>

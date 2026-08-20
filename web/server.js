@@ -3744,6 +3744,46 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, pagos: store.pagos });
   }
 
+  // Resultado económico del mes (Inicio): ingresos NS (Nacho+Seba) por fecha de
+  // cobro, gastos del mes, y lo que queda en bolsillo (total y por socio). Admin.
+  if (p === "/api/resultado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const mes = String(url.searchParams.get("mes") || "").trim() || ahoraAR().fecha.slice(0, 7); // YYYY-MM
+    const fstore = loadFacturas();
+    let ingresoNacho = 0, ingresoSeba = 0, facturasContadas = 0;
+    for (const r of fstore.registros) {
+      if (!r.fechaCobro || String(r.fechaCobro).slice(0, 7) !== mes) continue;
+      const cfg = facturaConfigCliente(fstore, r.slug);
+      const total = (r.items || []).reduce((a, it) => a + (Number(it.monto) || 0), 0);
+      if (total <= 0) continue;
+      const ret = Math.max(0, total - (Number(fstore.minimoGanancias) || 0)) * (cfg.retencionPct || 0) / 100;
+      const base = cfg.baseComision === "neto" ? (total - ret) : total;
+      const com = base * (cfg.comisionPct || 0) / 100;
+      const socios = cfg.socios || 2;
+      const cadaUno = com / socios;
+      ingresoNacho += cadaUno;                       // 1 parte (Nacho siempre es socio)
+      if (socios >= 2) ingresoSeba += cadaUno;       // 1 parte (Seba)
+      facturasContadas++;
+    }
+    const ingresoNS = ingresoNacho + ingresoSeba;
+    // Gastos fijos del mes (todos aplican por mes; USD al dólar oficial de hoy).
+    const gstore = loadGastosOSemilla();
+    const dolar = await getDolarOficial();
+    let gastos = 0;
+    for (const g of gstore.gastos) gastos += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolar.valor || 0) : (Number(g.monto) || 0);
+    const gastosMitad = gastos / 2;
+    return json(res, 200, {
+      mes,
+      ingresoNS, ingresoNacho, ingresoSeba,
+      gastos, dolar: { valor: dolar.valor, fecha: dolar.fecha },
+      bolsilloNS: ingresoNS - gastos,
+      bolsilloNacho: ingresoNacho - gastosMitad,
+      bolsilloSeba: ingresoSeba - gastosMitad,
+      facturasContadas,
+    });
+  }
+
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
   // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las
   // filas crudas, solo los totales tipo Julio). Va ANTES del match de /bandeja.

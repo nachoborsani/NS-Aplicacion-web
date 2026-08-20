@@ -73,7 +73,7 @@ function go(v, el){
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'users') renderUsers();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
-  if (v === 'dash') updateDashClientsTile();
+  if (v === 'dash'){ updateDashClientsTile(); loadResultado(); }
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'soon') loadGeneralDebitos();
@@ -1887,6 +1887,26 @@ async function deleteGasto(id){
 async function toggleGastoPagado(id, pagado){
   var res = await req('POST', '/api/gastos/pagado', { periodo: gastosPeriodoActual(), gastoId: id, pagado: pagado });
   if (res.ok){ GASTOS.pagos = res.data.pagos || {}; renderGastos(); }
+}
+
+// ===== Inicio: resultado económico del mes (solo admin) =====
+async function loadResultado(){
+  var card = document.getElementById('dashResultado'); if (!card) return;
+  if (!ME || ME.role !== 'admin'){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  var mesEl = document.getElementById('resMes');
+  if (mesEl && !mesEl.value){ var d = new Date(); mesEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  var mes = mesEl ? mesEl.value : '';
+  var res = await api('/api/resultado' + (mes ? '?mes=' + encodeURIComponent(mes) : ''));
+  if (!res.ok || !res.data) return;
+  var d = res.data;
+  document.getElementById('resIngreso').textContent = moneyFmt(d.ingresoNS);
+  document.getElementById('resGastos').textContent = moneyFmt(d.gastos);
+  var bols = document.getElementById('resBolsillo'); bols.textContent = moneyFmt(d.bolsilloNS);
+  var netTile = bols.closest('.res-tile'); if (netTile) netTile.classList.toggle('neg', d.bolsilloNS < 0);
+  document.getElementById('resNacho').textContent = moneyFmt(d.bolsilloNacho);
+  document.getElementById('resSeba').textContent = moneyFmt(d.bolsilloSeba);
+  document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes' + (d.dolar && d.dolar.valor ? ' · dólar oficial ' + moneyFmt(d.dolar.valor) : '');
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;
