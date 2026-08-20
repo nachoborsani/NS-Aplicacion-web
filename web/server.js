@@ -3786,13 +3786,16 @@ const server = http.createServer(async (req, res) => {
     const del = ingresoNSDelMes(fstore, mes, nombreCliente);
     const ingresoNS = del.ingresoNacho + del.ingresoSeba;
     const gastosMitad = gastos / 2;
-    // Serie de los últimos 6 meses (para las barras mes contra mes).
+    // Serie mes contra mes: desde el inicio del sistema (ago-2026) hasta el mes
+    // elegido, sin pasar de los últimos 12. No mostramos meses previos al arranque.
+    const INICIO_SISTEMA = "2026-08";
     const serie = [];
     let [yy, mm] = mes.split("-").map(Number);
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       let m = mm - i, y = yy;
       while (m <= 0) { m += 12; y -= 1; }
       const mStr = y + "-" + String(m).padStart(2, "0");
+      if (mStr < INICIO_SISTEMA || mStr > mes) continue;
       const d = ingresoNSDelMes(fstore, mStr, nombreCliente);
       const ing = d.ingresoNacho + d.ingresoSeba;
       serie.push({ mes: mStr, ingresoNS: ing, gastos, bolsilloNS: ing - gastos });
