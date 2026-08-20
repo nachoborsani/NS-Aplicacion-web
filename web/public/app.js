@@ -138,13 +138,21 @@ async function descargarCredencial(){
     btn.disabled = false; btn.textContent = textoOrig;
   }
 }
-// ===== Lote Scheffelaar (planilla de Google) =====
+// ===== Lote de credenciales (planilla de Google) — por cliente Médico de cabecera =====
+// Clientes con módulo de credenciales; la tarjeta aparece en su Dashboard general.
+var CRED_CLIENTES = ['scheffelaar-mc', 'dubesarky-ezequiel'];
+// Planilla de Google de cada cliente (para el botón "Ir a la planilla").
+var CRED_PLANILLA = {
+  'scheffelaar-mc': '1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334',
+  'dubesarky-ezequiel': '1CJHJz2iR32aknMKwtMsivpjhdIQ3n1T-iUaMt7iENGo',
+};
+function credBase(){ return '/api/credenciales/' + (ACTIVE_CLIENT ? ACTIVE_CLIENT.slug : 'scheffelaar-mc'); }
 var CRED_LOTE_ROWS = [], CRED_LOTE_STOP = false, CRED_LOTE_RUNNING = false;
 async function credLoteCargar(){
   var err = document.getElementById('credLoteError'); err.style.display = 'none'; err.textContent = '';
   var desde = parseInt(document.getElementById('credLoteDesde').value, 10) || 2;
   var btn = document.getElementById('credLoteCargarBtn'); btn.disabled = true; var t = btn.textContent; btn.textContent = 'Cargando…';
-  var res = await req('GET', '/api/credenciales/scheffelaar/pendientes');
+  var res = await req('GET', credBase() + '/pendientes');
   btn.disabled = false; btn.textContent = t;
   if (!res.ok){ err.style.display = 'block'; err.textContent = (res.data && res.data.error) || 'No se pudo leer la planilla.'; return; }
   var all = res.data.pendientes || [];
@@ -177,7 +185,7 @@ async function credLoteProcesar(){
     var row = CRED_LOTE_ROWS[i];
     if (row.estado === 'ok'){ done++; continue; }
     row.estado = 'procesando'; credLoteRender();
-    var res = await req('POST', '/api/credenciales/scheffelaar/procesar-fila',
+    var res = await req('POST', credBase() + '/procesar-fila',
       { sheetRow: row.sheetRow, benef: row.benef, dni: row.dni, tramite: row.tramite, sexo: row.sexo, nombre: row.nombre });
     if (res.ok && res.data && res.data.ok){ row.estado = 'ok'; row.archivo = res.data.archivo; okN++; }
     else { row.estado = 'error'; row.error = (res.data && res.data.error) || 'falló'; row.definitivo = !!(res.data && res.data.definitivo); if (row.definitivo) sinCredN++; else errN++; }
@@ -196,7 +204,7 @@ async function credLoteProcesar(){
 // ===== Corrida automática diaria (server-side) =====
 var CRED_SCHED_POLL = null;
 async function credSchedCargar(){
-  var r = await req('GET', '/api/credenciales/scheffelaar/schedule');
+  var r = await req('GET', credBase() + '/schedule');
   if (!r.ok) return;
   var d = r.data || {};
   var chk = document.getElementById('credSchedEnabled'); if (chk) chk.checked = !!d.enabled;
@@ -257,12 +265,12 @@ async function credSchedGuardar(){
     hora: document.getElementById('credSchedHora').value,
     desdeFila: parseInt(document.getElementById('credLoteDesde').value, 10) || 2
   };
-  await req('PUT', '/api/credenciales/scheffelaar/schedule', payload);
+  await req('PUT', credBase() + '/schedule', payload);
   credSchedCargar();
 }
 async function credCorrerAhora(){
   var btn = document.getElementById('credCorrerBtn'); btn.disabled = true;
-  var r = await req('POST', '/api/credenciales/scheffelaar/correr-ahora', {});
+  var r = await req('POST', credBase() + '/correr-ahora', {});
   btn.disabled = false;
   if (r.ok && r.data && r.data.ok === false){ alert(r.data.error || 'No se pudo iniciar.'); return; }
   credSchedPoll();
@@ -270,7 +278,7 @@ async function credCorrerAhora(){
 function credSchedPoll(){
   if (CRED_SCHED_POLL) clearInterval(CRED_SCHED_POLL);
   CRED_SCHED_POLL = setInterval(async function(){
-    var r = await req('GET', '/api/credenciales/scheffelaar/schedule');
+    var r = await req('GET', credBase() + '/schedule');
     if (!r.ok) return;
     credSchedInfoRender(r.data);
     if (!r.data.corriendo){ clearInterval(CRED_SCHED_POLL); CRED_SCHED_POLL = null; }
@@ -1410,11 +1418,18 @@ function setClientSection(section){
 function renderClientGeneral(){
   var card = document.getElementById('credLoteCard'), ph = document.getElementById('generalPlaceholder');
   var links = document.getElementById('schefeLinks');
-  var esSchefe = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'scheffelaar-mc');
-  if (card) card.style.display = esSchefe ? '' : 'none';
-  if (ph) ph.style.display = esSchefe ? 'none' : '';
-  if (links) links.style.display = esSchefe ? 'flex' : 'none';
-  if (esSchefe) credSchedCargar();
+  var slug = ACTIVE_CLIENT ? ACTIVE_CLIENT.slug : '';
+  var tieneCred = CRED_CLIENTES.indexOf(slug) >= 0;
+  if (card) card.style.display = tieneCred ? '' : 'none';
+  if (ph) ph.style.display = tieneCred ? 'none' : '';
+  if (links){
+    var sid = CRED_PLANILLA[slug];
+    if (tieneCred && sid){
+      links.style.display = 'flex';
+      var a = links.querySelector('a'); if (a) a.href = 'https://docs.google.com/spreadsheets/d/' + sid + '/edit';
+    } else { links.style.display = 'none'; }
+  }
+  if (tieneCred) credSchedCargar();
 }
 // Acceso PAMI del cliente (card en Informacion basica) — solo admin.
 async function loadClientPami(){

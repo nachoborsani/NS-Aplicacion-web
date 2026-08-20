@@ -353,13 +353,32 @@ function saveGoogleCfg(cfg) {
 }
 // Planilla + carpeta de Scheffelaar (columnas 0-based: B=1 nombre, C=2 sexo,
 // D=3 benef, F=5 dni, G=6 trámite, I=8 credencial/resultado).
-const CRED_SCHEFE = {
-  spreadsheetId: "1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334",
-  tab: "Schefelar",
-  folderId: "1dVeF4i89jbGlZqu_7qrajUgonDFWMoGJ",
-  startRow: 2,
-  cols: { nombre: 1, sexo: 2, benef: 3, dni: 5, tramite: 6, credencial: 8 },
+// Config del módulo de credenciales por cliente (Médico de cabecera). Cada uno
+// con su planilla, su carpeta de Drive y el mapeo de columnas (0-based). El
+// "sexo" es opcional: si no está, se prueban m/f/o.
+const CRED_CONFIGS = {
+  "scheffelaar-mc": {
+    spreadsheetId: "1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334",
+    tab: "Schefelar",
+    folderId: "1dVeF4i89jbGlZqu_7qrajUgonDFWMoGJ",
+    startRow: 2,
+    cols: { nombre: 1, sexo: 2, benef: 3, dni: 5, tramite: 6, credencial: 8 },
+  },
+  "dubesarky-ezequiel": {
+    spreadsheetId: "1CJHJz2iR32aknMKwtMsivpjhdIQ3n1T-iUaMt7iENGo",
+    tab: "Mc Dube",
+    folderId: "1aQ94-mQ3utVHcka6ldKRt83Cg_5c8zE4",
+    startRow: 2,
+    cols: { benef: 0, dni: 1, tramite: 2, nombre: 3, credencial: 13 }, // N: columna nueva "CREDENCIAL"
+  },
 };
+// Resuelve la config por clave. "scheffelaar" (legacy, de la app y el front) mapea
+// al slug scheffelaar-mc.
+function credCfg(key) {
+  if (key === "scheffelaar") key = "scheffelaar-mc";
+  const c = CRED_CONFIGS[key];
+  return c ? { slug: key, ...c } : null;
+}
 const gcreds = require("./google_creds.js");
 const telegram = require("./telegram.js");
 // Config de Telegram: solo el chat_id (a quién le escribe el bot). El token vive
@@ -389,14 +408,14 @@ async function avisarTelegram(texto) {
     return algo;
   } catch (e) { try { console.error("[telegram] no pude avisar:", (e && e.message) || e); } catch {} return false; }
 }
-// Lee las filas pendientes de la planilla de Scheffelaar (con datos y sin
+// Lee las filas pendientes de la planilla de un cliente (con datos y sin
 // credencial), opcionalmente desde una fila.
-async function leerPendientesScheffelaar(auth, desde) {
-  const C = CRED_SCHEFE, cc = C.cols;
+async function leerPendientesCred(auth, C, desde) {
+  const cc = C.cols;
   const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
   const pendientes = []; let hechas = 0, faltanDatos = 0;
   rows.forEach((r, i) => {
-    const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
+    const g = (idx) => (idx == null ? "" : String((r[idx] != null ? r[idx] : "")).trim());
     const nombre = g(cc.nombre), sexo = g(cc.sexo), benef = g(cc.benef), dni = g(cc.dni), tramite = g(cc.tramite), cred = g(cc.credencial);
     if (!nombre && !benef && !dni && !tramite) return;
     if (cred) { hechas++; return; }
@@ -409,12 +428,12 @@ async function leerPendientesScheffelaar(auth, desde) {
 }
 // Filas con DNI pero SIN benef (y sin credencial): las que el barrido de la app
 // tiene que resolver en el padrón. Devuelve DNI para buscar.
-async function leerFaltanBenefScheffelaar(auth) {
-  const C = CRED_SCHEFE, cc = C.cols;
+async function leerFaltanBenefCred(auth, C) {
+  const cc = C.cols;
   const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(cc.credencial)}`);
   const faltan = [];
   rows.forEach((r, i) => {
-    const g = (idx) => String((r[idx] != null ? r[idx] : "")).trim();
+    const g = (idx) => (idx == null ? "" : String((r[idx] != null ? r[idx] : "")).trim());
     const dni = g(cc.dni), benef = g(cc.benef), cred = g(cc.credencial), nombre = g(cc.nombre), tramite = g(cc.tramite);
     if (cred || benef || !dni) return;   // ya hecha, ya tiene benef, o no hay DNI para buscar
     faltan.push({ sheetRow: C.startRow + i, dni, nombre, tramite });
@@ -423,8 +442,7 @@ async function leerFaltanBenefScheffelaar(auth) {
 }
 // Procesa UNA fila: baja, sube a Drive, marca la planilla (o marca el error
 // definitivo). Reusado por el endpoint manual y por la corrida programada.
-async function procesarCredencialFila(auth, row) {
-  const C = CRED_SCHEFE;
+async function procesarCredencialFila(auth, C, row) {
   const sheetRow = Number(row.sheetRow) || 0;
   const marcar = async (t) => { if (sheetRow) { try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, t); } catch {} } };
   let dl;
@@ -438,62 +456,80 @@ async function procesarCredencialFila(auth, row) {
     return { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero };
   } catch (e) { return { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) }; }
 }
-// Programador de la corrida diaria de credenciales (hora Argentina). Config en el
-// volumen; corre en el server (no depende de la app ni de la PC).
+// Programador de la corrida diaria de credenciales (hora Argentina), POR CLIENTE.
+// El archivo guarda un objeto { slug: {enabled, hora, ...} }. Migra el formato
+// viejo (flat = scheffelaar).
 const credScheduleFile = path.join(dataDir, "cred_schedule.json");
-function loadCredSchedule() {
+function loadCredSchedules() {
   try {
     const j = JSON.parse(fs.readFileSync(credScheduleFile, "utf8"));
-    return { enabled: !!j.enabled, hora: String(j.hora || ""), desdeFila: Number(j.desdeFila) || 2, lastRunDate: j.lastRunDate || "", lastRun: j.lastRun || null, benefRun: j.benefRun || null };
-  } catch { return { enabled: false, hora: "", desdeFila: 2, lastRunDate: "", lastRun: null, benefRun: null }; }
+    if (j && typeof j === "object" && !j["scheffelaar-mc"] &&
+        (j.enabled !== undefined || j.hora !== undefined || j.lastRun !== undefined || j.benefRun !== undefined)) {
+      return { "scheffelaar-mc": j };   // formato viejo (flat) = schedule de scheffelaar
+    }
+    return j && typeof j === "object" ? j : {};
+  } catch { return {}; }
 }
-function saveCredSchedule(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(credScheduleFile, JSON.stringify(cfg, null, 2)); }
+function loadCredSchedule(slug) {
+  const j = loadCredSchedules()[slug] || {};
+  return { enabled: !!j.enabled, hora: String(j.hora || ""), desdeFila: Number(j.desdeFila) || 2, lastRunDate: j.lastRunDate || "", lastRun: j.lastRun || null, benefRun: j.benefRun || null };
+}
+function saveCredSchedule(slug, obj) { const all = loadCredSchedules(); all[slug] = obj; fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(credScheduleFile, JSON.stringify(all, null, 2)); }
 function ahoraAR() {
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
   const parts = {}; for (const p of fmt.formatToParts(new Date())) parts[p.type] = p.value;
   return { fecha: `${parts.year}-${parts.month}-${parts.day}`, hhmm: `${parts.hour}:${parts.minute}` };
 }
-const CRED_RUN_STATE = { corriendo: false, stop: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
+// Estado de corrida en memoria, por cliente.
+const CRED_RUN_STATES = {};
+function credState(slug) {
+  if (!CRED_RUN_STATES[slug]) CRED_RUN_STATES[slug] = { corriendo: false, stop: false, origen: "", inicio: "", total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 };
+  return CRED_RUN_STATES[slug];
+}
 // origen: etiqueta para el log. soloFilas: si viene un array de sheetRow, baja
-// SOLO esas filas (modo quirúrgico, para lo recién completado por el barrido). Sin
-// eso, recorre todo el backlog pendiente desde desdeFila (puesta al día).
-async function correrLoteCredenciales(origen, soloFilas, limite) {
-  if (CRED_RUN_STATE.corriendo) return;
-  const cfg = loadGoogleCfg();
-  if (!cfg) { const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(s); return; }
-  Object.assign(CRED_RUN_STATE, { corriendo: true, stop: false, origen, inicio: new Date().toISOString(), total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 });
+// SOLO esas filas (modo quirúrgico). limite: tanda acotada.
+async function correrLoteCredenciales(slug, origen, soloFilas, limite) {
+  const C = credCfg(slug);
+  if (!C) return;
+  const st = credState(slug);
+  if (st.corriendo) return;
+  const gcfg = loadGoogleCfg();
+  if (!gcfg) { const s = loadCredSchedule(slug); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(slug, s); return; }
+  Object.assign(st, { corriendo: true, stop: false, origen, inicio: new Date().toISOString(), total: 0, hechas: 0, ok: 0, sinCred: 0, err: 0 });
   try {
-    const auth = gcreds.makeAuth(cfg);
-    const sch = loadCredSchedule();
+    const auth = gcreds.makeAuth(gcfg);
+    const sch = loadCredSchedule(slug);
     const filtro = Array.isArray(soloFilas) && soloFilas.length ? new Set(soloFilas.map(Number)) : null;
-    let { pendientes } = await leerPendientesScheffelaar(auth, filtro ? 0 : (sch.desdeFila || 2));
+    let { pendientes } = await leerPendientesCred(auth, C, filtro ? 0 : (sch.desdeFila || 2));
     if (filtro) pendientes = pendientes.filter((p) => filtro.has(Number(p.sheetRow)));
     const lim = Number(limite) || 0;
-    if (lim > 0) pendientes = pendientes.slice(0, lim);   // tanda acotada
-    CRED_RUN_STATE.total = pendientes.length;
+    if (lim > 0) pendientes = pendientes.slice(0, lim);
+    st.total = pendientes.length;
     for (const row of pendientes) {
-      if (CRED_RUN_STATE.stop) break;   // parada manual
-      const r = await procesarCredencialFila(auth, row);
-      if (r.ok) CRED_RUN_STATE.ok++; else if (r.definitivo) CRED_RUN_STATE.sinCred++; else CRED_RUN_STATE.err++;
-      CRED_RUN_STATE.hechas = CRED_RUN_STATE.ok + CRED_RUN_STATE.sinCred + CRED_RUN_STATE.err;
+      if (st.stop) break;
+      const r = await procesarCredencialFila(auth, C, row);
+      if (r.ok) st.ok++; else if (r.definitivo) st.sinCred++; else st.err++;
+      st.hechas = st.ok + st.sinCred + st.err;
       await new Promise((rs) => setTimeout(rs, 400));
     }
-    const s = loadCredSchedule();
-    s.lastRun = { at: new Date().toISOString(), origen, total: CRED_RUN_STATE.total, ok: CRED_RUN_STATE.ok, sinCred: CRED_RUN_STATE.sinCred, err: CRED_RUN_STATE.err };
-    saveCredSchedule(s);
+    const s = loadCredSchedule(slug);
+    s.lastRun = { at: new Date().toISOString(), origen, total: st.total, ok: st.ok, sinCred: st.sinCred, err: st.err };
+    saveCredSchedule(slug, s);
   } catch (e) {
-    const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: String((e && e.message) || e) }; saveCredSchedule(s);
-  } finally { CRED_RUN_STATE.corriendo = false; }
+    const s = loadCredSchedule(slug); s.lastRun = { at: new Date().toISOString(), origen, error: String((e && e.message) || e) }; saveCredSchedule(slug, s);
+  } finally { st.corriendo = false; }
 }
 setInterval(() => {
   try {
-    const sch = loadCredSchedule();
-    if (!sch.enabled || !sch.hora || CRED_RUN_STATE.corriendo) return;
     const { fecha, hhmm } = ahoraAR();
-    if (sch.lastRunDate === fecha) return;             // ya corrió hoy
-    if (hhmm >= sch.hora) {                             // hora alcanzada (con catch-up)
-      sch.lastRunDate = fecha; saveCredSchedule(sch);   // marcar antes de correr (evita doble disparo)
-      correrLoteCredenciales("programada");
+    for (const slug of Object.keys(CRED_CONFIGS)) {
+      const sch = loadCredSchedule(slug);
+      if (!sch.enabled || !sch.hora || credState(slug).corriendo) continue;
+      if (sch.lastRunDate === fecha) continue;
+      if (hhmm >= sch.hora) {
+        sch.lastRunDate = fecha; saveCredSchedule(slug, sch);
+        correrLoteCredenciales(slug, "programada");
+      }
     }
   } catch {}
 }, 60000);
@@ -4463,111 +4499,97 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Credenciales Scheffelaar: filas pendientes de la planilla.
-  if (p === "/api/credenciales/scheffelaar/pendientes" && req.method === "GET") {
+  // --- Módulo de credenciales por cliente (Médico de cabecera). ---
+  // clientKey en la URL: "scheffelaar" (legacy, app+front) o el slug (ej.
+  // dubesarky-ezequiel). Un solo handler para todas las acciones.
+  const credM = p.match(/^\/api\/credenciales\/([^/]+)\/([a-z-]+)$/);
+  if (credM) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    const cfg = loadGoogleCfg();
-    if (!cfg) return json(res, 400, { error: "Google no está conectado (falta cargar el token, admin)." });
-    try {
-      const r = await leerPendientesScheffelaar(gcreds.makeAuth(cfg), 0);
-      return json(res, 200, r);
-    } catch (e) {
-      return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) });
+    const C = credCfg(credM[1]);
+    if (!C) return json(res, 404, { error: "Cliente sin módulo de credenciales." });
+    const slug = C.slug, action = credM[2], st = credState(slug);
+    const gcfg = loadGoogleCfg();
+    const needGoogle = () => (gcfg ? null : json(res, 400, { error: "Google no está conectado (falta cargar el token, admin)." }));
+
+    if (action === "pendientes" && req.method === "GET") {
+      const g = needGoogle(); if (g) return g;
+      try { return json(res, 200, await leerPendientesCred(gcreds.makeAuth(gcfg), C, 0)); }
+      catch (e) { return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) }); }
     }
-  }
-
-  // Credenciales Scheffelaar: procesar UNA fila (baja, sube a Drive, marca la planilla).
-  if (p === "/api/credenciales/scheffelaar/procesar-fila" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    const cfg = loadGoogleCfg();
-    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
-    let body = {};
-    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
-    const r = await procesarCredencialFila(gcreds.makeAuth(cfg), body);
-    return json(res, 200, r);
-  }
-
-  // Corrida diaria de credenciales: leer/guardar la config + estado de la última.
-  if (p === "/api/credenciales/scheffelaar/schedule" && req.method === "GET") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    const s = loadCredSchedule();
-    return json(res, 200, {
-      enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila, lastRun: s.lastRun, benefRun: s.benefRun,
-      corriendo: CRED_RUN_STATE.corriendo,
-      progreso: CRED_RUN_STATE.corriendo ? { total: CRED_RUN_STATE.total, hechas: CRED_RUN_STATE.hechas, ok: CRED_RUN_STATE.ok, sinCred: CRED_RUN_STATE.sinCred, err: CRED_RUN_STATE.err } : null,
-    });
-  }
-  // El barrido de benef de la app reporta su resultado (para el tablero de salud).
-  if (p === "/api/credenciales/scheffelaar/benef-estado" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    let body = {};
-    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
-    const s = loadCredSchedule();
-    s.benefRun = {
-      at: new Date().toISOString(),
-      revisadas: Number(body.revisadas) || 0,
-      completados: Number(body.completados) || 0,
-      sinBenef: Number(body.sinBenef) || 0,
-      errores: Number(body.errores) || 0,
-      error: body.error ? String(body.error).slice(0, 200) : "",
-    };
-    saveCredSchedule(s);
-    return json(res, 200, { ok: true });
-  }
-  if (p === "/api/credenciales/scheffelaar/schedule" && req.method === "PUT") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede configurar la corrida." });
-    let body = {};
-    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
-    const s = loadCredSchedule();
-    s.enabled = !!body.enabled;
-    if (typeof body.hora === "string" && /^\d{1,2}:\d{2}$/.test(body.hora.trim())) { const [h, m] = body.hora.trim().split(":"); s.hora = String(h).padStart(2, "0") + ":" + m; }
-    if (body.desdeFila !== undefined) s.desdeFila = Math.max(2, Number(body.desdeFila) || 2);
-    saveCredSchedule(s);
-    return json(res, 200, { ok: true, enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila });
-  }
-  // Correr el lote ahora (en segundo plano).
-  if (p === "/api/credenciales/scheffelaar/correr-ahora" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
-    correrLoteCredenciales("manual");
-    return json(res, 200, { ok: true });
-  }
-  // Corre una TANDA acotada del backlog (las primeras N pendientes sin marcar).
-  // Idempotente: repetir la llamada procesa las siguientes N.
-  if (p === "/api/credenciales/scheffelaar/correr-tanda" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
-    const b = await readBody(req);
-    const limite = Math.max(1, Math.min(2000, Number((b && b.limite) || 500)));
-    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
-    correrLoteCredenciales("tanda", null, limite);
-    return json(res, 200, { ok: true, limite });
-  }
-  // Baja credenciales SOLO de filas puntuales (las que el barrido acaba de
-  // completar). Modo quirúrgico: no toca el resto de la planilla.
-  if (p === "/api/credenciales/scheffelaar/correr-filas" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    const b = await readBody(req);
-    const rows = Array.isArray(b && b.rows) ? b.rows.map(Number).filter((n) => n > 0) : [];
-    if (!rows.length) return json(res, 400, { error: "sin filas" });
-    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
-    correrLoteCredenciales("barrido", rows);
-    return json(res, 200, { ok: true, filas: rows.length });
-  }
-  // Detener la corrida de credenciales en curso.
-  if (p === "/api/credenciales/scheffelaar/detener" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    CRED_RUN_STATE.stop = true;
-    return json(res, 200, { ok: true, corriendo: CRED_RUN_STATE.corriendo });
+    if (action === "faltan-benef" && req.method === "GET") {
+      const g = needGoogle(); if (g) return g;
+      try { return json(res, 200, { faltan: await leerFaltanBenefCred(gcreds.makeAuth(gcfg), C) }); }
+      catch (e) { return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) }); }
+    }
+    if (action === "procesar-fila" && req.method === "POST") {
+      const g = needGoogle(); if (g) return g;
+      const body = await readBody(req);
+      return json(res, 200, await procesarCredencialFila(gcreds.makeAuth(gcfg), C, body));
+    }
+    if (action === "set-benef" && req.method === "POST") {
+      const g = needGoogle(); if (g) return g;
+      const body = await readBody(req);
+      const sheetRow = Number(body.sheetRow) || 0;
+      let benef; try { benef = credNormBenef(body.benef); } catch (e) { return json(res, 400, { error: e.message }); }
+      if (!sheetRow) return json(res, 400, { error: "Falta la fila." });
+      try { await gcreds.writeCell(gcreds.makeAuth(gcfg), C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.benef) + sheetRow, benef); return json(res, 200, { ok: true, sheetRow, benef }); }
+      catch (e) { return json(res, 502, { error: "No pude escribir la planilla: " + ((e && e.message) || e) }); }
+    }
+    if (action === "schedule" && req.method === "GET") {
+      const s = loadCredSchedule(slug);
+      return json(res, 200, {
+        enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila, lastRun: s.lastRun, benefRun: s.benefRun,
+        corriendo: st.corriendo,
+        progreso: st.corriendo ? { total: st.total, hechas: st.hechas, ok: st.ok, sinCred: st.sinCred, err: st.err } : null,
+      });
+    }
+    if (action === "schedule" && req.method === "PUT") {
+      if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede configurar la corrida." });
+      const body = await readBody(req);
+      const s = loadCredSchedule(slug);
+      s.enabled = !!body.enabled;
+      if (typeof body.hora === "string" && /^\d{1,2}:\d{2}$/.test(body.hora.trim())) { const [h, m] = body.hora.trim().split(":"); s.hora = String(h).padStart(2, "0") + ":" + m; }
+      if (body.desdeFila !== undefined) s.desdeFila = Math.max(2, Number(body.desdeFila) || 2);
+      saveCredSchedule(slug, s);
+      return json(res, 200, { ok: true, enabled: s.enabled, hora: s.hora, desdeFila: s.desdeFila });
+    }
+    if (action === "benef-estado" && req.method === "POST") {
+      const body = await readBody(req);
+      const s = loadCredSchedule(slug);
+      s.benefRun = {
+        at: new Date().toISOString(), revisadas: Number(body.revisadas) || 0, completados: Number(body.completados) || 0,
+        sinBenef: Number(body.sinBenef) || 0, errores: Number(body.errores) || 0, error: body.error ? String(body.error).slice(0, 200) : "",
+      };
+      saveCredSchedule(slug, s);
+      return json(res, 200, { ok: true });
+    }
+    if (action === "correr-ahora" && req.method === "POST") {
+      if (st.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+      correrLoteCredenciales(slug, "manual");
+      return json(res, 200, { ok: true });
+    }
+    if (action === "correr-tanda" && req.method === "POST") {
+      if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+      const b = await readBody(req);
+      const limite = Math.max(1, Math.min(2000, Number((b && b.limite) || 500)));
+      if (st.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+      correrLoteCredenciales(slug, "tanda", null, limite);
+      return json(res, 200, { ok: true, limite });
+    }
+    if (action === "correr-filas" && req.method === "POST") {
+      const b = await readBody(req);
+      const rows = Array.isArray(b && b.rows) ? b.rows.map(Number).filter((n) => n > 0) : [];
+      if (!rows.length) return json(res, 400, { error: "sin filas" });
+      if (st.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+      correrLoteCredenciales(slug, "barrido", rows);
+      return json(res, 200, { ok: true, filas: rows.length });
+    }
+    if (action === "detener" && req.method === "POST") {
+      st.stop = true;
+      return json(res, 200, { ok: true, corriendo: st.corriendo });
+    }
+    return json(res, 404, { error: "Acción de credenciales desconocida." });
   }
   // --- Telegram (avisos) ---
   // Estado: si el token llegó al entorno, datos del bot y chat configurado.
@@ -4631,39 +4653,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok });
   }
 
-  // Filas con DNI y sin benef (para el barrido de la app: buscar el benef).
-  if (p === "/api/credenciales/scheffelaar/faltan-benef" && req.method === "GET") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    const cfg = loadGoogleCfg();
-    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
-    try {
-      const faltan = await leerFaltanBenefScheffelaar(gcreds.makeAuth(cfg));
-      return json(res, 200, { faltan });
-    } catch (e) {
-      return json(res, 502, { error: "No pude leer la planilla: " + ((e && e.message) || e) });
-    }
-  }
-  // Escribe el benef encontrado en la planilla (col. Num Benef). Lo llama el barrido.
-  if (p === "/api/credenciales/scheffelaar/set-benef" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    const cfg = loadGoogleCfg();
-    if (!cfg) return json(res, 400, { error: "Google no está conectado." });
-    let body = {};
-    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
-    const sheetRow = Number(body.sheetRow) || 0;
-    let benef;
-    try { benef = credNormBenef(body.benef); } catch (e) { return json(res, 400, { error: e.message }); }
-    if (!sheetRow) return json(res, 400, { error: "Falta la fila." });
-    try {
-      const C = CRED_SCHEFE;
-      await gcreds.writeCell(gcreds.makeAuth(cfg), C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.benef) + sheetRow, benef);
-      return json(res, 200, { ok: true, sheetRow, benef });
-    } catch (e) {
-      return json(res, 502, { error: "No pude escribir la planilla: " + ((e && e.message) || e) });
-    }
-  }
+  // (faltan-benef y set-benef ahora los maneja el handler paramétrico de arriba.)
 
   // ---- Olvide mi contraseña: pedir enlace ----
   if (p === "/api/nomencladores" && req.method === "DELETE") {
