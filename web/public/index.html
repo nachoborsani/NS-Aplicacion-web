@@ -739,6 +739,7 @@
           <div class="card">
             <div class="client-card-head">
               <h3>Facturas por cliente</h3>
+              <label class="factura-cfg" title="Se resta del bruto antes de aplicar la retención (Ganancias)">Mín. Ganancias <input class="inp mini" id="facMinimo" inputmode="decimal" onchange="saveMinimo()" style="width:100px"></label>
               <button class="btn btn-primary btn-sm" type="button" onclick="agregarPeriodo()">+ Período</button>
             </div>
             <p class="nom-muted" style="margin:0 0 8px">Cada período agrupa las facturas del mes por cliente (descripción + valor). El panel calcula la comisión y el reparto entre socios.</p>

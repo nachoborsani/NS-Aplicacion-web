@@ -1534,7 +1534,7 @@ function blanquearMedicoClave(id){
 }
 
 // ===== Administración → Facturas (solo admin) — períodos > clientes > facturas =====
-var FACTURAS = { clientes: [], registros: [], periodos: [] };
+var FACTURAS = { clientes: [], registros: [], periodos: [], minimo: 67170 };
 var FAC_PER_OPEN = {};   // qué períodos están abiertos (por nombre)
 var FAC_CLI_OPEN = {};   // qué clientes están abiertos (clave: pIdx + '_' + slug)
 function facturaParseMonto(v){
@@ -1550,10 +1550,17 @@ async function loadFacturas(){
   var err = document.getElementById('facturasError'); if (err) err.style.display = 'none';
   var res = await api('/api/facturas');
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
-  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || [] };
+  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || [], minimo: res.data.minimoGanancias != null ? res.data.minimoGanancias : 67170 };
+  var mEl = document.getElementById('facMinimo'); if (mEl) mEl.value = FACTURAS.minimo;
   // Por defecto abrimos el período más nuevo (último de la lista).
   if (!Object.keys(FAC_PER_OPEN).length && FACTURAS.periodos.length) FAC_PER_OPEN[FACTURAS.periodos[FACTURAS.periodos.length - 1]] = true;
   renderFacturas();
+}
+async function saveMinimo(){
+  var el = document.getElementById('facMinimo');
+  var v = facturaParseMonto(el ? el.value : '');
+  var res = await req('POST', '/api/facturas/minimo', { valor: v });
+  if (res.ok){ FACTURAS.minimo = res.data.minimoGanancias; renderFacturas(); }
 }
 async function agregarPeriodo(){
   var nombre = prompt('Nombre del nuevo período (ej: JULIO, AGOSTO, etc.):');
@@ -1608,7 +1615,7 @@ function facturaCliBlock(c, pIdx){
   var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
   var items = (r && r.items && r.items.length) ? r.items : [{ label: '', monto: '' }];
   var total = items.reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
-  var ret = total * (Number(c.retencionPct) || 0) / 100;
+  var ret = Math.max(0, total - (Number(FACTURAS.minimo) || 0)) * (Number(c.retencionPct) || 0) / 100;
   var neto = total - ret;
   var base = c.baseComision === 'neto' ? neto : total;
   var com = base * (Number(c.comisionPct) || 0) / 100;
@@ -1619,6 +1626,7 @@ function facturaCliBlock(c, pIdx){
     '<div class="fac-cli-head" onclick="toggleFacturaCli(\'' + k + '\')">' +
       '<svg class="nav-caret mini-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '<b class="fac-cli-name">' + esc(c.name) + '</b>' +
+      (c.pamiUser ? '<span class="fac-up">' + esc(c.pamiUser) + '</span>' + (c.tieneClave ? '<button class="icon-btn mini" type="button" title="Copiar clave PAMI" onclick="event.stopPropagation();copiarClavePami(\'' + c.slug + '\',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg></button>' : '') : '') +
       '<span class="fac-tot">Total <b id="facTot_' + k + '">' + moneyFmt(total) + '</b></span>' +
       '<span class="fac-tot">Neto acred. <b id="facNet_' + k + '">' + moneyFmt(neto) + '</b></span>' +
       '<span class="fac-tot">Comisión <b id="facCom_' + k + '">' + moneyFmt(com) + '</b></span>' +
@@ -1647,7 +1655,7 @@ function facturaRecalcRow(k){
   var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + k).value) || 2));
   var retPct = facturaParseMonto((document.getElementById('facRet_' + k) || {}).value);
   var baseEl = document.getElementById('facBase_' + k);
-  var ret = total * retPct / 100, neto = total - ret;
+  var ret = Math.max(0, total - (Number(FACTURAS.minimo) || 0)) * retPct / 100, neto = total - ret;
   var base = (baseEl && baseEl.value === 'neto') ? neto : total;
   var com = base * pct / 100, cad = com / soc;
   var set = function(id, v){ var e = document.getElementById(id + k); if (e) e.textContent = moneyFmt(v); };
@@ -1715,6 +1723,13 @@ async function saveFacturaRow(k){
     subida: document.getElementById('facSub_' + k).checked,
   });
   if (res.ok){ FACTURAS.registros = res.data.registros || []; }
+}
+// Copia la clave PAMI del cliente al portapapeles (admin). La trae desencriptada
+// del endpoint de credenciales del cliente.
+async function copiarClavePami(slug, btn){
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pami/credenciales');
+  if (!res.ok || !res.data){ if (btn){ var o = btn.getAttribute('title'); btn.setAttribute('title', 'No se pudo'); setTimeout(function(){ btn.setAttribute('title', o || 'Copiar clave PAMI'); }, 1400); } return; }
+  copiarTexto(res.data.pamiPassword || '', btn);
 }
 
 // ===== Administración → Gastos (solo admin) =====
@@ -4256,6 +4271,8 @@ function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remo
 var ME = null;
 function setUser(u){
   ME = u;
+  // Administración (Facturas/Gastos) es solo para admin.
+  var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);

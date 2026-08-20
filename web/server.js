@@ -128,8 +128,10 @@ function loadFacturas() {
     if (!periodos.length && j.periodo) periodos = [String(j.periodo)];
     if (!periodos.length && j.periodos && typeof j.periodos === "object") periodos = Object.values(j.periodos).filter(Boolean).map(String);
     for (const r of registros) { if (r.periodo && periodos.indexOf(r.periodo) < 0) periodos.push(r.periodo); }
-    return { config: j.config || {}, registros, periodos };
-  } catch { return { config: {}, registros: [], periodos: [] }; }
+    // Mínimo no imponible mensual de Ganancias (se resta antes del 2%).
+    const minimoGanancias = j.minimoGanancias != null ? Number(j.minimoGanancias) : 67170;
+    return { config: j.config || {}, registros, periodos, minimoGanancias };
+  } catch { return { config: {}, registros: [], periodos: [], minimoGanancias: 67170 }; }
 }
 function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -3506,8 +3508,19 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const store = loadFacturas();
-    const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "", ...facturaConfigCliente(store, c.slug) }));
-    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos });
+    const creds = loadClientCreds();
+    const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "", pamiUser: (creds[c.slug] || {}).pamiUser || "", tieneClave: !!(creds[c.slug] || {}).pamiPassEnc, ...facturaConfigCliente(store, c.slug) }));
+    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos, minimoGanancias: store.minimoGanancias });
+  }
+  // Mínimo no imponible de Ganancias (global del panel).
+  if (p === "/api/facturas/minimo" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const store = loadFacturas();
+    store.minimoGanancias = Math.max(0, Number(b && b.valor) || 0);
+    saveFacturas(store);
+    return json(res, 200, { ok: true, minimoGanancias: store.minimoGanancias });
   }
   // Agregar un período nuevo a la lista.
   if (p === "/api/facturas/periodo" && req.method === "POST") {
