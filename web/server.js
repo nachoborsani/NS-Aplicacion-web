@@ -320,7 +320,7 @@ const CRED_RUN_STATE = { corriendo: false, stop: false, origen: "", inicio: "", 
 // origen: etiqueta para el log. soloFilas: si viene un array de sheetRow, baja
 // SOLO esas filas (modo quirúrgico, para lo recién completado por el barrido). Sin
 // eso, recorre todo el backlog pendiente desde desdeFila (puesta al día).
-async function correrLoteCredenciales(origen, soloFilas) {
+async function correrLoteCredenciales(origen, soloFilas, limite) {
   if (CRED_RUN_STATE.corriendo) return;
   const cfg = loadGoogleCfg();
   if (!cfg) { const s = loadCredSchedule(); s.lastRun = { at: new Date().toISOString(), origen, error: "Google no está conectado." }; saveCredSchedule(s); return; }
@@ -331,6 +331,8 @@ async function correrLoteCredenciales(origen, soloFilas) {
     const filtro = Array.isArray(soloFilas) && soloFilas.length ? new Set(soloFilas.map(Number)) : null;
     let { pendientes } = await leerPendientesScheffelaar(auth, filtro ? 0 : (sch.desdeFila || 2));
     if (filtro) pendientes = pendientes.filter((p) => filtro.has(Number(p.sheetRow)));
+    const lim = Number(limite) || 0;
+    if (lim > 0) pendientes = pendientes.slice(0, lim);   // tanda acotada
     CRED_RUN_STATE.total = pendientes.length;
     for (const row of pendientes) {
       if (CRED_RUN_STATE.stop) break;   // parada manual
@@ -4025,6 +4027,17 @@ const server = http.createServer(async (req, res) => {
     if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
     correrLoteCredenciales("manual");
     return json(res, 200, { ok: true });
+  }
+  // Corre una TANDA acotada del backlog (las primeras N pendientes sin marcar).
+  // Idempotente: repetir la llamada procesa las siguientes N.
+  if (p === "/api/credenciales/scheffelaar/correr-tanda" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const limite = Math.max(1, Math.min(2000, Number((b && b.limite) || 500)));
+    if (CRED_RUN_STATE.corriendo) return json(res, 200, { ok: false, error: "Ya hay una corrida en curso." });
+    correrLoteCredenciales("tanda", null, limite);
+    return json(res, 200, { ok: true, limite });
   }
   // Baja credenciales SOLO de filas puntuales (las que el barrido acaba de
   // completar). Modo quirúrgico: no toca el resto de la planilla.
