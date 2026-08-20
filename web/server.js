@@ -119,8 +119,8 @@ function medicoPublico(m) {
   return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc };
 }
 function loadFacturas() {
-  try { const j = JSON.parse(fs.readFileSync(facturasFile, "utf8")); return { config: j.config || {}, registros: Array.isArray(j.registros) ? j.registros : [], periodos: j.periodos || {} }; }
-  catch { return { config: {}, registros: [], periodos: {} }; }
+  try { const j = JSON.parse(fs.readFileSync(facturasFile, "utf8")); return { config: j.config || {}, registros: Array.isArray(j.registros) ? j.registros : [], periodo: String(j.periodo || "") }; }
+  catch { return { config: {}, registros: [], periodo: "" }; }
 }
 function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -3490,20 +3490,17 @@ const server = http.createServer(async (req, res) => {
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const store = loadFacturas();
     const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "", ...facturaConfigCliente(store, c.slug) }));
-    return json(res, 200, { clientes, registros: store.registros, periodos: store.periodos || {} });
+    return json(res, 200, { clientes, registros: store.registros, periodo: store.periodo || "" });
   }
-  // Guardar el período de un grupo (consultorios / medcab).
+  // Guardar el período (único para todo el panel).
   if (p === "/api/facturas/periodo" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const b = await readBody(req);
-    const grupo = String((b && b.grupo) || "").trim();
-    if (grupo !== "consultorios" && grupo !== "medcab") return json(res, 400, { error: "grupo inválido" });
     const store = loadFacturas();
-    store.periodos = store.periodos || {};
-    store.periodos[grupo] = String((b && b.valor) || "").trim();
+    store.periodo = String((b && b.valor) || "").trim();
     saveFacturas(store);
-    return json(res, 200, { ok: true, periodos: store.periodos });
+    return json(res, 200, { ok: true, periodo: store.periodo });
   }
   // Guardar la config de facturación de un cliente (% comisión, nº de socios).
   if (p === "/api/facturas/config" && req.method === "POST") {
@@ -3534,6 +3531,7 @@ const server = http.createServer(async (req, res) => {
       slug,
       periodo: String((b && b.periodo) || "").trim(),
       items,
+      fechaCobro: String((b && b.fechaCobro) || "").trim(),
       subida: !!(b && b.subida),
     };
     const store = loadFacturas();

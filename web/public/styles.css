@@ -935,3 +935,8 @@
   .facturas-table input.fac-monto{width:130px;text-align:right}
   .facturas-table input.fac-chk{width:18px;height:18px;accent-color:var(--turq)}
   .facturas-table td{vertical-align:middle}
+
+  /* Facturas: celda descripción + valor, y fecha de cobro */
+  .fac-fact{display:flex;gap:6px;align-items:center}
+  .facturas-table input.fac-desc{flex:1 1 auto;min-width:120px;text-align:left}
+  .facturas-table input.fac-fecha{width:140px}
