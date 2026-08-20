@@ -1452,23 +1452,69 @@ async function loadClientMedicos(){
   MEDICOS = (res.ok && res.data && res.data.medicos) ? res.data.medicos : [];
   renderClientMedicos();
 }
+var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
   if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr>'; return; }
+  var ojo = '<svg viewBox="0 0 24 24" fill="none">' + EYE_ON + '</svg>';
+  var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
+  var llave = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M11 12l9-9M17 3l3 3M15 5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   body.innerHTML = MEDICOS.map(function(m){
-    var clave = m.tieneClave ? '•••••• guardada' : '<span class="nom-muted">sin clave</span>';
+    var claveCell;
+    if (m.tieneClave){
+      claveCell = '<span id="medClaveTxt_' + m.id + '">•••••• guardada</span>' +
+        ' <button class="icon-btn mini" type="button" title="Ver" onclick="revealMedicoClave(\'' + m.id + '\')">' + ojo + '</button>';
+    } else {
+      claveCell = '<span class="nom-muted">sin clave</span>';
+    }
+    var usuarioCell = m.usuario
+      ? esc(m.usuario) + ' <button class="icon-btn mini" type="button" title="Copiar" onclick="copiarTexto(\'' + esc(m.usuario) + '\', this)">' + copiar + '</button>'
+      : '-';
     return '<tr>' +
       '<td>' + esc(m.nombre) + '</td>' +
       '<td>' + (esc(m.especialidad) || '-') + '</td>' +
-      '<td>' + (esc(m.usuario) || '-') + '</td>' +
-      '<td>' + clave + '</td>' +
+      '<td>' + usuarioCell + '</td>' +
+      '<td>' + claveCell + '</td>' +
       '<td>' + (esc(m.telefono) || '-') + '</td>' +
       '<td class="row-actions">' +
         '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+        (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + m.id + '\')">' + llave + '</button> ' : '') +
         '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '</td>' +
     '</tr>';
   }).join('');
+}
+// Revela la clave del médico (admin): la trae desencriptada y la muestra con botón copiar.
+async function revealMedicoClave(id){
+  if (!ACTIVE_CLIENT) return;
+  var span = document.getElementById('medClaveTxt_' + id); if (!span) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id) + '/credenciales');
+  if (!res.ok || !res.data){ return; }
+  var clave = res.data.clave || '';
+  var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
+  var cell = span.parentElement;
+  cell.innerHTML = '<code id="medClaveVal_' + id + '"></code>' +
+    ' <button class="icon-btn mini" type="button" title="Copiar" onclick="copiarClaveRevelada(\'' + id + '\', this)">' + copiar + '</button>';
+  // textContent (no innerHTML) para no interpretar la clave como HTML.
+  document.getElementById('medClaveVal_' + id).textContent = clave;
+}
+function copiarClaveRevelada(id, btn){
+  var el = document.getElementById('medClaveVal_' + id);
+  if (el) copiarTexto(el.textContent, btn);
+}
+// Copia un texto al portapapeles y da un feedback breve en el botón.
+function copiarTexto(txt, btn){
+  try {
+    navigator.clipboard.writeText(txt);
+    if (btn){ var old = btn.getAttribute('title'); btn.setAttribute('title', 'Copiado'); setTimeout(function(){ btn.setAttribute('title', old || 'Copiar'); }, 1200); }
+  } catch (e){}
+}
+// Blanquea la clave: copia el usuario al portapapeles y abre la página de PAMI para
+// blanquear (no se puede pre-cargar el usuario en su form; queda listo para pegar).
+function blanquearMedicoClave(id){
+  var m = MEDICOS.find(function(x){ return x.id === id; });
+  if (m && m.usuario){ try { navigator.clipboard.writeText(m.usuario); } catch (e){} }
+  window.open(PAMI_BLANQUEO_URL, '_blank', 'noopener');
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;
