@@ -138,6 +138,32 @@ function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(facturasFile, JSON.stringify(store, null, 2));
 }
+// Ingreso de NS (Nacho+Seba) de las facturas con fecha de cobro en un mes (YYYY-MM).
+// Devuelve el ingreso de cada socio y el detalle por cliente.
+function ingresoNSDelMes(fstore, mes, nombreCliente) {
+  let ingresoNacho = 0, ingresoSeba = 0, facturasContadas = 0;
+  const porCliente = {};
+  for (const r of fstore.registros) {
+    if (!r.fechaCobro || String(r.fechaCobro).slice(0, 7) !== mes) continue;
+    const cfg = facturaConfigCliente(fstore, r.slug);
+    const total = (r.items || []).reduce((a, it) => a + (Number(it.monto) || 0), 0);
+    if (total <= 0) continue;
+    const ret = Math.max(0, total - (Number(fstore.minimoGanancias) || 0)) * (cfg.retencionPct || 0) / 100;
+    const base = cfg.baseComision === "neto" ? (total - ret) : total;
+    const com = base * (cfg.comisionPct || 0) / 100;
+    const socios = cfg.socios || 2;
+    const cadaUno = com / socios;
+    const nsShares = Math.min(2, socios);
+    ingresoNacho += cadaUno;
+    if (socios >= 2) ingresoSeba += cadaUno;
+    porCliente[r.slug] = (porCliente[r.slug] || 0) + cadaUno * nsShares;
+    facturasContadas++;
+  }
+  const detalle = Object.keys(porCliente)
+    .map((slug) => ({ slug, name: (nombreCliente && nombreCliente[slug]) || slug, monto: porCliente[slug] }))
+    .sort((a, b) => b.monto - a.monto);
+  return { ingresoNacho, ingresoSeba, detalle, facturasContadas };
+}
 // Avanza en 1 el mes de patrones MM-YY / MM/YYYY dentro de un texto (para clonar
 // las descripciones de facturas al período siguiente). "FACTURA 06-26" -> "07-26".
 function avanzarMesEnTexto(t) {
@@ -3745,7 +3771,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Resultado económico del mes (Inicio): ingresos NS (Nacho+Seba) por fecha de
-  // cobro, gastos del mes, y lo que queda en bolsillo (total y por socio). Admin.
+  // cobro, gastos del mes, en bolsillo (total y por socio) + serie mensual. Admin.
   if (p === "/api/resultado" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
@@ -3753,43 +3779,34 @@ const server = http.createServer(async (req, res) => {
     const fstore = loadFacturas();
     const nombreCliente = {};
     loadClientsStore().forEach((c) => { nombreCliente[c.slug] = c.name; });
-    let ingresoNacho = 0, ingresoSeba = 0, facturasContadas = 0;
-    const porCliente = {};   // slug -> ingreso NS del cliente en el mes
-    for (const r of fstore.registros) {
-      if (!r.fechaCobro || String(r.fechaCobro).slice(0, 7) !== mes) continue;
-      const cfg = facturaConfigCliente(fstore, r.slug);
-      const total = (r.items || []).reduce((a, it) => a + (Number(it.monto) || 0), 0);
-      if (total <= 0) continue;
-      const ret = Math.max(0, total - (Number(fstore.minimoGanancias) || 0)) * (cfg.retencionPct || 0) / 100;
-      const base = cfg.baseComision === "neto" ? (total - ret) : total;
-      const com = base * (cfg.comisionPct || 0) / 100;
-      const socios = cfg.socios || 2;
-      const cadaUno = com / socios;
-      const nsShares = Math.min(2, socios);
-      ingresoNacho += cadaUno;                       // 1 parte (Nacho siempre es socio)
-      if (socios >= 2) ingresoSeba += cadaUno;       // 1 parte (Seba)
-      porCliente[r.slug] = (porCliente[r.slug] || 0) + cadaUno * nsShares;
-      facturasContadas++;
-    }
-    const ingresoNS = ingresoNacho + ingresoSeba;
-    const detalle = Object.keys(porCliente)
-      .map((slug) => ({ slug, name: nombreCliente[slug] || slug, monto: porCliente[slug] }))
-      .sort((a, b) => b.monto - a.monto);
-    // Gastos fijos del mes (todos aplican por mes; USD al dólar oficial de hoy).
     const gstore = loadGastosOSemilla();
     const dolar = await getDolarOficial();
     let gastos = 0;
     for (const g of gstore.gastos) gastos += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolar.valor || 0) : (Number(g.monto) || 0);
+    const del = ingresoNSDelMes(fstore, mes, nombreCliente);
+    const ingresoNS = del.ingresoNacho + del.ingresoSeba;
     const gastosMitad = gastos / 2;
+    // Serie de los últimos 6 meses (para las barras mes contra mes).
+    const serie = [];
+    let [yy, mm] = mes.split("-").map(Number);
+    for (let i = 5; i >= 0; i--) {
+      let m = mm - i, y = yy;
+      while (m <= 0) { m += 12; y -= 1; }
+      const mStr = y + "-" + String(m).padStart(2, "0");
+      const d = ingresoNSDelMes(fstore, mStr, nombreCliente);
+      const ing = d.ingresoNacho + d.ingresoSeba;
+      serie.push({ mes: mStr, ingresoNS: ing, gastos, bolsilloNS: ing - gastos });
+    }
     return json(res, 200, {
       mes,
-      ingresoNS, ingresoNacho, ingresoSeba,
+      ingresoNS, ingresoNacho: del.ingresoNacho, ingresoSeba: del.ingresoSeba,
       gastos, dolar: { valor: dolar.valor, fecha: dolar.fecha },
       bolsilloNS: ingresoNS - gastos,
-      bolsilloNacho: ingresoNacho - gastosMitad,
-      bolsilloSeba: ingresoSeba - gastosMitad,
-      facturasContadas,
-      detalle,
+      bolsilloNacho: del.ingresoNacho - gastosMitad,
+      bolsilloSeba: del.ingresoSeba - gastosMitad,
+      facturasContadas: del.facturasContadas,
+      detalle: del.detalle,
+      serie,
     });
   }
 

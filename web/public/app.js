@@ -1903,7 +1903,7 @@ async function loadResultado(){
   document.getElementById('resIngreso').textContent = moneyFmt(d.ingresoNS);
   document.getElementById('resGastos').textContent = moneyFmt(d.gastos);
   var bols = document.getElementById('resBolsillo'); bols.textContent = moneyFmt(d.bolsilloNS);
-  var netTile = bols.closest('.res-tile'); if (netTile) netTile.classList.toggle('neg', d.bolsilloNS < 0);
+  var netCard = bols.closest('.res-hero-card'); if (netCard) netCard.classList.toggle('neg', d.bolsilloNS < 0);
   document.getElementById('resNacho').textContent = moneyFmt(d.bolsilloNacho);
   document.getElementById('resSeba').textContent = moneyFmt(d.bolsilloSeba);
   // Desglose: cada cliente su comisión NS, luego los gastos y el resultado.
@@ -1911,12 +1911,29 @@ async function loadResultado(){
   if (box){
     var filas = (d.detalle || []).map(function(x){
       return '<div class="res-linea"><span>' + esc(x.name) + '</span><span class="pos">' + moneyFmt(x.monto) + '</span></div>';
-    }).join('');
+    }).join('') || '<div class="nom-muted">Sin facturas con cobro en el mes.</div>';
     filas += '<div class="res-linea res-linea-gasto"><span>Gastos</span><span class="neg">− ' + moneyFmt(d.gastos) + '</span></div>';
     filas += '<div class="res-linea res-linea-total"><span>En bolsillo</span><span>' + moneyFmt(d.bolsilloNS) + '</span></div>';
     box.innerHTML = filas;
   }
   document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes' + (d.dolar && d.dolar.valor ? ' · dólar oficial ' + moneyFmt(d.dolar.valor) : '');
+  renderResChart(d.serie || [], d.mes);
+}
+var RES_MESES = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function resMesCorto(mes){ var p = String(mes).split('-'); return (RES_MESES[Number(p[1])] || '') + ' ' + String(p[0] || '').slice(2); }
+function renderResChart(serie, mesSel){
+  var box = document.getElementById('resChart'); if (!box) return;
+  if (!serie.length){ box.innerHTML = '<div class="nom-muted">Sin datos.</div>'; return; }
+  var max = 1;
+  serie.forEach(function(s){ max = Math.max(max, Math.abs(s.bolsilloNS)); });
+  box.innerHTML = serie.map(function(s){
+    var h = Math.round(Math.abs(s.bolsilloNS) / max * 100);
+    var cls = 'rc-fill' + (s.bolsilloNS < 0 ? ' neg' : '') + (s.mes === mesSel ? ' sel' : '');
+    return '<div class="rc-bar" title="' + resMesCorto(s.mes) + ': ' + moneyFmt(s.bolsilloNS) + '">' +
+      '<div class="rc-track"><div class="' + cls + '" style="height:' + h + '%"></div></div>' +
+      '<div class="rc-lbl">' + resMesCorto(s.mes) + '</div>' +
+    '</div>';
+  }).join('');
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;
