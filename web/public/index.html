@@ -761,39 +761,6 @@
       </div>
     </div>
 
-    <!-- ===== Modal: alta / edición de factura ===== -->
-    <div class="scrim" id="facturaScrim" onclick="closeFacturaModal()"></div>
-    <div class="modal" id="facturaModal" role="dialog" aria-modal="true">
-      <div class="modal-head"><h3 id="facturaTitle">Nueva factura</h3><button class="x" onclick="closeFacturaModal()" aria-label="Cerrar">×</button></div>
-      <div class="modal-body">
-        <input type="hidden" id="facturaId">
-        <input type="hidden" id="facturaSlug">
-        <div class="field"><label>Cliente</label><input class="inp" id="facturaCliente" disabled></div>
-        <div class="field"><label>Período</label><input class="inp" id="facturaPeriodo" placeholder="Ej: 06-26 o Mayo-Junio" spellcheck="false"></div>
-        <div class="field">
-          <label>Factura 1</label>
-          <div class="factura-item">
-            <input class="inp" id="facturaLabel1" placeholder="Detalle (ej: FACTURA 06-26)" spellcheck="false">
-            <input class="inp" id="facturaMonto1" inputmode="decimal" placeholder="Monto" oninput="facturaPreview()">
-          </div>
-        </div>
-        <div class="field">
-          <label>Factura 2 <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label>
-          <div class="factura-item">
-            <input class="inp" id="facturaLabel2" placeholder="Detalle" spellcheck="false">
-            <input class="inp" id="facturaMonto2" inputmode="decimal" placeholder="Monto" oninput="facturaPreview()">
-          </div>
-        </div>
-        <label class="chk"><input type="checkbox" id="facturaCobrado"> Cobrado</label>
-        <div class="factura-calc" id="facturaCalc"></div>
-        <div class="msg err" id="facturaModalError"></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" onclick="closeFacturaModal()">Cancelar</button>
-        <button class="btn btn-primary" id="facturaSaveBtn" onclick="saveFactura()">Guardar</button>
-      </div>
-    </div>
-
     <!-- ===== Modal: alta / edición de usuario médico ===== -->
     <div class="scrim" id="medicoScrim" onclick="closeMedicoModal()"></div>
     <div class="modal" id="medicoModal" role="dialog" aria-modal="true">

@@ -1531,8 +1531,9 @@ function blanquearMedicoClave(id){
   window.open(PAMI_BLANQUEO_URL, '_blank', 'noopener');
 }
 
-// ===== Pagos → Facturas (solo admin) =====
-var FACTURAS = { clientes: [], registros: [] };
+// ===== Pagos → Facturas (solo admin) — grilla inline tipo planilla =====
+var FACTURAS = { clientes: [], registros: [], periodos: {} };
+var FACTURAS_OPEN = { consultorios: true, medcab: true };
 function facturaParseMonto(v){
   // Acepta "2.678.400,00" o "2678400.00" o "2678400".
   var s = String(v == null ? '' : v).trim();
@@ -1541,48 +1542,84 @@ function facturaParseMonto(v){
   var n = Number(s);
   return isFinite(n) ? n : 0;
 }
+function facGrupoDe(c){ return (c && c.tipo === 'med_cabecera') ? 'medcab' : 'consultorios'; }
 async function loadFacturas(){
   var err = document.getElementById('facturasError'); if (err) err.style.display = 'none';
   var res = await api('/api/facturas');
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
-  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [] };
+  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [], periodos: res.data.periodos || {} };
   renderFacturas();
 }
+var FAC_GRUPOS = [
+  { key: 'consultorios', titulo: 'Consultorios' },
+  { key: 'medcab', titulo: 'Médicos de cabecera' },
+];
 function renderFacturas(){
   var box = document.getElementById('facturasBody'); if (!box) return;
   if (!FACTURAS.clientes.length){ box.innerHTML = '<p class="nom-muted">No hay clientes.</p>'; return; }
-  box.innerHTML = FACTURAS.clientes.map(function(c){
-    var regs = FACTURAS.registros.filter(function(r){ return r.slug === c.slug; });
-    var filas = regs.map(function(r){
-      var total = (r.items || []).reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
-      var comision = total * (Number(c.comisionPct) || 0) / 100;
-      var cadaUno = comision / (Number(c.socios) || 2);
-      var detalle = (r.items || []).map(function(it){ return esc(it.label || '') + (it.monto ? ' ' + moneyFmt(it.monto) : ''); }).join(' · ') || '<span class="nom-muted">sin detalle</span>';
-      return '<tr>' +
-        '<td>' + (esc(r.periodo) || '-') + '</td>' +
-        '<td>' + detalle + '</td>' +
-        '<td class="num"><b>' + moneyFmt(total) + '</b></td>' +
-        '<td class="num">' + moneyFmt(comision) + '</td>' +
-        '<td class="num">' + moneyFmt(cadaUno) + ' <span class="nom-muted">×' + (Number(c.socios) || 2) + '</span></td>' +
-        '<td class="num"><label class="chk mini"><input type="checkbox" ' + (r.cobrado ? 'checked' : '') + ' onchange="toggleFacturaCobrado(\'' + r.id + '\', this.checked)"> </label></td>' +
-        '<td class="row-actions">' +
-          '<button class="icon-btn mini" type="button" title="Editar" onclick="openFacturaModal(\'' + c.slug + '\',\'' + r.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
-          '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteFactura(\'' + r.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
-    return '<div class="factura-cli">' +
-      '<div class="factura-cli-head">' +
-        '<h4>' + esc(c.name) + '</h4>' +
-        '<label class="factura-cfg">Comisión <input class="inp mini" id="facPct_' + c.slug + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" onchange="saveFacturaConfig(\'' + c.slug + '\')" style="width:70px">%</label>' +
-        '<label class="factura-cfg">Socios <input class="inp mini" id="facSoc_' + c.slug + '" inputmode="numeric" value="' + (c.socios || 2) + '" onchange="saveFacturaConfig(\'' + c.slug + '\')" style="width:56px"></label>' +
-        '<button class="btn btn-primary btn-sm" type="button" onclick="openFacturaModal(\'' + c.slug + '\')">+ Factura</button>' +
+  var html = FAC_GRUPOS.map(function(g){
+    var cls = FACTURAS.clientes.filter(function(c){ return facGrupoDe(c) === g.key; });
+    if (!cls.length) return '';
+    var periodo = (FACTURAS.periodos && FACTURAS.periodos[g.key]) || '';
+    var abierto = FACTURAS_OPEN[g.key] !== false;
+    var filas = cls.map(function(c){ return facturaFila(c, periodo); }).join('');
+    return '<div class="factura-group' + (abierto ? ' open' : '') + '" id="facGrp_' + g.key + '">' +
+      '<div class="factura-group-head" onclick="toggleFacturaGroup(\'' + g.key + '\')">' +
+        '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '<h4>' + g.titulo + '</h4>' +
+        '<label class="factura-cfg" onclick="event.stopPropagation()">Período <input class="inp mini" id="facPer_' + g.key + '" value="' + esc(periodo) + '" placeholder="Ej: JUNIO" onchange="savePeriodo(\'' + g.key + '\')" style="width:130px"></label>' +
       '</div>' +
-      (regs.length
-        ? '<div class="table-scroll"><table class="saved-report-table facturas-table"><thead><tr><th>Período</th><th>Detalle</th><th class="num">Total</th><th class="num">Comisión</th><th class="num">C/socio</th><th class="num">Cobr.</th><th>Acción</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
-        : '<p class="nom-muted" style="margin:6px 0 0">Sin facturas cargadas.</p>') +
+      '<div class="factura-group-body"><div class="table-scroll"><table class="saved-report-table facturas-table"><thead><tr>' +
+        '<th>Cliente</th><th class="num">Com.%</th><th class="num">Socios</th><th class="num">Factura 1</th><th class="num">Factura 2</th><th class="num">Total</th><th class="num">Comisión</th><th class="num">C/socio</th><th class="num">Subida</th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table></div></div>' +
     '</div>';
   }).join('');
+  box.innerHTML = html || '<p class="nom-muted">No hay clientes.</p>';
+}
+function facturaFila(c, periodo){
+  var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
+  var it = (r && r.items) || [];
+  var m1 = it[0] ? (it[0].monto || '') : '';
+  var m2 = it[1] ? (it[1].monto || '') : '';
+  var total = (Number(m1) || 0) + (Number(m2) || 0);
+  var com = total * (Number(c.comisionPct) || 0) / 100;
+  var cad = com / (Number(c.socios) || 2);
+  var s = c.slug;
+  return '<tr>' +
+    '<td>' + esc(c.name) + '</td>' +
+    '<td class="num"><input class="inp mini fac-in" id="facPct_' + s + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></td>' +
+    '<td class="num"><input class="inp mini fac-in" id="facSoc_' + s + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaConfig(\'' + s + '\')"></td>' +
+    '<td class="num"><input class="inp mini fac-monto" id="facM1_' + s + '" inputmode="decimal" value="' + esc(m1) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaRow(\'' + s + '\')"></td>' +
+    '<td class="num"><input class="inp mini fac-monto" id="facM2_' + s + '" inputmode="decimal" value="' + esc(m2) + '" oninput="facturaRecalcRow(\'' + s + '\')" onchange="saveFacturaRow(\'' + s + '\')"></td>' +
+    '<td class="num"><b id="facTot_' + s + '">' + moneyFmt(total) + '</b></td>' +
+    '<td class="num" id="facCom_' + s + '">' + moneyFmt(com) + '</td>' +
+    '<td class="num" id="facCad_' + s + '">' + moneyFmt(cad) + '</td>' +
+    '<td class="num"><input type="checkbox" class="fac-chk" id="facSub_' + s + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + s + '\')"></td>' +
+  '</tr>';
+}
+// Recalcula Total/Comisión/C-socio de una fila en vivo (sin re-render, no pierde foco).
+function facturaRecalcRow(slug){
+  var g = function(id){ return document.getElementById(id + slug); };
+  var total = facturaParseMonto(g('facM1_').value) + facturaParseMonto(g('facM2_').value);
+  var pct = facturaParseMonto(g('facPct_').value);
+  var soc = Math.max(1, Math.round(Number(g('facSoc_').value) || 2));
+  var com = total * pct / 100, cad = com / soc;
+  if (g('facTot_')) g('facTot_').textContent = moneyFmt(total);
+  if (g('facCom_')) g('facCom_').textContent = moneyFmt(com);
+  if (g('facCad_')) g('facCad_').textContent = moneyFmt(cad);
+}
+function toggleFacturaGroup(grupo){
+  var abierto = FACTURAS_OPEN[grupo] !== false;
+  FACTURAS_OPEN[grupo] = !abierto;
+  var elg = document.getElementById('facGrp_' + grupo);
+  if (elg) elg.classList.toggle('open', FACTURAS_OPEN[grupo]);
+}
+async function savePeriodo(grupo){
+  var el = document.getElementById('facPer_' + grupo);
+  var valor = el ? el.value.trim() : '';
+  FACTURAS.periodos[grupo] = valor;
+  await req('POST', '/api/facturas/periodo', { grupo: grupo, valor: valor });
+  renderFacturas();  // muestra las facturas de ese período
 }
 async function saveFacturaConfig(slug){
   var pct = facturaParseMonto(document.getElementById('facPct_' + slug).value);
@@ -1591,69 +1628,22 @@ async function saveFacturaConfig(slug){
   if (res.ok){
     var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
     if (c){ c.comisionPct = res.data.comisionPct; c.socios = res.data.socios; }
-    renderFacturas();
+    facturaRecalcRow(slug);
   }
 }
-function openFacturaModal(slug, id){
+async function saveFacturaRow(slug){
+  facturaRecalcRow(slug);
   var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
-  var r = id ? FACTURAS.registros.find(function(x){ return x.id === id; }) : null;
-  document.getElementById('facturaSlug').value = slug;
-  document.getElementById('facturaId').value = r ? r.id : '';
-  document.getElementById('facturaCliente').value = c ? c.name : '';
-  document.getElementById('facturaPeriodo').value = r ? (r.periodo || '') : '';
-  var it = (r && r.items) || [];
-  document.getElementById('facturaLabel1').value = it[0] ? (it[0].label || '') : '';
-  document.getElementById('facturaMonto1').value = it[0] ? (it[0].monto || '') : '';
-  document.getElementById('facturaLabel2').value = it[1] ? (it[1].label || '') : '';
-  document.getElementById('facturaMonto2').value = it[1] ? (it[1].monto || '') : '';
-  document.getElementById('facturaCobrado').checked = !!(r && r.cobrado);
-  document.getElementById('facturaTitle').textContent = r ? 'Editar factura' : 'Nueva factura';
-  document.getElementById('facturaModalError').textContent = '';
-  facturaPreview();
-  showModal('facturaModal', 'facturaScrim');
-  document.getElementById('facturaPeriodo').focus();
-}
-function closeFacturaModal(){ hideModal('facturaModal', 'facturaScrim'); }
-function facturaPreview(){
-  var slug = document.getElementById('facturaSlug').value;
-  var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; }) || { comisionPct: 0, socios: 2 };
-  var total = facturaParseMonto(document.getElementById('facturaMonto1').value) + facturaParseMonto(document.getElementById('facturaMonto2').value);
-  var comision = total * (Number(c.comisionPct) || 0) / 100;
-  var cadaUno = comision / (Number(c.socios) || 2);
-  document.getElementById('facturaCalc').innerHTML =
-    'Total <b>' + moneyFmt(total) + '</b> · Comisión (' + (c.comisionPct || 0) + '%) <b>' + moneyFmt(comision) + '</b> · Por socio (÷' + (c.socios || 2) + ') <b>' + moneyFmt(cadaUno) + '</b>';
-}
-async function saveFactura(){
-  var errBox = document.getElementById('facturaModalError'); errBox.textContent = '';
+  var grupo = facGrupoDe(c);
+  var perEl = document.getElementById('facPer_' + grupo);
+  var periodo = perEl ? perEl.value.trim() : '';
   var items = [
-    { label: document.getElementById('facturaLabel1').value.trim(), monto: facturaParseMonto(document.getElementById('facturaMonto1').value) },
-    { label: document.getElementById('facturaLabel2').value.trim(), monto: facturaParseMonto(document.getElementById('facturaMonto2').value) },
-  ].filter(function(it){ return it.label || it.monto; });
-  if (!items.length){ errBox.textContent = 'Cargá al menos una factura con monto.'; return; }
-  var btn = document.getElementById('facturaSaveBtn'); btn.disabled = true;
-  var res = await req('POST', '/api/facturas', {
-    id: document.getElementById('facturaId').value || '',
-    slug: document.getElementById('facturaSlug').value,
-    periodo: document.getElementById('facturaPeriodo').value.trim(),
-    items: items,
-    cobrado: document.getElementById('facturaCobrado').checked,
-  });
-  btn.disabled = false;
-  if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
-  FACTURAS.registros = res.data.registros || [];
-  renderFacturas();
-  closeFacturaModal();
-}
-async function toggleFacturaCobrado(id, cobrado){
-  var r = FACTURAS.registros.find(function(x){ return x.id === id; });
-  if (!r) return;
-  var res = await req('POST', '/api/facturas', { id: id, slug: r.slug, periodo: r.periodo, items: r.items, cobrado: cobrado });
+    { monto: facturaParseMonto(document.getElementById('facM1_' + slug).value) },
+    { monto: facturaParseMonto(document.getElementById('facM2_' + slug).value) },
+  ];
+  var subida = document.getElementById('facSub_' + slug).checked;
+  var res = await req('POST', '/api/facturas', { slug: slug, periodo: periodo, items: items, subida: subida });
   if (res.ok){ FACTURAS.registros = res.data.registros || []; }
-}
-async function deleteFactura(id){
-  if (!confirm('¿Borrar esta factura?')) return;
-  var res = await req('DELETE', '/api/facturas/' + encodeURIComponent(id));
-  if (res.ok){ FACTURAS.registros = res.data.registros || []; renderFacturas(); }
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;

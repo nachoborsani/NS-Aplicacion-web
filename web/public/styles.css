@@ -922,3 +922,16 @@
   .factura-calc b{color:var(--text)}
   .chk.mini{margin:0;justify-content:center}
   .chk.mini input{width:16px;height:16px}
+
+  /* --- Facturas: grupos colapsables + grilla inline --- */
+  .factura-group{border:1px solid var(--line);border-radius:12px;margin:12px 0;overflow:hidden}
+  .factura-group-head{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;background:var(--soft,rgba(0,0,0,.03));flex-wrap:wrap}
+  .factura-group-head h4{margin:0;font-size:15px;flex:1 1 140px}
+  .factura-group-head .nav-caret{width:18px;height:18px;transition:transform .18s;transform:rotate(-90deg)}
+  .factura-group.open .factura-group-head .nav-caret{transform:rotate(0)}
+  .factura-group-body{padding:6px 12px 14px}
+  .factura-group:not(.open) .factura-group-body{display:none}
+  .facturas-table input.fac-in{width:62px;text-align:right}
+  .facturas-table input.fac-monto{width:130px;text-align:right}
+  .facturas-table input.fac-chk{width:18px;height:18px;accent-color:var(--turq)}
+  .facturas-table td{vertical-align:middle}
