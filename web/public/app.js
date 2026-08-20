@@ -1906,6 +1906,16 @@ async function loadResultado(){
   var netTile = bols.closest('.res-tile'); if (netTile) netTile.classList.toggle('neg', d.bolsilloNS < 0);
   document.getElementById('resNacho').textContent = moneyFmt(d.bolsilloNacho);
   document.getElementById('resSeba').textContent = moneyFmt(d.bolsilloSeba);
+  // Desglose: cada cliente su comisión NS, luego los gastos y el resultado.
+  var box = document.getElementById('resDesglose');
+  if (box){
+    var filas = (d.detalle || []).map(function(x){
+      return '<div class="res-linea"><span>' + esc(x.name) + '</span><span class="pos">' + moneyFmt(x.monto) + '</span></div>';
+    }).join('');
+    filas += '<div class="res-linea res-linea-gasto"><span>Gastos</span><span class="neg">− ' + moneyFmt(d.gastos) + '</span></div>';
+    filas += '<div class="res-linea res-linea-total"><span>En bolsillo</span><span>' + moneyFmt(d.bolsilloNS) + '</span></div>';
+    box.innerHTML = filas;
+  }
   document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes' + (d.dolar && d.dolar.valor ? ' · dólar oficial ' + moneyFmt(d.dolar.valor) : '');
 }
 function openMedicoModal(id){

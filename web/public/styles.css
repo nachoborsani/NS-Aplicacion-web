@@ -1007,3 +1007,11 @@
   .res-socio .rs-name{font-weight:600;color:var(--text-2)}
   .res-socio .rs-val{font-weight:800}
   @media(max-width:700px){ .res-grid{grid-template-columns:1fr} }
+
+  /* Inicio: desglose del resultado */
+  .res-desglose{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;max-width:440px}
+  .res-linea{display:flex;justify-content:space-between;gap:14px;padding:5px 0;font-size:13.5px}
+  .res-linea .pos{font-weight:600;color:#0a8a4f}
+  .res-linea .neg{font-weight:600;color:#c0392b}
+  .res-linea-gasto{border-top:1px dashed var(--line);margin-top:4px;padding-top:8px}
+  .res-linea-total{border-top:1px solid var(--line);margin-top:4px;padding-top:9px;font-weight:800;font-size:15px}

@@ -3751,7 +3751,10 @@ const server = http.createServer(async (req, res) => {
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const mes = String(url.searchParams.get("mes") || "").trim() || ahoraAR().fecha.slice(0, 7); // YYYY-MM
     const fstore = loadFacturas();
+    const nombreCliente = {};
+    loadClientsStore().forEach((c) => { nombreCliente[c.slug] = c.name; });
     let ingresoNacho = 0, ingresoSeba = 0, facturasContadas = 0;
+    const porCliente = {};   // slug -> ingreso NS del cliente en el mes
     for (const r of fstore.registros) {
       if (!r.fechaCobro || String(r.fechaCobro).slice(0, 7) !== mes) continue;
       const cfg = facturaConfigCliente(fstore, r.slug);
@@ -3762,11 +3765,16 @@ const server = http.createServer(async (req, res) => {
       const com = base * (cfg.comisionPct || 0) / 100;
       const socios = cfg.socios || 2;
       const cadaUno = com / socios;
+      const nsShares = Math.min(2, socios);
       ingresoNacho += cadaUno;                       // 1 parte (Nacho siempre es socio)
       if (socios >= 2) ingresoSeba += cadaUno;       // 1 parte (Seba)
+      porCliente[r.slug] = (porCliente[r.slug] || 0) + cadaUno * nsShares;
       facturasContadas++;
     }
     const ingresoNS = ingresoNacho + ingresoSeba;
+    const detalle = Object.keys(porCliente)
+      .map((slug) => ({ slug, name: nombreCliente[slug] || slug, monto: porCliente[slug] }))
+      .sort((a, b) => b.monto - a.monto);
     // Gastos fijos del mes (todos aplican por mes; USD al dólar oficial de hoy).
     const gstore = loadGastosOSemilla();
     const dolar = await getDolarOficial();
@@ -3781,6 +3789,7 @@ const server = http.createServer(async (req, res) => {
       bolsilloNacho: ingresoNacho - gastosMitad,
       bolsilloSeba: ingresoSeba - gastosMitad,
       facturasContadas,
+      detalle,
     });
   }
 
