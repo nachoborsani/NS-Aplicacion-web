@@ -1900,24 +1900,38 @@ async function loadResultado(){
   var res = await api('/api/resultado' + (mes ? '?mes=' + encodeURIComponent(mes) : ''));
   if (!res.ok || !res.data) return;
   var d = res.data;
+  var bols = document.getElementById('resBolsillo');
+  bols.textContent = moneyFmt(d.bolsilloNS);
+  bols.classList.toggle('neg', d.bolsilloNS < 0);
   document.getElementById('resIngreso').textContent = moneyFmt(d.ingresoNS);
   document.getElementById('resGastos').textContent = moneyFmt(d.gastos);
-  var bols = document.getElementById('resBolsillo'); bols.textContent = moneyFmt(d.bolsilloNS);
-  var netCard = bols.closest('.res-hero-card'); if (netCard) netCard.classList.toggle('neg', d.bolsilloNS < 0);
   document.getElementById('resNacho').textContent = moneyFmt(d.bolsilloNacho);
   document.getElementById('resSeba').textContent = moneyFmt(d.bolsilloSeba);
-  // Desglose: cada cliente su comisión NS, luego los gastos y el resultado.
+  // Desglose: cada factura con su comisión NS + check de cobrado (vencido si la
+  // fecha de cobro ya pasó y no está marcada).
   var box = document.getElementById('resDesglose');
   if (box){
+    var hoy = new Date(); hoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
     var filas = (d.detalle || []).map(function(x){
-      return '<div class="res-linea"><span>' + esc(x.name) + '</span><span class="pos">' + moneyFmt(x.monto) + '</span></div>';
-    }).join('') || '<div class="nom-muted">Sin facturas con cobro en el mes.</div>';
-    filas += '<div class="res-linea res-linea-gasto"><span>Gastos</span><span class="neg">− ' + moneyFmt(d.gastos) + '</span></div>';
-    filas += '<div class="res-linea res-linea-total"><span>En bolsillo</span><span>' + moneyFmt(d.bolsilloNS) + '</span></div>';
+      var vencido = !x.cobrado && x.fechaCobro && x.fechaCobro < hoy;
+      var cls = 'mescurso-line res-cobro-line' + (x.cobrado ? ' cobrado' : (vencido ? ' vencido' : ''));
+      var fecha = x.fechaCobro ? x.fechaCobro.split('-').reverse().slice(0, 2).join('/') : '';
+      var nota = fecha ? '<span class="res-fecha">' + (x.cobrado ? '✓ cobrado' : (vencido ? '⚠ cobro vencido ' + fecha : 'cobra ' + fecha)) + '</span>' : '';
+      return '<div class="' + cls + '">' +
+        '<span class="res-cobro-nombre"><input type="checkbox" class="res-check" ' + (x.cobrado ? 'checked' : '') + ' onchange="toggleResCobrado(\'' + x.id + '\', this.checked)" title="Marcar cobrado">' +
+        esc(x.name) + ' ' + nota + '</span>' +
+        '<b>' + moneyFmt(x.monto) + '</b>' +
+      '</div>';
+    }).join('') || '<div class="mescurso-line"><span class="nom-muted">Sin facturas con cobro en el mes</span><b></b></div>';
+    filas += '<div class="mescurso-line alert"><span>Gastos fijos</span><b>− ' + moneyFmt(d.gastos) + '</b></div>';
     box.innerHTML = filas;
   }
-  document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes' + (d.dolar && d.dolar.valor ? ' · dólar oficial ' + moneyFmt(d.dolar.valor) : '');
+  document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes · dólar oficial ' + (d.dolar && d.dolar.valor ? moneyFmt(d.dolar.valor) : '—');
   renderResChart(d.serie || [], d.mes);
+}
+async function toggleResCobrado(id, cobrado){
+  var res = await req('POST', '/api/facturas/cobrado', { id: id, cobrado: cobrado });
+  if (res.ok) loadResultado();
 }
 var RES_MESES = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 function resMesCorto(mes){ var p = String(mes).split('-'); return (RES_MESES[Number(p[1])] || '') + ' ' + String(p[0] || '').slice(2); }

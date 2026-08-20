@@ -142,7 +142,7 @@ function saveFacturas(store) {
 // Devuelve el ingreso de cada socio y el detalle por cliente.
 function ingresoNSDelMes(fstore, mes, nombreCliente) {
   let ingresoNacho = 0, ingresoSeba = 0, facturasContadas = 0;
-  const porCliente = {};
+  const detalle = [];
   for (const r of fstore.registros) {
     if (!r.fechaCobro || String(r.fechaCobro).slice(0, 7) !== mes) continue;
     const cfg = facturaConfigCliente(fstore, r.slug);
@@ -156,12 +156,10 @@ function ingresoNSDelMes(fstore, mes, nombreCliente) {
     const nsShares = Math.min(2, socios);
     ingresoNacho += cadaUno;
     if (socios >= 2) ingresoSeba += cadaUno;
-    porCliente[r.slug] = (porCliente[r.slug] || 0) + cadaUno * nsShares;
+    detalle.push({ id: r.id, slug: r.slug, name: (nombreCliente && nombreCliente[r.slug]) || r.slug, monto: cadaUno * nsShares, fechaCobro: r.fechaCobro, cobrado: !!r.cobrado });
     facturasContadas++;
   }
-  const detalle = Object.keys(porCliente)
-    .map((slug) => ({ slug, name: (nombreCliente && nombreCliente[slug]) || slug, monto: porCliente[slug] }))
-    .sort((a, b) => b.monto - a.monto);
+  detalle.sort((a, b) => b.monto - a.monto);
   return { ingresoNacho, ingresoSeba, detalle, facturasContadas };
 }
 // Avanza en 1 el mes de patrones MM-YY / MM/YYYY dentro de un texto (para clonar
@@ -3684,6 +3682,19 @@ const server = http.createServer(async (req, res) => {
     }
     saveFacturas(store);
     return json(res, 200, { ok: true, registros: store.registros });
+  }
+  // Marcar una factura como cobrada / no cobrada (desde el dashboard).
+  if (p === "/api/facturas/cobrado" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const id = String((b && b.id) || "").trim();
+    const store = loadFacturas();
+    const r = store.registros.find((x) => x.id === id);
+    if (!r) return json(res, 404, { error: "Factura no encontrada." });
+    r.cobrado = !!(b && b.cobrado);
+    saveFacturas(store);
+    return json(res, 200, { ok: true });
   }
   // Borrar un registro de factura.
   const facturaDelMatch = p.match(/^\/api\/facturas\/([^/]+)$/);

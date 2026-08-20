@@ -1045,3 +1045,18 @@
   .rc-fill.sel{background:linear-gradient(180deg,#0a8a4f,#076b3c);box-shadow:0 2px 10px rgba(10,138,79,.3)}
   .rc-lbl{font-size:11px;color:var(--text-2);margin-top:6px;text-transform:capitalize;white-space:nowrap}
   @media(max-width:820px){ .res-cols{grid-template-columns:1fr} .res-hero-op{display:none} }
+
+  /* Resumen de cuenta: tarjeta estilo mes en curso + check de cobrado */
+  .res-card{max-width:600px}
+  .res-mes-input{width:152px}
+  .res-socios-row{display:flex;gap:10px;margin:10px 0 2px}
+  .res-socios-row .res-socio{flex:1 1 160px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:9px;padding:8px 12px;background:var(--surface-2)}
+  .res-socios-row .rs-name{font-size:12px;color:var(--text-2);font-weight:600}
+  .res-socios-row .rs-val{font-weight:750;font-variant-numeric:tabular-nums}
+  .mescurso-val.neg{color:var(--error)}
+  .res-check{margin-right:8px;accent-color:var(--turq);width:15px;height:15px;cursor:pointer;flex:0 0 auto}
+  .res-cobro-nombre{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+  .res-fecha{font-size:10.5px;color:var(--text-2);margin-left:4px}
+  .res-cobro-line.vencido{background:var(--error-bg);border-color:var(--error)}
+  .res-cobro-line.vencido .res-fecha{color:var(--error);font-weight:700}
+  .res-cobro-line.cobrado .res-fecha{color:var(--turq);font-weight:600}

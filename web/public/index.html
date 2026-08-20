@@ -165,35 +165,20 @@
 
           <!-- Dashboard financiero (admin) -->
           <div id="dashResultado" style="display:none">
-            <div class="res-head">
-              <h2>Resumen de cuenta — NS</h2>
-              <label class="res-mes">Mes <input class="inp mini" id="resMes" type="month" onchange="loadResultado()"></label>
-            </div>
-
-            <div class="res-hero">
-              <div class="res-hero-card in">
-                <div class="rh-k">Ingresos NS</div>
-                <div class="rh-v" id="resIngreso">—</div>
-                <div class="rh-m" id="resIngresoSub">comisión de Nacho + Seba</div>
+            <div class="mescurso-card res-card">
+              <div class="mescurso-head">
+                <span class="mescurso-title">Resumen de cuenta — NS</span>
+                <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
               </div>
-              <div class="res-hero-op">−</div>
-              <div class="res-hero-card out">
-                <div class="rh-k">Gastos</div>
-                <div class="rh-v" id="resGastos">—</div>
-                <div class="rh-m" id="resGastosSub">gastos fijos del mes</div>
+              <div class="mescurso-val-lbl">En bolsillo</div>
+              <div class="mescurso-val" id="resBolsillo">—</div>
+              <div class="mescurso-val-note">Ingresos <b id="resIngreso">—</b> − Gastos <b id="resGastos">—</b></div>
+              <div class="res-socios-row">
+                <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
+                <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
               </div>
-              <div class="res-hero-op">=</div>
-              <div class="res-hero-card net">
-                <div class="rh-k">En bolsillo</div>
-                <div class="rh-v" id="resBolsillo">—</div>
-                <div class="rh-m">Nacho <b id="resNacho">—</b> · Seba <b id="resSeba">—</b></div>
-              </div>
-            </div>
-
-            <div class="card res-panel" style="margin-top:14px;max-width:540px">
-              <div class="res-panel-h">Detalle del mes</div>
-              <div class="res-desglose" id="resDesglose"></div>
-              <div class="nom-muted" id="resDetalle" style="margin-top:10px"></div>
+              <div class="mescurso-lines" id="resDesglose"></div>
+              <div class="mescurso-foot" id="resDetalle"></div>
             </div>
           </div>
         </section>
