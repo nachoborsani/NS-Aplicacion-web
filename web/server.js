@@ -4492,7 +4492,8 @@ const server = http.createServer(async (req, res) => {
       const auth = gcreds.makeAuth(cfg);
       const meta = await gcreds.getSheetMeta(auth, id);
       const tab = String(url.searchParams.get("tab") || "").trim() || meta.tabs[0] || "";
-      const filas = tab ? await gcreds.readValues(auth, id, tab, "A1:M10") : [];
+      const rango = String(url.searchParams.get("rango") || "").trim() || "A1:T12";
+      const filas = tab ? await gcreds.readValues(auth, id, tab, rango) : [];
       return json(res, 200, { ok: true, titulo: meta.title, tabs: meta.tabs, tab, filas });
     } catch (e) {
       return json(res, 200, { ok: false, error: (e && e.message) || String(e) });
