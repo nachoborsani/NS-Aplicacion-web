@@ -140,7 +140,14 @@ function saveFacturas(store) {
 function facturaConfigCliente(store, slug) {
   const c = store.config[slug] || {};
   const sociosDefault = slug === "caballito-pediatrico" ? 3 : 2;
-  return { comisionPct: Number(c.comisionPct) || 0, socios: Number(c.socios) || sociosDefault };
+  return {
+    comisionPct: Number(c.comisionPct) || 0,
+    socios: Number(c.socios) || sociosDefault,
+    // Retención que PAMI descuenta antes de acreditar (Ganancias). GJS 2%, resto 5%.
+    retencionPct: c.retencionPct != null ? Number(c.retencionPct) : (slug === "st-ignacio" ? 2 : 5),
+    // Sobre qué base se cobra la comisión: 'neto' (tras retención) o 'bruto'. GJS neto.
+    baseComision: (c.baseComision === "neto" || c.baseComision === "bruto") ? c.baseComision : (slug === "st-ignacio" ? "neto" : "bruto"),
+  };
 }
 // --- Gastos fijos de NS ---
 // Semilla inicial (se crea solo la primera vez): sueldo empleado (15 y 30) + Claude.
@@ -3533,9 +3540,12 @@ const server = http.createServer(async (req, res) => {
     const slug = String((b && b.slug) || "").trim();
     if (!slug) return json(res, 400, { error: "falta slug" });
     const store = loadFacturas();
+    const prev = store.config[slug] || {};
     store.config[slug] = {
       comisionPct: Math.max(0, Number(b.comisionPct) || 0),
       socios: Math.max(1, Math.round(Number(b.socios) || 2)),
+      retencionPct: b.retencionPct != null ? Math.max(0, Number(b.retencionPct) || 0) : (prev.retencionPct != null ? prev.retencionPct : (slug === "st-ignacio" ? 2 : 5)),
+      baseComision: (b.baseComision === "neto" || b.baseComision === "bruto") ? b.baseComision : (prev.baseComision || (slug === "st-ignacio" ? "neto" : "bruto")),
     };
     saveFacturas(store);
     return json(res, 200, { ok: true, ...facturaConfigCliente(store, slug) });

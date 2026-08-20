@@ -1603,7 +1603,10 @@ function facturaCliBlock(c, pIdx){
   var r = FACTURAS.registros.find(function(x){ return x.slug === c.slug && x.periodo === periodo; });
   var items = (r && r.items && r.items.length) ? r.items : [{ label: '', monto: '' }];
   var total = items.reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
-  var com = total * (Number(c.comisionPct) || 0) / 100;
+  var ret = total * (Number(c.retencionPct) || 0) / 100;
+  var neto = total - ret;
+  var base = c.baseComision === 'neto' ? neto : total;
+  var com = base * (Number(c.comisionPct) || 0) / 100;
   var cad = com / (Number(c.socios) || 2);
   var abierto = FAC_CLI_OPEN[k] !== false;
   var itemsHtml = items.map(function(it){ return facItemRow(k, it.label || '', it.monto || ''); }).join('');
@@ -1612,6 +1615,7 @@ function facturaCliBlock(c, pIdx){
       '<svg class="nav-caret mini-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '<b class="fac-cli-name">' + esc(c.name) + '</b>' +
       '<span class="fac-tot">Total <b id="facTot_' + k + '">' + moneyFmt(total) + '</b></span>' +
+      '<span class="fac-tot">Neto acred. <b id="facNet_' + k + '">' + moneyFmt(neto) + '</b></span>' +
       '<span class="fac-tot">Comisión <b id="facCom_' + k + '">' + moneyFmt(com) + '</b></span>' +
       '<span class="fac-tot">C/socio <b id="facCad_' + k + '">' + moneyFmt(cad) + '</b></span>' +
     '</div>' +
@@ -1619,6 +1623,8 @@ function facturaCliBlock(c, pIdx){
       '<div class="fac-cli-cfg">' +
         '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + k + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
         '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + k + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"></label>' +
+        '<label class="fac-cfg">Retención <input class="inp mini fac-in" id="facRet_' + k + '" inputmode="decimal" value="' + (c.retencionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
+        '<label class="fac-cfg">Comisión sobre <select class="inp mini" id="facBase_' + k + '" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"><option value="bruto"' + (c.baseComision !== 'neto' ? ' selected' : '') + '>Bruto</option><option value="neto"' + (c.baseComision === 'neto' ? ' selected' : '') + '>Neto acred.</option></select></label>' +
         '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + k + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + k + '\')"></label>' +
         '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + k + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + k + '\')"></label>' +
       '</div>' +
@@ -1634,9 +1640,13 @@ function facturaRecalcRow(k){
   if (cont) cont.querySelectorAll('.fac-monto').forEach(function(inp){ total += facturaParseMonto(inp.value); });
   var pct = facturaParseMonto(document.getElementById('facPct_' + k).value);
   var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + k).value) || 2));
-  var com = total * pct / 100, cad = com / soc;
+  var retPct = facturaParseMonto((document.getElementById('facRet_' + k) || {}).value);
+  var baseEl = document.getElementById('facBase_' + k);
+  var ret = total * retPct / 100, neto = total - ret;
+  var base = (baseEl && baseEl.value === 'neto') ? neto : total;
+  var com = base * pct / 100, cad = com / soc;
   var set = function(id, v){ var e = document.getElementById(id + k); if (e) e.textContent = moneyFmt(v); };
-  set('facTot_', total); set('facCom_', com); set('facCad_', cad);
+  set('facTot_', total); set('facNet_', neto); set('facCom_', com); set('facCad_', cad);
 }
 function addFacturaItem(k){
   var cont = document.getElementById('facItems_' + k); if (!cont) return;
@@ -1669,15 +1679,19 @@ async function borrarPeriodo(pIdx){
 async function saveFacturaConfig(k, slug){
   var pct = facturaParseMonto(document.getElementById('facPct_' + k).value);
   var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + k).value) || 2));
-  var res = await req('POST', '/api/facturas/config', { slug: slug, comisionPct: pct, socios: soc });
+  var ret = facturaParseMonto((document.getElementById('facRet_' + k) || {}).value);
+  var baseEl = document.getElementById('facBase_' + k);
+  var res = await req('POST', '/api/facturas/config', { slug: slug, comisionPct: pct, socios: soc, retencionPct: ret, baseComision: baseEl ? baseEl.value : 'bruto' });
   if (res.ok){
     var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
-    if (c){ c.comisionPct = res.data.comisionPct; c.socios = res.data.socios; }
+    if (c){ c.comisionPct = res.data.comisionPct; c.socios = res.data.socios; c.retencionPct = res.data.retencionPct; c.baseComision = res.data.baseComision; }
     // Actualiza y recalcula el cliente en TODOS los períodos visibles (config global).
     FACTURAS.periodos.forEach(function(_, i){
       var kk = i + '_' + slug;
       var pe = document.getElementById('facPct_' + kk); if (pe) pe.value = res.data.comisionPct;
       var se = document.getElementById('facSoc_' + kk); if (se) se.value = res.data.socios;
+      var re = document.getElementById('facRet_' + kk); if (re) re.value = res.data.retencionPct;
+      var be = document.getElementById('facBase_' + kk); if (be) be.value = res.data.baseComision;
       if (document.getElementById('facItems_' + kk)) facturaRecalcRow(kk);
     });
   }
