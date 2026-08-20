@@ -56,9 +56,18 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', facturas:'Facturas', soon:'Configuración general' };
+// Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
+// entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
+function togglePagosGroup(el){
+  var group = document.getElementById('navGroupPagos');
+  var enFacturas = document.getElementById('view-facturas').style.display !== 'none';
+  var colapsado = document.body.classList.contains('sidebar-collapsed');
+  if (!enFacturas || colapsado){ go('facturas', el); return; }
+  if (group) group.classList.toggle('open');
+}
 function go(v, el){
-  ['dash','users','clientes','nomencladores','informes','credencial','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','clientes','nomencladores','informes','credencial','facturas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -73,6 +82,8 @@ function go(v, el){
     var g = document.getElementById(id);
     if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
   });
+  var gPagos = document.getElementById('navGroupPagos');
+  if (gPagos){ gPagos.classList.toggle('open', v === 'facturas'); gPagos.classList.toggle('active', v === 'facturas'); }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
   if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
@@ -276,7 +287,7 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'facturas', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;

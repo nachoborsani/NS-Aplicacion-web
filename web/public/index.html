@@ -91,6 +91,16 @@
         <a onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V4a1 1 0 011-1zM7.5 14H10l1.5-3 2 5 1.5-2h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
         <a onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2zM9 7h7M9 11h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
         <a onclick="go('credencial',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1zM7 15h4M7 11h2m5-2h4m-4 4h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Credencial provisoria</a>
+        <div class="nav-group" id="navGroupPagos">
+          <button class="nav-parent" type="button" onclick="togglePagosGroup(this)">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 3h16v18l-2.5-1.5L15 21l-3-1.5L9 21l-2.5-1.5L4 21zM8 8h8M8 12h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Pagos</span>
+            <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="nav-sub">
+            <a class="client-nav-item" onclick="go('facturas', this)">Facturas</a>
+          </div>
+        </div>
         <div class="nav-section">clientes</div>
         <div class="nav-group" id="navGroupConsultorios">
           <button class="nav-parent" type="button" onclick="toggleClientGroup('consultorios', this)">
@@ -721,6 +731,14 @@
             </div>
             <div class="msg err" id="credError" style="display:none"></div>
             <div class="cred-result" id="credResult" style="display:none"></div>
+          </div>
+        </section>
+
+        <!-- PAGOS / FACTURAS -->
+        <section id="view-facturas" style="display:none">
+          <div class="card">
+            <h3>Facturas</h3>
+            <p class="nom-muted">Sección de pagos — facturas. En preparación: acá vamos a cargar y ver las facturas. Contame qué necesitás que muestre y lo armamos.</p>
           </div>
         </section>
 
