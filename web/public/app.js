@@ -56,7 +56,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', facturas:'Facturas', gastos:'Gastos', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 function togglePagosGroup(el){
@@ -67,13 +67,14 @@ function togglePagosGroup(el){
   if (group) group.classList.toggle('open');
 }
 function go(v, el){
-  ['dash','users','clientes','nomencladores','informes','credencial','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','users','clientes','nomencladores','informes','credencial','resumen','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'users') renderUsers();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
-  if (v === 'dash'){ updateDashClientsTile(); loadResultado(); }
+  if (v === 'dash') updateDashClientsTile();
+  if (v === 'resumen') loadResultado();
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'soon') loadGeneralDebitos();
@@ -85,7 +86,7 @@ function go(v, el){
     if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
   });
   var gPagos = document.getElementById('navGroupPagos');
-  var enAdmin = (v === 'facturas' || v === 'gastos');
+  var enAdmin = (v === 'resumen' || v === 'facturas' || v === 'gastos');
   if (gPagos){ gPagos.classList.toggle('open', enAdmin); gPagos.classList.toggle('active', enAdmin); }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
@@ -290,7 +291,7 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;

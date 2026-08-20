@@ -98,6 +98,7 @@
             <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <div class="nav-sub">
+            <a class="client-nav-item" onclick="go('resumen', this)">Resumen de cuenta</a>
             <a class="client-nav-item" onclick="go('facturas', this)">Facturas</a>
             <a class="client-nav-item" onclick="go('gastos', this)">Gastos</a>
           </div>
@@ -162,8 +163,10 @@
         <!-- DASHBOARD -->
         <section id="view-dash">
           <div class="page-head"><h1 id="dashHello">Buen día 👋</h1><p>Resumen del sistema — uso interno de NS.</p></div>
+        </section>
 
-          <!-- Dashboard financiero (admin) -->
+        <!-- ADMINISTRACIÓN / RESUMEN DE CUENTA -->
+        <section id="view-resumen" style="display:none">
           <div id="dashResultado" style="display:none">
             <div class="mescurso-card res-card">
               <div class="mescurso-head">
