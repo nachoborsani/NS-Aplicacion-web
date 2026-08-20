@@ -1441,8 +1441,29 @@ async function revealClientPami(){
   if (!res.ok || !res.data) return;
   var pass = document.getElementById('clientPamiPass');
   pass.value = res.data.pamiPassword || '';
+  pass.dataset.fromReveal = '1';
   pass.type = 'text';
   document.getElementById('clientPamiPassIco').innerHTML = EYE_OFF;
+}
+// Ojo del campo: revela la clave (la trae guardada si el campo está vacío) o la
+// oculta. Si lo revelado venía de la guardada, al ocultar limpia para que
+// "vacío = no cambiar" siga valiendo.
+async function toggleRevealClientPami(){
+  if (!ACTIVE_CLIENT) return;
+  var pass = document.getElementById('clientPamiPass');
+  var ico = document.getElementById('clientPamiPassIco');
+  if (pass.type === 'password'){
+    if (!pass.value){
+      var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami/credenciales');
+      if (res.ok && res.data && res.data.pamiPassword){ pass.value = res.data.pamiPassword; pass.dataset.fromReveal = '1'; }
+    }
+    pass.type = 'text';
+    if (ico) ico.innerHTML = EYE_OFF;
+  } else {
+    pass.type = 'password';
+    if (ico) ico.innerHTML = EYE_ON;
+    if (pass.dataset.fromReveal === '1'){ pass.value = ''; pass.dataset.fromReveal = ''; }
+  }
 }
 async function saveClientPami(){
   if (!ACTIVE_CLIENT) return;
