@@ -4480,25 +4480,6 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { connected: true, email: "", error: (e && e.message) || String(e) });
     }
   }
-  // Lector temporal (admin): inspecciona una planilla por id (para mapear columnas).
-  if (p === "/api/admin/leer-hoja" && req.method === "GET") {
-    const me = getSessionUser(req);
-    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
-    const cfg = loadGoogleCfg();
-    if (!cfg) return json(res, 200, { ok: false, error: "Google no está conectado." });
-    const id = String(url.searchParams.get("id") || "").trim();
-    if (!id) return json(res, 400, { error: "falta id" });
-    try {
-      const auth = gcreds.makeAuth(cfg);
-      const meta = await gcreds.getSheetMeta(auth, id);
-      const tab = String(url.searchParams.get("tab") || "").trim() || meta.tabs[0] || "";
-      const rango = String(url.searchParams.get("rango") || "").trim() || "A1:T12";
-      const filas = tab ? await gcreds.readValues(auth, id, tab, rango) : [];
-      return json(res, 200, { ok: true, titulo: meta.title, tabs: meta.tabs, tab, filas });
-    } catch (e) {
-      return json(res, 200, { ok: false, error: (e && e.message) || String(e) });
-    }
-  }
 
   // --- Módulo de credenciales por cliente (Médico de cabecera). ---
   // clientKey en la URL: "scheffelaar" (legacy, app+front) o el slug (ej.
