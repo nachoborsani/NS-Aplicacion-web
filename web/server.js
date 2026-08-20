@@ -137,6 +137,18 @@ function saveFacturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(facturasFile, JSON.stringify(store, null, 2));
 }
+// Avanza en 1 el mes de patrones MM-YY / MM/YYYY dentro de un texto (para clonar
+// las descripciones de facturas al período siguiente). "FACTURA 06-26" -> "07-26".
+function avanzarMesEnTexto(t) {
+  return String(t == null ? "" : t).replace(/\b(0[1-9]|1[0-2])([-/])(\d{4}|\d{2})\b/g, (m, mm, sep, yy) => {
+    let mes = parseInt(mm, 10) + 1;
+    let anio = parseInt(yy, 10);
+    if (mes > 12) { mes = 1; anio += 1; }
+    const mmStr = String(mes).padStart(2, "0");
+    const yyStr = yy.length === 2 ? String(anio % 100).padStart(2, "0") : String(anio);
+    return mmStr + sep + yyStr;
+  });
+}
 // Config de facturación por cliente, con defaults: Caballito reparte en 3 (entra
 // el Dr Dubezarsky), el resto en 2 (Nacho/Seba).
 function facturaConfigCliente(store, slug) {
@@ -3522,7 +3534,8 @@ const server = http.createServer(async (req, res) => {
     saveFacturas(store);
     return json(res, 200, { ok: true, minimoGanancias: store.minimoGanancias });
   }
-  // Agregar un período nuevo a la lista.
+  // Agregar un período nuevo. Si viene copiarDe, clona las facturas de ese período
+  // (mismas descripciones con el mes +1, montos vacíos) para arrancar el mes.
   if (p === "/api/facturas/periodo" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
@@ -3531,8 +3544,36 @@ const server = http.createServer(async (req, res) => {
     if (!valor) return json(res, 400, { error: "Poné un nombre de período." });
     const store = loadFacturas();
     if (store.periodos.indexOf(valor) < 0) store.periodos.push(valor);
+    const copiarDe = String((b && b.copiarDe) || "").trim();
+    if (copiarDe && copiarDe !== valor) {
+      const fuente = store.registros.filter((r) => r.periodo === copiarDe);
+      for (const r of fuente) {
+        // Evita duplicar si ya existe ese cliente en el nuevo período.
+        if (store.registros.find((x) => x.slug === r.slug && x.periodo === valor)) continue;
+        store.registros.push({
+          id: crypto.randomUUID(), creado: new Date().toISOString(),
+          slug: r.slug, periodo: valor,
+          items: (r.items || []).map((it) => ({ label: avanzarMesEnTexto(it.label || ""), monto: 0 })),
+          fechaCobro: "", subida: false,
+        });
+      }
+    }
     saveFacturas(store);
-    return json(res, 200, { ok: true, periodos: store.periodos });
+    return json(res, 200, { ok: true, periodos: store.periodos, registros: store.registros });
+  }
+  // Renombrar un período (en la lista y en todos sus registros).
+  if (p === "/api/facturas/periodo/renombrar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const viejo = String((b && b.viejo) || "").trim();
+    const nuevo = String((b && b.nuevo) || "").trim();
+    if (!nuevo) return json(res, 400, { error: "Poné un nombre." });
+    const store = loadFacturas();
+    store.periodos = store.periodos.map((x) => (x === viejo ? nuevo : x));
+    store.registros.forEach((r) => { if (r.periodo === viejo) r.periodo = nuevo; });
+    saveFacturas(store);
+    return json(res, 200, { ok: true, periodos: store.periodos, registros: store.registros });
   }
   // Borrar un período (y sus facturas de ese período).
   if (p === "/api/facturas/periodo/borrar" && req.method === "POST") {

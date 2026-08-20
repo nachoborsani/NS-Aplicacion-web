@@ -1587,8 +1587,28 @@ async function agregarPeriodo(){
   var nombre = prompt('Nombre del nuevo período (ej: JULIO, AGOSTO, etc.):');
   if (!nombre) return;
   nombre = nombre.trim(); if (!nombre) return;
-  var res = await req('POST', '/api/facturas/periodo', { valor: nombre });
-  if (res.ok){ FACTURAS.periodos = res.data.periodos || []; FAC_PER_OPEN[nombre] = true; renderFacturas(); }
+  // Copia la estructura del período más nuevo (facturas con el mes +1, montos vacíos).
+  var copiarDe = FACTURAS.periodos.length ? FACTURAS.periodos[FACTURAS.periodos.length - 1] : '';
+  var res = await req('POST', '/api/facturas/periodo', { valor: nombre, copiarDe: copiarDe });
+  if (res.ok){
+    FACTURAS.periodos = res.data.periodos || [];
+    if (res.data.registros) FACTURAS.registros = res.data.registros;
+    FAC_PER_OPEN[nombre] = true;
+    renderFacturas();
+  }
+}
+async function renombrarPeriodo(pIdx){
+  var viejo = FACTURAS.periodos[pIdx];
+  var nuevo = prompt('Nuevo nombre del período:', viejo);
+  if (nuevo == null) return;
+  nuevo = nuevo.trim(); if (!nuevo || nuevo === viejo) return;
+  var res = await req('POST', '/api/facturas/periodo/renombrar', { viejo: viejo, nuevo: nuevo });
+  if (res.ok){
+    FACTURAS.periodos = res.data.periodos || [];
+    if (res.data.registros) FACTURAS.registros = res.data.registros;
+    if (FAC_PER_OPEN[viejo]){ delete FAC_PER_OPEN[viejo]; FAC_PER_OPEN[nuevo] = true; }
+    renderFacturas();
+  }
 }
 var FAC_GRUPOS = [
   { key: 'consultorios', titulo: 'Consultorios' },
@@ -1616,6 +1636,7 @@ function facturaPeriodoSection(pIdx){
     '<div class="factura-group-head" onclick="togglePeriodo(' + pIdx + ')">' +
       '<svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
       '<h4>' + esc(periodo) + '</h4>' +
+      '<button class="icon-btn mini" type="button" title="Renombrar período" onclick="event.stopPropagation();renombrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '<button class="icon-danger-btn mini" type="button" title="Borrar período" onclick="event.stopPropagation();borrarPeriodo(' + pIdx + ')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
     '</div>' +
     '<div class="factura-group-body">' + cuerpo + '</div>' +
