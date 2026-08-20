@@ -193,6 +193,7 @@
                 <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
                 <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
                 <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
+                <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios medicos</button>
                 <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
               </div>
 
@@ -470,6 +471,23 @@
                 </div>
                 </div>
               </section>
+
+              <section id="client-section-medicos" class="client-section" style="display:none">
+                <div class="client-card">
+                  <div class="client-card-head">
+                    <h3>Usuarios medicos</h3>
+                    <button class="btn btn-primary" type="button" onclick="openMedicoModal()">Agregar medico</button>
+                  </div>
+                  <p class="nom-muted">Medicos de este consultorio con su acceso PAMI. Mas adelante se van a usar para generar OME de especialista. La clave se guarda encriptada.</p>
+                  <div class="msg err" id="medicosError" style="display:none"></div>
+                  <div class="table-scroll">
+                    <table class="saved-report-table" id="medicosTable">
+                      <thead><tr><th>Nombre y apellido</th><th>Especialidad</th><th>Usuario</th><th>Clave</th><th>Telefono</th><th>Accion</th></tr></thead>
+                      <tbody id="medicosBody"><tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
           </section>
         </section>
 
@@ -713,6 +731,32 @@
             <div id="generalDebitosResumen"><div class="nom-muted">Cargando…</div></div>
           </div>
         </section>
+      </div>
+    </div>
+
+    <!-- ===== Modal: alta / edición de usuario médico ===== -->
+    <div class="scrim" id="medicoScrim" onclick="closeMedicoModal()"></div>
+    <div class="modal" id="medicoModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="medicoTitle">Nuevo medico</h3><button class="x" onclick="closeMedicoModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="medicoId">
+        <div class="field"><label>Nombre y apellido</label><input class="inp" id="medicoNombre" spellcheck="false"></div>
+        <div class="field"><label>Especialidad</label><input class="inp" id="medicoEspecialidad" spellcheck="false"></div>
+        <div class="field"><label>Usuario PAMI</label><input class="inp" id="medicoUsuario" spellcheck="false" autocomplete="off"></div>
+        <div class="field">
+          <label>Clave PAMI</label>
+          <div class="pwd-wrap">
+            <input class="inp" id="medicoClave" type="password" autocomplete="new-password">
+            <button type="button" class="pwd-eye" onclick="eyeToggle('medicoClave','medicoClaveIco')" aria-label="Ver"><svg id="medicoClaveIco" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          </div>
+          <div class="hint" id="medicoClaveHint">Se guarda encriptada.</div>
+        </div>
+        <div class="field"><label>Telefono</label><input class="inp" id="medicoTelefono" spellcheck="false" autocomplete="off"></div>
+        <div class="msg err" id="medicoModalError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeMedicoModal()">Cancelar</button>
+        <button class="btn btn-primary" id="medicoSaveBtn" onclick="saveMedico()">Guardar</button>
       </div>
     </div>
 

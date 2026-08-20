@@ -1345,13 +1345,18 @@ var CLIENT_SECTIONS = [
   { key:'basica',    sec:'client-section-basica',    tab:'clientTabBasica',    crumb:'Informacion basica' },
   { key:'dashboard', sec:'client-section-dashboard', tab:'clientTabDashboard', crumb:'Dashboard de reportes' },
   { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
+  { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios medicos' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' }
 ];
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
-// tienen reportes ni mes en curso: solo Info básica + Dashboard general.
+// tienen reportes ni mes en curso: solo Info básica + Dashboard general. Los
+// consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
-  return esMC ? ['basica', 'general'] : ['mescurso', 'basica', 'dashboard', 'reportes'];
+  if (esMC) return ['basica', 'general'];
+  var base = ['mescurso', 'basica', 'dashboard', 'reportes'];
+  if (ME && ME.role === 'admin') base.push('medicos');
+  return base;
 }
 // Muestra/oculta las pestañas según el tipo de cliente.
 function aplicarPestanasCliente(){
@@ -1383,6 +1388,7 @@ function setClientSection(section){
   // cambio de cliente.
   if (CLIENT_SECTION === 'mescurso') loadClientMesCurso();
   if (CLIENT_SECTION === 'general') renderClientGeneral();
+  if (CLIENT_SECTION === 'medicos') loadClientMedicos();
 }
 // El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
 // se muestra solo para ese cliente; el resto ve el placeholder.
@@ -1435,6 +1441,79 @@ async function saveClientPami(){
   document.getElementById('clientPamiPass').value = '';
   document.getElementById('clientPamiPass').placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
   msg.textContent = 'Acceso PAMI guardado.';
+}
+
+// ===== Usuarios médicos del consultorio (solo admin) =====
+var MEDICOS = [];
+async function loadClientMedicos(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('medicosError'); if (err) err.style.display = 'none';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos');
+  MEDICOS = (res.ok && res.data && res.data.medicos) ? res.data.medicos : [];
+  renderClientMedicos();
+}
+function renderClientMedicos(){
+  var body = document.getElementById('medicosBody'); if (!body) return;
+  if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr>'; return; }
+  body.innerHTML = MEDICOS.map(function(m){
+    var clave = m.tieneClave ? '•••••• guardada' : '<span class="nom-muted">sin clave</span>';
+    return '<tr>' +
+      '<td>' + esc(m.nombre) + '</td>' +
+      '<td>' + (esc(m.especialidad) || '-') + '</td>' +
+      '<td>' + (esc(m.usuario) || '-') + '</td>' +
+      '<td>' + clave + '</td>' +
+      '<td>' + (esc(m.telefono) || '-') + '</td>' +
+      '<td class="row-actions">' +
+        '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+        '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+function openMedicoModal(id){
+  var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;
+  document.getElementById('medicoId').value = m ? m.id : '';
+  document.getElementById('medicoNombre').value = m ? (m.nombre || '') : '';
+  document.getElementById('medicoEspecialidad').value = m ? (m.especialidad || '') : '';
+  document.getElementById('medicoUsuario').value = m ? (m.usuario || '') : '';
+  document.getElementById('medicoTelefono').value = m ? (m.telefono || '') : '';
+  var clave = document.getElementById('medicoClave'); clave.value = ''; clave.type = 'password';
+  document.getElementById('medicoClaveIco').innerHTML = EYE_ON;
+  document.getElementById('medicoClaveHint').textContent = (m && m.tieneClave) ? 'Ya hay una clave guardada — dejá vacío para no cambiarla.' : 'Se guarda encriptada.';
+  document.getElementById('medicoTitle').textContent = m ? 'Editar medico' : 'Nuevo medico';
+  document.getElementById('medicoModalError').textContent = '';
+  showModal('medicoModal', 'medicoScrim');
+  document.getElementById('medicoNombre').focus();
+}
+function closeMedicoModal(){ hideModal('medicoModal', 'medicoScrim'); }
+async function saveMedico(){
+  if (!ACTIVE_CLIENT) return;
+  var errBox = document.getElementById('medicoModalError'); errBox.textContent = '';
+  var nombre = document.getElementById('medicoNombre').value.trim();
+  if (!nombre){ errBox.textContent = 'El nombre y apellido es obligatorio.'; return; }
+  var btn = document.getElementById('medicoSaveBtn'); btn.disabled = true;
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos', {
+    id: document.getElementById('medicoId').value || '',
+    nombre: nombre,
+    especialidad: document.getElementById('medicoEspecialidad').value.trim(),
+    usuario: document.getElementById('medicoUsuario').value.trim(),
+    clave: document.getElementById('medicoClave').value,
+    telefono: document.getElementById('medicoTelefono').value.trim(),
+  });
+  btn.disabled = false;
+  if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  MEDICOS = (res.data && res.data.medicos) || [];
+  renderClientMedicos();
+  closeMedicoModal();
+}
+async function deleteMedico(id){
+  if (!ACTIVE_CLIENT || !id) return;
+  var m = MEDICOS.find(function(x){ return x.id === id; });
+  if (!confirm('¿Borrar a ' + ((m && m.nombre) || 'este medico') + '?')) return;
+  var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id));
+  if (!res.ok){ var err = document.getElementById('medicosError'); if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo borrar.'; } return; }
+  MEDICOS = (res.data && res.data.medicos) || [];
+  renderClientMedicos();
 }
 // Panel "Dashboard mes en curso": dos cuadros resumen (mes en curso desde la
 // bandeja de la app + mes pasado sin cerrar desde el último reporte con débitos

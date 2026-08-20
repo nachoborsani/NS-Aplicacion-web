@@ -211,6 +211,10 @@ class NSWebClient:
                              body={"revisadas": int(revisadas), "completados": int(completados),
                                    "sinBenef": int(sin_benef), "errores": int(errores), "error": str(error or "")})
 
+    def avisar(self, texto: str) -> dict:
+        """Manda un aviso por Telegram (la web tiene el token; la app no lo conoce)."""
+        return self._request("POST", "/api/avisar", body={"texto": str(texto)})
+
     def upload_bandeja(self, slug: str, month: str, rows: list[dict],
                        columns: list[str] | None = None, month_label: str = "",
                        generated_at: str = "") -> dict:

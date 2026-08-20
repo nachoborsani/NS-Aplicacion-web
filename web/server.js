@@ -30,6 +30,9 @@ const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
 const clientCredsFile = path.join(dataDir, "client_credentials.json");
+// Usuarios médicos por cliente consultorio (para generar OME de especialista más
+// adelante). La clave va encriptada, igual que las claves PAMI del cliente.
+const clientMedicosFile = path.join(dataDir, "client_medicos.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -97,6 +100,18 @@ function loadClientCreds() {
 function saveClientCreds(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientCredsFile, JSON.stringify(store, null, 2));
+}
+function loadClientMedicos() {
+  try { const parsed = JSON.parse(fs.readFileSync(clientMedicosFile, "utf8")); return parsed && typeof parsed === "object" ? parsed : {}; }
+  catch { return {}; }
+}
+function saveClientMedicos(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientMedicosFile, JSON.stringify(store, null, 2));
+}
+// Vista pública de un médico (sin la clave; solo si tiene una guardada).
+function medicoPublico(m) {
+  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc };
 }
 // Bandeja del mes por cliente (la sube la app cada noche desde PAMI).
 function loadClientBandejas() {
@@ -3331,6 +3346,78 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, pamiUser, hasPassword: !!(store[slug] && store[slug].pamiPassEnc) });
   }
 
+  // Usuarios médicos del cliente (consultorio). Admin-only: manejan usuario/clave.
+  // La clave se guarda encriptada y nunca se devuelve en el listado.
+  const clientMedicosMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos$/);
+  if (clientMedicosMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede ver o cambiar los usuarios médicos." });
+    const slug = decodeURIComponent(clientMedicosMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    if (req.method === "GET") {
+      return json(res, 200, { medicos: lista.map(medicoPublico) });
+    }
+    const body = await readBody(req);
+    const nombre = String(body.nombre || "").trim();
+    if (!nombre) return json(res, 400, { error: "El nombre y apellido es obligatorio." });
+    const datos = {
+      nombre,
+      especialidad: String(body.especialidad || "").trim(),
+      usuario: String(body.usuario || "").trim(),
+      telefono: String(body.telefono || "").trim(),
+    };
+    const id = String(body.id || "").trim();
+    if (id) {
+      const m = lista.find((x) => x.id === id);
+      if (!m) return json(res, 404, { error: "Médico no encontrado." });
+      Object.assign(m, datos);
+      // Clave vacía en edición = se deja la que estaba.
+      if (typeof body.clave === "string" && body.clave.length) m.claveEnc = encryptSecret(body.clave);
+    } else {
+      const nuevo = Object.assign({ id: crypto.randomUUID() }, datos);
+      if (typeof body.clave === "string" && body.clave.length) nuevo.claveEnc = encryptSecret(body.clave);
+      lista.push(nuevo);
+    }
+    store[slug] = lista;
+    saveClientMedicos(store);
+    return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
+  }
+  // Borrar un médico.
+  const clientMedicoDelMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)$/);
+  if (clientMedicoDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede borrar usuarios médicos." });
+    const slug = decodeURIComponent(clientMedicoDelMatch[1]);
+    const id = decodeURIComponent(clientMedicoDelMatch[2]);
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    const idx = lista.findIndex((x) => x.id === id);
+    if (idx < 0) return json(res, 404, { error: "Médico no encontrado." });
+    lista.splice(idx, 1);
+    store[slug] = lista;
+    saveClientMedicos(store);
+    return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
+  }
+  // Credenciales de un médico (usuario + clave desencriptada) — admin, para que la
+  // app genere OME de especialista. Análogo a /pami/credenciales del cliente.
+  const clientMedicoCredMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)\/credenciales$/);
+  if (clientMedicoCredMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const slug = decodeURIComponent(clientMedicoCredMatch[1]);
+    const id = decodeURIComponent(clientMedicoCredMatch[2]);
+    const lista = loadClientMedicos()[slug] || [];
+    const m = (Array.isArray(lista) ? lista : []).find((x) => x.id === id);
+    if (!m) return json(res, 404, { error: "Médico no encontrado." });
+    return json(res, 200, { nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", clave: decryptSecret(m.claveEnc), telefono: m.telefono || "" });
+  }
+
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
   // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las
   // filas crudas, solo los totales tipo Julio). Va ANTES del match de /bandeja.
@@ -4084,6 +4171,17 @@ const server = http.createServer(async (req, res) => {
     if (!chatId) return json(res, 400, { error: "falta chatId" });
     saveTelegramCfg({ chatId, nombre: String((b && b.nombre) || "") });
     return json(res, 200, { ok: true });
+  }
+  // Aviso genérico: cualquier proceso autenticado (ej. el barrido de bandeja de la
+  // app) manda su resumen por Telegram sin conocer el token.
+  if (p === "/api/avisar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const texto = String((b && b.texto) || "").trim();
+    if (!texto) return json(res, 400, { error: "falta texto" });
+    const ok = await avisarTelegram(texto.slice(0, 3500));
+    return json(res, 200, { ok });
   }
   // Manda un mensaje de prueba al chat guardado.
   if (p === "/api/admin/telegram/probar" && req.method === "POST") {

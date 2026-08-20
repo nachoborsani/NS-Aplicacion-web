@@ -35,6 +35,9 @@ _TRANSMIT_TIMEOUT_S = 1800
 # hasta hoy. Antes de esa hora (ej. una corrida manual al mediodía): read-only,
 # hasta ayer. El schedule por defecto es una sola corrida a las 20:00.
 _HORA_FIN_DIA_H = 19
+# Clientes que NO se bajan en el barrido automático (por ahora, por decisión del
+# user). Se pueden bajar igual pidiéndolos explícitamente por only_slugs.
+EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc"}
 
 
 def _current_period() -> str:
@@ -276,7 +279,14 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
 
     results: list[dict] = []
     for client in web.list_clients():
-        if only_slugs and client.get("slug") not in only_slugs:
+        slug = client.get("slug")
+        if only_slugs and slug not in only_slugs:
+            continue
+        # Clientes que NO se bajan en el barrido automático (por decisión del user).
+        # Si se piden explícitamente por only_slugs, igual se bajan.
+        if not only_slugs and slug in EXCLUIDOS_AUTO:
+            if progress:
+                progress(f"{client.get('name', slug)}: omitido (excluido del automático)")
             continue
         res = sync_client(web, client, period, progress=progress, transmitir=transmitir)
         # Reportamos el resultado (ok/error + transmisión) para el indicador de salud.
@@ -298,6 +308,25 @@ if __name__ == "__main__":  # pragma: no cover
     period_arg = sys.argv[1] if len(sys.argv) > 1 else None
     slugs_arg = sys.argv[2].split(",") if len(sys.argv) > 2 else None
     print(f"Sincronizando bandeja {period_arg or _current_period()} …")
-    for r in sync_all(period_arg, only_slugs=slugs_arg, progress=lambda m: print("  ", m)):
+    resultados = sync_all(period_arg, only_slugs=slugs_arg, progress=lambda m: print("  ", m))
+    for r in resultados:
         estado = f"OK — {r.get('count')} filas" if r.get("ok") else f"FALLO — {r.get('error')}"
         print(f"  {r['name'][:32]:32} -> {estado}")
+
+    # Aviso por Telegram: que esté todo ok (o qué clientes fallaron).
+    try:
+        ok = [r for r in resultados if r.get("ok")]
+        fallo = [r for r in resultados if not r.get("ok")]
+        hoy = _current_period()
+        if fallo:
+            detalle = ", ".join(f"{r['name']} ({r.get('error') or 'error'})" for r in fallo)
+            msg = f"⚠️ <b>Bandejas</b> {hoy}: {len(ok)}/{len(resultados)} ok. Fallaron: {detalle}"
+        else:
+            msg = f"✅ <b>Bandejas</b> {hoy}: todo ok — {len(ok)} clientes actualizados."
+        cfg = load_config()
+        w = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
+        w.login(cfg.get("username", ""), cfg.get("password", ""))
+        w.avisar(msg)
+        print("  → aviso Telegram enviado")
+    except Exception as e:  # noqa: BLE001 - el aviso no debe cortar el barrido
+        print(f"  → no pude enviar el aviso Telegram: {e!r}")
