@@ -77,6 +77,7 @@ function go(v, el){
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'soon') loadGeneralDebitos();
+  if (v === 'facturas') loadFacturas();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
     var g = document.getElementById(id);
@@ -1528,6 +1529,131 @@ function blanquearMedicoClave(id){
   var m = MEDICOS.find(function(x){ return x.id === id; });
   if (m && m.usuario){ try { navigator.clipboard.writeText(m.usuario); } catch (e){} }
   window.open(PAMI_BLANQUEO_URL, '_blank', 'noopener');
+}
+
+// ===== Pagos → Facturas (solo admin) =====
+var FACTURAS = { clientes: [], registros: [] };
+function facturaParseMonto(v){
+  // Acepta "2.678.400,00" o "2678400.00" o "2678400".
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  if (s.indexOf(',') >= 0){ s = s.replace(/\./g, '').replace(',', '.'); }
+  var n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+async function loadFacturas(){
+  var err = document.getElementById('facturasError'); if (err) err.style.display = 'none';
+  var res = await api('/api/facturas');
+  if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
+  FACTURAS = { clientes: res.data.clientes || [], registros: res.data.registros || [] };
+  renderFacturas();
+}
+function renderFacturas(){
+  var box = document.getElementById('facturasBody'); if (!box) return;
+  if (!FACTURAS.clientes.length){ box.innerHTML = '<p class="nom-muted">No hay clientes.</p>'; return; }
+  box.innerHTML = FACTURAS.clientes.map(function(c){
+    var regs = FACTURAS.registros.filter(function(r){ return r.slug === c.slug; });
+    var filas = regs.map(function(r){
+      var total = (r.items || []).reduce(function(a, it){ return a + (Number(it.monto) || 0); }, 0);
+      var comision = total * (Number(c.comisionPct) || 0) / 100;
+      var cadaUno = comision / (Number(c.socios) || 2);
+      var detalle = (r.items || []).map(function(it){ return esc(it.label || '') + (it.monto ? ' ' + moneyFmt(it.monto) : ''); }).join(' · ') || '<span class="nom-muted">sin detalle</span>';
+      return '<tr>' +
+        '<td>' + (esc(r.periodo) || '-') + '</td>' +
+        '<td>' + detalle + '</td>' +
+        '<td class="num"><b>' + moneyFmt(total) + '</b></td>' +
+        '<td class="num">' + moneyFmt(comision) + '</td>' +
+        '<td class="num">' + moneyFmt(cadaUno) + ' <span class="nom-muted">×' + (Number(c.socios) || 2) + '</span></td>' +
+        '<td class="num"><label class="chk mini"><input type="checkbox" ' + (r.cobrado ? 'checked' : '') + ' onchange="toggleFacturaCobrado(\'' + r.id + '\', this.checked)"> </label></td>' +
+        '<td class="row-actions">' +
+          '<button class="icon-btn mini" type="button" title="Editar" onclick="openFacturaModal(\'' + c.slug + '\',\'' + r.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+          '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteFactura(\'' + r.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="factura-cli">' +
+      '<div class="factura-cli-head">' +
+        '<h4>' + esc(c.name) + '</h4>' +
+        '<label class="factura-cfg">Comisión <input class="inp mini" id="facPct_' + c.slug + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" onchange="saveFacturaConfig(\'' + c.slug + '\')" style="width:70px">%</label>' +
+        '<label class="factura-cfg">Socios <input class="inp mini" id="facSoc_' + c.slug + '" inputmode="numeric" value="' + (c.socios || 2) + '" onchange="saveFacturaConfig(\'' + c.slug + '\')" style="width:56px"></label>' +
+        '<button class="btn btn-primary btn-sm" type="button" onclick="openFacturaModal(\'' + c.slug + '\')">+ Factura</button>' +
+      '</div>' +
+      (regs.length
+        ? '<div class="table-scroll"><table class="saved-report-table facturas-table"><thead><tr><th>Período</th><th>Detalle</th><th class="num">Total</th><th class="num">Comisión</th><th class="num">C/socio</th><th class="num">Cobr.</th><th>Acción</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
+        : '<p class="nom-muted" style="margin:6px 0 0">Sin facturas cargadas.</p>') +
+    '</div>';
+  }).join('');
+}
+async function saveFacturaConfig(slug){
+  var pct = facturaParseMonto(document.getElementById('facPct_' + slug).value);
+  var soc = Math.max(1, Math.round(Number(document.getElementById('facSoc_' + slug).value) || 2));
+  var res = await req('POST', '/api/facturas/config', { slug: slug, comisionPct: pct, socios: soc });
+  if (res.ok){
+    var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
+    if (c){ c.comisionPct = res.data.comisionPct; c.socios = res.data.socios; }
+    renderFacturas();
+  }
+}
+function openFacturaModal(slug, id){
+  var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; });
+  var r = id ? FACTURAS.registros.find(function(x){ return x.id === id; }) : null;
+  document.getElementById('facturaSlug').value = slug;
+  document.getElementById('facturaId').value = r ? r.id : '';
+  document.getElementById('facturaCliente').value = c ? c.name : '';
+  document.getElementById('facturaPeriodo').value = r ? (r.periodo || '') : '';
+  var it = (r && r.items) || [];
+  document.getElementById('facturaLabel1').value = it[0] ? (it[0].label || '') : '';
+  document.getElementById('facturaMonto1').value = it[0] ? (it[0].monto || '') : '';
+  document.getElementById('facturaLabel2').value = it[1] ? (it[1].label || '') : '';
+  document.getElementById('facturaMonto2').value = it[1] ? (it[1].monto || '') : '';
+  document.getElementById('facturaCobrado').checked = !!(r && r.cobrado);
+  document.getElementById('facturaTitle').textContent = r ? 'Editar factura' : 'Nueva factura';
+  document.getElementById('facturaModalError').textContent = '';
+  facturaPreview();
+  showModal('facturaModal', 'facturaScrim');
+  document.getElementById('facturaPeriodo').focus();
+}
+function closeFacturaModal(){ hideModal('facturaModal', 'facturaScrim'); }
+function facturaPreview(){
+  var slug = document.getElementById('facturaSlug').value;
+  var c = FACTURAS.clientes.find(function(x){ return x.slug === slug; }) || { comisionPct: 0, socios: 2 };
+  var total = facturaParseMonto(document.getElementById('facturaMonto1').value) + facturaParseMonto(document.getElementById('facturaMonto2').value);
+  var comision = total * (Number(c.comisionPct) || 0) / 100;
+  var cadaUno = comision / (Number(c.socios) || 2);
+  document.getElementById('facturaCalc').innerHTML =
+    'Total <b>' + moneyFmt(total) + '</b> · Comisión (' + (c.comisionPct || 0) + '%) <b>' + moneyFmt(comision) + '</b> · Por socio (÷' + (c.socios || 2) + ') <b>' + moneyFmt(cadaUno) + '</b>';
+}
+async function saveFactura(){
+  var errBox = document.getElementById('facturaModalError'); errBox.textContent = '';
+  var items = [
+    { label: document.getElementById('facturaLabel1').value.trim(), monto: facturaParseMonto(document.getElementById('facturaMonto1').value) },
+    { label: document.getElementById('facturaLabel2').value.trim(), monto: facturaParseMonto(document.getElementById('facturaMonto2').value) },
+  ].filter(function(it){ return it.label || it.monto; });
+  if (!items.length){ errBox.textContent = 'Cargá al menos una factura con monto.'; return; }
+  var btn = document.getElementById('facturaSaveBtn'); btn.disabled = true;
+  var res = await req('POST', '/api/facturas', {
+    id: document.getElementById('facturaId').value || '',
+    slug: document.getElementById('facturaSlug').value,
+    periodo: document.getElementById('facturaPeriodo').value.trim(),
+    items: items,
+    cobrado: document.getElementById('facturaCobrado').checked,
+  });
+  btn.disabled = false;
+  if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  FACTURAS.registros = res.data.registros || [];
+  renderFacturas();
+  closeFacturaModal();
+}
+async function toggleFacturaCobrado(id, cobrado){
+  var r = FACTURAS.registros.find(function(x){ return x.id === id; });
+  if (!r) return;
+  var res = await req('POST', '/api/facturas', { id: id, slug: r.slug, periodo: r.periodo, items: r.items, cobrado: cobrado });
+  if (res.ok){ FACTURAS.registros = res.data.registros || []; }
+}
+async function deleteFactura(id){
+  if (!confirm('¿Borrar esta factura?')) return;
+  var res = await req('DELETE', '/api/facturas/' + encodeURIComponent(id));
+  if (res.ok){ FACTURAS.registros = res.data.registros || []; renderFacturas(); }
 }
 function openMedicoModal(id){
   var m = id ? MEDICOS.find(function(x){ return x.id === id; }) : null;

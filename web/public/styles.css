@@ -906,3 +906,19 @@
   @media(min-width:981px) and (max-width:1340px){
     .nom-filters{grid-template-columns:repeat(3,minmax(0,1fr))}
   }
+
+  /* --- Pagos / Facturas --- */
+  .factura-cli{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0}
+  .factura-cli-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .factura-cli-head h4{margin:0;font-size:15px;flex:1 1 180px}
+  .factura-cfg{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2)}
+  .inp.mini{padding:6px 8px;font-size:13px;height:auto}
+  .btn-sm{padding:6px 12px;font-size:13px}
+  .facturas-table td.num,.facturas-table th.num{text-align:right;white-space:nowrap}
+  .factura-item{display:flex;gap:8px}
+  .factura-item .inp:first-child{flex:1 1 auto}
+  .factura-item .inp:last-child{flex:0 0 130px}
+  .factura-calc{margin-top:12px;padding:10px 12px;background:var(--soft,rgba(0,0,0,.03));border-radius:8px;font-size:13.5px;color:var(--text-2)}
+  .factura-calc b{color:var(--text)}
+  .chk.mini{margin:0;justify-content:center}
+  .chk.mini input{width:16px;height:16px}

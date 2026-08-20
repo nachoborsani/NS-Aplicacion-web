@@ -33,6 +33,9 @@ const clientCredsFile = path.join(dataDir, "client_credentials.json");
 // Usuarios médicos por cliente consultorio (para generar OME de especialista más
 // adelante). La clave va encriptada, igual que las claves PAMI del cliente.
 const clientMedicosFile = path.join(dataDir, "client_medicos.json");
+// Facturación por cliente (panel Pagos → Facturas): % de comisión y nº de socios
+// por cliente, más los registros de facturas cargadas por período.
+const facturasFile = path.join(dataDir, "facturas.json");
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -112,6 +115,21 @@ function saveClientMedicos(store) {
 // Vista pública de un médico (sin la clave; solo si tiene una guardada).
 function medicoPublico(m) {
   return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc };
+}
+function loadFacturas() {
+  try { const j = JSON.parse(fs.readFileSync(facturasFile, "utf8")); return { config: j.config || {}, registros: Array.isArray(j.registros) ? j.registros : [] }; }
+  catch { return { config: {}, registros: [] }; }
+}
+function saveFacturas(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(facturasFile, JSON.stringify(store, null, 2));
+}
+// Config de facturación por cliente, con defaults: Caballito reparte en 3 (entra
+// el Dr Dubezarsky), el resto en 2 (Nacho/Seba).
+function facturaConfigCliente(store, slug) {
+  const c = store.config[slug] || {};
+  const sociosDefault = slug === "caballito-pediatrico" ? 3 : 2;
+  return { comisionPct: Number(c.comisionPct) || 0, socios: Number(c.socios) || sociosDefault };
 }
 // Bandeja del mes por cliente (la sube la app cada noche desde PAMI).
 function loadClientBandejas() {
@@ -3416,6 +3434,71 @@ const server = http.createServer(async (req, res) => {
     const m = (Array.isArray(lista) ? lista : []).find((x) => x.id === id);
     if (!m) return json(res, 404, { error: "Médico no encontrado." });
     return json(res, 200, { nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", clave: decryptSecret(m.claveEnc), telefono: m.telefono || "" });
+  }
+
+  // --- Facturas (panel Pagos) — admin-only ---
+  if (p === "/api/facturas" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const store = loadFacturas();
+    const clientes = loadClientsStore().map((c) => ({ slug: c.slug, name: c.name, ...facturaConfigCliente(store, c.slug) }));
+    return json(res, 200, { clientes, registros: store.registros });
+  }
+  // Guardar la config de facturación de un cliente (% comisión, nº de socios).
+  if (p === "/api/facturas/config" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const slug = String((b && b.slug) || "").trim();
+    if (!slug) return json(res, 400, { error: "falta slug" });
+    const store = loadFacturas();
+    store.config[slug] = {
+      comisionPct: Math.max(0, Number(b.comisionPct) || 0),
+      socios: Math.max(1, Math.round(Number(b.socios) || 2)),
+    };
+    saveFacturas(store);
+    return json(res, 200, { ok: true, ...facturaConfigCliente(store, slug) });
+  }
+  // Crear o actualizar un registro de factura (1 o 2 ítems por período).
+  if (p === "/api/facturas" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const slug = String((b && b.slug) || "").trim();
+    if (!slug) return json(res, 400, { error: "falta slug" });
+    const items = (Array.isArray(b.items) ? b.items : [])
+      .map((it) => ({ label: String((it && it.label) || "").trim(), monto: Math.max(0, Number(it && it.monto) || 0) }))
+      .filter((it) => it.label || it.monto);
+    const reg = {
+      slug,
+      periodo: String((b && b.periodo) || "").trim(),
+      items,
+      cobrado: !!(b && b.cobrado),
+    };
+    const store = loadFacturas();
+    const id = String((b && b.id) || "").trim();
+    if (id) {
+      const r = store.registros.find((x) => x.id === id);
+      if (!r) return json(res, 404, { error: "Factura no encontrada." });
+      Object.assign(r, reg);
+    } else {
+      store.registros.push({ id: crypto.randomUUID(), creado: new Date().toISOString(), ...reg });
+    }
+    saveFacturas(store);
+    return json(res, 200, { ok: true, registros: store.registros });
+  }
+  // Borrar un registro de factura.
+  const facturaDelMatch = p.match(/^\/api\/facturas\/([^/]+)$/);
+  if (facturaDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const id = decodeURIComponent(facturaDelMatch[1]);
+    const store = loadFacturas();
+    const idx = store.registros.findIndex((x) => x.id === id);
+    if (idx < 0) return json(res, 404, { error: "Factura no encontrada." });
+    store.registros.splice(idx, 1);
+    saveFacturas(store);
+    return json(res, 200, { ok: true, registros: store.registros });
   }
 
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
