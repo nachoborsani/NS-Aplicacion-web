@@ -981,3 +981,8 @@
   /* Facturas: columnas automáticas según ancho (4 en pantalla ancha, 1 en celular) */
   .fac-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,430px),1fr))}
   @media(max-width:900px){ .fac-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))} }
+
+  /* Facturas: config en dos filas compactas (Com/Socios/Ret juntos) */
+  .fac-cli-cfg{flex-direction:column;align-items:flex-start;gap:8px}
+  .fac-cfg-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .fac-cli .fac-in{width:52px}

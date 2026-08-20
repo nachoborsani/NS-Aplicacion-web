@@ -1655,12 +1655,16 @@ function facturaCliBlock(c, pIdx){
     '</div>' +
     '<div class="fac-cli-body">' +
       '<div class="fac-cli-cfg">' +
-        '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + k + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
-        '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + k + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"></label>' +
-        '<label class="fac-cfg">Retención <input class="inp mini fac-in" id="facRet_' + k + '" inputmode="decimal" value="' + (c.retencionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
-        '<label class="fac-cfg">Comisión sobre <select class="inp mini" id="facBase_' + k + '" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"><option value="bruto"' + (c.baseComision !== 'neto' ? ' selected' : '') + '>Bruto</option><option value="neto"' + (c.baseComision === 'neto' ? ' selected' : '') + '>Neto acred.</option></select></label>' +
-        '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + k + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + k + '\')"></label>' +
-        '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + k + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + k + '\')"></label>' +
+        '<div class="fac-cfg-row">' +
+          '<label class="fac-cfg">Com. <input class="inp mini fac-in" id="facPct_' + k + '" inputmode="decimal" value="' + (c.comisionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
+          '<label class="fac-cfg">Socios <input class="inp mini fac-in" id="facSoc_' + k + '" inputmode="numeric" value="' + (c.socios || 2) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"></label>' +
+          '<label class="fac-cfg">Ret. <input class="inp mini fac-in" id="facRet_' + k + '" inputmode="decimal" value="' + (c.retencionPct || 0) + '" oninput="facturaRecalcRow(\'' + k + '\')" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')">%</label>' +
+        '</div>' +
+        '<div class="fac-cfg-row">' +
+          '<label class="fac-cfg">Comisión sobre <select class="inp mini" id="facBase_' + k + '" onchange="saveFacturaConfig(\'' + k + '\',\'' + c.slug + '\')"><option value="bruto"' + (c.baseComision !== 'neto' ? ' selected' : '') + '>Bruto</option><option value="neto"' + (c.baseComision === 'neto' ? ' selected' : '') + '>Neto acred.</option></select></label>' +
+          '<label class="fac-cfg">Cobro est. <input type="date" class="inp mini fac-fecha" id="facFec_' + k + '" value="' + esc(r && r.fechaCobro || '') + '" onchange="saveFacturaRow(\'' + k + '\')"></label>' +
+          '<label class="fac-cfg">Subida <input type="checkbox" class="fac-chk" id="facSub_' + k + '" ' + (r && r.subida ? 'checked' : '') + ' onchange="saveFacturaRow(\'' + k + '\')"></label>' +
+        '</div>' +
       '</div>' +
       '<div class="fac-items" id="facItems_' + k + '">' + itemsHtml + '</div>' +
       '<button class="btn btn-ghost btn-sm" type="button" onclick="addFacturaItem(\'' + k + '\')">+ Factura</button>' +
