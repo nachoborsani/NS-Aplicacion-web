@@ -1388,9 +1388,12 @@ var CLIENT_SECTIONS = [
 // tienen reportes ni mes en curso: solo Info básica + Dashboard general. Los
 // consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
+  var esClinica = (ME && ME.role === 'clinica');
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
   if (esMC) return ['general', 'basica'];
-  var base = ['mescurso', 'basica', 'dashboard', 'reportes'];
+  var base = ['mescurso', 'basica', 'dashboard'];
+  // La clínica NO adjunta reportes (solo lectura). El resto sí.
+  if (!esClinica) base.push('reportes');
   if (ME && ME.role === 'admin') base.push('medicos');
   return base;
 }
