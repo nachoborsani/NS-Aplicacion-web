@@ -1341,23 +1341,44 @@ function renderClientList(){
   var med = document.getElementById('clientNavListMedCab');
   var medGroup = document.getElementById('navGroupMedCab');
   if (!cons) return;
+  // --- Clínica: el menú son las SECCIONES de su propio centro (no una lista de
+  // clientes). El header del grupo pasa a ser el nombre del centro. ---
+  if (ME && ME.role === 'clinica' && ME.centro){
+    var centroCli = CLIENTS.filter(function(c){ return c.slug === ME.centro; })[0];
+    var hdrCli = document.querySelector('#navGroupConsultorios .nav-parent span');
+    if (hdrCli) hdrCli.textContent = centroCli ? centroCli.name : 'Mi centro';
+    var SECC_CLINICA = [
+      { key: 'mescurso',  label: 'Dashboard' },
+      { key: 'dashboard', label: 'Reportes' },
+      { key: 'medicos',   label: 'Médicos' },
+      { key: 'basica',    label: 'Datos del centro' },
+    ];
+    cons.innerHTML = SECC_CLINICA.map(function(s){
+      var active = (ACTIVE_CLIENT && CLIENT_SECTION === s.key) ? ' active' : '';
+      return '<button class="client-nav-item' + active + '" type="button" data-cli-section="' + s.key + '">' + s.label + '</button>';
+    }).join('');
+    if (med) med.innerHTML = '';
+    if (medGroup) medGroup.style.display = 'none';
+    cons.querySelectorAll('[data-cli-section]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();
+      });
+    });
+    return;
+  }
   var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
   };
-  // El usuario efectivo clínica (o el espejado) solo ve SU centro.
-  var lista = (ME && ME.role === 'clinica' && ME.centro) ? CLIENTS.filter(function(c){ return c.slug === ME.centro; }) : CLIENTS;
-  var consultorios = lista.filter(function(c){ return c.tipo !== 'med_cabecera'; });
-  var medCab = lista.filter(function(c){ return c.tipo === 'med_cabecera'; });
+  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera'; });
+  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera'; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
-  // Para la clínica, "Consultorios" no le dice nada (él ES su centro): lo rotulamos "Dashboard".
-  var esClinica = (ME && ME.role === 'clinica');
   var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
-  if (consHdr) consHdr.textContent = esClinica ? 'Dashboard' : 'Consultorios';
+  if (consHdr) consHdr.textContent = 'Consultorios';
   var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
-  if (medHdr) medHdr.textContent = esClinica ? 'Dashboard' : 'Médicos de cabecera';
+  if (medHdr) medHdr.textContent = 'Médicos de cabecera';
   document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
       go('clientes');
@@ -1394,7 +1415,8 @@ function clientSeccionesPermitidas(){
   var base = ['mescurso', 'basica', 'dashboard'];
   // La clínica NO adjunta reportes (solo lectura). El resto sí.
   if (!esClinica) base.push('reportes');
-  if (ME && ME.role === 'admin') base.push('medicos');
+  // Médicos: admin (edita) y la clínica (solo lectura, para verlos en su menú).
+  if ((ME && ME.role === 'admin') || esClinica) base.push('medicos');
   return base;
 }
 // Muestra/oculta las pestañas según el tipo de cliente.
@@ -1528,28 +1550,30 @@ function renderClientMedicos(){
   var ojo = '<svg viewBox="0 0 24 24" fill="none">' + EYE_ON + '</svg>';
   var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
   var llave = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M11 12l9-9M17 3l3 3M15 5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var esAdminMed = ME && ME.role === 'admin';
   body.innerHTML = MEDICOS.map(function(m){
     var claveCell;
     if (m.tieneClave){
       claveCell = '<span id="medClaveTxt_' + m.id + '">•••••• guardada</span>' +
-        ' <button class="icon-btn mini" type="button" title="Ver" onclick="revealMedicoClave(\'' + m.id + '\')">' + ojo + '</button>';
+        (esAdminMed ? ' <button class="icon-btn mini" type="button" title="Ver" onclick="revealMedicoClave(\'' + m.id + '\')">' + ojo + '</button>' : '');
     } else {
       claveCell = '<span class="nom-muted">sin clave</span>';
     }
     var usuarioCell = m.usuario
-      ? esc(m.usuario) + ' <button class="icon-btn mini" type="button" title="Copiar" onclick="copiarTexto(\'' + esc(m.usuario) + '\', this)">' + copiar + '</button>'
+      ? esc(m.usuario) + (esAdminMed ? ' <button class="icon-btn mini" type="button" title="Copiar" onclick="copiarTexto(\'' + esc(m.usuario) + '\', this)">' + copiar + '</button>' : '')
       : '-';
+    var acciones = esAdminMed
+      ? '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+          (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + m.id + '\')">' + llave + '</button> ' : '') +
+          '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+      : '<span class="nom-muted">—</span>';
     return '<tr>' +
       '<td>' + esc(m.nombre) + '</td>' +
       '<td>' + (esc(m.especialidad) || '-') + '</td>' +
       '<td>' + usuarioCell + '</td>' +
       '<td>' + claveCell + '</td>' +
       '<td>' + (esc(m.telefono) || '-') + '</td>' +
-      '<td class="row-actions">' +
-        '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
-        (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + m.id + '\')">' + llave + '</button> ' : '') +
-        '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
-      '</td>' +
+      '<td class="row-actions">' + acciones + '</td>' +
     '</tr>';
   }).join('');
 }

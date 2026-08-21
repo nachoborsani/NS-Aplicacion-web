@@ -1079,3 +1079,6 @@
   /* Rol clínica (dueño del centro): solo ve su centro, oculta lo interno de NS */
   body.role-clinica .ns-only,
   body.role-clinica #clientNewBtn{display:none !important}
+
+  /* Clínica: navega por el menú izquierdo, se oculta la barra de pestañas del cliente */
+  body.role-clinica .client-tabs{display:none}
