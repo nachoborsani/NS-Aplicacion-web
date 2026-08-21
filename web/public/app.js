@@ -1352,6 +1352,12 @@ function renderClientList(){
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
+  // Para la clínica, "Consultorios" no le dice nada (él ES su centro): lo rotulamos "Dashboard".
+  var esClinica = (ME && ME.role === 'clinica');
+  var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
+  if (consHdr) consHdr.textContent = esClinica ? 'Dashboard' : 'Consultorios';
+  var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
+  if (medHdr) medHdr.textContent = esClinica ? 'Dashboard' : 'Médicos de cabecera';
   document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
       go('clientes');
