@@ -2184,6 +2184,8 @@ function buildBandejaResumen(slug) {
   let coversMin = "", coversMax = "";
   // Detalle copiable de las que faltan informe (validadas sin transmitir).
   const missingInformeRows = [];
+  // Detalle de ausentes (con turno pero sin validar → el paciente no vino).
+  const ausentesRows = [];
   // Filas sintéticas con el shape que esperan las reglas de débito
   // (para reusar applyAutomaticExclusionDebits).
   const synth = [];
@@ -2208,6 +2210,13 @@ function buildBandejaResumen(slug) {
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
     if (nomRow) { matched++; grossEstimado += valueGross; }
     else unmatched++;
+    if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
+      benef: String(row[kBenef] || "").trim(),
+      nombre: String(row[kNombre] || "").trim(),
+      practica: pracRaw,
+      turno: String(row[kTurno] || "").trim(),
+      valor: money(valueGross),
+    });
     if (esTransmitida) grossTransmitido += valueGross;
     else if (!esValidada) grossTurno += valueGross; // el caso validada+sin-transmitir va a missingInformeAmount
     // Falta informe: validada pero NO transmitida (le debemos el informe). Un
@@ -2326,7 +2335,7 @@ function buildBandejaResumen(slug) {
     grossTransmitido: money(grossTransmitido), grossTurno: money(grossTurno),
     ausentesConsultas, ausentesPracticas,
     missingInforme, missingInformeAmount: money(missingInformeAmount),
-    missingInformeRows,
+    missingInformeRows, ausentesRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
     coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
