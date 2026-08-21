@@ -1345,8 +1345,10 @@ function renderClientList(){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
   };
-  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera'; });
-  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera'; });
+  // El usuario efectivo clínica (o el espejado) solo ve SU centro.
+  var lista = (ME && ME.role === 'clinica' && ME.centro) ? CLIENTS.filter(function(c){ return c.slug === ME.centro; }) : CLIENTS;
+  var consultorios = lista.filter(function(c){ return c.tipo !== 'med_cabecera'; });
+  var medCab = lista.filter(function(c){ return c.tipo === 'med_cabecera'; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
@@ -4489,12 +4491,14 @@ function verComo(u){
   aplicarUsuario(u);
   document.body.classList.add('espejo-activo');
   var nom = document.getElementById('espejoBannerNombre'); if (nom) nom.textContent = u.name + ' · ' + roleLabel(u.role);
+  renderClientList();  // re-filtra el menú según el usuario espejado (clínica → su centro)
   go('dash');
 }
 function salirEspejo(){
   ESPEJO = false;
   aplicarUsuario(ME_REAL);
   document.body.classList.remove('espejo-activo');
+  renderClientList();  // vuelve a mostrar todos los centros
   go('dash');
 }
 var _espejoToastT = null;
