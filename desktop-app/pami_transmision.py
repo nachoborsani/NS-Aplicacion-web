@@ -1132,19 +1132,50 @@ class PamiTransmisionController:
             self._cleanup_dead_session()
             self._navigate_to_transmision_if_needed()
             page = self._get_transmision_page()
-            page.goto(f"{PAMI_TRANSMISION_URL}?registros_por_pagina=50", wait_until="domcontentloaded")
-            page.wait_for_timeout(700)
-            if filtros:
-                self._apply_transmision_filters(page, filtros)
 
             # El botón Exportar aparece junto al panel de resultados, que PAMI
             # renderiza de forma asíncrona tras la búsqueda (y más lento en
-            # headless). Antes se chequeaba al instante y en headless daba 0 ->
-            # "No encontré el botón Exportar". Esperamos a que esté visible.
-            exportar = page.locator("input[value='Exportar'], button:has-text('Exportar'), a:has-text('Exportar')").first
-            try:
-                exportar.wait_for(state="visible", timeout=25000)
-            except Exception:
+            # headless). En un barrido de varios clientes, a veces la grilla no
+            # termina de renderizar en la 1ra pasada -> reintentamos recargando la
+            # pantalla y re-aplicando los filtros antes de darlo por fallado.
+            exportar = None
+            for intento in range(2):
+                page.goto(f"{PAMI_TRANSMISION_URL}?registros_por_pagina=50", wait_until="domcontentloaded")
+                page.wait_for_timeout(700 if intento == 0 else 1500)
+                if filtros:
+                    self._apply_transmision_filters(page, filtros)
+                cand = page.locator("input[value='Exportar'], button:has-text('Exportar'), a:has-text('Exportar')").first
+                try:
+                    cand.wait_for(state="visible", timeout=25000)
+                    exportar = cand
+                    break
+                except Exception:
+                    if intento == 0:
+                        self._log("Exportar no apareció; recargo y reintento una vez…")
+                        continue
+            if exportar is None:
+                # Diagnóstico: dejar rastro de en qué pantalla quedó (URL, texto,
+                # captura) para entender por qué no aparece el Exportar.
+                try:
+                    diag_dir = Path(__file__).resolve().parent / "logs" / "diag"
+                    diag_dir.mkdir(parents=True, exist_ok=True)
+                    url = page.url
+                    cuerpo = ""
+                    try:
+                        cuerpo = (page.locator("body").inner_text(timeout=3000) or "")[:1500]
+                    except Exception:
+                        pass
+                    shot = diag_dir / "exportar_no_encontrado.png"
+                    try:
+                        page.screenshot(path=str(shot), full_page=True)
+                    except Exception:
+                        shot = None
+                    self._log(f"[DIAG] Exportar no visible. URL: {url}")
+                    self._log(f"[DIAG] Texto de la pantalla (recorte):\n{cuerpo}")
+                    if shot:
+                        self._log(f"[DIAG] Captura guardada en: {shot}")
+                except Exception as diag_exc:  # noqa: BLE001
+                    self._log(f"[DIAG] No pude capturar el diagnóstico: {diag_exc!r}")
                 raise RuntimeError("No encontré el botón Exportar en la pantalla actual.")
 
             # PAMI genera el Excel del mes en el momento y tarda: para una bandeja
@@ -1396,7 +1427,15 @@ class PamiTransmisionController:
                 "transmitida": transmitida,
             },
         )
-        page.wait_for_timeout(700)
+        # Esperar a que la búsqueda REALMENTE termine de recargar la grilla antes de
+        # exportar. Sin esto, en centros grandes (muchas filas, ej. CIMA con 3.500+)
+        # el export salía antes de que PAMI recargara → exportaba datos parciales o
+        # viejos (rango de fechas y cantidad equivocados). networkidle + estabilización.
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            pass
+        page.wait_for_timeout(1600)
         self._log(
             "Filtros aplicados desde la app -> "
             f"desde={fecha_desde or '-'} | hasta={fecha_hasta or '-'} | "
