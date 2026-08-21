@@ -4457,8 +4457,12 @@ function aplicarUsuario(u){
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
-  document.getElementById('sideAvatar').textContent = ini;
-  document.getElementById('topAvatar').textContent = ini;
+  // Para la clínica, en vez de iniciales (que salen feas, ej. "CIMA (centro)" → "C(")
+  // mostramos una cruz de salud. Los usuarios internos de NS mantienen sus iniciales.
+  var cruzSalud = '<svg viewBox="0 0 24 24" style="width:20px;height:20px" aria-hidden="true"><path d="M9.5 3h5a1 1 0 011 1v4.5H20a1 1 0 011 1v5a1 1 0 01-1 1h-4.5V20a1 1 0 01-1 1h-5a1 1 0 01-1-1v-4.5H4a1 1 0 01-1-1v-5a1 1 0 011-1h4.5V4a1 1 0 011-1z" fill="currentColor"/></svg>';
+  var sa = document.getElementById('sideAvatar'), ta = document.getElementById('topAvatar');
+  if (u.role === 'clinica'){ if (sa) sa.innerHTML = cruzSalud; if (ta) ta.innerHTML = cruzSalud; }
+  else { if (sa) sa.textContent = ini; if (ta) ta.textContent = ini; }
   var _h = new Date().getHours();
   var _saludo = _h < 6 ? 'Buenas noches' : (_h < 13 ? 'Buen día' : (_h < 20 ? 'Buenas tardes' : 'Buenas noches'));
   document.getElementById('dashHello').textContent = _saludo + ', ' + (u.name.split(' ')[0]) + ' 👋';
