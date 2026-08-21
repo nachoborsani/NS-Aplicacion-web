@@ -1075,3 +1075,7 @@
     background:#111827;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;
     opacity:0;pointer-events:none;transition:opacity .2s,top .2s}
   #espejoToast.show{opacity:1;top:26px}
+
+  /* Rol clínica (dueño del centro): solo ve su centro, oculta lo interno de NS */
+  body.role-clinica .ns-only,
+  body.role-clinica #clientNewBtn{display:none !important}

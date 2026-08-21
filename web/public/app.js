@@ -67,6 +67,11 @@ function togglePagosGroup(el){
   if (group) group.classList.toggle('open');
 }
 function go(v, el){
+  // El rol clínica solo entra a su centro: cualquier vista interna de NS lo redirige.
+  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0){
+    if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
+    return;
+  }
   ['dash','users','clientes','nomencladores','informes','credencial','resumen','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -4451,7 +4456,12 @@ function aplicarUsuario(u){
   document.getElementById('dashHello').textContent = _saludo + ', ' + (u.name.split(' ')[0]) + ' 👋';
   // El acceso "Ver como…" solo lo ve el admin real.
   var vc = document.getElementById('verComoLink'); if (vc) vc.style.display = (ME_REAL && ME_REAL.role === 'admin') ? '' : 'none';
+  // Rol clínica: solo su centro (oculta lo interno de NS por CSS) y sin "Adjuntar reporte".
+  document.body.classList.toggle('role-clinica', u.role === 'clinica');
+  var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
 }
+// Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','users','soon','resumen','facturas','gastos'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

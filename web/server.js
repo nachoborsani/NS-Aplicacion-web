@@ -992,7 +992,7 @@ function readBody(req) {
   });
 }
 function publicUser(u) {
-  return { username: u.username, name: u.name, role: u.role, mustChange: !!u.mustChange };
+  return { username: u.username, name: u.name, role: u.role, centro: u.centro || "", mustChange: !!u.mustChange };
 }
 
 // Perfiles validos y reglas de nombre de usuario
@@ -3183,6 +3183,23 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { user: publicUser(u) });
   }
 
+  // --- Gate del rol "clinica" (dueño del centro): SOLO LECTURA y SOLO su centro.
+  // Puede: ver su sesión, cambiar su clave, salir, y hacer GET de /api/clientes
+  // (scopeado abajo) y de /api/clientes/{su-centro}/... Todo lo demás: 403.
+  if (p.startsWith("/api/")) {
+    const meGate = getSessionUser(req);
+    if (meGate && meGate.role === "clinica") {
+      const esGet = (req.method === "GET" || !req.method);
+      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
+      const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
+      let permitido = false;
+      if (permitidoSiempre) permitido = true;
+      else if (esGet && p === "/api/clientes") permitido = true;
+      else if (esGet && mCli && decodeURIComponent(mCli[1]) === meGate.centro) permitido = true;
+      if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
+    }
+  }
+
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
@@ -3193,6 +3210,7 @@ const server = http.createServer(async (req, res) => {
         username: u.username,
         name: u.name,
         role: u.role,
+        centro: u.centro || "",
         email: u.email || "",
         active: u.active !== false,
         mustChange: !!u.mustChange,
@@ -3205,20 +3223,23 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password, email } = await readBody(req);
+    const { username, name, role, password, email, centro } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
     const pw = String(password || "");
     const em = String(email || "").trim().toLowerCase();
+    const ce = String(centro || "").trim();
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
+    // El rol "clinica" (dueño del centro) DEBE estar atado a un centro existente.
+    if (rl === "clinica" && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece el usuario clínica." });
     if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
     if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
     const users = loadUsers() || [];
     if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
-    users.push({ username: uname, name: nm, role: rl, email: em, password: hashPassword(pw), mustChange: true, active: true });
+    users.push({ username: uname, name: nm, role: rl, email: em, centro: rl === "clinica" ? ce : "", password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
   }
@@ -3270,6 +3291,11 @@ const server = http.createServer(async (req, res) => {
         if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
         users[idx].email = em;
       }
+      if (body.centro !== undefined) users[idx].centro = String(body.centro).trim();
+      // Un usuario clínica siempre debe tener un centro válido.
+      if (users[idx].role === "clinica" && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
+        return json(res, 400, { error: "El usuario clínica tiene que estar atado a un centro válido." });
+      }
       saveUsers(users);
       return json(res, 200, { ok: true });
     }
@@ -3320,7 +3346,10 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/clientes" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    return json(res, 200, { clients: loadClientsStore() });
+    let clients = loadClientsStore();
+    // El rol clínica solo ve SU centro.
+    if (me.role === "clinica") clients = clients.filter((c) => c.slug === me.centro);
+    return json(res, 200, { clients });
   }
 
   if (p === "/api/clientes" && req.method === "POST") {
