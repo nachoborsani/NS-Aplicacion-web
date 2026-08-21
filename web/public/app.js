@@ -4432,8 +4432,12 @@ async function saveDelete(){
 
 function showModal(id, scrimId){ document.getElementById(scrimId).classList.add('show'); document.getElementById(id).classList.add('show'); }
 function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remove('show'); document.getElementById(id).classList.remove('show'); }
-var ME = null;
-function setUser(u){
+var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
+var ME_REAL = null;    // usuario realmente logueado (siempre el admin real)
+var ESPEJO = false;    // modo espejo activo (solo lectura)
+function setUser(u){ ME_REAL = u; aplicarUsuario(u); }
+// Aplica la UI (menú, sidebar, saludo) para un usuario dado.
+function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
@@ -4445,12 +4449,58 @@ function setUser(u){
   var _h = new Date().getHours();
   var _saludo = _h < 6 ? 'Buenas noches' : (_h < 13 ? 'Buen día' : (_h < 20 ? 'Buenas tardes' : 'Buenas noches'));
   document.getElementById('dashHello').textContent = _saludo + ', ' + (u.name.split(' ')[0]) + ' 👋';
+  // El acceso "Ver como…" solo lo ve el admin real.
+  var vc = document.getElementById('verComoLink'); if (vc) vc.style.display = (ME_REAL && ME_REAL.role === 'admin') ? '' : 'none';
 }
+// ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
+async function abrirVerComo(){
+  if (!ME_REAL || ME_REAL.role !== 'admin') return;
+  var res = await api('/api/users');
+  var users = (res.ok && res.data && (res.data.users || res.data)) || [];
+  var sel = document.getElementById('espejoSelect');
+  window._ESPEJO_USERS = users;
+  sel.innerHTML = users.filter(function(u){ return u.username !== ME_REAL.username; })
+    .map(function(u){ return '<option value="' + esc(u.username) + '">' + esc(u.name) + ' — ' + esc(roleLabel(u.role)) + '</option>'; }).join('');
+  if (!sel.innerHTML){ sel.innerHTML = '<option value="">(no hay otros usuarios)</option>'; }
+  showModal('espejoModal', 'espejoScrim');
+}
+function cerrarVerComo(){ hideModal('espejoModal', 'espejoScrim'); }
+function confirmarVerComo(){
+  var sel = document.getElementById('espejoSelect');
+  var uname = sel && sel.value;
+  var u = (window._ESPEJO_USERS || []).find(function(x){ return x.username === uname; });
+  if (!u) return;
+  cerrarVerComo();
+  verComo(u);
+}
+function verComo(u){
+  if (!ME_REAL || ME_REAL.role !== 'admin') return;
+  ESPEJO = true;
+  aplicarUsuario(u);
+  document.body.classList.add('espejo-activo');
+  var nom = document.getElementById('espejoBannerNombre'); if (nom) nom.textContent = u.name + ' · ' + roleLabel(u.role);
+  go('dash');
+}
+function salirEspejo(){
+  ESPEJO = false;
+  aplicarUsuario(ME_REAL);
+  document.body.classList.remove('espejo-activo');
+  go('dash');
+}
+var _espejoToastT = null;
+function toastEspejo(){
+  var t = document.getElementById('espejoToast'); if (!t) return;
+  t.classList.add('show');
+  if (_espejoToastT) clearTimeout(_espejoToastT);
+  _espejoToastT = setTimeout(function(){ t.classList.remove('show'); }, 1800);
+}
+function bloqueadoEspejo(){ if (ESPEJO){ toastEspejo(); return true; } return false; }
 function showApp(){ document.body.classList.remove('mustchange','booting'); document.body.classList.add('authed'); renderUsers(); loadClients({ detail:false }); applyRoute(); }
 function showChange(){ document.body.classList.remove('authed','booting'); document.body.classList.add('mustchange'); }
 function showLogin(){ document.body.classList.remove('authed','mustchange','booting','resetting'); }
 
 async function api(path, body){
+  if (body && bloqueadoEspejo()) return { ok:false, status:0, data:{ error:'Modo espejo: solo lectura' } };
   var opt = { method: body ? 'POST' : 'GET', headers: { 'content-type':'application/json' } };
   if (body) opt.body = JSON.stringify(body);
   var r = await fetch(path, opt);
@@ -4459,6 +4509,7 @@ async function api(path, body){
   return { ok: r.ok, status: r.status, data: data };
 }
 async function req(method, path, body){
+  if (String(method).toUpperCase() !== 'GET' && bloqueadoEspejo()) return { ok:false, status:0, data:{ error:'Modo espejo: solo lectura' } };
   var opt = { method: method, headers: { 'content-type':'application/json' } };
   if (body !== undefined) opt.body = JSON.stringify(body);
   var r = await fetch(path, opt);
