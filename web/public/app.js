@@ -953,7 +953,7 @@ function cleanNomType(value){
   return (!text || text === '0') ? '-' : text;
 }
 function scopeLabel(scope){
-  return scope === 'internacion' ? 'Internacion' : scope === 'ambulatorio' ? 'Ambulatorio' : 'Otros';
+  return scope === 'internacion' ? 'Internación' : scope === 'ambulatorio' ? 'Ambulatorio' : 'Otros';
 }
 function dateFmt(iso){
   if (!iso) return '';
@@ -995,7 +995,7 @@ function renderModuleOptions(items){
   box.innerHTML = NOM_MODULES.map(function(item){
     var checked = NOM_SELECTED_MODULES.includes(item.value) ? ' checked' : '';
     return '<label class="multi-option"><input type="checkbox" value="' + esc(item.value) + '"' + checked + ' onchange="toggleModuleSelection(this)"> <span>' + esc(item.label) + '</span></label>';
-  }).join('') || '<div class="multi-empty">Sin modulos</div>';
+  }).join('') || '<div class="multi-empty">Sin módulos</div>';
   filterModuleOptions();
   updateModuleTrigger();
 }
@@ -1399,10 +1399,10 @@ function selectClient(slug){
 }
 var CLIENT_SECTIONS = [
   { key:'mescurso',  sec:'client-section-mescurso',  tab:'clientTabMescurso',  crumb:'Dashboard mes en curso' },
-  { key:'basica',    sec:'client-section-basica',    tab:'clientTabBasica',    crumb:'Informacion basica' },
+  { key:'basica',    sec:'client-section-basica',    tab:'clientTabBasica',    crumb:'Información básica' },
   { key:'dashboard', sec:'client-section-dashboard', tab:'clientTabDashboard', crumb:'Dashboard de reportes' },
   { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
-  { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios medicos' },
+  { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios médicos' },
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' }
 ];
@@ -1649,7 +1649,7 @@ async function loadClientMedicos(){
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
-  if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr>'; return; }
+  if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin médicos cargados.</td></tr>'; return; }
   var ojo = '<svg viewBox="0 0 24 24" fill="none">' + EYE_ON + '</svg>';
   var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
   var llave = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M11 12l9-9M17 3l3 3M15 5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -2118,7 +2118,7 @@ function openMedicoModal(id){
   var clave = document.getElementById('medicoClave'); clave.value = ''; clave.type = 'password';
   document.getElementById('medicoClaveIco').innerHTML = EYE_ON;
   document.getElementById('medicoClaveHint').textContent = (m && m.tieneClave) ? 'Ya hay una clave guardada — dejá vacío para no cambiarla.' : 'Se guarda encriptada.';
-  document.getElementById('medicoTitle').textContent = m ? 'Editar medico' : 'Nuevo medico';
+  document.getElementById('medicoTitle').textContent = m ? 'Editar médico' : 'Nuevo médico';
   document.getElementById('medicoModalError').textContent = '';
   showModal('medicoModal', 'medicoScrim');
   document.getElementById('medicoNombre').focus();
@@ -2147,7 +2147,7 @@ async function saveMedico(){
 async function deleteMedico(id){
   if (!ACTIVE_CLIENT || !id) return;
   var m = MEDICOS.find(function(x){ return x.id === id; });
-  if (!confirm('¿Borrar a ' + ((m && m.nombre) || 'este medico') + '?')) return;
+  if (!confirm('¿Borrar a ' + ((m && m.nombre) || 'este médico') + '?')) return;
   var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id));
   if (!res.ok){ var err = document.getElementById('medicosError'); if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo borrar.'; } return; }
   MEDICOS = (res.data && res.data.medicos) || [];
@@ -2256,9 +2256,9 @@ function mesCursoDescargarDatos(panelId){
   if (panelId === 'ausentes') return { titulo: 'Ausentes - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
-  if (panelId === 'debitos-julio') return { titulo: 'Posibles debitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [6] };
-  if (panelId === 'debitos-adelante') return { titulo: 'Posibles debitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [6] };
-  return { titulo: 'Posibles debitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [6] };
+  if (panelId === 'debitos-julio') return { titulo: 'Posibles débitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [6] };
+  if (panelId === 'debitos-adelante') return { titulo: 'Posibles débitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [6] };
+  return { titulo: 'Posibles débitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [6] };
 }
 async function mesCursoDescargar(fmt, panelId, btn){
   var d = mesCursoDescargarDatos(panelId);
@@ -2654,7 +2654,7 @@ function moduleNameFromOption(option){
 async function renderClientModuleOptions(boxId, selectedModules){
   var box = document.getElementById(boxId);
   if (!box) return false;
-  box.innerHTML = '<div class="muted-cell">Cargando modulos...</div>';
+  box.innerHTML = '<div class="muted-cell">Cargando módulos...</div>';
   var period = document.getElementById('clientNomPeriod').value || '';
   var summary = await api('/api/nomencladores' + (period ? '?period=' + encodeURIComponent(period) : ''));
   if (!summary.ok || !summary.data.loaded){
@@ -2703,7 +2703,7 @@ async function saveClientCreate(){
   var err = document.getElementById('clientCreateError');
   if (err) err.textContent = '';
   var selected = selectedClientModulesFrom('clientCreateModulesOptions');
-  if (!selected.length){ if (err) err.textContent = 'Selecciona al menos un modulo.'; return; }
+  if (!selected.length){ if (err) err.textContent = 'Seleccioná al menos un módulo.'; return; }
   var payload = {
     name: (document.getElementById('clientCreateName') || {}).value || '',
     businessName: (document.getElementById('clientCreateBusinessName') || {}).value || '',
@@ -2736,12 +2736,12 @@ async function saveClientModules(){
   var err = document.getElementById('clientModulesError');
   err.textContent = '';
   var selected = selectedClientModulesFrom('clientModulesOptions');
-  if (!selected.length){ err.textContent = 'Selecciona al menos un modulo.'; return; }
+  if (!selected.length){ err.textContent = 'Seleccioná al menos un módulo.'; return; }
   var btn = document.getElementById('clientModulesSave');
   btn.disabled = true;
   var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/modules', { activeModules:selected });
   btn.disabled = false;
-  if (!res.ok){ err.textContent = res.data.error || 'No se pudieron guardar los modulos.'; return; }
+  if (!res.ok){ err.textContent = res.data.error || 'No se pudieron guardar los módulos.'; return; }
   CLIENTS = res.data.clients || CLIENTS;
   ACTIVE_CLIENT = res.data.client || ACTIVE_CLIENT;
   renderClientList();
@@ -2943,7 +2943,7 @@ function fillClientDashboardSelects(periods, currentPeriod, comparePeriod){
       var suffix = item.reportCount ? ' (' + item.reportCount + ')' : '';
       return '<option value="' + esc(item.period) + '">' + esc(item.label + suffix) + '</option>';
     }).join('');
-    compare.innerHTML = '<option value="">Sin comparacion</option>' + compareOptions;
+    compare.innerHTML = '<option value="">Sin comparación</option>' + compareOptions;
     if (comparePeriod && comparePeriod !== currentPeriod && [].slice.call(compare.options).some(function(option){ return option.value === comparePeriod; })) compare.value = comparePeriod;
   }
 }
@@ -3087,10 +3087,10 @@ function renderClientDashboard(data){
     var hc = !!compare.period;
     function kprev(txt){ return hc ? '<small class="kpi-prev">' + esc(cmpShort + ': ' + txt) + '</small>' : ''; }
     kpis.innerHTML = ''
-      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturacion neta</span>' + kprev(moneyFmt(compare.net || 0)) + dashboardDelta(deltas.net, true) + '</div>'
+      + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturación neta</span>' + kprev(moneyFmt(compare.net || 0)) + dashboardDelta(deltas.net, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + kprev(numberFmt(compare.consultations || 0)) + dashboardDelta(deltas.consultations, false) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Practicas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(compare.practices || 0)) + dashboardDelta(deltas.practices, false) + '</div>'
-      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Debitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '<div class="debit-breakdown">' + debitBreakdownHtml(current.debitUmbral || 0, current.debitExcluyente || 0, current.debitOtros || 0) + '</div></div>'
+      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Prácticas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(compare.practices || 0)) + dashboardDelta(deltas.practices, false) + '</div>'
+      + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Débitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '<div class="debit-breakdown">' + debitBreakdownHtml(current.debitUmbral || 0, current.debitExcluyente || 0, current.debitOtros || 0) + '</div></div>'
       + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + kprev(numberFmt(compare.absent || 0)) + dashboardDelta(deltas.absent, false, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + kprev(numberFmt(compare.outsideCutoff || 0)) + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
   }
@@ -3181,8 +3181,8 @@ function renderClientDashboard(data){
       function detailRow(kind, label, detailRows, prevRows){
         return '<tr class="dashboard-module-detail" id="dashboardModuleDetail' + moduleIndex + kind + '" style="display:none"><td colspan="4">'
           + '<div class="dashboard-detail-title">' + esc(label + ' - ' + (module.moduleCode || '-') + ' ' + (module.moduleDescription || '')) + (hayCompare ? ' <span class="nom-muted">(número grande = ' + esc(curLbl) + '; abajo = ' + esc(cmpLbl) + ')</span>' : '') + '</div>'
-          + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Prestacion</th><th>Cantidad</th><th>Neto</th></tr></thead><tbody>'
-          + renderDetailRows(detailRows, prevRows, 'Sin ' + label.toLowerCase() + ' para este modulo.')
+          + '<div class="dashboard-detail-scroll"><table><thead><tr><th>Prestación</th><th>Cantidad</th><th>Neto</th></tr></thead><tbody>'
+          + renderDetailRows(detailRows, prevRows, 'Sin ' + label.toLowerCase() + ' para este módulo.')
           + '</tbody></table></div></td></tr>';
       }
       function countButton(kind, count){
@@ -3820,7 +3820,7 @@ function updateClientReportSummary(){
   if (outside) meta += ' - ' + outside + ' fuera de corte';
   if (missingInforme) meta += ' - ' + missingInforme + ' falta informe';
   if (unmatched) meta += ' - ' + unmatched + ' sin valor';
-  document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavia no hay bandeja cargada.';
+  document.getElementById('clientReportMeta').textContent = totalRows ? meta : 'Todavía no hay bandeja cargada.';
   var clearBtn = document.getElementById('clientReportClearBtn');
   if (clearBtn){
     // El tacho "descartar" solo tiene sentido en borrador/edición (tira el trabajo
@@ -3910,7 +3910,7 @@ function renderClientReportRows(){
   }
   var visible = getClientReportVisibleRows();
   if (!visible.length){
-    body.innerHTML = '<tr><td colspan="7" class="muted-cell">No hay resultados para esa busqueda.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="muted-cell">No hay resultados para esa búsqueda.</td></tr>';
     updateClientReportSummary();
     return;
   }
@@ -3978,7 +3978,7 @@ function renderClientReportModuleFilter(){
   var options = Object.keys(modules).sort(function(a,b){ return Number(a) - Number(b) || a.localeCompare(b); }).map(function(code){
     return '<option value="' + esc(code) + '">' + esc(modules[code]) + '</option>';
   }).join('');
-  el.innerHTML = '<option value="">Todos los modulos</option>' + options;
+  el.innerHTML = '<option value="">Todos los módulos</option>' + options;
   if (current && modules[current]) el.value = current;
   else {
     CLIENT_REPORT_MODULE = '';
@@ -4074,7 +4074,7 @@ function editReportValue(index){
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   var current = Number(row.valueGross || 0);
-  var entered = window.prompt('Nuevo valor bruto para esta practica', current ? String(current).replace('.', ',') : '');
+  var entered = window.prompt('Nuevo valor bruto para esta práctica', current ? String(current).replace('.', ',') : '');
   if (entered === null) return;
   var next = parseMoneyInput(entered);
   if (next < 0) next = 0;
@@ -4111,7 +4111,7 @@ function restoreClientReportDraft(){
   var periodSelect = document.getElementById('clientReportPeriod');
   if (periodSelect && CLIENT_REPORT_SOURCE && CLIENT_REPORT_SOURCE.nomencladorPeriod) periodSelect.value = CLIENT_REPORT_SOURCE.nomencladorPeriod;
   var st = document.getElementById('clientReportStatus');
-  if (st) st.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Edicion restaurada. Guarda cambios para cerrar el reporte.' : 'Borrador restaurado. Para cambiar el nomenclador, volve a adjuntar la bandeja.';
+  if (st) st.textContent = CLIENT_REPORT_MODE === 'edit' ? 'Edición restaurada. Guardá cambios para cerrar el reporte.' : 'Borrador restaurado. Para cambiar el nomenclador, volvé a adjuntar la bandeja.';
   renderClientReportRows();
 }
 function clearClientReport(){
@@ -4251,7 +4251,7 @@ function unlockClientReport(){
 async function changeClientReportPeriod(){
   if (CLIENT_REPORT_MODE === 'closed') {
     var closedStatus = document.getElementById('clientReportStatus');
-    if (closedStatus) closedStatus.textContent = 'Este reporte ya esta cerrado; el nomenclador no se recalcula.';
+    if (closedStatus) closedStatus.textContent = 'Este reporte ya está cerrado; el nomenclador no se recalcula.';
     return;
   }
   if (CLIENT_REPORT_MODE === 'edit') {
@@ -4368,7 +4368,7 @@ async function loadNomencladorSummary(period){
   var selected = period || document.getElementById('nomPeriod').value || '';
   var res = await api('/api/nomencladores' + (selected ? '?period=' + encodeURIComponent(selected) : ''));
   if (!res.ok){
-    st.innerHTML = '<b>No se pudo consultar el nomenclador</b><span>Revisa la sesion o volve a ingresar.</span>';
+    st.innerHTML = '<b>No se pudo consultar el nomenclador</b><span>Revisá la sesión o volvé a ingresar.</span>';
     return;
   }
   // Al abrir sin nada elegido, mostrar siempre el ultimo mes cargado (el mas nuevo).
@@ -4382,9 +4382,9 @@ async function loadNomencladorSummary(period){
   if (previousPeriod && NOM_ACTIVE_PERIOD && previousPeriod !== NOM_ACTIVE_PERIOD) NOM_SELECTED_MODULES = [];
   fillPeriodSelect(res.data.nomencladores || [], NOM_ACTIVE_PERIOD);
   if (!NOM_READY){
-    st.innerHTML = '<b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span>';
+    st.innerHTML = '<b>Sin nomenclador cargado</b><span>Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span>';
     document.getElementById('nomBody').innerHTML = '<tr><td colspan="6" class="muted-cell">No hay datos cargados.</td></tr>';
-    document.getElementById('nomResultMeta').textContent = 'Todavia no hay busqueda.';
+    document.getElementById('nomResultMeta').textContent = 'Todavía no hay búsqueda.';
     return;
   }
   var d = res.data;
@@ -4431,7 +4431,7 @@ async function uploadNomenclador(files){
   try { data = await r.json(); } catch (e) {}
   if (input) input.value = '';
   if (!r.ok){
-    st.innerHTML = '<b>No se pudo cargar</b><span>' + esc(data.error || 'Revisa el formato del archivo.') + '</span>';
+    st.innerHTML = '<b>No se pudo cargar</b><span>' + esc(data.error || 'Revisá el formato del archivo.') + '</span>';
     return;
   }
   await loadNomencladorSummary(data.activePeriod || period);
@@ -4445,7 +4445,7 @@ async function deleteNomenclador(){
   st.innerHTML = '<b>Eliminando nomenclador...</b><span>' + esc(label) + '</span>';
   var res = await req('DELETE', '/api/nomencladores?period=' + encodeURIComponent(period));
   if (!res.ok){
-    st.innerHTML = '<b>No se pudo eliminar</b><span>' + esc(res.data.error || 'Revisa permisos o sesion.') + '</span>';
+    st.innerHTML = '<b>No se pudo eliminar</b><span>' + esc(res.data.error || 'Revisá permisos o sesión.') + '</span>';
     return;
   }
   NOM_READY = !!res.data.loaded;

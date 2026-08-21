@@ -210,10 +210,10 @@
               <div class="client-tabs">
                 <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
                 <button id="clientTabMescurso" type="button" onclick="setClientSection('mescurso')">Dashboard mes en curso</button>
-                <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Informacion basica</button>
+                <button id="clientTabBasica" type="button" onclick="setClientSection('basica')">Información básica</button>
                 <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
                 <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
-                <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios medicos</button>
+                <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios médicos</button>
                 <button id="clientTabHonorarios" type="button" onclick="setClientSection('honorarios')" style="display:none">Honorarios</button>
               </div>
 
@@ -274,7 +274,7 @@
                     </div>
                   </div>
                   <dl class="info-list">
-                    <div><dt>Razon social</dt><dd id="clientBusinessName">-</dd></div>
+                    <div><dt>Razón social</dt><dd id="clientBusinessName">-</dd></div>
                     <div class="client-info-row">
                       <div><dt>CUIT</dt><dd id="clientCuit">-</dd></div>
                       <div><dt>UGL</dt><dd id="clientUgl">-</dd></div>
@@ -285,8 +285,8 @@
 
                 <article class="client-card">
                   <div class="client-card-head">
-                    <h3>Modulos activos</h3>
-                    <button class="icon-btn mini" id="clientModulesEdit" type="button" onclick="openClientModulesModal()" title="Editar modulos activos" aria-label="Editar modulos activos">
+                    <h3>Módulos activos</h3>
+                    <button class="icon-btn mini" id="clientModulesEdit" type="button" onclick="openClientModulesModal()" title="Editar módulos activos" aria-label="Editar módulos activos">
                       <svg viewBox="0 0 24 24" fill="none"><path d="M12 15.5a3.5 3.5 0 100-7 3.5 3.5 0 000 7z" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06A1.65 1.65 0 0015 19.4a1.65 1.65 0 00-1 .6 1.65 1.65 0 00-.4 1.08V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-.6-1 1.65 1.65 0 00-1.08-.4H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-.6 1.65 1.65 0 00.4-1.08V3a2 2 0 114 0v.09A1.65 1.65 0 0016 4.6a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9c.14.36.35.69.6 1 .3.28.68.43 1.08.4H21a2 2 0 110 4h-.09A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </button>
                   </div>
@@ -318,7 +318,7 @@
                   </div>
                   <div class="client-dashboard-controls">
                     <label class="field"><span>Mes</span><select class="inp" id="clientDashPeriod" onchange="loadClientDashboard()"><option value="">Sin reportes</option></select></label>
-                    <label class="field"><span>Comparar con</span><select class="inp" id="clientDashCompare" onchange="loadClientDashboard()"><option value="">Sin comparacion</option></select></label>
+                    <label class="field"><span>Comparar con</span><select class="inp" id="clientDashCompare" onchange="loadClientDashboard()"><option value="">Sin comparación</option></select></label>
                     <div class="dashboard-export" id="clientDashboardExport" style="display:none">
                       <span class="field-lbl">Comparativa</span>
                       <div>
@@ -335,10 +335,10 @@
                 <div class="dashboard-resumen" id="clientDashboardResumen" style="display:none"></div>
                 <div class="dashboard-nomnote" id="clientDashboardNomNote" style="display:none"></div>
                 <div class="dashboard-kpis" id="clientDashboardKpis">
-                  <div><b>$ 0,00</b><span>Facturacion neta</span></div>
+                  <div><b>$ 0,00</b><span>Facturación neta</span></div>
                   <div><b>0</b><span>Consultas</span></div>
-                  <div><b>0</b><span>Practicas / estudios</span></div>
-                  <div><b>$ 0,00</b><span>Debitos</span></div>
+                  <div><b>0</b><span>Prácticas / estudios</span></div>
+                  <div><b>$ 0,00</b><span>Débitos</span></div>
                   <div><b>0</b><span>Ausentes</span></div>
                 </div>
                 <div class="dashboard-compare" id="clientDashboardCompare" style="display:none"></div>
@@ -352,7 +352,7 @@
                     <button type="button" data-sort="baja" onclick="setDashModuleSort('baja')">Mayor baja</button>
                   </div>
                   <table class="dashboard-module-table">
-                    <thead><tr><th>Modulo</th><th>Consultas</th><th>Practicas</th><th title="Participación sobre facturación total del mes">Neto · % part.</th></tr></thead>
+                    <thead><tr><th>Módulo</th><th>Consultas</th><th>Prácticas</th><th title="Participación sobre facturación total del mes">Neto · % part.</th></tr></thead>
                     <tbody id="clientDashboardModules"><tr><td colspan="4" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
                   </table>
                 </div>
@@ -362,11 +362,11 @@
                 <div class="client-nom-head">
                   <div>
                     <h3>Nomenclador del cliente</h3>
-                    <p>Filtrado automaticamente por modulos activos.</p>
+                    <p>Filtrado automaticamente por módulos activos.</p>
                   </div>
                   <div class="client-nom-controls">
                     <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
-                    <input class="inp" id="clientNomQ" placeholder="Buscar prestacion o codigo..." oninput="queueClientNomencladorSearch()">
+                    <input class="inp" id="clientNomQ" placeholder="Buscar prestación o código..." oninput="queueClientNomencladorSearch()">
                   </div>
                   <div class="client-nom-actions">
                     <button class="btn btn-ghost" id="clientNomXlsxBtn" onclick="exportClientNomenclador('xlsx')" type="button" title="Descargar en Excel">
@@ -381,7 +381,7 @@
 
                 <div class="tablecard nom-table client-nom-body">
                   <div class="table-head">
-                    <div><b>Resultados</b><span id="clientNomMeta">Todavia no hay busqueda.</span></div>
+                    <div><b>Resultados</b><span id="clientNomMeta">Todavía no hay búsqueda.</span></div>
                   </div>
                   <div class="table-scroll">
                     <table class="nom-results-table">
@@ -393,7 +393,7 @@
                         <col class="col-total">
                         <col class="col-auth">
                       </colgroup>
-                      <thead><tr><th>Modulo</th><th>Prestacion</th><th>Tipo</th><th>Ambito</th><th>Total</th><th>Autorizacion</th></tr></thead>
+                      <thead><tr><th>Módulo</th><th>Prestación</th><th>Tipo</th><th>Ámbito</th><th>Total</th><th>Autorización</th></tr></thead>
                       <tbody id="clientNomBody"></tbody>
                     </table>
                   </div>
@@ -427,7 +427,7 @@
                   </div>
                   <div class="table-scroll">
                     <table class="saved-report-table">
-                      <thead><tr><th>Reporte</th><th>Nomenclador</th><th>Practicas</th><th>Neto</th><th>Accion</th></tr></thead>
+                      <thead><tr><th>Reporte</th><th>Nomenclador</th><th>Prácticas</th><th>Neto</th><th>Acción</th></tr></thead>
                       <tbody id="clientSavedReportsBody"><tr><td colspan="5" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
                     </table>
                   </div>
@@ -436,7 +436,7 @@
                 <div id="clientReportWork" style="display:none">
                 <div class="client-card report-upload-card">
                   <div class="client-card-head">
-                    <h3>Valorizacion de practicas transmitidas</h3>
+                    <h3>Valorización de prácticas transmitidas</h3>
                     <div class="report-head-actions">
                       <button class="btn btn-navy" id="clientReportSaveBtn" onclick="saveClientReport()" type="button" disabled>Guardar reporte</button>
                       <button class="btn btn-ghost" id="clientReportEditBtn" onclick="unlockClientReport()" type="button" disabled>Editar</button>
@@ -449,19 +449,19 @@
                     </div>
                   </div>
                   <div class="client-report-controls">
-                    <label class="field"><span>Nombre del reporte</span><input class="inp" id="clientReportTitle" placeholder="Ej: Mayo 2026 - Cardiologia" oninput="saveClientReportDraft()"></label>
-                    <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod" onchange="changeClientReportPeriod()"><option value="">Ultimo disponible</option></select></label>
-                    <div id="clientReportStatus" class="nom-muted">Subi la bandeja de transmision para previsualizar la factura.</div>
-                    <label class="field report-notes-field"><span>Observaciones</span><textarea class="inp" id="clientReportObservations" placeholder="Ej: diferencia menor aceptada, debitos revisados..." oninput="setClientReportObservations(this.value)"></textarea></label>
+                    <label class="field"><span>Nombre del reporte</span><input class="inp" id="clientReportTitle" placeholder="Ej: Mayo 2026 - Cardiología" oninput="saveClientReportDraft()"></label>
+                    <label class="field"><span>Nomenclador</span><select class="inp" id="clientReportPeriod" onchange="changeClientReportPeriod()"><option value="">Último disponible</option></select></label>
+                    <div id="clientReportStatus" class="nom-muted">Subí la bandeja de transmisión para previsualizar la factura.</div>
+                    <label class="field report-notes-field"><span>Observaciones</span><textarea class="inp" id="clientReportObservations" placeholder="Ej: diferencia menor aceptada, débitos revisados..." oninput="setClientReportObservations(this.value)"></textarea></label>
                   </div>
                 </div>
 
                 <div class="report-summary-grid" id="clientReportSummary">
                   <div class="report-summary-card filterable" id="clientReportGrossCard" onclick="setClientReportQuickFilter('facturable')" onkeydown="handleReportSummaryCardKey(event,'facturable')" role="button" tabindex="0"><b>$ 0,00</b><span>Bruto facturable</span></div>
-                  <div class="report-summary-card filterable" id="clientReportDebitCard" onclick="setClientReportQuickFilter('debito')" onkeydown="handleReportSummaryCardKey(event,'debito')" role="button" tabindex="0"><b>$ 0,00</b><span>Debitos</span><div class="debit-breakdown" id="clientReportDebitBreakdown"></div></div>
+                  <div class="report-summary-card filterable" id="clientReportDebitCard" onclick="setClientReportQuickFilter('debito')" onkeydown="handleReportSummaryCardKey(event,'debito')" role="button" tabindex="0"><b>$ 0,00</b><span>Débitos</span><div class="debit-breakdown" id="clientReportDebitBreakdown"></div></div>
                   <div class="report-summary-card filterable" id="clientReportNetCard" onclick="setClientReportQuickFilter('neto')" onkeydown="handleReportSummaryCardKey(event,'neto')" role="button" tabindex="0"><b>$ 0,00</b><span>Neto estimado</span></div>
                   <div class="report-summary-card filterable" id="clientReportAbsentCard" onclick="setClientReportQuickFilter('ausentes')" onkeydown="handleReportSummaryCardKey(event,'ausentes')" role="button" tabindex="0"><b>0</b><span>Ausentes / activas</span><small id="clientReportAbsentValue" title="Lo que nos perdimos de facturar"></small></div>
-                  <div class="report-summary-card filterable" id="clientReportCutoffCard" onclick="setClientReportQuickFilter('cutoff')" onkeydown="handleReportSummaryCardKey(event,'cutoff')" role="button" tabindex="0"><b>$ 0,00</b><span>Proximo periodo por corte</span></div>
+                  <div class="report-summary-card filterable" id="clientReportCutoffCard" onclick="setClientReportQuickFilter('cutoff')" onkeydown="handleReportSummaryCardKey(event,'cutoff')" role="button" tabindex="0"><b>$ 0,00</b><span>Próximo período por corte</span></div>
                   <div class="report-summary-card filterable" id="clientReportMissingInformeCard" onclick="setClientReportQuickFilter('missingInforme')" onkeydown="handleReportSummaryCardKey(event,'missingInforme')" role="button" tabindex="0"><b>$ 0,00</b><span>Falta informe</span></div>
                   <div class="report-expected-card">
                     <label><span>Monto esperado</span><input class="inp" id="clientReportExpectedAmount" placeholder="$ 0,00" oninput="setClientReportExpectedAmount(this.value)"></label>
@@ -476,11 +476,11 @@
 
                 <div class="tablecard nom-table">
                   <div class="table-head report-head">
-                    <div><b>Practicas</b><span id="clientReportMeta">Todavia no hay bandeja cargada.</span></div>
+                    <div><b>Prácticas</b><span id="clientReportMeta">Todavía no hay bandeja cargada.</span></div>
                     <div class="report-filter-bar">
                       <input class="inp report-search" id="clientReportSearch" placeholder="Paciente, beneficio u OME..." oninput="setClientReportSearch(this.value)">
-                      <input class="inp report-search" id="clientReportPracticeFilter" placeholder="Codigo o practica..." oninput="setClientReportPracticeFilter(this.value)">
-                      <select class="inp" id="clientReportModuleFilter" onchange="setClientReportModuleFilter(this.value)"><option value="">Todos los modulos</option></select>
+                      <input class="inp report-search" id="clientReportPracticeFilter" placeholder="Código o práctica..." oninput="setClientReportPracticeFilter(this.value)">
+                      <select class="inp" id="clientReportModuleFilter" onchange="setClientReportModuleFilter(this.value)"><option value="">Todos los módulos</option></select>
                       <select class="inp" id="clientReportStatusFilter" onchange="setClientReportStatusFilter(this.value)"><option value="">Todos los estados</option></select>
                       <label class="date-filter"><span>Transm. desde</span><input class="inp" type="date" id="clientReportTransFrom" onchange="setClientReportTransmissionFilter()"></label>
                       <label class="date-filter"><span>Transm. hasta</span><input class="inp" type="date" id="clientReportTransTo" onchange="setClientReportTransmissionFilter()"></label>
@@ -488,7 +488,7 @@
                   </div>
                   <div class="table-scroll">
                     <table class="report-results-table">
-                      <thead><tr><th>Paciente</th><th><button class="th-sort" type="button" onclick="toggleClientReportPracticeSort()">Practica <span id="clientReportPracticeSortIcon">A-Z</span></button></th><th>Turno / transmision</th><th>Estado</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('bruto')">Bruto <span id="clientReportBrutoSortIcon"></span></button></th><th>Debito</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('neto')">Neto <span id="clientReportNetoSortIcon"></span></button></th></tr></thead>
+                      <thead><tr><th>Paciente</th><th><button class="th-sort" type="button" onclick="toggleClientReportPracticeSort()">Practica <span id="clientReportPracticeSortIcon">A-Z</span></button></th><th>Turno / transmisión</th><th>Estado</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('bruto')">Bruto <span id="clientReportBrutoSortIcon"></span></button></th><th>Débito</th><th><button class="th-sort" type="button" onclick="toggleClientReportValueSort('neto')">Neto <span id="clientReportNetoSortIcon"></span></button></th></tr></thead>
                       <tbody id="clientReportBody"><tr><td colspan="7" class="muted-cell">No hay datos cargados.</td></tr></tbody>
                     </table>
                   </div>
@@ -499,15 +499,15 @@
               <section id="client-section-medicos" class="client-section" style="display:none">
                 <div class="client-card">
                   <div class="client-card-head">
-                    <h3>Usuarios medicos</h3>
-                    <button class="btn btn-primary ns-only" type="button" onclick="openMedicoModal()">Agregar medico</button>
+                    <h3>Usuarios médicos</h3>
+                    <button class="btn btn-primary ns-only" type="button" onclick="openMedicoModal()">Agregar médico</button>
                   </div>
-                  <p class="nom-muted">Medicos de este consultorio con su acceso PAMI. Mas adelante se van a usar para generar OME de especialista. La clave se guarda encriptada.</p>
+                  <p class="nom-muted">Médicos de este consultorio con su acceso PAMI. Más adelante se van a usar para generar OME de especialista. La clave se guarda encriptada.</p>
                   <div class="msg err" id="medicosError" style="display:none"></div>
                   <div class="table-scroll">
                     <table class="saved-report-table" id="medicosTable">
-                      <thead><tr><th>Nombre y apellido</th><th>Especialidad</th><th>Usuario</th><th>Clave</th><th>Telefono</th><th>Accion</th></tr></thead>
-                      <tbody id="medicosBody"><tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr></tbody>
+                      <thead><tr><th>Nombre y apellido</th><th>Especialidad</th><th>Usuario</th><th>Clave</th><th>Teléfono</th><th>Acción</th></tr></thead>
+                      <tbody id="medicosBody"><tr><td colspan="6" class="muted-cell">Sin médicos cargados.</td></tr></tbody>
                     </table>
                   </div>
                 </div>
@@ -541,7 +541,7 @@
         <!-- NOMENCLADORES -->
         <section id="view-nomencladores" style="display:none">
           <div class="nom-status card" id="nomStatus">
-            <div id="nomStatusText"><b>Sin nomenclador cargado</b><span>Subi un Excel .xls o .xlsx para habilitar la busqueda.</span></div>
+            <div id="nomStatusText"><b>Sin nomenclador cargado</b><span>Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span></div>
             <div class="nom-upload">
               <label class="month-field">
                 <span>Mes opcional</span>
@@ -569,16 +569,16 @@
               </button>
             </div>
             <div class="field nom-search">
-              <label>Prestacion, codigo o modulo</label>
-              <input class="inp" id="nomQ" placeholder="Ej: ecodoppler, 427110, internacion..." oninput="queueNomencladorSearch()">
+              <label>Prestación, código o módulo</label>
+              <input class="inp" id="nomQ" placeholder="Ej: ecodoppler, 427110, internación..." oninput="queueNomencladorSearch()">
             </div>
             <div class="field">
-              <label>Modulo</label>
+              <label>Módulo</label>
               <div class="multi-select" id="nomModuleMulti">
                 <button class="inp multi-trigger" id="nomModuleTrigger" type="button" onclick="toggleModuleMenu()">Todos</button>
                 <div class="multi-menu" id="nomModuleMenu">
                   <div class="multi-menu-head">
-                    <span>Modulos</span>
+                    <span>Módulos</span>
                     <button type="button" onclick="clearModuleSelection()">Limpiar</button>
                   </div>
                   <input class="multi-search" id="nomModuleSearch" type="text" placeholder="Buscar módulo…" oninput="filterModuleOptions()" autocomplete="off">
@@ -587,7 +587,7 @@
               </div>
             </div>
             <div class="field">
-              <label>Ambito</label>
+              <label>Ámbito</label>
               <select class="inp" id="nomScope" onchange="searchNomenclador()"><option value="">Todos</option></select>
             </div>
             <div class="field">
@@ -598,7 +598,7 @@
 
           <div class="tablecard nom-table">
             <div class="table-head">
-              <div><b id="nomResultTitle">Resultados</b><span id="nomResultMeta">Todavia no hay busqueda.</span></div>
+              <div><b id="nomResultTitle">Resultados</b><span id="nomResultMeta">Todavía no hay búsqueda.</span></div>
             </div>
             <div class="table-scroll">
               <table class="nom-results-table">
@@ -610,7 +610,7 @@
                   <col class="col-total">
                   <col class="col-auth">
                 </colgroup>
-                <thead><tr><th>Modulo</th><th>Prestacion</th><th>Tipo</th><th>Ambito</th><th>Total</th><th>Autorizacion</th></tr></thead>
+                <thead><tr><th>Módulo</th><th>Prestación</th><th>Tipo</th><th>Ámbito</th><th>Total</th><th>Autorización</th></tr></thead>
                 <tbody id="nomBody"></tbody>
               </table>
             </div>
@@ -859,7 +859,7 @@
     <!-- ===== Modal: alta / edición de usuario médico ===== -->
     <div class="scrim" id="medicoScrim" onclick="closeMedicoModal()"></div>
     <div class="modal" id="medicoModal" role="dialog" aria-modal="true">
-      <div class="modal-head"><h3 id="medicoTitle">Nuevo medico</h3><button class="x" onclick="closeMedicoModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-head"><h3 id="medicoTitle">Nuevo médico</h3><button class="x" onclick="closeMedicoModal()" aria-label="Cerrar">×</button></div>
       <div class="modal-body">
         <input type="hidden" id="medicoId">
         <div class="field"><label>Nombre y apellido</label><input class="inp" id="medicoNombre" spellcheck="false"></div>
@@ -873,7 +873,7 @@
           </div>
           <div class="hint" id="medicoClaveHint">Se guarda encriptada.</div>
         </div>
-        <div class="field"><label>Telefono</label><input class="inp" id="medicoTelefono" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><label>Teléfono</label><input class="inp" id="medicoTelefono" spellcheck="false" autocomplete="off"></div>
         <div class="msg err" id="medicoModalError"></div>
       </div>
       <div class="modal-foot">
@@ -966,12 +966,12 @@
         <div class="form-grid two">
           <label>Nombre<input class="inp" id="clientCreateName" placeholder="Ej: Sala Millon"></label>
           <label>CUIT<input class="inp" id="clientCreateCuit" placeholder="Ej: 30545942123"></label>
-          <label class="span-2">Razon social<input class="inp" id="clientCreateBusinessName" placeholder="Ej: SALA DE AUXILIO DE LOMAS DEL MILLON"></label>
+          <label class="span-2">Razón social<input class="inp" id="clientCreateBusinessName" placeholder="Ej: SALA DE AUXILIO DE LOMAS DEL MILLON"></label>
           <label>UGL<input class="inp" id="clientCreateUgl" placeholder="Ej: UGL XXXV (opcional)"></label>
           <label>SAP<input class="inp" id="clientCreateSap" placeholder="Ej: 110853"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientCreateTipo" onchange="onClientCreateTipoChange()"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
         </div>
-        <p class="modal-note">Modulos activos</p>
+        <p class="modal-note">Módulos activos</p>
         <div class="module-edit-list" id="clientCreateModulesOptions"></div>
         <div class="msg err" id="clientCreateError"></div>
       </div>
@@ -984,15 +984,15 @@
     <!-- ===== Modal: editar modulos del cliente ===== -->
     <div class="scrim" id="cmScrim" onclick="closeClientModulesModal()"></div>
     <div class="modal wide" id="clientModulesModal" role="dialog" aria-modal="true">
-      <div class="modal-head"><h3>Editar modulos activos</h3><button class="x" onclick="closeClientModulesModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-head"><h3>Editar módulos activos</h3><button class="x" onclick="closeClientModulesModal()" aria-label="Cerrar">&times;</button></div>
       <div class="modal-body">
-        <p class="modal-note">Elegimos los modulos desde el nomenclador seleccionado para este cliente.</p>
+        <p class="modal-note">Elegimos los módulos desde el nomenclador seleccionado para este cliente.</p>
         <div class="module-edit-list" id="clientModulesOptions"></div>
         <div class="msg err" id="clientModulesError"></div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeClientModulesModal()">Cancelar</button>
-        <button class="btn btn-primary" id="clientModulesSave" onclick="saveClientModules()">Guardar modulos</button>
+        <button class="btn btn-primary" id="clientModulesSave" onclick="saveClientModules()">Guardar módulos</button>
       </div>
     </div>
 
@@ -1004,12 +1004,12 @@
         <div class="form-grid two">
           <label>Nombre<input class="inp" id="clientEditName" placeholder="Ej: St Ignacio"></label>
           <label>CUIT<input class="inp" id="clientEditCuit" placeholder="Ej: 30716016680"></label>
-          <label class="span-2">Razon social<input class="inp" id="clientEditBusinessName" placeholder="Ej: ST IGNACIO SRL"></label>
+          <label class="span-2">Razón social<input class="inp" id="clientEditBusinessName" placeholder="Ej: ST IGNACIO SRL"></label>
           <label>UGL<input class="inp" id="clientEditUgl" placeholder="Ej: UGL XXXV"></label>
           <label>SAP<input class="inp" id="clientEditSap" placeholder="Ej: 112553"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientEditTipo"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
         </div>
-        <p class="modal-note">Los módulos activos se editan aparte, desde la tarjeta "Modulos activos".</p>
+        <p class="modal-note">Los módulos activos se editan aparte, desde la tarjeta "Módulos activos".</p>
         <div class="msg err" id="clientEditError"></div>
       </div>
       <div class="modal-foot">
