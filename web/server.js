@@ -3246,6 +3246,13 @@ const server = http.createServer(async (req, res) => {
   // (scopeado abajo) y de /api/clientes/{su-centro}/... Todo lo demás: 403.
   if (p.startsWith("/api/")) {
     const meGate = getSessionUser(req);
+    // Gate GLOBAL de acceso: toda ruta que no sea pública exige sesión ACTIVA.
+    // getSessionUser ya filtra por `active`, así que desactivar a un usuario lo deja
+    // afuera al instante — no puede loguearse NI usar una sesión ya abierta, y no
+    // llega a ningún endpoint aunque alguno se olvidara de chequear. Corte de
+    // servicio impenetrable (si dejan de pagar, active=false y quedan bloqueados).
+    const RUTAS_PUBLICAS = new Set(["/api/login", "/api/logout", "/api/me", "/api/version", "/api/forgot", "/api/reset"]);
+    if (!RUTAS_PUBLICAS.has(p) && !meGate) return json(res, 401, { error: "no-auth" });
     if (meGate && meGate.role === "clinica") {
       const esGet = (req.method === "GET" || !req.method);
       const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
