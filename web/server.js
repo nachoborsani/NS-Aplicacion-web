@@ -2167,6 +2167,26 @@ function buildHonorariosCodigos(slug) {
     .sort((x, y) => (x.especialidad || "").localeCompare(y.especialidad || "") || (y.facturado - x.facturado));
   return { periodo: bandeja.month || "", codigos };
 }
+// Igual que arriba pero desde un REPORTE CERRADO (lo que el centro realmente
+// cobra: neto tras débitos). Los honorarios se liquidan sobre lo cerrado.
+function buildHonorariosDeReporte(slug, reportId) {
+  const store = loadClientReportsStore();
+  const report = (store.items || []).find((r) => r.clientSlug === slug && String(r.id) === String(reportId));
+  if (!report || !Array.isArray(report.rows)) return null;
+  const agr = new Map();
+  for (const row of report.rows) {
+    const code = cleanIdentifier(row.practiceCode);
+    if (!code) continue;
+    let a = agr.get(code);
+    if (!a) { a = { code, nombre: String(row.practiceText || row.practiceDescription || "").trim(), especialidad: String(row.moduleDescription || "").trim() || "Sin especialidad", cantidad: 0, facturado: 0 }; agr.set(code, a); }
+    if (!a.nombre && row.practiceText) a.nombre = String(row.practiceText).trim();
+    a.cantidad++; a.facturado += reportRowNet(row);
+  }
+  const codigos = [...agr.values()]
+    .map((a) => ({ code: a.code, nombre: a.nombre, especialidad: a.especialidad, cantidad: a.cantidad, facturado: money(a.facturado) }))
+    .sort((x, y) => (x.especialidad || "").localeCompare(y.especialidad || "") || (y.facturado - x.facturado));
+  return { periodo: report.period || "", reporteNombre: report.name || "", codigos };
+}
 function buildBandejaResumen(slug) {
   const bandeja = loadClientBandejas()[slug];
   if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
@@ -3952,8 +3972,17 @@ const server = http.createServer(async (req, res) => {
     if (!permitido) return json(res, 403, { error: "forbidden" });
     const store = loadHonorarios();
     if (req.method === "GET") {
-      const { periodo, codigos } = buildHonorariosCodigos(slug);
-      return json(res, 200, { periodo, codigos, config: store[slug] || {} });
+      // Los honorarios se liquidan sobre lo CERRADO. Listamos los reportes cerrados
+      // y calculamos sobre el elegido (o el más nuevo). Si no hay reportes, cae al
+      // mes en curso como referencia.
+      const rstore = loadClientReportsStore();
+      const reportes = (rstore.items || []).filter((r) => r.clientSlug === slug)
+        .sort((a, b) => String(b.closedAt || "").localeCompare(String(a.closedAt || ""))).map(reportListItem);
+      const reporteId = String(url.searchParams.get("reporte") || "").trim() || (reportes[0] && reportes[0].id) || "";
+      let data = reporteId ? buildHonorariosDeReporte(slug, reporteId) : null;
+      const fuente = data ? "reporte" : "mescurso";
+      if (!data) data = buildHonorariosCodigos(slug);
+      return json(res, 200, { fuente, reportes, reporteId, periodo: data.periodo, reporteNombre: data.reporteNombre || "", codigos: data.codigos, config: store[slug] || {} });
     }
     const b = await readBody(req);
     const code = cleanIdentifier(b && b.code);

@@ -1538,15 +1538,23 @@ async function saveClientPami(){
 
 // ===== Usuarios médicos del consultorio (solo admin) =====
 // ===== Honorarios y ganancia real (admin + clínica del centro) =====
-var HON = { periodo: '', codigos: [], config: {} };
-async function loadClientHonorarios(){
+var HON = { periodo: '', codigos: [], config: {}, reportes: [], reporteId: '', fuente: '', reporteNombre: '' };
+async function loadClientHonorarios(reporteId){
   if (!ACTIVE_CLIENT) return;
   var err = document.getElementById('honError'); if (err) err.style.display = 'none';
-  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios');
+  var qs = reporteId ? ('?reporte=' + encodeURIComponent(reporteId)) : '';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios' + qs);
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
-  HON = { periodo: res.data.periodo || '', codigos: res.data.codigos || [], config: res.data.config || {} };
+  var d = res.data;
+  HON = { periodo: d.periodo || '', codigos: d.codigos || [], config: d.config || {}, reportes: d.reportes || [], reporteId: d.reporteId || '', fuente: d.fuente || '', reporteNombre: d.reporteNombre || '' };
+  // Selector de reportes cerrados.
+  var sel = document.getElementById('honReporte');
+  if (sel){
+    sel.innerHTML = HON.reportes.map(function(r){ return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(HON.reporteId) ? ' selected' : '') + '>' + esc(r.name || r.period || r.id) + '</option>'; }).join('') || '<option value="">(sin reportes cerrados)</option>';
+    sel.style.display = HON.reportes.length ? '' : 'none';
+  }
   var pe = document.getElementById('honPeriodo');
-  if (pe) pe.textContent = HON.periodo ? ('Período ' + HON.periodo) : 'Sin bandeja del mes cargada';
+  if (pe) pe.textContent = HON.fuente === 'reporte' ? ((HON.reporteNombre || 'Reporte') + ' · ' + (HON.periodo || '')) : (HON.periodo ? ('Mes en curso ' + HON.periodo + ' (aún sin reporte cerrado)') : 'Sin datos');
   renderHonorarios();
 }
 function honCalc(cod, cfg){
@@ -1558,7 +1566,7 @@ function honCalc(cod, cfg){
 }
 function renderHonorarios(){
   var body = document.getElementById('honBody'); if (!body) return;
-  if (!HON.codigos.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">No hay prácticas en la bandeja del mes.</td></tr>'; var t = document.getElementById('honTotales'); if (t) t.innerHTML = ''; return; }
+  if (!HON.codigos.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + (HON.reportes.length ? 'El reporte elegido no tiene prácticas.' : 'Todavía no hay reportes cerrados de este centro.') + '</td></tr>'; var t = document.getElementById('honTotales'); if (t) t.innerHTML = ''; return; }
   var html = '', espActual = null;
   HON.codigos.forEach(function(cod){
     if (cod.especialidad !== espActual){ espActual = cod.especialidad; html += '<tr class="hon-esp"><td colspan="6">' + esc(espActual || 'Sin especialidad') + '</td></tr>'; }

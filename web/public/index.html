@@ -518,12 +518,13 @@
                   <div class="client-card-head">
                     <h3>Honorarios y ganancia real</h3>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                      <label class="factura-cfg">Reporte <select class="inp mini" id="honReporte" onchange="loadClientHonorarios(this.value)" style="max-width:220px"></select></label>
                       <span class="nom-muted" id="honPeriodo"></span>
                       <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('pdf')">📄 PDF</button>
                       <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('xlsx')">📊 Excel</button>
                     </div>
                   </div>
-                  <p class="nom-muted">Por cada práctica ves lo que factura PAMI y cargás cuánto le pagás al médico (monto fijo por práctica o % de lo facturado). La diferencia es tu <b>ganancia real</b>.</p>
+                  <p class="nom-muted">Se liquida sobre lo <b>cerrado</b> (lo que el centro cobra). Por cada práctica ves lo cobrado y cargás cuánto le pagás al médico ($/práctica o % ); la diferencia es tu <b>ganancia real</b>.</p>
                   <div class="msg err" id="honError" style="display:none"></div>
                   <div class="hon-totales" id="honTotales"></div>
                   <div class="table-scroll">
