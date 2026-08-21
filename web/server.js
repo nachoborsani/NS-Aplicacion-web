@@ -3548,10 +3548,8 @@ const server = http.createServer(async (req, res) => {
   if (clientMedicosMatch && (req.method === "GET" || req.method === "POST")) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede ver o cambiar los usuarios médicos." });
     const slug = decodeURIComponent(clientMedicosMatch[1]);
-    // La clínica de ese centro puede LEER la lista (sin claves); crear/editar es admin.
-    const clinicaLee = req.method === "GET" && me.role === "clinica" && me.centro === slug;
-    if (me.role !== "admin" && !clinicaLee) return json(res, 403, { error: "Solo un administrador puede ver o cambiar los usuarios médicos." });
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
     const store = loadClientMedicos();

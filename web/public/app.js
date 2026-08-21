@@ -1350,7 +1350,6 @@ function renderClientList(){
     var SECC_CLINICA = [
       { key: 'mescurso',  label: 'Dashboard' },
       { key: 'dashboard', label: 'Reportes' },
-      { key: 'medicos',   label: 'Médicos' },
       { key: 'basica',    label: 'Datos del centro' },
     ];
     cons.innerHTML = SECC_CLINICA.map(function(s){
@@ -1415,8 +1414,8 @@ function clientSeccionesPermitidas(){
   var base = ['mescurso', 'basica', 'dashboard'];
   // La clínica NO adjunta reportes (solo lectura). El resto sí.
   if (!esClinica) base.push('reportes');
-  // Médicos: admin (edita) y la clínica (solo lectura, para verlos en su menú).
-  if ((ME && ME.role === 'admin') || esClinica) base.push('medicos');
+  // Médicos: por ahora solo admin (no se le muestra al centro).
+  if (ME && ME.role === 'admin') base.push('medicos');
   return base;
 }
 // Muestra/oculta las pestañas según el tipo de cliente.
