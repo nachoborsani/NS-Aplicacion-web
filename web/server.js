@@ -38,6 +38,11 @@ const clientMedicosFile = path.join(dataDir, "client_medicos.json");
 const facturasFile = path.join(dataDir, "facturas.json");
 // Gastos fijos de NS (panel Administración → Gastos).
 const gastosFile = path.join(dataDir, "gastos.json");
+// Honorarios: cuánto le paga el centro a los médicos por cada código de práctica.
+// { [slug]: { [practiceCode]: { tipo: "monto"|"pct", valor: number } } }
+const honorariosFile = path.join(dataDir, "honorarios.json");
+function loadHonorarios() { try { const j = JSON.parse(fs.readFileSync(honorariosFile, "utf8")); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
+function saveHonorarios(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(honorariosFile, JSON.stringify(store, null, 2)); }
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -2129,6 +2134,39 @@ function isConsultationRow(row) {
 // NINGÚN importe; el $ estimado sale de matchear cada código contra el
 // nomenclador del período y sumar el neto. Además cuenta consultas/prácticas y
 // validadas/transmitidas. Es una ESTIMACIÓN del mes en curso, sin débitos.
+// Agrupa las prácticas de la bandeja del mes por CÓDIGO: cantidad y facturado
+// (neto del nomenclador), con la especialidad (módulo) y el nombre de la práctica.
+// Base del módulo de honorarios (ganancia = facturado − lo que paga el centro).
+function buildHonorariosCodigos(slug) {
+  const bandeja = loadClientBandejas()[slug];
+  if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return { periodo: "", codigos: [] };
+  const nomStore = loadNomencladorStore();
+  let nom = (nomStore.items || {})[bandeja.month] || null;
+  if (!nom) {
+    const periodos = Object.keys(nomStore.items || {}).sort();
+    const noPost = periodos.filter((p) => p <= String(bandeja.month || ""));
+    const elegido = noPost.length ? noPost[noPost.length - 1] : periodos[periodos.length - 1];
+    nom = elegido ? nomStore.items[elegido] : null;
+  }
+  const byCode = new Map();
+  if (nom && Array.isArray(nom.rows)) for (const r of nom.rows) { const c = cleanIdentifier(r.practiceCode); if (c && !byCode.has(c)) byCode.set(c, r); }
+  const keys = Object.keys(bandeja.rows[0] || {});
+  const kPrac = keys.find((k) => /PRACTICA/.test(normalizeText(k))) || "";
+  const agr = new Map();
+  for (const row of bandeja.rows) {
+    const pracRaw = String(row[kPrac] || "");
+    const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
+    if (!code) continue;
+    const nomRow = byCode.get(code) || null;
+    let a = agr.get(code);
+    if (!a) { a = { code, nombre: nomRow ? nomRow.practiceDescription : (pracRaw.split(" - ").slice(1).join(" - ").trim() || pracRaw), especialidad: (nomRow && nomRow.moduleDescription) || "Sin especialidad", cantidad: 0, facturado: 0 }; agr.set(code, a); }
+    a.cantidad++; a.facturado += nomRow ? Number(nomRow.total || 0) : 0;
+  }
+  const codigos = [...agr.values()]
+    .map((a) => ({ code: a.code, nombre: a.nombre, especialidad: a.especialidad, cantidad: a.cantidad, facturado: money(a.facturado) }))
+    .sort((x, y) => (x.especialidad || "").localeCompare(y.especialidad || "") || (y.facturado - x.facturado));
+  return { periodo: bandeja.month || "", codigos };
+}
 function buildBandejaResumen(slug) {
   const bandeja = loadClientBandejas()[slug];
   if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
@@ -3192,10 +3230,14 @@ const server = http.createServer(async (req, res) => {
       const esGet = (req.method === "GET" || !req.method);
       const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
       const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
+      const suCentro = mCli && decodeURIComponent(mCli[1]) === meGate.centro;
       let permitido = false;
       if (permitidoSiempre) permitido = true;
       else if (esGet && p === "/api/clientes") permitido = true;
-      else if (esGet && mCli && decodeURIComponent(mCli[1]) === meGate.centro) permitido = true;
+      else if (esGet && suCentro) permitido = true;
+      // Única excepción de escritura: guardar SUS honorarios. Y exportar PDF (lectura).
+      else if (!esGet && suCentro && /\/honorarios$/.test(p)) permitido = true;
+      else if (p === "/api/mescurso/export") permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
   }
@@ -3899,6 +3941,32 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
+  // Honorarios del centro: prácticas por código (cantidad + facturado) + config
+  // (cuánto paga por cada código). GET admin o clínica del centro; POST guarda.
+  const clientHonorariosMatch = p.match(/^\/api\/clientes\/([^/]+)\/honorarios$/);
+  if (clientHonorariosMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientHonorariosMatch[1]);
+    const permitido = me.role === "admin" || (me.role === "clinica" && me.centro === slug);
+    if (!permitido) return json(res, 403, { error: "forbidden" });
+    const store = loadHonorarios();
+    if (req.method === "GET") {
+      const { periodo, codigos } = buildHonorariosCodigos(slug);
+      return json(res, 200, { periodo, codigos, config: store[slug] || {} });
+    }
+    const b = await readBody(req);
+    const code = cleanIdentifier(b && b.code);
+    if (!code) return json(res, 400, { error: "Falta el código." });
+    store[slug] = store[slug] || {};
+    const valorVacio = !b || b.valor === "" || b.valor == null;
+    const valor = Math.max(0, Number(b && b.valor) || 0);
+    if (valorVacio || valor === 0) delete store[slug][code];
+    else store[slug][code] = { tipo: (b && b.tipo) === "pct" ? "pct" : "monto", valor };
+    saveHonorarios(store);
+    return json(res, 200, { ok: true, config: store[slug] });
+  }
+
   // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las
   // filas crudas, solo los totales tipo Julio). Va ANTES del match de /bandeja.
   const clientBandejaResumenMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/resumen$/);

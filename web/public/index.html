@@ -214,6 +214,7 @@
                 <button class="active" id="clientTabDashboard" type="button" onclick="setClientSection('dashboard')">Dashboard de reportes</button>
                 <button id="clientTabReportes" type="button" onclick="setClientSection('reportes')">Adjuntar reporte</button>
                 <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios medicos</button>
+                <button id="clientTabHonorarios" type="button" onclick="setClientSection('honorarios')" style="display:none">Honorarios</button>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
@@ -507,6 +508,28 @@
                     <table class="saved-report-table" id="medicosTable">
                       <thead><tr><th>Nombre y apellido</th><th>Especialidad</th><th>Usuario</th><th>Clave</th><th>Telefono</th><th>Accion</th></tr></thead>
                       <tbody id="medicosBody"><tr><td colspan="6" class="muted-cell">Sin medicos cargados.</td></tr></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+
+              <section id="client-section-honorarios" class="client-section" style="display:none">
+                <div class="client-card">
+                  <div class="client-card-head">
+                    <h3>Honorarios y ganancia real</h3>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                      <span class="nom-muted" id="honPeriodo"></span>
+                      <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('pdf')">📄 PDF</button>
+                      <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('xlsx')">📊 Excel</button>
+                    </div>
+                  </div>
+                  <p class="nom-muted">Por cada práctica ves lo que factura PAMI y cargás cuánto le pagás al médico (monto fijo por práctica o % de lo facturado). La diferencia es tu <b>ganancia real</b>.</p>
+                  <div class="msg err" id="honError" style="display:none"></div>
+                  <div class="hon-totales" id="honTotales"></div>
+                  <div class="table-scroll">
+                    <table class="saved-report-table hon-table" id="honTable">
+                      <thead><tr><th>Especialidad / Práctica</th><th class="num">Cant.</th><th class="num">Facturado</th><th>Le pago</th><th class="num">Honorarios</th><th class="num">Ganancia</th></tr></thead>
+                      <tbody id="honBody"><tr><td colspan="6" class="muted-cell">Cargando…</td></tr></tbody>
                     </table>
                   </div>
                 </div>

@@ -1348,9 +1348,10 @@ function renderClientList(){
     var hdrCli = document.querySelector('#navGroupConsultorios .nav-parent span');
     if (hdrCli) hdrCli.textContent = centroCli ? centroCli.name : 'Mi centro';
     var SECC_CLINICA = [
-      { key: 'mescurso',  label: 'Dashboard' },
-      { key: 'dashboard', label: 'Reportes' },
-      { key: 'basica',    label: 'Datos del centro' },
+      { key: 'mescurso',   label: 'Dashboard' },
+      { key: 'dashboard',  label: 'Reportes' },
+      { key: 'honorarios', label: 'Honorarios' },
+      { key: 'basica',     label: 'Datos del centro' },
     ];
     cons.innerHTML = SECC_CLINICA.map(function(s){
       var active = (ACTIVE_CLIENT && CLIENT_SECTION === s.key) ? ' active' : '';
@@ -1402,6 +1403,7 @@ var CLIENT_SECTIONS = [
   { key:'dashboard', sec:'client-section-dashboard', tab:'clientTabDashboard', crumb:'Dashboard de reportes' },
   { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
   { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios medicos' },
+  { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' }
 ];
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
@@ -1411,7 +1413,7 @@ function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
   if (esMC) return ['general', 'basica'];
-  var base = ['mescurso', 'basica', 'dashboard'];
+  var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
   // La clínica NO adjunta reportes (solo lectura). El resto sí.
   if (!esClinica) base.push('reportes');
   // Médicos: por ahora solo admin (no se le muestra al centro).
@@ -1449,6 +1451,7 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'mescurso') loadClientMesCurso();
   if (CLIENT_SECTION === 'general') renderClientGeneral();
   if (CLIENT_SECTION === 'medicos') loadClientMedicos();
+  if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
 }
 // El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
 // se muestra solo para ese cliente; el resto ve el placeholder.
@@ -1534,6 +1537,99 @@ async function saveClientPami(){
 }
 
 // ===== Usuarios médicos del consultorio (solo admin) =====
+// ===== Honorarios y ganancia real (admin + clínica del centro) =====
+var HON = { periodo: '', codigos: [], config: {} };
+async function loadClientHonorarios(){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('honError'); if (err) err.style.display = 'none';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios');
+  if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
+  HON = { periodo: res.data.periodo || '', codigos: res.data.codigos || [], config: res.data.config || {} };
+  var pe = document.getElementById('honPeriodo');
+  if (pe) pe.textContent = HON.periodo ? ('Período ' + HON.periodo) : 'Sin bandeja del mes cargada';
+  renderHonorarios();
+}
+function honCalc(cod, cfg){
+  var fact = Number(cod.facturado) || 0, hon = 0;
+  if (cfg && Number(cfg.valor) > 0){
+    hon = (cfg.tipo === 'pct') ? fact * Number(cfg.valor) / 100 : (Number(cod.cantidad) || 0) * Number(cfg.valor);
+  }
+  return { fact: fact, hon: hon, gan: fact - hon };
+}
+function renderHonorarios(){
+  var body = document.getElementById('honBody'); if (!body) return;
+  if (!HON.codigos.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">No hay prácticas en la bandeja del mes.</td></tr>'; var t = document.getElementById('honTotales'); if (t) t.innerHTML = ''; return; }
+  var html = '', espActual = null;
+  HON.codigos.forEach(function(cod){
+    if (cod.especialidad !== espActual){ espActual = cod.especialidad; html += '<tr class="hon-esp"><td colspan="6">' + esc(espActual || 'Sin especialidad') + '</td></tr>'; }
+    var cfg = HON.config[cod.code] || null;
+    var tipo = cfg ? cfg.tipo : 'monto', valor = cfg ? cfg.valor : '';
+    var c = honCalc(cod, cfg);
+    html += '<tr data-code="' + esc(cod.code) + '">' +
+      '<td>' + esc(cod.nombre || cod.code) + ' <span class="nom-muted">(' + esc(cod.code) + ')</span></td>' +
+      '<td class="num">' + numberFmt(cod.cantidad) + '</td>' +
+      '<td class="num">' + moneyFmt(cod.facturado) + '</td>' +
+      '<td class="hon-pago">' +
+        '<select class="inp mini hon-tipo" onchange="honCambio(\'' + esc(cod.code) + '\')"><option value="monto"' + (tipo !== 'pct' ? ' selected' : '') + '>$/prác.</option><option value="pct"' + (tipo === 'pct' ? ' selected' : '') + '>%</option></select>' +
+        '<input class="inp mini hon-valor" inputmode="decimal" value="' + esc(valor) + '" placeholder="0" oninput="honRecalc(\'' + esc(cod.code) + '\')" onchange="honCambio(\'' + esc(cod.code) + '\')">' +
+      '</td>' +
+      '<td class="num" id="honHon_' + esc(cod.code) + '">' + moneyFmt(c.hon) + '</td>' +
+      '<td class="num hon-gan" id="honGan_' + esc(cod.code) + '">' + moneyFmt(c.gan) + '</td>' +
+    '</tr>';
+  });
+  body.innerHTML = html;
+  honTotales();
+}
+function honFilaCfg(code){
+  var tr = document.querySelector('#honBody tr[data-code="' + code + '"]'); if (!tr) return null;
+  return { tipo: tr.querySelector('.hon-tipo').value, valor: facturaParseMonto(tr.querySelector('.hon-valor').value) };
+}
+function honRecalc(code){
+  var cod = HON.codigos.find(function(x){ return String(x.code) === String(code); }); if (!cod) return;
+  var c = honCalc(cod, honFilaCfg(code));
+  var h = document.getElementById('honHon_' + code), g = document.getElementById('honGan_' + code);
+  if (h) h.textContent = moneyFmt(c.hon);
+  if (g) g.textContent = moneyFmt(c.gan);
+  honTotales();
+}
+async function honCambio(code){
+  honRecalc(code);
+  var cfg = honFilaCfg(code); if (!cfg) return;
+  if (cfg.valor > 0) HON.config[code] = cfg; else delete HON.config[code];
+  await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios', { code: code, tipo: cfg.tipo, valor: cfg.valor });
+}
+function honTotales(){
+  var box = document.getElementById('honTotales'); if (!box) return;
+  var tf = 0, th = 0;
+  HON.codigos.forEach(function(cod){
+    var cfg = honFilaCfg(cod.code) || HON.config[cod.code] || null;
+    var c = honCalc(cod, cfg); tf += c.fact; th += c.hon;
+  });
+  box.innerHTML =
+    '<div class="hon-tot in"><span>Facturado (PAMI)</span><b>' + moneyFmt(tf) + '</b></div>' +
+    '<div class="hon-tot out"><span>Honorarios (médicos)</span><b>' + moneyFmt(th) + '</b></div>' +
+    '<div class="hon-tot net"><span>Ganancia real</span><b>' + moneyFmt(tf - th) + '</b></div>';
+}
+async function honDescargar(fmt){
+  if (!HON.codigos.length) return;
+  var filas = HON.codigos.map(function(cod){
+    var cfg = honFilaCfg(cod.code) || HON.config[cod.code] || null;
+    var c = honCalc(cod, cfg);
+    var pago = cfg && cfg.valor > 0 ? (cfg.tipo === 'pct' ? (cfg.valor + '%') : ('$ ' + cfg.valor + '/prác.')) : '';
+    return [cod.especialidad || '', cod.nombre + ' (' + cod.code + ')', cod.cantidad, Number(cod.facturado) || 0, pago, c.hon, c.gan];
+  });
+  var cli = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
+  var d = { fmt: fmt, titulo: 'Honorarios ' + cli + ' - ' + (HON.periodo || ''), columnas: ['ESPECIALIDAD', 'PRACTICA', 'CANT', 'FACTURADO', 'LE PAGO', 'HONORARIOS', 'GANANCIA'], filas: filas, moneyCols: [3, 5, 6] };
+  try {
+    var resp = await fetch('/api/mescurso/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(d) });
+    if (!resp.ok) throw new Error('export');
+    var blob = await resp.blob(); var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url;
+    a.download = d.titulo.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') + (fmt === 'pdf' ? '.pdf' : '.xlsx');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  } catch (e){ alert('No se pudo generar el archivo.'); }
+}
 var MEDICOS = [];
 async function loadClientMedicos(){
   if (!ACTIVE_CLIENT) return;
