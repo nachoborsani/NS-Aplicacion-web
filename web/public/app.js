@@ -1550,7 +1550,7 @@ async function loadClientHonorarios(reporteId){
   // Selector de reportes cerrados.
   var sel = document.getElementById('honReporte');
   if (sel){
-    sel.innerHTML = HON.reportes.map(function(r){ return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(HON.reporteId) ? ' selected' : '') + '>' + esc(r.name || r.period || r.id) + '</option>'; }).join('') || '<option value="">(sin reportes cerrados)</option>';
+    sel.innerHTML = HON.reportes.map(function(r){ var etq = r.title || r.nomencladorLabel || r.dashboardPeriod || r.id; return '<option value="' + esc(r.id) + '"' + (String(r.id) === String(HON.reporteId) ? ' selected' : '') + '>' + esc(etq) + '</option>'; }).join('') || '<option value="">(sin reportes cerrados)</option>';
     sel.style.display = HON.reportes.length ? '' : 'none';
   }
   var pe = document.getElementById('honPeriodo');
