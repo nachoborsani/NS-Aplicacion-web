@@ -68,7 +68,7 @@ async def _procesar(web, user: str, clave: str, faltan: list[dict], progress=Non
     return resumen
 
 
-def run(progress=None) -> dict:
+def run(progress=None, disparar_credencial: bool = True) -> dict:
     cfg = load_config()
     web = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
     web.login(cfg.get("username", ""), cfg.get("password", ""))
@@ -105,8 +105,10 @@ def run(progress=None) -> dict:
     # Cierra el círculo: si completamos benef nuevos, disparamos la descarga de
     # credenciales en la web SOLO de esas filas (modo quirúrgico: no toca el resto
     # de la planilla ni el backlog histórico).
+    # Si el orquestador maneja la cadena (disparar_credencial=False), NO disparamos
+    # acá — él corre la credencial completa y la espera antes del OME.
     filas_ok = resumen.get("filas_ok") or []
-    if filas_ok:
+    if disparar_credencial and filas_ok:
         try:
             web.correr_credenciales_scheffelaar(rows=filas_ok)
             log(f"→ Disparada la descarga de credenciales en la web (solo {len(filas_ok)} filas nuevas).")

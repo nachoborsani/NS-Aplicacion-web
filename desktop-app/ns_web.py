@@ -204,6 +204,14 @@ class NSWebClient:
                                  body={"rows": [int(r) for r in rows]})
         return self._request("POST", "/api/credenciales/scheffelaar/correr-ahora", body={})
 
+    def credencial_corriendo(self, slug_key: str = "scheffelaar") -> bool:
+        """True si hay una corrida de credenciales en curso (para esperarla)."""
+        try:
+            data = self._request("GET", f"/api/credenciales/{slug_key}/schedule")
+            return bool(isinstance(data, dict) and data.get("corriendo"))
+        except Exception:
+            return False
+
     def reportar_benef_estado(self, completados: int, sin_benef: int, errores: int,
                               revisadas: int = 0, error: str = "") -> dict:
         """Reporta el resultado del barrido de benef (para el tablero de la web)."""
