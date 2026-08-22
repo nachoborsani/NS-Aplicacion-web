@@ -67,11 +67,15 @@ def _write_bat() -> Path:
 
 
 def _build_xml(horarios: list[str]) -> str:
+    # Solo días hábiles (lunes a viernes). Los fines de semana no corre.
     triggers = "\n".join(
         "    <CalendarTrigger>\n"
         f"      <StartBoundary>2026-01-01T{h}:00</StartBoundary>\n"
         "      <Enabled>true</Enabled>\n"
-        "      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>\n"
+        "      <ScheduleByWeek>\n"
+        "        <DaysOfWeek><Monday/><Tuesday/><Wednesday/><Thursday/><Friday/></DaysOfWeek>\n"
+        "        <WeeksInterval>1</WeeksInterval>\n"
+        "      </ScheduleByWeek>\n"
         "    </CalendarTrigger>"
         for h in horarios
     )
