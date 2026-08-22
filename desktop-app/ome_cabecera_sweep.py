@@ -32,7 +32,9 @@ CLIENTE_SLUG = "scheffelaar-mc"
 SPREADSHEET = "https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit"
 SHEET_NAME = "Schefelar"
 START_ROW = 4718
-DIAGNOSTICO = "Z000 - Examen medico general"
+# PAMI llena el campo CÓDIGO y clickea la opción que EMPIEZA con este texto, así
+# que va solo el código (la descripción de PAMI puede diferir de la de la app).
+DIAGNOSTICO = "Z000"
 # Cascada: se prueba en orden; si una da LIMITE/LIMITE_ANUAL, va la siguiente.
 PRACTICAS = ["427122", "427121", "427120", "427109"]
 
@@ -99,13 +101,17 @@ async def _procesar(user: str, clave: str, candidatos: list[dict], progress=None
                 resumen["limite"] += 1
                 log("    todas las prácticas dieron LIMITE")
 
-            # Fila para escribir de vuelta en la planilla (nro OME + fecha).
+            # Escribir de vuelta SOLO si el resultado es definitivo (OME generada,
+            # ya tenía, límite, baja, etc.). Un error TRANSITORIO (ERROR*) no se
+            # escribe: la fila queda pendiente y se reintenta en la próxima corrida.
             if ultimo is not None and sheet_row:
-                d = ultimo.to_row() if hasattr(ultimo, "to_row") else {}
-                d["sheet_row"] = sheet_row
-                d.setdefault("beneficio", benef)
-                d.setdefault("dni", dni)
-                result_rows.append(d)
+                es_transitorio = str(getattr(ultimo, "resultado", "")).strip().upper().startswith("ERROR")
+                if not es_transitorio:
+                    d = ultimo.to_row() if hasattr(ultimo, "to_row") else {}
+                    d["sheet_row"] = sheet_row
+                    d.setdefault("beneficio", benef)
+                    d.setdefault("dni", dni)
+                    result_rows.append(d)
     return result_rows, resumen
 
 
