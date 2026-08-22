@@ -3080,13 +3080,17 @@ function buildGeneralReportPdf(report) {
   const traumatoSummary = summarizeReportRows(traumatoRows);
   const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
   const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
-  const total = cardioSummary.net + traumatoSummary.net + cutoffTotal + missingInformeTotal;
+  // El TOTAL del encabezado es SOLO lo cobrado (cardio + traumato = transmitido).
+  // Proximo periodo y falta informe NO estan cobrados: se muestran como secciones
+  // aparte pero no suman al total, para no confundir.
+  const totalCobrado = cardioSummary.net + traumatoSummary.net;
+  const total = totalCobrado;
   return buildRowsPdf({
     heading: "SALA MILLON - INFORME GENERAL",
     title: report.title || "Reporte",
     total,
-    totalLabel: "Total general",
-    detailText: `Cardio + traumato + proximo periodo + falta informe`,
+    totalLabel: "Total cobrado",
+    detailText: `Solo cardio + traumato (transmitido). Proximo periodo (${pdfMoney(cutoffTotal)}) y falta informe (${pdfMoney(missingInformeTotal)}) van aparte y NO estan cobrados.`,
     sections: [
       {
         title: `CARDIOLOGIA - ${pdfMoney(cardioSummary.net)}`,
@@ -3117,7 +3121,7 @@ function buildGeneralReportPdf(report) {
         emptyText: "Sin practicas con falta de informe.",
       },
     ],
-    summaryText: `Resumen: cardio ${pdfMoney(cardioSummary.net)} - traumato ${pdfMoney(traumatoSummary.net)} - proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)} - total ${pdfMoney(total)}`,
+    summaryText: `Cobrado: cardio ${pdfMoney(cardioSummary.net)} + traumato ${pdfMoney(traumatoSummary.net)} = ${pdfMoney(total)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)}.`,
   });
 }
 // PDF genérico de una tabla (título + columnas + filas). Reparte el ancho en
