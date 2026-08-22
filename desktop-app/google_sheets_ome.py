@@ -436,6 +436,9 @@ def _find_result_date_index(headers: list[str], ome_index: int | None) -> int | 
         "fecha generacion ome",
         "fecha generada",
         "fecha resultado",
+        "generada",
+        "generado",
+        "generacion",
     }
     for index, header in enumerate(normalized_headers):
         if not header:
