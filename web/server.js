@@ -3090,7 +3090,7 @@ function buildGeneralReportPdf(report) {
     title: report.title || "Reporte",
     total,
     totalLabel: "Total cobrado",
-    detailText: `Solo cardio + traumato (transmitido). Proximo periodo (${pdfMoney(cutoffTotal)}) y falta informe (${pdfMoney(missingInformeTotal)}) van aparte y NO estan cobrados.`,
+    detailText: `Solo cardio + traumato. Detalle abajo.`,
     sections: [
       {
         title: `CARDIOLOGIA - ${pdfMoney(cardioSummary.net)}`,
