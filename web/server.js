@@ -2978,7 +2978,8 @@ function buildRowsPdf(options) {
   newPage(!options.sections);
   sections.forEach((section, index) => {
     if (options.sections || section.title) {
-      if (index > 0) y -= 10;
+      if (index > 0 && section.pageBreakBefore) newPage(false);
+      else if (index > 0) y -= 10;
       if (y < 70) newPage(false);
       commands.push(pdfLineCommand(margin, y + 7, width - margin, y + 7));
       commands.push(pdfTextCommand(margin, y - 4, section.title || "Detalle", 9, "F2"));
@@ -3105,6 +3106,7 @@ function buildGeneralReportPdf(report) {
         statusForRow: professionalReportStatus,
         amountForRow: reportRowNet,
         emptyText: "Sin practicas cobradas de traumatologia.",
+        pageBreakBefore: true,
       },
       {
         title: `PROXIMO PERIODO - a cobrar - ${pdfMoney(cutoffTotal)}`,
@@ -3112,6 +3114,7 @@ function buildGeneralReportPdf(report) {
         statusForRow: () => "Proximo mes",
         amountForRow: reportRowNextPeriodCutoff,
         emptyText: "Sin practicas fuera de corte para el proximo periodo.",
+        pageBreakBefore: true,
       },
       {
         title: `FALTA INFORME NO COBRADO - valor recuperable - ${pdfMoney(missingInformeTotal)}`,
@@ -3119,6 +3122,7 @@ function buildGeneralReportPdf(report) {
         statusForRow: () => "A recuperar",
         amountForRow: reportRowMissingInformeAmount,
         emptyText: "Sin practicas con falta de informe.",
+        pageBreakBefore: true,
       },
     ],
     summaryText: `Cobrado: cardio ${pdfMoney(cardioSummary.net)} + traumato ${pdfMoney(traumatoSummary.net)} = ${pdfMoney(total)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)}.`,
