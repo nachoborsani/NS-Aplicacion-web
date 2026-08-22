@@ -883,6 +883,10 @@ if __name__ == "__main__":
             estado = f"OK — {_r.get('count')} filas" if _r.get("ok") else f"FALLO — {_r.get('error')}"
             print(f"  {str(_r.get('name'))[:32]:32} -> {estado}")
         sys.exit(0)
+    if "--run-bandeja-retry" in sys.argv:
+        import bandeja_retry
+        bandeja_retry.run(progress=lambda m: print("  ", m))
+        sys.exit(0)
     if _acquire_single_instance_lock():
         app = PamiDesktopApp()
         app.mainloop()

@@ -253,6 +253,14 @@ class NSWebClient:
             },
         )
 
+    def bandeja_estados(self) -> dict:
+        """Estado del último sync de cada cliente {slug: {ok, error, at, ...}}.
+
+        Sirve para el reintento nocturno: saber quiénes quedaron con error.
+        Requiere sesión admin/operador."""
+        data = self._request("GET", "/api/bandeja/estados")
+        return data.get("estados", {}) if isinstance(data, dict) else {}
+
     def report_bandeja_estado(self, slug: str, ok: bool, count: int | None = None,
                               error: str = "", transmitidas: int | None = None,
                               transmit_errores: int | None = None,

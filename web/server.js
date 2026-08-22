@@ -4023,6 +4023,15 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { resumen: buildBandejaResumen(slug), adelante: buildBandejaAdelanteResumen(slug), estado: loadBandejaEstado()[slug] || null });
   }
 
+  // Estados de sync de TODOS los clientes (para el reintento nocturno: saber
+  // quiénes quedaron con error en la última corrida). Solo admin/operador.
+  if (p === "/api/bandeja/estados" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
+    return json(res, 200, { estados: loadBandejaEstado() || {} });
+  }
+
   // La app reporta el resultado del último sync de cada cliente (ok/error + hora).
   const clientBandejaEstadoMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/estado$/);
   if (clientBandejaEstadoMatch && req.method === "POST") {
