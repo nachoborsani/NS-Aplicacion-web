@@ -5,6 +5,7 @@ import os
 import random
 import re
 import threading
+import time
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
@@ -486,6 +487,7 @@ class PamiOmeGenerator:
             retry_capita_done=patient.retry_capita_done,
             completar_benef=patient.completar_benef,
             completar_dni=patient.completar_dni,
+            practicas_equivalentes=patient.practicas_equivalentes,
         )
         nombre = ""
         expected_beneficio = sanitize_text(patient.beneficio)
@@ -715,6 +717,7 @@ class PamiOmeGenerator:
                         diagnostico=effective_patient.diagnostico,
                         practica="427109",
                         retry_capita_done=True,
+                        practicas_equivalentes=effective_patient.practicas_equivalentes,
                     )
                     retry_capita_done = True
                     continue
