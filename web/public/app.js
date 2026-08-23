@@ -371,8 +371,10 @@ function construirPayloadInforme(){
       benef: document.getElementById('infBenef').value.trim(),
       fecha: document.getElementById('infFecha').value.trim(),
       documento: document.getElementById('infDoc').value.trim(),
+      cobertura: ((document.getElementById('infCobertura') || {}).value || '').trim(),
     },
     textoInforme: (document.getElementById('infTexto') || {}).value || '',
+    estudio: ((document.getElementById('infEstudio') || {}).value || '').trim(),
     valores: recolectarCampos(),
     medicoId: document.getElementById('infMedico').value,
   };
@@ -533,6 +535,16 @@ function aplicarPreset(){
     txt.value = texto;
     autoGrow(txt);
   }
+  // El preset puede fijar el "Estudio solicitado" y el médico que firma.
+  if (preset){
+    var estEl = document.getElementById('infEstudio');
+    if (estEl && preset.estudio) estEl.value = preset.estudio;
+    var medEl = document.getElementById('infMedico');
+    if (medEl && preset.medicoId){
+      var existe = Array.prototype.some.call(medEl.options, function(o){ return o.value === preset.medicoId; });
+      if (existe) medEl.value = preset.medicoId;
+    }
+  }
   var valores = (preset && preset.valores) || {};
   document.querySelectorAll('#infCampos [data-key]').forEach(function(inp){
     var k = inp.getAttribute('data-key');
@@ -583,6 +595,23 @@ function filtrarPorModelo(){
   }
   var ladoWrap = document.getElementById('infLadoWrap');
   if (ladoWrap) ladoWrap.style.display = modeloRequiereLado(key) ? '' : 'none';
+  var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; }) || {};
+  // Cobertura (default PAMI) solo en modelos que la piden.
+  var cobWrap = document.getElementById('infCoberturaWrap');
+  if (cobWrap){
+    cobWrap.style.display = m.mostrarCobertura ? '' : 'none';
+    var cob = document.getElementById('infCobertura');
+    if (m.mostrarCobertura && cob && !cob.value.trim()) cob.value = 'PAMI';
+  }
+  // Estudio solicitado editable (lo pisa el preset) solo donde corresponde.
+  var estWrap = document.getElementById('infEstudioWrap');
+  if (estWrap){
+    estWrap.style.display = m.estudioEditable ? '' : 'none';
+    var estLbl = document.getElementById('infEstudioLabel');
+    if (estLbl) estLbl.textContent = (m.estudioLabel || 'Estudio solicitado:').replace(/:$/, '');
+    var est = document.getElementById('infEstudio');
+    if (m.estudioEditable && est && !est.value.trim()) est.value = m.estudio || '';
+  }
   aplicarPreset();
 }
 function setInformesTab(tab){

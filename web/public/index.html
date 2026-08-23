@@ -632,6 +632,14 @@
               <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" inputmode="numeric" placeholder="Ej: 14023345500100" oninput="this.value=this.value.replace(/[^0-9-]/g,'')"></div>
               <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
             </div>
+            <div class="field" id="infCoberturaWrap" style="display:none">
+              <label>Cobertura</label>
+              <input class="inp" id="infCobertura" spellcheck="false" placeholder="PAMI" oninput="programarPreviewVivo()">
+            </div>
+            <div class="field" id="infEstudioWrap" style="display:none">
+              <label id="infEstudioLabel">Estudio solicitado</label>
+              <input class="inp" id="infEstudio" spellcheck="false" placeholder="Ej: Ecografía de partes blandas" oninput="programarPreviewVivo()">
+            </div>
             <div class="field" id="infLadoWrap" style="display:none">
               <label>Lado</label>
               <select class="inp" id="infLado" onchange="aplicarPreset()">

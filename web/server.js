@@ -630,6 +630,26 @@ const ORL_SEED_PRESETS = [
     texto: "PREVIA ANTISEPSIA SE REALIZA ELECTROCOAGULACIÓN DE QUERATOSIS SEBORREICAS EN REGIÓN A ESPECIFICAR. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
   },
   {
+    id: "eco-partes-blandas-normal", modelo: "caballito-eco-musculo", nombre: "Partes blandas normal",
+    estudio: "Ecografía de partes blandas", medicoId: "sanchez-jamilyn",
+    texto: "EXPLORADA LA REGIÓN SOLICITADA CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
+  },
+  {
+    id: "eco-partes-blandas-planta", modelo: "caballito-eco-musculo", nombre: "Partes blandas normal — planta del pie derecho",
+    estudio: "Ecografía de partes blandas", medicoId: "sanchez-jamilyn",
+    texto: "EXPLORADA LA REGIÓN SOLICITADA (PLANTA DEL PIE DERECHO) CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
+  },
+  {
+    id: "eco-hombro-derecho", modelo: "caballito-eco-musculo", nombre: "Hombro derecho — líquido peritendinoso supraespinoso",
+    estudio: "Ecografía de hombro derecho", medicoId: "nirenberg-alberto",
+    texto: "SE EVALUÓ EL HOMBRO DERECHO, OBSERVÁNDOSE LÍQUIDO PERITENDINOSO DEL SUPRAESPINOSO, LO QUE SUGIERE PROBABLE ETIOLOGÍA INFLAMATORIA.",
+  },
+  {
+    id: "eco-ambos-hombros", modelo: "caballito-eco-musculo", nombre: "Ambos hombros — líquido peritendinoso supraespinoso",
+    estudio: "Ecografía de ambos hombros", medicoId: "nirenberg-alberto",
+    texto: "SE EVALUARON AMBOS HOMBROS, OBSERVÁNDOSE EN LOS DOS, MÁS DEL LADO IZQUIERDO, LÍQUIDO PERITENDINOSO DEL SUPRAESPINOSO, LO QUE SUGIERE PROBABLE ETIOLOGÍA INFLAMATORIA.",
+  },
+  {
     id: "sibo-negativo", modelo: "caballito-sibo", nombre: "Estudio negativo para SIBO",
     texto: "Estudio negativo para SIBO",
     valores: { umbral: "25", ppm1: "5", ppm2: "7", ppm3: "7", ppm4: "6", ppm5: "4", ppm6: "6", ppm7: "7", ppm8: "11", ppm9: "3", ppm10: "4" },
@@ -728,7 +748,7 @@ function loadInformesConfig() {
       { id: "normal", nombre: "ECG normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
-      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} })),
+      ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" })),
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
     ];
   }
@@ -4930,8 +4950,11 @@ const server = http.createServer(async (req, res) => {
         paciente: body.paciente || {},
         textoInforme: body.textoInforme,
         solicitante: body.solicitante,
+        estudio: body.estudio,
         valores: sanitizarValores(body.valores),
         firmaArchivo: medico ? medico.firma : "",
+        medicoNombre: medico ? medico.nombre : "",
+        medicoMatricula: medico ? (medico.matricula || "") : "",
       });
       const filename = informes.informeFilename(modelo, body.paciente || {});
       const buf = Buffer.from(bytes);
@@ -4977,8 +5000,11 @@ const server = http.createServer(async (req, res) => {
           paciente: pac,
           textoInforme: it.textoInforme,
           solicitante: it.solicitante,
+          estudio: it.estudio,
           valores: sanitizarValores(it.valores),
           firmaArchivo: medico ? medico.firma : "",
+          medicoNombre: medico ? medico.nombre : "",
+          medicoMatricula: medico ? (medico.matricula || "") : "",
         });
         let nombre = informes.informeFilename(modelo, pac).replace(/[\\/:*?"<>|]+/g, " ");
         if (usados[nombre]) { const n = ++usados[nombre]; nombre = nombre.replace(/\.pdf$/i, "") + " (" + n + ").pdf"; }
@@ -5051,10 +5077,10 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, {
       modelos: informes.listarModelos(),
       medicos: (cfg.medicos || []).map((m) => ({
-        id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), modelos: m.modelos || [],
+        id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "", modelos: m.modelos || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {},
+        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
       })),
     });
   }
@@ -5262,7 +5288,7 @@ function ensureOrlSeed() {
     for (const s of ORL_SEED_PRESETS) {
       // Por id (no por modelo): un modelo puede tener varios presets (ej. SIBO).
       if (!cfg.descripciones.some((d) => d.id === s.id)) {
-        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {} });
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" });
         cambio = true;
       }
     }
@@ -5275,12 +5301,17 @@ function ensureOrlSeed() {
       { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["cima-orl-videorino"] },
       { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["caballito-derma-crio"] },
       { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["caballito-derma-electro"] },
+      { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["caballito-eco-musculo"] },
+      { id: "nirenberg-alberto", nombre: "Dr. Alberto Nirenberg", matricula: "MN 54398", modelos: ["caballito-eco-musculo"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
-        if (!cfg.medicos.some((x) => x.id === m.id)) {
-          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", modelos: m.modelos.slice() });
+        const ex = cfg.medicos.find((x) => x.id === m.id);
+        if (!ex) {
+          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula || "", modelos: m.modelos.slice() });
           cambio = true;
+        } else if (m.matricula && !ex.matricula) {   // completar matrícula en configs ya sembradas
+          ex.matricula = m.matricula; cambio = true;
         }
       }
     }

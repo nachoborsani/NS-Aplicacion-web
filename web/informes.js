@@ -12,6 +12,9 @@ const path = require("path");
 const ASSETS = path.join(__dirname, "assets", "informes");
 
 const PIE_CABALLITO = ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"];
+// Ecografía / Diagnóstico por imágenes usa el membrete "Centro de Medicina
+// Ambulatoria" (otra sede, Av. Directorio 1658).
+const PIE_CABALLITO_AMB = ["Caballito. Centro de Medicina Ambulatoria.", "Av. Directorio 1658. 1406 Cap. Fed.", "TE: 4633-8713 / 4633-9320"];
 const PIE_CIMA = ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"];
 
 // Campos de la caja técnica del Holter. Base = Caballito; CIMA suma 4 más.
@@ -363,6 +366,27 @@ const MODELOS = {
     textoDefault: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
     pie: PIE_CABALLITO,
   },
+  // --- Caballito (Centro de Medicina Ambulatoria): Ecografía musculoesquelética ---
+  "caballito-eco-musculo": {
+    label: "Caballito — Ecografía musculoesquelética (186001)",
+    short: "Caballito · Eco musculoesquelética",
+    practica: "186001 - Ecografía musculoesquelética",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    membreteTexto: PIE_CABALLITO_AMB,   // encabezado de texto (no servicio grande)
+    mostrarCobertura: true,             // muestra "Cobertura:" (default PAMI)
+    estudioEditable: true,              // "Estudio solicitado" se edita / lo pisa el preset
+    firmaConMatricula: true,            // muestra nombre + matrícula del médico en la firma
+    especialidad: "Diagnóstico por imágenes / Ecografía",
+    codigoPractica: "186001",
+    estudio: "Ecografía de partes blandas",
+    estudioLabel: "Estudio solicitado:",
+    estudioArchivo: "Ecografia musculoesqueletica",
+    solicitanteDefault: "",
+    textoDefault: "EXPLORADA LA REGIÓN SOLICITADA CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
+    pie: PIE_CABALLITO_AMB,
+  },
   // --- Centro Médico Caballito: Test de SIBO (aire espirado) — layout propio ---
   "caballito-sibo": {
     label: "Caballito — Test de SIBO (607130)",
@@ -452,6 +476,10 @@ function listarModelos() {
     codigoPractica: MODELOS[k].codigoPractica || "",
     campos: MODELOS[k].campos || [],
     requiereLado: !!MODELOS[k].requiereLado,
+    mostrarCobertura: !!MODELOS[k].mostrarCobertura,
+    estudioEditable: !!MODELOS[k].estudioEditable,
+    estudio: MODELOS[k].estudio || "",
+    estudioLabel: MODELOS[k].estudioLabel || "Estudio realizado:",
   }));
 }
 
@@ -505,8 +533,15 @@ async function buildInformePdf(modeloKey, input) {
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
+  // "Estudio realizado/solicitado": del input si el modelo lo deja editar; si no, fijo.
+  const estudioTxt = ((input && input.estudio) || "").trim() || modelo.estudio || "";
+  // Cobertura (default PAMI) solo si el modelo la muestra.
+  const cobertura = ((p.cobertura || "").trim()) || (modelo.mostrarCobertura ? "PAMI" : "");
   // La firma la define el médico elegido (input.firmaArchivo). Sin archivo -> borrador.
   const firmaArchivo = (input && input.firmaArchivo) || "";
+  // Nombre + matrícula del médico que firma (para modelos que los muestran).
+  const medicoNombre = ((input && input.medicoNombre) || "").trim();
+  const medicoMatricula = ((input && input.medicoMatricula) || "").trim();
 
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4 vertical
@@ -551,22 +586,33 @@ async function buildInformePdf(modeloKey, input) {
     y -= lh + 6;
   }
 
-  // Título (bold itálica)
-  const ts = 17;
-  centerT(modelo.servicio, y - ts, { font: titleFont, size: ts, color: border });
-  y -= ts + 22;
+  // Título. Modelos con membreteTexto (ej. Ecografía / Centro de Medicina
+  // Ambulatoria) usan un encabezado de líneas de texto; el resto, el servicio
+  // en bold itálica.
+  if (modelo.membreteTexto && modelo.membreteTexto.length) {
+    centerT(modelo.membreteTexto[0], y - 13, { bold: true, size: 13, color: border });
+    let hy = y - 13 - 15;
+    for (let i = 1; i < modelo.membreteTexto.length; i++) { centerT(modelo.membreteTexto[i], hy, { bold: true, size: 10 }); hy -= 13; }
+    y = hy - 12;
+  } else {
+    const ts = 17;
+    centerT(modelo.servicio, y - ts, { font: titleFont, size: ts, color: border });
+    y -= ts + 22;
+  }
 
   // Caja: Datos de paciente
   {
     const hasDoc = (p.documento || "").trim();
-    const innerLines = 1 + 2 + (hasDoc ? 1 : 0);
+    const hasCob = !!cobertura;
+    const innerLines = 1 + 2 + (hasDoc ? 1 : 0) + (hasCob ? 1 : 0);
     const h = innerLines * 15 + 14;
     drawBox(y, h);
     let iy = y - 18;
     T("Datos de paciente", LBLX, iy, { bold: true, size: 11 }); iy -= 16;
     T("Nombre:", LBLX, iy, { bold: true }); T(p.nombre || "—", VALX, iy); iy -= 15;
     if (hasDoc) { T("Documento:", LBLX, iy, { bold: true }); T(hasDoc, VALX, iy); iy -= 15; }
-    T("N° Benef.:", LBLX, iy, { bold: true }); T(p.benef || "—", VALX, iy);
+    T("N° Benef.:", LBLX, iy, { bold: true }); T(p.benef || "—", VALX, iy); iy -= 15;
+    if (hasCob) { T("Cobertura:", LBLX, iy, { bold: true }); T(cobertura, VALX, iy); }
     y -= h + 12;
   }
 
@@ -579,17 +625,18 @@ async function buildInformePdf(modeloKey, input) {
   {
     const vx = VALX + 30;
     const rightX = boxX + boxW - PADX;
-    const estudio = modelo.estudio || "";
+    const estudio = estudioTxt;
+    const estLabel = modelo.estudioLabel || "Estudio realizado:";
     if (bold.widthOfTextAtSize(estudio, 10.5) <= rightX - vx) {
       const h = 34; drawBox(y, h);
-      T("Estudio realizado:", LBLX, y - 22, { bold: true });
+      T(estLabel, LBLX, y - 22, { bold: true });
       T(estudio, vx, y - 22, { bold: true });
       y -= h + 22;
     } else {
       const lines = wrapText(estudio, bold, 10.5, boxW - 2 * PADX);
       const h = 20 + lines.length * 14 + 8;
       drawBox(y, h);
-      T("Estudio realizado:", LBLX, y - 18, { bold: true });
+      T(estLabel, LBLX, y - 18, { bold: true });
       let iy = y - 34;
       for (const ln of lines) { T(ln, LBLX, iy, { bold: true, size: 10.5 }); iy -= 14; }
       y -= h + 22;
@@ -654,6 +701,13 @@ async function buildInformePdf(modeloKey, input) {
   } else {
     centerIn("Firma Médico", firmaAreaX, width - Mx, fy, { bold: true, size: 11 });
     page.drawLine({ start: { x: firmaAreaX + 12, y: fy - 34 }, end: { x: width - Mx - 12, y: fy - 34 }, thickness: 0.8, color: border });
+  }
+  // Nombre + matrícula del médico que firma (regla: aunque no haya firma cargada,
+  // se muestra el nombre y la matrícula debajo del espacio de firma).
+  if (modelo.firmaConMatricula && (medicoNombre || medicoMatricula)) {
+    let my = fy - 44;
+    if (medicoNombre) { centerIn(medicoNombre, firmaAreaX, width - Mx, my, { bold: true, size: 10 }); my -= 13; }
+    if (medicoMatricula) { centerIn(medicoMatricula, firmaAreaX, width - Mx, my, { size: 9.5, color: soft }); }
   }
 
   // Caja: pie del centro (abajo)
