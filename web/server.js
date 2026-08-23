@@ -614,6 +614,10 @@ const ORL_SEED_PRESETS = [
     texto: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
   },
   {
+    id: "derma-crio-lesiones", modelo: "caballito-derma-crio", nombre: "Criocirugía de lesiones cutáneas",
+    texto: "SE REALIZA CRIOCIRUGÍA DE LESIONES CUTÁNEAS EN REGIÓN A ESPECIFICAR. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS. SE INDICAN PAUTAS DE CUIDADO LOCAL Y CONTROL EVOLUTIVO.",
+  },
+  {
     id: "sibo-negativo", modelo: "caballito-sibo", nombre: "Estudio negativo para SIBO",
     texto: "Estudio negativo para SIBO",
     valores: { umbral: "25", ppm1: "5", ppm2: "7", ppm3: "7", ppm4: "6", ppm5: "4", ppm6: "6", ppm7: "7", ppm8: "11", ppm9: "3", ppm10: "4" },
@@ -724,6 +728,7 @@ function saveInformesConfig(cfg) {
 }
 // Reglas de débito de PAMI (cruces): dos estudios que se pisan el mismo día → PAMI debita uno.
 // Confirmadas contra bandejas reales (Caballito 05/06 y GJS 06 2026). Ver memoria pami-debitos-regla-mismo-dia.
+const DEBITO_REGLAS_SEED_VERSION = 2;
 const DEBITO_REGLAS_SEED = [
   { id: "prostatica-vesical", activa: true, tipo: "inclusion", monto: "total",
     debita: "180114", debitaNombre: "Ecografía prostática / vesicoprostática",
@@ -733,6 +738,14 @@ const DEBITO_REGLAS_SEED = [
     debita: "180116", debitaNombre: "Ecografía renal bilateral",
     conCodigos: ["180112"], conNombre: "Ecografía abdominal completa",
     nota: "La abdominal completa ya incluye los riñones. Confirmado Caballito 05 y 06/2026." },
+  { id: "hepatica-abdominal", activa: true, tipo: "inclusion", monto: "total",
+    debita: "180113", debitaNombre: "Ecografía hepática / biliar / esplénica / torácica",
+    conCodigos: ["180112"], conNombre: "Ecografía abdominal completa",
+    nota: "La abdominal completa incluye los estudios ecográficos parciales de abdomen. Alta desde PDF de prácticas excluyentes PAMI." },
+  { id: "pancreatica-abdominal", activa: true, tipo: "inclusion", monto: "total",
+    debita: "180118", debitaNombre: "Ecografía pancreática o suprarrenal",
+    conCodigos: ["180112"], conNombre: "Ecografía abdominal completa",
+    nota: "La abdominal completa incluye páncreas/suprarrenales. Alta desde PDF de prácticas excluyentes PAMI." },
   { id: "flujometria-urodinamia", activa: true, tipo: "inclusion", monto: "total",
     debita: "507315", debitaNombre: "Flujometría urinaria computarizada",
     conCodigos: ["507313"], conNombre: "Estudio urodinámico completo",
@@ -767,22 +780,41 @@ function sanearUmbralPct(v) {
   const n = Number(v);
   return (n > 0 && n <= 100) ? n : UMBRAL_PAGA_PCT_DEFAULT;
 }
+function mergeDebitoSeed(reglasRaw) {
+  const actuales = (Array.isArray(reglasRaw) ? reglasRaw : []).map(normalizarReglaDebito).filter(Boolean);
+  const ids = new Set(actuales.map((r) => r.id));
+  for (const seed of DEBITO_REGLAS_SEED) {
+    const regla = normalizarReglaDebito(seed);
+    if (regla && !ids.has(regla.id)) {
+      actuales.push(regla);
+      ids.add(regla.id);
+    }
+  }
+  return actuales;
+}
 // El archivo puede ser un array (formato viejo, solo reglas) o un objeto
 // { reglas, umbralPagaPct }. loadDebitoStore normaliza ambos.
 function loadDebitoStore() {
   let raw = null;
   try { raw = JSON.parse(fs.readFileSync(debitoReglasFile, "utf8")); } catch {}
-  let reglasRaw, umbral;
+  let reglasRaw, umbral, seedVersion = 0;
   if (Array.isArray(raw)) { reglasRaw = raw; umbral = UMBRAL_PAGA_PCT_DEFAULT; }
-  else if (raw && typeof raw === "object") { reglasRaw = Array.isArray(raw.reglas) ? raw.reglas : DEBITO_REGLAS_SEED; umbral = sanearUmbralPct(raw.umbralPagaPct); }
-  else { reglasRaw = DEBITO_REGLAS_SEED; umbral = UMBRAL_PAGA_PCT_DEFAULT; }
-  return { reglas: reglasRaw.map(normalizarReglaDebito).filter(Boolean), umbralPagaPct: umbral };
+  else if (raw && typeof raw === "object") { reglasRaw = Array.isArray(raw.reglas) ? raw.reglas : DEBITO_REGLAS_SEED; umbral = sanearUmbralPct(raw.umbralPagaPct); seedVersion = Number(raw.seedVersion || 0); }
+  else { reglasRaw = DEBITO_REGLAS_SEED; umbral = UMBRAL_PAGA_PCT_DEFAULT; seedVersion = DEBITO_REGLAS_SEED_VERSION; }
+  const reglas = seedVersion < DEBITO_REGLAS_SEED_VERSION
+    ? mergeDebitoSeed(reglasRaw)
+    : reglasRaw.map(normalizarReglaDebito).filter(Boolean);
+  const store = { reglas, umbralPagaPct: umbral, seedVersion: DEBITO_REGLAS_SEED_VERSION };
+  if (raw && (Array.isArray(raw) || seedVersion < DEBITO_REGLAS_SEED_VERSION)) {
+    try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(debitoReglasFile, JSON.stringify(store, null, 2)); } catch {}
+  }
+  return store;
 }
 function loadDebitoReglas() { return loadDebitoStore().reglas; }
 function saveDebitoStore(reglas, umbralPagaPct) {
   fs.mkdirSync(dataDir, { recursive: true });
   const limpio = (Array.isArray(reglas) ? reglas : []).map(normalizarReglaDebito).filter(Boolean);
-  const store = { reglas: limpio, umbralPagaPct: sanearUmbralPct(umbralPagaPct) };
+  const store = { reglas: limpio, umbralPagaPct: sanearUmbralPct(umbralPagaPct), seedVersion: DEBITO_REGLAS_SEED_VERSION };
   fs.writeFileSync(debitoReglasFile, JSON.stringify(store, null, 2));
   return store;
 }
@@ -1314,8 +1346,22 @@ const pamiExclusionCodeAliases = {
   "570121": ["170145", "177145"],
   "570124": ["170157", "177157"],
   "570126": ["170141", "177141"],
+  "180112": ["187112"],
+  "180113": ["187113"],
   "180114": ["187114"],
+  "180116": ["187116"],
+  "180118": ["187118"],
+  "180123": ["187120"],
+  "507313": ["360111"],
+  "507315": ["360116"],
 };
+const pamiExclusionReverseAliases = {};
+for (const [actual, historicos] of Object.entries(pamiExclusionCodeAliases)) {
+  for (const historico of historicos || []) {
+    if (!pamiExclusionReverseAliases[historico]) pamiExclusionReverseAliases[historico] = [];
+    pamiExclusionReverseAliases[historico].push(actual);
+  }
+}
 const pamiExclusionPairs = loadPamiExclusionPairs();
 const pamiExclusionPairMap = new Map(pamiExclusionPairs.map((rule) => [pairKey(rule.codes && rule.codes[0], rule.codes && rule.codes[1]), rule]));
 const pamiExclusionDescriptionCodes = new Map();
@@ -1349,7 +1395,7 @@ function expandedPamiExclusionCodes(rowOrCode) {
   const row = typeof rowOrCode === "object" && rowOrCode ? rowOrCode : null;
   const clean = cleanIdentifier(row ? row.practiceCode : rowOrCode);
   const descriptionCodes = row ? pamiExclusionCodesByDescription(`${row.practiceDescription || ""} ${row.practiceText || ""}`) : [];
-  return Array.from(new Set([clean, ...(pamiExclusionCodeAliases[clean] || []), ...descriptionCodes].filter(Boolean)));
+  return Array.from(new Set([clean, ...(pamiExclusionCodeAliases[clean] || []), ...(pamiExclusionReverseAliases[clean] || []), ...descriptionCodes].filter(Boolean)));
 }
 function findPamiExclusionRule(rowA, rowB) {
   for (const a of expandedPamiExclusionCodes(rowA)) {
@@ -1448,7 +1494,7 @@ function applyAutomaticExclusionDebits(rows) {
   };
   const aplicar = (groups, reglasSet) => {
     for (const groupRows of groups.values()) {
-      const codes = new Set(groupRows.map((r) => cleanIdentifier(r.practiceCode)));
+      const codes = new Set(groupRows.flatMap((r) => expandedPamiExclusionCodes(r)));
       for (const regla of reglasSet) {
         const cuando = regla.alcance === "periodo" ? "en el mes" : "el mismo día";
         if (regla.tipo === "inclusion") {
@@ -1456,13 +1502,13 @@ function applyAutomaticExclusionDebits(rows) {
           if (!hayGrande) continue;
           const dc = cleanIdentifier(regla.debita);
           const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || (regla.conCodigos || []).join("/")}.`;
-          groupRows.filter((r) => cleanIdentifier(r.practiceCode) === dc)
+          groupRows.filter((r) => expandedPamiExclusionCodes(r).includes(dc))
             .forEach((r) => marcar(r, "total", regla, reason, (regla.conCodigos || []).join("/")));
         } else if (regla.tipo === "par") {
           const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
           const presentes = new Set(cods.filter((c) => codes.has(c)));
           if (presentes.size < 2) continue;
-          const candidatos = groupRows.filter((r) => cods.includes(cleanIdentifier(r.practiceCode)) && !yaCargado(r));
+          const candidatos = groupRows.filter((r) => expandedPamiExclusionCodes(r).some((c) => cods.includes(c)) && !yaCargado(r));
           if (candidatos.length < 2) continue;
           // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
           const reason = `${regla.codigosNombre || "Par de estudios"} ${cuando}: PAMI paga uno al 40%.`;
