@@ -20,22 +20,15 @@ from __future__ import annotations
 import sys
 from datetime import date, datetime, timedelta
 
+from cadena_clientes import get_cliente
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
 from pami_activar import PamiActivarController
 from google_sheets_ome import build_sheets_service, extract_spreadsheet_id
 
-CLIENTE_SLUG = "scheffelaar-mc"
-SPREADSHEET = "https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit"
-SHEET_NAME = "Schefelar"
-START_ROW = 4718
+CLIENTE_SLUG_DEFAULT = "scheffelaar-mc"
 HORA_INICIO = "10:00"
 INTERVALO_MIN = 15
 MODALIDAD = "P"
-MARCA = "ACTIVADA"
-
-# Columnas de la hoja Schefelar (0-based): B nombre, D benef, F dni, H OME,
-# I credencial, M Validacion.
-COL_NOMBRE, COL_BENEF, COL_DNI, COL_OME, COL_VALID = 1, 3, 5, 7, 12
 
 
 def log(m: str) -> None:
@@ -67,48 +60,61 @@ def proximo_habil() -> str:
     return d.strftime("%d/%m/%Y")
 
 
-def run(limite: int | None = None, progress=None, solo_filas=None) -> dict:
-    # solo_filas: si viene, activar SOLO esas filas de la planilla (lo generado en
-    # la tanda de la cadena), no todo el backlog. Igual se respeta el chequeo de M
-    # vacía (no re-activa lo ya activado).
+def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, limite: int | None = None,
+        progress=None, solo_filas=None) -> dict:
+    # solo_filas: si viene, activar SOLO esas filas (lo generado en la tanda de la
+    # cadena), no todo el backlog. Igual se respeta el chequeo de la col de
+    # activación vacía (no re-activa lo ya activado → no duplica turnos).
+    C = get_cliente(cliente_slug)
+    nombre = C.get("nombre", cliente_slug)
+    start_row = int(C.get("start_row") or 2)
+    cols = C["cols"]
+    col_ome = cols["ome"]
+    col_activ = cols["activacion"]       # donde marcamos activada / fecha
+    col_benef = cols.get("benef")
+    col_dni = cols.get("dni")
+    col_nombre = cols.get("nombre")
+    # Qué se escribe al activar: "ACTIVADA" (texto) o la fecha del turno.
+    marca_es_fecha = str(C.get("activacion_marca", "ACTIVADA")).upper() == "FECHA"
+
     filas_permitidas = {int(f) for f in solo_filas} if solo_filas else None
     cfg = load_config()
     web = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
     web.login(cfg.get("username", ""), cfg.get("password", ""))
-    cred = web.client_pami(CLIENTE_SLUG)
+    cred = web.client_pami(cliente_slug)
     user = str(cred.get("pamiUser", "")).strip()
     clave = str(cred.get("pamiPassword", "") or "")
     if not user or not clave:
-        log("Scheffelaar no tiene usuario/clave PAMI cargados en la web.")
+        log(f"{nombre} no tiene usuario/clave PAMI cargados en la web.")
         return {"error": "sin clave PAMI"}
 
     svc = build_sheets_service(interactive=False)
-    sid = extract_spreadsheet_id(SPREADSHEET)
+    sid = extract_spreadsheet_id(C["spreadsheet"])
     values = svc.spreadsheets().values().get(
-        spreadsheetId=sid, range=f"{SHEET_NAME}!A{START_ROW}:N", majorDimension="ROWS",
+        spreadsheetId=sid, range=f"{C['sheet_name']}!A{start_row}:R", majorDimension="ROWS",
     ).execute().get("values", [])
 
     candidatos = []
     for offset, row in enumerate(values):
-        sheet_row = START_ROW + offset
+        sheet_row = start_row + offset
         if filas_permitidas is not None and sheet_row not in filas_permitidas:
             continue                      # fuera de la tanda pedida
-        ome = _solo_digitos(_cell(row, COL_OME))
+        ome = _solo_digitos(_cell(row, col_ome))
         if not ome:                       # sin OME → no se puede activar
             continue
-        if _cell(row, COL_VALID):         # M no vacía (ACTIVADA/SI) → saltear
+        if _cell(row, col_activ):         # col activación no vacía → ya activada, saltear
             continue
         candidatos.append({
             "sheet_row": sheet_row,
             "ome": ome,
-            "benef": _cell(row, COL_BENEF),
-            "dni": _cell(row, COL_DNI),
-            "nombre": _cell(row, COL_NOMBRE),
+            "benef": _cell(row, col_benef) if col_benef is not None else "",
+            "dni": _cell(row, col_dni) if col_dni is not None else "",
+            "nombre": _cell(row, col_nombre) if col_nombre is not None else "",
         })
 
     if limite:
         candidatos = candidatos[:limite]
-    log(f"Candidatos a activar (con OME, M vacía, desde {START_ROW}): {len(candidatos)}")
+    log(f"{nombre}: candidatos a activar (con OME, sin activar, desde {start_row}): {len(candidatos)}")
     if not candidatos:
         return {"candidatos": 0, "activadas": 0, "errores": 0}
 
@@ -135,12 +141,14 @@ def run(limite: int | None = None, progress=None, solo_filas=None) -> dict:
             det = resultado.detalle[0] if resultado.detalle else None
             estado = getattr(det, "estado_final", "ERROR") if det else "ERROR"
             if estado == "ACEPTADA":
-                # Marcar M INMEDIATAMENTE (si se corta, el reintento la saltea).
+                # Marcar la col de activación INMEDIATAMENTE (si se corta, el
+                # reintento la saltea). Texto "ACTIVADA" o la fecha del turno.
+                marca = entry["fecha"] if marca_es_fecha else "ACTIVADA"
                 svc.spreadsheets().values().update(
                     spreadsheetId=sid,
-                    range=f"{SHEET_NAME}!{_col_letter(COL_VALID)}{c['sheet_row']}",
+                    range=f"{C['sheet_name']}!{_col_letter(col_activ)}{c['sheet_row']}",
                     valueInputOption="USER_ENTERED",
-                    body={"values": [[MARCA]]},
+                    body={"values": [[marca]]},
                 ).execute()
                 activadas += 1
                 log(f"  fila {c['sheet_row']} · {c['nombre']} · OME {c['ome']} → ACTIVADA "
@@ -158,5 +166,11 @@ def run(limite: int | None = None, progress=None, solo_filas=None) -> dict:
 
 
 if __name__ == "__main__":
-    lim = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else None
-    run(limite=lim, progress=lambda m: None)
+    _slug = CLIENTE_SLUG_DEFAULT
+    _lim = None
+    for _a in sys.argv[1:]:
+        if _a.isdigit():
+            _lim = int(_a)
+        elif "-" in _a:
+            _slug = _a
+    run(cliente_slug=_slug, limite=_lim, progress=lambda m: None)

@@ -51,3 +51,17 @@ def get_cliente(slug: str) -> dict:
         raise KeyError(f"Cliente '{slug}' no está en la config de la cadena "
                        f"(cadena_clientes.py). Disponibles: {', '.join(CLIENTES)}.")
     return CLIENTES[slug]
+
+
+def layout_ome(C: dict) -> dict:
+    """layout_override para read/write_ome_sheet_rows a partir del config del
+    cliente (así no depende del auto-detect por header, que falla con Dube)."""
+    cols = C["cols"]
+    return {
+        "beneficio_col": cols.get("benef"),
+        "dni_col": cols.get("dni"),
+        "ome_col": cols.get("ome"),
+        "fecha_col": cols.get("generada"),   # donde va la FECHA DE GENERACIÓN
+        "nombre_col": cols.get("nombre"),
+        "credencial_col": cols.get("credencial"),
+    }

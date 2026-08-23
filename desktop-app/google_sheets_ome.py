@@ -598,6 +598,7 @@ def read_ome_sheet_rows(
     complete_benef_only: bool = False,
     complete_dni_only: bool = False,
     require_credential_ok: bool = False,
+    layout_override: dict | None = None,
 ) -> list[dict]:
     spreadsheet_id = extract_spreadsheet_id(spreadsheet_url_or_id)
     service = build_sheets_service(interactive=False)
@@ -612,6 +613,10 @@ def read_ome_sheet_rows(
     header_values = headers_response.get("values", [])
     headers = [str(value or "").strip() for value in (header_values[0] if header_values else [])]
     layout = _detect_sheet_layout(headers)
+    # layout_override: columnas explícitas del config del cliente (para hojas donde
+    # el auto-detect por header no alcanza, ej. Dube tiene el benef bajo header "F").
+    if layout_override:
+        layout = {**layout, **layout_override}
 
     only_complete_data = complete_benef_only or complete_dni_only
     if layout["ome_col"] is None and not only_complete_data:
@@ -833,6 +838,7 @@ def write_ome_sheet_results(
     spreadsheet_url_or_id: str,
     sheet_name: str,
     result_rows: list[dict],
+    layout_override: dict | None = None,
 ) -> int:
     spreadsheet_id = extract_spreadsheet_id(spreadsheet_url_or_id)
     service = build_sheets_service(interactive=False)
@@ -845,6 +851,8 @@ def write_ome_sheet_results(
     header_values = headers_response.get("values", [])
     headers = [str(value or "").strip() for value in (header_values[0] if header_values else [])]
     layout = _detect_sheet_layout(headers)
+    if layout_override:
+        layout = {**layout, **layout_override}
 
     consolidated_rows = _group_sheet_result_rows(result_rows)
 
