@@ -1,9 +1,11 @@
-"""Cadena completa diaria de Scheffelaar: benef → credencial → OME de cabecera.
+"""Cadena completa diaria de Scheffelaar: benef → credencial → OME → activar.
 
-Corre los tres pasos EN SECUENCIA (cada uno sobre lo que dejó el anterior):
+Corre los cuatro pasos EN SECUENCIA (cada uno sobre lo que dejó el anterior):
   1. Barrido de benef (completa los N° de beneficio que faltan).
   2. Descarga de credenciales (backlog completo) y ESPERA a que termine.
   3. Generación de OME de cabecera (solo a los que ya tienen credencial).
+  4. Activación de turnos SOLO de las OMEs generadas en ESTA tanda (no todo el
+     backlog): turno al día hábil siguiente, desde las 10:00 cada 15 min.
 
 Pensado para correr programado 2 veces por día (17:00 y al otro día 10:00) vía
 pipeline_schedule.py. Uso manual: python pipeline_scheffelaar.py
@@ -13,6 +15,7 @@ from __future__ import annotations
 import sys
 import time
 
+import activacion_sweep
 import benef_sweep
 import ome_cabecera_sweep
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
@@ -49,11 +52,23 @@ def run() -> None:
         log(f"credencial falló (sigo con OME sobre lo que haya): {e!r}")
 
     # --- Paso 3: OME de cabecera (solo a los que tienen credencial). ---
-    log("=== [3/3] Generación de OME de cabecera ===")
+    log("=== [3/4] Generación de OME de cabecera ===")
+    filas_generadas = []
     try:
-        ome_cabecera_sweep.run(progress=lambda m: None)
+        resumen_ome = ome_cabecera_sweep.run(progress=lambda m: None) or {}
+        filas_generadas = list(resumen_ome.get("filas_con_ome") or [])
     except Exception as e:  # noqa: BLE001
         log(f"OME falló: {e!r}")
+
+    # --- Paso 4: activar SOLO las OMEs generadas en ESTA tanda. ---
+    log(f"=== [4/4] Activación de turnos ({len(filas_generadas)} de esta tanda) ===")
+    if filas_generadas:
+        try:
+            activacion_sweep.run(progress=lambda m: None, solo_filas=filas_generadas)
+        except Exception as e:  # noqa: BLE001
+            log(f"activación falló: {e!r}")
+    else:
+        log("No hubo OMEs nuevas para activar en esta tanda.")
 
     log("=== Cadena completa terminada ===")
 

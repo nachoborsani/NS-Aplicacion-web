@@ -167,6 +167,17 @@ def run(progress=None) -> dict:
         except Exception as e:  # noqa: BLE001
             log(f"No pude escribir los resultados en la planilla: {e!r}")
 
+    # Filas que quedaron CON OME en esta tanda (generadas o ya la tenían y le
+    # recuperamos el número). La cadena usa esto para activar SOLO lo de esta
+    # corrida, no todo el backlog.
+    filas_con_ome = [
+        r.get("sheet_row") for r in result_rows
+        if str(r.get("resultado", "")).upper() in OK_RESULTS
+        and str(r.get("nro_ome", "") or r.get("n_orden", "") or "").strip()
+        and r.get("sheet_row")
+    ]
+    resumen["filas_con_ome"] = filas_con_ome
+
     log(f"=== listo: {resumen['generadas']} generadas · {resumen['ya_tenian']} ya tenían · "
         f"{resumen['limite']} límite · {resumen['errores']} errores · {escritas} escritas en planilla ===")
     return resumen
