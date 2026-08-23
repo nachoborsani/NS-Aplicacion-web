@@ -134,6 +134,22 @@ async (fechaHoy) => {
 }
 """
 
+# Lista CRUDA de window.bandeja (todas las OMEs del afiliado, sin el filtro de
+# "activable/agenda futura" que aplica EXTRAER). Trae el CÓDIGO de práctica
+# (c_practica) y el n_orden, que es justo lo que necesitamos para recuperar el
+# número en el caso YA_TIENE_OME de cabecera (la OME recién generada queda
+# "PENDIENTE DE ACEPTACIÓN" y EXTRAER la descarta).
+RAW_OMES_AFILIADO_SCRIPT = r"""
+() => (Array.isArray(window.bandeja) ? window.bandeja : []).map(o => ({
+  n_orden: (o.n_orden || '').toString(),
+  c_practica: (o.c_practica || '').toString(),
+  c_practica_array: Array.isArray(o.c_practica_array) ? o.c_practica_array.map(String) : [],
+  estado: (o.estado || '').toString(),
+  f_emision_date: Number(o.f_emision_date) || 0,
+  f_vencimiento_date: Number(o.f_vencimiento_date) || 0
+}))
+"""
+
 
 def log(message: str) -> None:
     print(message, flush=True)
@@ -1321,6 +1337,44 @@ class PamiOmeGenerator:
                 continue
         return ""
 
+    async def _lookup_ome_cabecera_raw(self, page: Page, n_afiliado: str,
+                                       equivalentes: tuple[str, ...]) -> str:
+        """Recupera el Nro OME de cabecera leyendo la bandeja CRUDA del panel.
+
+        Busca al afiliado (sin filtro de práctica), lee todas sus OMEs de
+        window.bandeja y elige la de código de práctica dentro de la cascada
+        (`equivalentes`), la de emisión MÁS RECIENTE. Sirve para YA_TIENE_OME:
+        la OME recién generada queda 'PENDIENTE DE ACEPTACIÓN' y el extractor
+        normal (activables/agenda futura) la descarta, pero acá aparece igual."""
+        equiv = set(equivalentes or ())
+        if not equiv:
+            return ""
+        try:
+            await self._search_existing_ome_in_panel(page, n_afiliado=n_afiliado, practica="")
+            await page.wait_for_function("window.bandeja !== undefined", timeout=8000)
+            raw = await page.evaluate(RAW_OMES_AFILIADO_SCRIPT) or []
+        except Exception as exc:
+            log(f"[OME] No pude leer la bandeja cruda para {n_afiliado}: {exc}")
+            return ""
+
+        def codigos(o: dict) -> set:
+            cs = {self._extract_practice_code(o.get("c_practica", ""))}
+            for c in (o.get("c_practica_array") or []):
+                cs.add(self._extract_practice_code(c))
+            return {c for c in cs if c}
+
+        candidatos = [o for o in raw if codigos(o) & equiv]
+        if not candidatos:
+            log(f"[OME] Bandeja cruda: {len(raw)} OME(s) pero ninguna de cabecera "
+                f"({'/'.join(sorted(equiv))}) para {n_afiliado}.")
+            return ""
+        candidatos.sort(key=lambda o: o.get("f_emision_date") or 0, reverse=True)
+        elegida = candidatos[0]
+        log(f"[OME] Bandeja cruda: elegida n_orden={elegida.get('n_orden')} "
+            f"practica={elegida.get('c_practica')} estado={elegida.get('estado')} "
+            f"(de {len(candidatos)} de cabecera).")
+        return sanitize_text(elegida.get("n_orden"))
+
     async def _lookup_existing_generated_ome(self, page: Page, n_afiliado: str, practica: str,
                                              practicas_equivalentes: tuple[str, ...] = ()) -> str:
         n_afiliado = sanitize_text(n_afiliado)
@@ -1342,6 +1396,14 @@ class PamiOmeGenerator:
             # que PAMI liste todas las OMEs del afiliado; el filtrado lo hace
             # _pick_best_existing_ome contra el set equivalente.
             practica_busqueda = "" if equivalentes else practica
+            # Cabecera: leer la lista CRUDA de window.bandeja y elegir por código de
+            # práctica (la recién generada queda "PENDIENTE DE ACEPTACIÓN" y el
+            # extractor normal la descarta). Es lo más confiable para YA_TIENE_OME.
+            if equivalentes:
+                nro_raw = await self._lookup_ome_cabecera_raw(page, n_afiliado, equivalentes)
+                if nro_raw:
+                    log(f"[OME] OME de cabecera recuperada (bandeja cruda) para {n_afiliado}: {nro_raw}")
+                    return nro_raw
             omes = await self._search_existing_ome_with_fallback(page, n_afiliado=n_afiliado, practica=practica_busqueda)
             nro_ome = self._pick_best_existing_ome(omes, practica, equivalentes=equivalentes)
             if nro_ome:
