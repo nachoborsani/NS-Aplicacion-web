@@ -183,26 +183,43 @@ class NSWebClient:
         """Usuario + clave PAMI del cliente (desencriptada). Requiere sesión admin."""
         return self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/pami/credenciales")
 
-    def faltan_benef_scheffelaar(self) -> list[dict]:
-        """Filas de la planilla de Scheffelaar con DNI y sin benef (para buscarlo)."""
-        data = self._request("GET", "/api/credenciales/scheffelaar/faltan-benef")
+    # --- Credencial/benef: métodos GENÉRICOS por cred_key (para varios médicos de
+    #     cabecera). Los endpoints de la web ya son paramétricos (CRED_CONFIGS). ---
+    def faltan_benef(self, cred_key: str = "scheffelaar") -> list[dict]:
+        """Filas de la planilla del cliente con DNI y sin benef (para buscarlo)."""
+        data = self._request("GET", f"/api/credenciales/{cred_key}/faltan-benef")
         return data.get("faltan", []) if isinstance(data, dict) else []
 
-    def set_benef_scheffelaar(self, sheet_row: int, benef: str) -> dict:
-        """Escribe el benef encontrado en la planilla de Scheffelaar."""
-        return self._request("POST", "/api/credenciales/scheffelaar/set-benef",
+    def set_benef(self, cred_key: str, sheet_row: int, benef: str) -> dict:
+        """Escribe el benef encontrado en la planilla del cliente."""
+        return self._request("POST", f"/api/credenciales/{cred_key}/set-benef",
                              body={"sheetRow": int(sheet_row), "benef": str(benef)})
 
-    def correr_credenciales_scheffelaar(self, rows: list[int] | None = None) -> dict:
-        """Dispara la descarga de credenciales de Scheffelaar en la web (server-side).
+    def correr_credenciales(self, cred_key: str, rows: list[int] | None = None) -> dict:
+        """Dispara la descarga de credenciales del cliente en la web (server-side).
 
-        Si se pasan `rows` (las filas que el barrido acaba de completar), baja SOLO
-        esas (modo quirúrgico). Sin `rows`, corre todo el backlog pendiente.
-        """
+        Con `rows` baja SOLO esas (modo quirúrgico); sin `rows`, todo el backlog."""
         if rows:
-            return self._request("POST", "/api/credenciales/scheffelaar/correr-filas",
+            return self._request("POST", f"/api/credenciales/{cred_key}/correr-filas",
                                  body={"rows": [int(r) for r in rows]})
-        return self._request("POST", "/api/credenciales/scheffelaar/correr-ahora", body={})
+        return self._request("POST", f"/api/credenciales/{cred_key}/correr-ahora", body={})
+
+    def reportar_benef_estado_cred(self, cred_key: str, completados: int, sin_benef: int,
+                                   errores: int, revisadas: int = 0, error: str = "") -> dict:
+        """Reporta el resultado del barrido de benef del cliente (tablero web)."""
+        return self._request("POST", f"/api/credenciales/{cred_key}/benef-estado",
+                             body={"revisadas": int(revisadas), "completados": int(completados),
+                                   "sinBenef": int(sin_benef), "errores": int(errores), "error": str(error or "")})
+
+    # --- Envoltorios Scheffelaar (compatibilidad con el código existente). ---
+    def faltan_benef_scheffelaar(self) -> list[dict]:
+        return self.faltan_benef("scheffelaar")
+
+    def set_benef_scheffelaar(self, sheet_row: int, benef: str) -> dict:
+        return self.set_benef("scheffelaar", sheet_row, benef)
+
+    def correr_credenciales_scheffelaar(self, rows: list[int] | None = None) -> dict:
+        return self.correr_credenciales("scheffelaar", rows=rows)
 
     def credencial_corriendo(self, slug_key: str = "scheffelaar") -> bool:
         """True si hay una corrida de credenciales en curso (para esperarla)."""
@@ -214,10 +231,8 @@ class NSWebClient:
 
     def reportar_benef_estado(self, completados: int, sin_benef: int, errores: int,
                               revisadas: int = 0, error: str = "") -> dict:
-        """Reporta el resultado del barrido de benef (para el tablero de la web)."""
-        return self._request("POST", "/api/credenciales/scheffelaar/benef-estado",
-                             body={"revisadas": int(revisadas), "completados": int(completados),
-                                   "sinBenef": int(sin_benef), "errores": int(errores), "error": str(error or "")})
+        return self.reportar_benef_estado_cred("scheffelaar", completados, sin_benef,
+                                               errores, revisadas=revisadas, error=error)
 
     def avisar(self, texto: str) -> dict:
         """Manda un aviso por Telegram (la web tiene el token; la app no lo conoce)."""
