@@ -1381,7 +1381,7 @@ function renderClientList(){
   var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
   if (consHdr) consHdr.textContent = 'Consultorios';
   var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
-  if (medHdr) medHdr.textContent = 'Médicos de cabecera';
+  if (medHdr) medHdr.textContent = 'Med. Cabecera';
   document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
       go('clientes');
