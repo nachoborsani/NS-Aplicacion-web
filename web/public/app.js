@@ -33,11 +33,15 @@ function toggleSidebar(){
 // lo cierra (colapsa la lista); si no, entra a Clientes y lo abre.
 function toggleClientGroup(tipo, el){
   var group = document.getElementById(tipo === 'medcab' ? 'navGroupMedCab' : 'navGroupConsultorios');
-  var enClientes = document.getElementById('view-clientes').style.display !== 'none';
-  var colapsado = document.body.classList.contains('sidebar-collapsed');
-  if (!enClientes || colapsado){ go('clientes', el); return; }  // entra a Clientes (abre ambos)
-  if (group) group.classList.toggle('open');                    // ya adentro: colapsa/expande este grupo
-  if (el) el.classList.add('active');
+  // Tocar el grupo SOLO despliega/pliega la lista; NO abre ningún cliente.
+  // Recién se entra a un consultorio al hacer clic en uno puntual de la lista.
+  var eraColapsada = document.body.classList.contains('sidebar-collapsed');
+  expandSidebar();                                          // si estaba colapsada, mostrarla
+  if (!CLIENTS.length) loadClients({ detail: false });      // garantizar la lista cargada
+  if (group){
+    if (eraColapsada) group.classList.add('open');          // al expandir, mostrar la lista
+    else group.classList.toggle('open');
+  }
 }
 // La lista de clientes vive en la barra: si está colapsada no se ve. Al entrar
 // a Clientes la expandimos para poder elegir un cliente.
