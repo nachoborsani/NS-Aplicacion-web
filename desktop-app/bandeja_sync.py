@@ -226,6 +226,16 @@ def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     return data, columns
 
 
+def _contar_transmitidas(rows: list[dict]) -> int:
+    """Cuántas filas del export están transmitidas (columna TRASMITIDA = 'S')."""
+    if not rows:
+        return 0
+    kt = next((k for k in rows[0] if "TRASMITIDA" in k.upper() or "TRANSMITIDA" in k.upper()), None)
+    if not kt:
+        return 0
+    return sum(1 for r in rows if str(r.get(kt, "")).strip().upper() == "S")
+
+
 def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                 transmitir: bool = False) -> dict:
     """Baja la bandeja de un cliente y la sube. Si transmitir=True y todavía no se
@@ -264,6 +274,19 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
             if progress:
                 progress(f"{name}: bajando bandeja…")
             exported = bot.exportar_excel_panel(str(tmp), {"fecha_desde": desde, "fecha_hasta": hasta})
+            # Auto-corrección: si transmitimos N>0 pero el export no trae NINGUNA
+            # transmitida, PAMI arrastró el filtro de la transmisión (validada=S,
+            # transmitida=N) y exportó solo ese subconjunto (bug detectado en CIMA:
+            # 476 filas en vez de 3707, cobro real $0). Re-exportamos una vez.
+            if transmit_info and (transmit_info.get("transmitidas") or 0) > 0:
+                try:
+                    rows_chk, _ = parse_bandeja_excel(exported)
+                    if _contar_transmitidas(rows_chk) == 0:
+                        if progress:
+                            progress(f"{name}: el export salió filtrado por la transmisión, re-exportando…")
+                        exported = bot.exportar_excel_panel(str(tmp), {"fecha_desde": desde, "fecha_hasta": hasta})
+                except Exception:  # noqa: BLE001 - si el chequeo falla, seguimos con lo que haya
+                    pass
             # 3) Bandeja "hacia adelante": turnos del día siguiente al corte hasta
             #    fin de mes (para detectar posibles débitos por adelantado).
             fut = forward_range(period, hasta_hoy=es_fin_dia)
