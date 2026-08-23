@@ -72,17 +72,16 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  ['dash','users','clientes','nomencladores','informes','credencial','resumen','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
-  if (v === 'users') renderUsers();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'dash') updateDashClientsTile();
   if (v === 'resumen') loadResultado();
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
-  if (v === 'soon') loadGeneralDebitos();
+  if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
   if (v === 'gastos') loadGastos();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -304,7 +303,7 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'users', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -4608,7 +4607,7 @@ function aplicarUsuario(u){
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','users','soon','resumen','facturas','gastos'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','gastos'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;
