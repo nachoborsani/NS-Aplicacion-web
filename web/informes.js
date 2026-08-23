@@ -346,6 +346,23 @@ const MODELOS = {
     textoDefault: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
     pie: PIE_CABALLITO,
   },
+  // --- Centro Médico Caballito: Dermatología (electrocoagulación / TCA) ---
+  "caballito-derma-electro": {
+    label: "Caballito — Destrucción de lesión de piel (537106)",
+    short: "Caballito · TCA/Electro",
+    practica: "537106 - Destrucción de lesión de piel por electrocoagulación o TCA",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE DERMATOLOGÍA",
+    especialidad: "Dermatología",
+    codigoPractica: "537106",
+    estudio: "TOPICACION CON TCA",
+    estudioArchivo: "Destruccion de lesion de piel",
+    solicitanteDefault: "Dra. Leydy Henriquez Gomez",
+    textoDefault: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
+    pie: PIE_CABALLITO,
+  },
   // --- Centro Médico Caballito: Test de SIBO (aire espirado) — layout propio ---
   "caballito-sibo": {
     label: "Caballito — Test de SIBO (607130)",

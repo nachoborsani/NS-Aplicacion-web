@@ -618,6 +618,18 @@ const ORL_SEED_PRESETS = [
     texto: "SE REALIZA CRIOCIRUGÍA DE LESIONES CUTÁNEAS EN REGIÓN A ESPECIFICAR. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS. SE INDICAN PAUTAS DE CUIDADO LOCAL Y CONTROL EVOLUTIVO.",
   },
   {
+    id: "derma-electro-tca-queratosis", modelo: "caballito-derma-electro", nombre: "Topicación con TCA por queratosis seborreicas en rostro",
+    texto: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
+  },
+  {
+    id: "derma-electro-tca-multiples", modelo: "caballito-derma-electro", nombre: "Topicación con TCA por múltiples queratosis seborreicas en rostro",
+    texto: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE MÚLTIPLES QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
+  },
+  {
+    id: "derma-electro-electrocoag", modelo: "caballito-derma-electro", nombre: "Electrocoagulación de queratosis seborreicas",
+    texto: "PREVIA ANTISEPSIA SE REALIZA ELECTROCOAGULACIÓN DE QUERATOSIS SEBORREICAS EN REGIÓN A ESPECIFICAR. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
+  },
+  {
     id: "sibo-negativo", modelo: "caballito-sibo", nombre: "Estudio negativo para SIBO",
     texto: "Estudio negativo para SIBO",
     valores: { umbral: "25", ppm1: "5", ppm2: "7", ppm3: "7", ppm4: "6", ppm5: "4", ppm6: "6", ppm7: "7", ppm8: "11", ppm9: "3", ppm10: "4" },
@@ -5262,6 +5274,7 @@ function ensureOrlSeed() {
       { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito },
       { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["cima-orl-videorino"] },
       { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["caballito-derma-crio"] },
+      { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["caballito-derma-electro"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
