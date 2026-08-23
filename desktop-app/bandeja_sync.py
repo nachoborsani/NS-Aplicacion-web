@@ -46,6 +46,56 @@ def _current_period() -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Clasificación del error de un cliente (para avisar distinto)
+# --------------------------------------------------------------------------- #
+def clasificar_error(msg: str) -> str:
+    """Clasifica el error de un sync en: 'credencial' (clave equivocada),
+    'sin_clave' (no cargada), 'transitorio' (502/red/timeout) u 'otro'.
+
+    Sirve para avisar distinto: una clave mal hay que ir a corregirla; un 502 se
+    reintenta solo. La señal de clave mal viene del login de PAMI
+    (`_auto_login_cup` lanza 'No se pudo iniciar sesión ... Revisa usuario y clave')."""
+    m = (msg or "").lower()
+    if not m:
+        return "otro"
+    if "sin usuario/clave" in m or "cargados en la web" in m:
+        return "sin_clave"
+    if ("revisa usuario y clave" in m or "iniciar sesion" in m or "iniciar sesión" in m
+            or "usuario y clave" in m or "usuario o clave" in m):
+        return "credencial"
+    # El fetch de credenciales a la web caído (502) NO es clave mal, es transitorio.
+    if m.startswith("credenciales:"):
+        return "transitorio"
+    if any(tok in m for tok in ("502", "503", "504", "timeout", "timed out",
+                                "econnreset", "econnrefused", "getaddrinfo",
+                                "connection", "temporarily", "network")):
+        return "transitorio"
+    return "otro"
+
+
+def armar_aviso_telegram(resultados: list[dict], periodo: str, titulo: str = "Bandejas") -> str:
+    """Mensaje de Telegram que separa 'clave equivocada' de 'error transitorio'."""
+    ok = [r for r in resultados if r.get("ok")]
+    fallo = [r for r in resultados if not r.get("ok")]
+    if not fallo:
+        return f"✅ <b>{titulo}</b> {periodo}: todo ok — {len(ok)} clientes actualizados."
+    cred = [r for r in fallo if clasificar_error(r.get("error")) == "credencial"]
+    sin_clave = [r for r in fallo if clasificar_error(r.get("error")) == "sin_clave"]
+    otros = [r for r in fallo if clasificar_error(r.get("error")) in ("transitorio", "otro")]
+    lineas = [f"⚠️ <b>{titulo}</b> {periodo}: {len(ok)}/{len(resultados)} ok."]
+    if cred:
+        lineas.append("🔑 <b>Clave equivocada</b> — revisar acceso PAMI: "
+                      + ", ".join(r.get("name", "") for r in cred))
+    if sin_clave:
+        lineas.append("🔒 <b>Sin clave cargada</b>: "
+                      + ", ".join(r.get("name", "") for r in sin_clave))
+    if otros:
+        det = ", ".join(f"{r.get('name', '')} ({str(r.get('error') or 'error')[:60]})" for r in otros)
+        lineas.append("↻ Error transitorio (se reintenta 22:00): " + det)
+    return "\n".join(lineas)
+
+
+# --------------------------------------------------------------------------- #
 # Transmisión automática (1 vez por día por cliente)
 # --------------------------------------------------------------------------- #
 def _transmit_state_path() -> Path:
@@ -315,16 +365,10 @@ if __name__ == "__main__":  # pragma: no cover
         estado = f"OK — {r.get('count')} filas" if r.get("ok") else f"FALLO — {r.get('error')}"
         print(f"  {r['name'][:32]:32} -> {estado}")
 
-    # Aviso por Telegram: que esté todo ok (o qué clientes fallaron).
+    # Aviso por Telegram: que esté todo ok (o qué clientes fallaron), separando
+    # 'clave equivocada' (hay que corregirla) de 'error transitorio' (se reintenta).
     try:
-        ok = [r for r in resultados if r.get("ok")]
-        fallo = [r for r in resultados if not r.get("ok")]
-        hoy = _current_period()
-        if fallo:
-            detalle = ", ".join(f"{r['name']} ({r.get('error') or 'error'})" for r in fallo)
-            msg = f"⚠️ <b>Bandejas</b> {hoy}: {len(ok)}/{len(resultados)} ok. Fallaron: {detalle}"
-        else:
-            msg = f"✅ <b>Bandejas</b> {hoy}: todo ok — {len(ok)} clientes actualizados."
+        msg = armar_aviso_telegram(resultados, _current_period())
         cfg = load_config()
         w = NSWebClient(cfg.get("base_url") or DEFAULT_BASE_URL)
         w.login(cfg.get("username", ""), cfg.get("password", ""))

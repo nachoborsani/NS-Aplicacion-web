@@ -55,14 +55,12 @@ def run(period: str | None = None, progress=None) -> dict:
         "siguen": [r.get("name") or r.get("slug") for r in siguen],
     }
 
-    # Aviso por Telegram: solo si efectivamente reintentamos algo.
+    # Aviso por Telegram: solo si efectivamente reintentamos algo. Separa
+    # 'clave equivocada' de 'error transitorio' (mismo formato que el sync).
     try:
-        if siguen:
-            detalle = ", ".join(f"{r['name']} ({r.get('error') or 'error'})" for r in siguen)
-            msg = (f"🔁 <b>Reintento bandejas</b>: recuperados {len(ok)}/{len(resultados)}. "
-                   f"Siguen con error: {detalle}")
-        else:
-            msg = f"🔁 <b>Reintento bandejas</b>: recuperados {len(ok)}/{len(resultados)}. Todo ok."
+        cuerpo = bandeja_sync.armar_aviso_telegram(
+            resultados, bandeja_sync._current_period(), titulo="Reintento bandejas")
+        msg = f"🔁 Recuperados {len(ok)}/{len(resultados)}.\n{cuerpo}"
         web.avisar(msg)
         prog("aviso Telegram enviado")
     except Exception as e:  # noqa: BLE001 - el aviso no debe cortar el reintento
