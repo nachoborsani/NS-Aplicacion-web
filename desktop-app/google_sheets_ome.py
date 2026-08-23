@@ -561,7 +561,11 @@ def _is_pending_ome_marker(value: str) -> bool:
     ]
     if not parts:
         return False
-    return all(part in {"NO ENCONTRADA", "NO ENCONTRADO"} for part in parts)
+    # "YA TIENE OME" sin número es un resultado INCOMPLETO: el paciente tiene una
+    # OME pero no pudimos traer el número. Lo tratamos como pendiente para que la
+    # próxima corrida lo reintente (y con el fix de búsqueda por práctica
+    # equivalente, la recupere). Cuando se escribe el número real, ya no matchea.
+    return all(part in {"NO ENCONTRADA", "NO ENCONTRADO", "YA TIENE OME"} for part in parts)
 
 
 def _row_has_table_context(row: list[str], layout: dict[str, int | None]) -> bool:
