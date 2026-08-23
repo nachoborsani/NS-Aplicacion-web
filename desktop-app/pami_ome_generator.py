@@ -197,6 +197,12 @@ class PatientInput:
     retry_capita_done: bool = False
     completar_benef: bool = False
     completar_dni: bool = False
+    # Códigos de práctica equivalentes para la búsqueda de OME existente. En
+    # cabecera las 4 consultas (427109/120/121/122) son "la misma OME": si PAMI
+    # dice "ya tiene OME", el número puede estar bajo cualquiera. Cuando esto
+    # viene cargado, la búsqueda del existente NO filtra por práctica y acepta
+    # cualquier código de esta lista. Vacío = comportamiento viejo (1 práctica).
+    practicas_equivalentes: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -743,7 +749,8 @@ class PamiOmeGenerator:
                 try:
                     if not nro_ome_existente:
                         nro_ome_existente = await self._lookup_existing_generated_ome(
-                            page, n_afiliado_busqueda, effective_patient.practica
+                            page, n_afiliado_busqueda, effective_patient.practica,
+                            practicas_equivalentes=effective_patient.practicas_equivalentes,
                         )
                 except Exception as exc:
                     log(
@@ -1314,21 +1321,29 @@ class PamiOmeGenerator:
                 continue
         return ""
 
-    async def _lookup_existing_generated_ome(self, page: Page, n_afiliado: str, practica: str) -> str:
+    async def _lookup_existing_generated_ome(self, page: Page, n_afiliado: str, practica: str,
+                                             practicas_equivalentes: tuple[str, ...] = ()) -> str:
         n_afiliado = sanitize_text(n_afiliado)
         practica = sanitize_text(practica)
+        # Códigos equivalentes normalizados a 6 dígitos (cabecera: las 4 consultas).
+        equivalentes = tuple(c for c in (self._extract_practice_code(p) for p in (practicas_equivalentes or ())) if c)
         if not n_afiliado:
             return ""
         try:
-            log(f"[OME] Buscando OME existente para {n_afiliado} con practica='{practica}'.")
+            log(f"[OME] Buscando OME existente para {n_afiliado} con practica='{practica}'"
+                + (f" (equivalentes {'/'.join(equivalentes)})" if equivalentes else "") + ".")
             nro_visible = await self._extract_ome_number_from_detail(page)
             if nro_visible:
                 log(f"[OME] OME existente recuperada desde pantalla actual para {n_afiliado}: {nro_visible}")
                 return nro_visible
             await page.goto(PANEL_ACEPTACION_URL, wait_until="domcontentloaded")
             await human_pause(1.0, 1.4)
-            omes = await self._search_existing_ome_with_fallback(page, n_afiliado=n_afiliado, practica=practica)
-            nro_ome = self._pick_best_existing_ome(omes, practica)
+            # En modo equivalentes (cabecera) buscamos SIN filtro de práctica para
+            # que PAMI liste todas las OMEs del afiliado; el filtrado lo hace
+            # _pick_best_existing_ome contra el set equivalente.
+            practica_busqueda = "" if equivalentes else practica
+            omes = await self._search_existing_ome_with_fallback(page, n_afiliado=n_afiliado, practica=practica_busqueda)
+            nro_ome = self._pick_best_existing_ome(omes, practica, equivalentes=equivalentes)
             if nro_ome:
                 log(f"[OME] OME existente recuperada para {n_afiliado}: {nro_ome}")
             else:
@@ -1408,13 +1423,17 @@ class PamiOmeGenerator:
             raise RuntimeError(f"No se pudo buscar OME existente en panel: {result}")
         await human_pause(1.5, 2.0)
 
-    def _pick_best_existing_ome(self, omes: list[dict], practica: str) -> str:
+    def _pick_best_existing_ome(self, omes: list[dict], practica: str,
+                                equivalentes: tuple[str, ...] = ()) -> str:
         practica_codigo = self._extract_practice_code(practica)
+        # Set de códigos aceptables: si vienen equivalentes (cabecera), cualquiera
+        # de esos códigos vale; si no, solo el código exacto de la práctica.
+        codigos_ok = set(equivalentes) if equivalentes else ({practica_codigo} if practica_codigo else set())
         candidatos = []
         for ome in omes or []:
             practica_item = sanitize_text(ome.get("practica"))
-            if practica_codigo:
-                if self._extract_practice_code(practica_item) != practica_codigo:
+            if codigos_ok:
+                if self._extract_practice_code(practica_item) not in codigos_ok:
                     continue
             elif practica and practica.upper() not in practica_item.upper():
                 continue

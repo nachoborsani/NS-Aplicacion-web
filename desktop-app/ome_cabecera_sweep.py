@@ -72,6 +72,9 @@ async def _procesar(user: str, clave: str, candidatos: list[dict], progress=None
                         practica=practica,
                         dni=dni,
                         nombre=nombre,
+                        # Cabecera: las 4 consultas son la misma OME. Si PAMI dice
+                        # "ya tiene OME", buscar el número bajo cualquiera de ellas.
+                        practicas_equivalentes=tuple(PRACTICAS),
                     ))
                 except Exception as e:  # noqa: BLE001
                     ultimo = None

@@ -2430,6 +2430,11 @@ function mesCursoCardMesEnCurso(r, estado){
   var cobroReal = r.grossTransmitido || 0;
   var faltaInf = r.missingInformeAmount || 0;
   var estimado = cobroReal + faltaInf;
+  // Cobro real en $0 habiendo prestaciones = casi siempre un error (la
+  // actualización no captó las transmitidas, o falló). Lo marcamos en rojo.
+  var cobroCeroWarn = (cobroReal === 0 && (r.count || 0) > 0)
+    ? '<div class="mescurso-salud err">⚠ Cobro real en $0 con ' + esc(numberFmt(r.count || 0)) + ' prestaciones — probable error de la transmisión o la actualización. Revisá.</div>'
+    : '';
   var ausTot = r.absent || 0;
   var tieneAusRows = (r.ausentesRows && r.ausentesRows.length) || ausTot > 0;
   var ausentesClick = tieneAusRows ? ' mescurso-click" onclick="toggleAusentes()' : '';
@@ -2437,7 +2442,7 @@ function mesCursoCardMesEnCurso(r, estado){
   var ausentesHtml = (ausTot > 0)
     ? '<div class="mescurso-ausentes' + ausentesClick + '"><span>Ausentes' + ausentesCaret + ' <b>' + esc(numberFmt(ausTot)) + '</b> · ' + esc(numberFmt(r.ausentesConsultas || 0)) + ' consultas · ' + esc(numberFmt(r.ausentesPracticas || 0)) + ' prácticas</span><b>' + (r.grossTurno ? esc(moneyFmt(r.grossTurno)) : '') + '</b></div>'
     : '';
-  return '<div class="mescurso-card">' + head + salud
+  return '<div class="mescurso-card">' + head + salud + cobroCeroWarn
     + '<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
     + '<div class="mescurso-val-note">+ Falta informe <b>' + esc(moneyFmt(faltaInf)) + '</b> → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
