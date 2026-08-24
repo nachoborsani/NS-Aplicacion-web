@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Padrón de afiliados', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 function togglePagosGroup(el){
@@ -76,7 +76,8 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  if (v === 'padron' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','padron','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -85,6 +86,7 @@ function go(v, el){
   if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
+  if (v === 'padron') loadPadronView();
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -4796,6 +4798,72 @@ async function saveDelete(){
 
 function showModal(id, scrimId){ document.getElementById(scrimId).classList.add('show'); document.getElementById(id).classList.add('show'); }
 function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remove('show'); document.getElementById(id).classList.remove('show'); }
+// ===== Padrón de afiliados (admin) =====
+var PADRON_SEARCH_TIMER = null;
+async function loadPadronView(){
+  var sel = document.getElementById('padCliente');
+  if (sel && !sel.options.length){
+    try {
+      var r = await fetch('/api/clientes');
+      var raw = await r.json();
+      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      list.forEach(function(c){
+        var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o);
+      });
+    } catch(e){}
+  }
+  await refreshPadron();
+}
+async function refreshPadron(){
+  var sel = document.getElementById('padCliente');
+  var slug = sel && sel.value;
+  var meta = document.getElementById('padResultMeta');
+  var body = document.getElementById('padBody');
+  if (!slug){ if (meta) meta.textContent = 'Elegí un cliente.'; if (body) body.innerHTML = ''; return; }
+  var q = (document.getElementById('padQ').value || '').trim();
+  var r = await fetch('/api/clientes/' + slug + '/padron?limit=300&q=' + encodeURIComponent(q));
+  var data = {};
+  try { data = await r.json(); } catch(e){}
+  if (!r.ok){ if (meta) meta.textContent = (data.error || 'No se pudo cargar.'); if (body) body.innerHTML=''; return; }
+  renderPadronRows(slug, data);
+}
+function renderPadronRows(slug, data){
+  var body = document.getElementById('padBody');
+  var meta = document.getElementById('padResultMeta');
+  var items = data.items || [];
+  if (meta){
+    meta.textContent = 'Padrón: ' + (data.totalPadron||0) + ' afiliados · ' + (data.conBeneficio||0) + ' con beneficio' + (data.total !== data.totalPadron ? ' · ' + data.total + ' en la búsqueda' : '');
+  }
+  if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
+  body.innerHTML = items.map(function(it){
+    return '<tr><td>' + esc(it.nombre||'') + '</td><td>' + esc(it.dni||'') + '</td><td>' + esc(it.beneficio||'—') + '</td><td>' + esc(it.tramite||'—') + '</td>' +
+      '<td style="text-align:right"><button class="icon-danger-btn" title="Quitar" onclick="deletePadronItem(\'' + slug + '\',\'' + esc(it.dni) + '\')"><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td></tr>';
+  }).join('');
+}
+function queuePadronSearch(){ clearTimeout(PADRON_SEARCH_TIMER); PADRON_SEARCH_TIMER = setTimeout(refreshPadron, 250); }
+async function uploadTurnera(files){
+  if (!files || !files[0]) return;
+  var sel = document.getElementById('padCliente');
+  var slug = sel && sel.value;
+  var input = document.getElementById('padFile');
+  var st = document.getElementById('padStatusText');
+  if (!slug){ if (st) st.innerHTML = '<b>Elegí un cliente primero</b><span>Seleccioná el cliente antes de subir la turnera.</span>'; if (input) input.value=''; return; }
+  if (st) st.innerHTML = '<b>Procesando turnera…</b><span>Creando y actualizando afiliados.</span>';
+  var fd = new FormData(); fd.append('file', files[0]);
+  var r = await fetch('/api/clientes/' + slug + '/padron/upload', { method:'POST', body: fd });
+  var data = {};
+  try { data = await r.json(); } catch(e){}
+  if (input) input.value = '';
+  if (!r.ok){ if (st) st.innerHTML = '<b>No se pudo cargar</b><span>' + esc(data.error||'Revisá el archivo.') + '</span>'; return; }
+  if (st) st.innerHTML = '<b>Turnera cargada ✓</b><span>' + esc(data.archivo||'') + ': ' + data.creados + ' nuevos, ' + data.actualizados + ' actualizados' + (data.sinDni ? ', ' + data.sinDni + ' sin DNI omitidos' : '') + '. Padrón: ' + data.totalPadron + ' afiliados.</span>';
+  await refreshPadron();
+}
+async function deletePadronItem(slug, dni){
+  if (!confirm('¿Quitar este afiliado del padrón?')) return;
+  var r = await fetch('/api/clientes/' + slug + '/padron/' + dni, { method:'DELETE' });
+  if (r.ok) await refreshPadron();
+}
+
 var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
 var ME_REAL = null;    // usuario realmente logueado (siempre el admin real)
 var ESPEJO = false;    // modo espejo activo (solo lectura)
@@ -4805,6 +4873,7 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
+  var np = document.getElementById('navPadron'); if (np) np.style.display = (u.role === 'admin') ? '' : 'none';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
@@ -4824,7 +4893,7 @@ function aplicarUsuario(u){
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

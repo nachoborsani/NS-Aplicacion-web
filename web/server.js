@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
 const informes = require("./informes");
+const padronLib = require("./padron");
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -307,6 +308,17 @@ function loadClientBandejasFuturas() {
 function saveClientBandejasFuturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasFuturasFile, JSON.stringify(store, null, 2));
+}
+// Padrón de afiliados por cliente: { [slug]: { [dni]: {dni, beneficio, nombre, tramite, ...} } }.
+// Se alimenta subiendo turneras. Es la base para matchear informes por número exacto.
+const padronFile = path.join(dataDir, "padron.json");
+function loadPadron() {
+  try { const j = JSON.parse(fs.readFileSync(padronFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function savePadron(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(padronFile, JSON.stringify(store, null, 2));
 }
 // Resumen de cada mes futuro guardado (ordenados por período). Cada uno reusa el
 // mismo cálculo que "hacia adelante".
@@ -5066,6 +5078,98 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el nomenclador." });
     }
+  }
+
+  // ---- Padrón de afiliados por cliente (solo admin) ----
+  // Subir una turnera -> crea/actualiza pacientes (dedup por DNI).
+  const padronUpload = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron\/upload$/);
+  if (padronUpload && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede cargar el padrón." });
+    const slug = padronUpload[1];
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    try {
+      const raw = await readBuffer(req);
+      const multipart = extractMultipart(raw, req.headers["content-type"]);
+      const ext = path.extname(multipart.file.filename).toLowerCase();
+      if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
+        return json(res, 400, { error: "Subí un archivo Excel .xls, .xlsx o .xlsm." });
+      }
+      const { rows, total, sinDni } = padronLib.parseTurnera(multipart.file.data);
+      const store = loadPadron();
+      if (!store[slug]) store[slug] = {};
+      const resumen = padronLib.mergeRows(store[slug], rows, "turnera:" + multipart.file.filename, new Date().toISOString());
+      savePadron(store);
+      return json(res, 200, {
+        archivo: multipart.file.filename,
+        filas: total, sinDni,
+        creados: resumen.creados, actualizados: resumen.actualizados, sinCambio: resumen.sinCambio,
+        totalPadron: Object.keys(store[slug]).length,
+      });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar la turnera." });
+    }
+  }
+
+  // Listar / buscar el padrón de un cliente.
+  const padronList = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron$/);
+  if (padronList && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = padronList[1];
+    const store = loadPadron();
+    const cli = store[slug] || {};
+    const q = padronLib.normNombre(url.searchParams.get("q") || "");
+    let items = Object.values(cli);
+    if (q) {
+      const qd = q.replace(/\D+/g, "");
+      items = items.filter((it) =>
+        padronLib.normNombre(it.nombre).includes(q) ||
+        (qd && (it.dni.includes(qd) || (it.beneficio || "").includes(qd)))
+      );
+    }
+    items.sort((a, b) => padronLib.normNombre(a.nombre).localeCompare(padronLib.normNombre(b.nombre)));
+    const total = items.length;
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 1), 500);
+    const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+    const totalPadron = Object.keys(cli).length;
+    const conBeneficio = Object.values(cli).filter((it) => it.beneficio).length;
+    return json(res, 200, { total, totalPadron, conBeneficio, items: items.slice(offset, offset + limit) });
+  }
+
+  // Buscar un afiliado puntual por DNI o beneficio (para el matcher / búsqueda manual).
+  const padronLookup = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron\/lookup$/);
+  if (padronLookup && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = padronLookup[1];
+    const cli = loadPadron()[slug] || {};
+    const dni = (url.searchParams.get("dni") || "").replace(/\D+/g, "");
+    const benef = (url.searchParams.get("beneficio") || "").replace(/\D+/g, "");
+    if (dni && cli[dni]) return json(res, 200, { encontrado: true, afiliado: cli[dni] });
+    if (benef) {
+      const hit = Object.values(cli).find((it) => it.beneficio === benef);
+      if (hit) return json(res, 200, { encontrado: true, afiliado: hit });
+    }
+    return json(res, 200, { encontrado: false, afiliado: null });
+  }
+
+  // Borrar un afiliado del padrón.
+  const padronDel = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron\/(\d+)$/);
+  if (padronDel && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, dni] = padronDel;
+    const store = loadPadron();
+    if (store[slug] && store[slug][dni]) {
+      delete store[slug][dni];
+      savePadron(store);
+      return json(res, 200, { ok: true });
+    }
+    return json(res, 404, { error: "No está en el padrón." });
   }
 
   // ---- Credencial provisoria: consulta en vivo a PAMI y devuelve el PDF ----
