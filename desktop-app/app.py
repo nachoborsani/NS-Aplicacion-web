@@ -887,6 +887,10 @@ if __name__ == "__main__":
         import bandeja_retry
         bandeja_retry.run(progress=lambda m: print("  ", m))
         sys.exit(0)
+    if "--run-bandeja-poller" in sys.argv:
+        import bandeja_poller
+        bandeja_poller.run(progress=lambda m: print("  ", m))
+        sys.exit(0)
     if _acquire_single_instance_lock():
         app = PamiDesktopApp()
         app.mainloop()

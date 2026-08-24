@@ -2382,6 +2382,34 @@ function mesCursoFechaHora(iso){
     return mesCursoFechaCorta(iso) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' hs';
   } catch (e){ return ''; }
 }
+// Botón "Actualizar" (mes en curso): deja un pedido de refresco; la PC lo sondea
+// (~10 min) y corre la bajada de TODAS las bandejas. Muestra el progreso.
+var REFRESCO_POLL = null;
+async function pedirRefrescoBandejas(btn){
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
+  var r = await req('POST', '/api/bandeja/refresco/pedir', {});
+  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } alert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
+  var desde = (r.data && r.data.pedidoAt) || new Date().toISOString();
+  if (btn){ btn.textContent = '🔄 Pedido — corre en la PC…'; btn.title = 'La PC lo corre en los próximos minutos'; }
+  // Sondea el estado: cuando la PC termina (terminadoAt >= el pedido), recarga.
+  if (REFRESCO_POLL) clearInterval(REFRESCO_POLL);
+  var vueltas = 0;
+  REFRESCO_POLL = setInterval(async function(){
+    vueltas++;
+    var e = await req('GET', '/api/bandeja/refresco/estado');
+    if (e.ok && e.data){
+      if (e.data.corriendo && btn) btn.textContent = '🔄 Actualizando…';
+      var termino = e.data.terminadoAt && e.data.terminadoAt >= desde && !e.data.corriendo;
+      if (termino){
+        clearInterval(REFRESCO_POLL); REFRESCO_POLL = null;
+        if (btn){ btn.disabled = false; btn.textContent = '✅ Actualizado'; }
+        try { loadClientMesCurso(); } catch(_){}
+        return;
+      }
+    }
+    if (vueltas > 60){ clearInterval(REFRESCO_POLL); REFRESCO_POLL = null; if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } }
+  }, 15000);
+}
 // Indicador de salud: SOLO avisa si el último sync falló o la bandeja quedó
 // desactualizada (>20 hs). Si está todo bien no muestra nada (cero ruido).
 function mesCursoSaludHtml(estado, uploadedAt){
@@ -2437,9 +2465,12 @@ function mesCursoCardMesEnCurso(r, estado){
   var chip = (r && r.label) || mesCursoMesActualLabel();
   // Rango de días que abarca la bandeja (ej. "01/08 al 18/08"), por las dudas.
   var abarca = (r && r.coversFrom && r.coversTo) ? (r.coversFrom + ' al ' + r.coversTo) : '';
+  var puedeRefrescar = ME && (ME.role === 'admin' || ME.role === 'operador');
   var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso'
     + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
-    + '<span class="mescurso-chip">' + esc(chip) + '</span></div>';
+    + '<span class="mescurso-chip">' + esc(chip) + '</span>'
+    + (puedeRefrescar ? '<button class="btn btn-sm" type="button" id="btnRefrescoBandejas" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>' : '')
+    + '</div>';
   if (!r){
     if (estado && estado.ok === false){
       return '<div class="mescurso-card">' + head

@@ -48,8 +48,20 @@ const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
 const clientBandejasAdelanteFile = path.join(dataDir, "client_bandejas_adelante.json");
 const clientBandejaEstadoFile = path.join(dataDir, "client_bandeja_estado.json");
+// Pedido de refresco on-demand desde la web (la PC lo sondea y corre la bajada).
+const bandejaRefrescoFile = path.join(dataDir, "bandeja_refresco.json");
+function loadBandejaRefresco() {
+  try { const j = JSON.parse(fs.readFileSync(bandejaRefrescoFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function saveBandejaRefresco(o) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(bandejaRefrescoFile, JSON.stringify(o || {}, null, 2));
+}
 const clientPracticeValuesFile = path.join(dataDir, "client_practice_values.json");
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
+const workerStateFile = path.join(dataDir, "worker_state.json");
+const workerTokenFile = path.join(dataDir, "worker_api_token");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -1017,6 +1029,81 @@ function setSessionCookie(res, username, remember) {
 }
 function clearSessionCookie(res) {
   res.setHeader("Set-Cookie", "ns_session=; HttpOnly; Path=/; Max-Age=0");
+}
+
+// ---------- Worker Linux / servidor externo ----------
+function getWorkerToken() {
+  const envToken = String(process.env.NS_WORKER_TOKEN || process.env.WORKER_API_TOKEN || "").trim();
+  if (envToken) return envToken;
+  try {
+    const stored = fs.readFileSync(workerTokenFile, "utf8").trim();
+    if (stored) return stored;
+  } catch {}
+  const token = crypto.randomBytes(32).toString("hex");
+  try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(workerTokenFile, token); } catch {}
+  return token;
+}
+const WORKER_TOKEN = getWorkerToken();
+function workerTokenFromReq(req) {
+  const auth = String(req.headers.authorization || "").trim();
+  if (/^bearer\s+/i.test(auth)) return auth.replace(/^bearer\s+/i, "").trim();
+  return String(req.headers["x-ns-worker-token"] || "").trim();
+}
+function isWorkerAuth(req) {
+  const got = workerTokenFromReq(req);
+  if (!got || !WORKER_TOKEN) return false;
+  const a = Buffer.from(got);
+  const b = Buffer.from(WORKER_TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function emptyWorkerState() {
+  return { workers: {}, tasks: [] };
+}
+function loadWorkerState() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(workerStateFile, "utf8"));
+    return {
+      workers: parsed && typeof parsed.workers === "object" && !Array.isArray(parsed.workers) ? parsed.workers : {},
+      tasks: Array.isArray(parsed && parsed.tasks) ? parsed.tasks : [],
+    };
+  } catch {
+    return emptyWorkerState();
+  }
+}
+function saveWorkerState(state) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(workerStateFile, JSON.stringify(state || emptyWorkerState(), null, 2));
+}
+function publicWorkerTask(t) {
+  return {
+    id: String(t.id || ""),
+    type: String(t.type || ""),
+    label: String(t.label || ""),
+    status: String(t.status || "pending"),
+    clientSlug: String(t.clientSlug || ""),
+    workerId: String(t.workerId || ""),
+    createdAt: String(t.createdAt || ""),
+    startedAt: String(t.startedAt || ""),
+    finishedAt: String(t.finishedAt || ""),
+    attempts: Number(t.attempts || 0),
+    error: String(t.error || ""),
+    result: t.result && typeof t.result === "object" ? t.result : null,
+    logs: Array.isArray(t.logs) ? t.logs.slice(-100) : [],
+  };
+}
+function appendWorkerTaskLog(task, level, message) {
+  if (!Array.isArray(task.logs)) task.logs = [];
+  task.logs.push({
+    at: new Date().toISOString(),
+    level: String(level || "info").slice(0, 20),
+    message: String(message || "").slice(0, 1000),
+  });
+  if (task.logs.length > 300) task.logs = task.logs.slice(-300);
+}
+function staleWorkerTask(t, nowMs) {
+  if (t.status !== "running") return false;
+  const started = Date.parse(t.startedAt || "");
+  return Number.isFinite(started) && nowMs - started > 30 * 60 * 1000;
 }
 
 // ---------- Helpers ----------
@@ -3320,6 +3407,83 @@ const server = http.createServer(async (req, res) => {
   // de que el usuario recargue el index.html — la SPA no lo hace al navegar por hash).
   if (p === "/api/version") return json(res, 200, { version: String(ASSET_VER) });
 
+  // ---- Worker externo: autenticación por token, sin cookie de navegador ----
+  if (p === "/api/worker/ping" && req.method === "GET") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    return json(res, 200, { ok: true, service: "ns-web", at: new Date().toISOString() });
+  }
+  if (p === "/api/worker/heartbeat" && req.method === "POST") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    const body = await readBody(req);
+    const workerId = String((body && body.workerId) || "").trim().slice(0, 80);
+    if (!workerId) return json(res, 400, { error: "falta workerId" });
+    const state = loadWorkerState();
+    state.workers[workerId] = {
+      workerId,
+      hostname: String((body && body.hostname) || "").slice(0, 120),
+      version: String((body && body.version) || "").slice(0, 40),
+      platform: String((body && body.platform) || "").slice(0, 120),
+      status: String((body && body.status) || "online").slice(0, 40),
+      message: String((body && body.message) || "").slice(0, 500),
+      lastSeenAt: new Date().toISOString(),
+    };
+    saveWorkerState(state);
+    return json(res, 200, { ok: true });
+  }
+  if (p === "/api/worker/tasks/next" && req.method === "GET") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    const workerId = String(url.searchParams.get("workerId") || "").trim().slice(0, 80);
+    if (!workerId) return json(res, 400, { error: "falta workerId" });
+    const state = loadWorkerState();
+    const now = Date.now();
+    for (const t of state.tasks) {
+      if (staleWorkerTask(t, now)) {
+        t.status = "pending";
+        t.workerId = "";
+        appendWorkerTaskLog(t, "warn", "La tarea volvió a pendiente porque el worker no la cerró a tiempo.");
+      }
+    }
+    const task = state.tasks.find((t) => t.status === "pending");
+    if (!task) {
+      saveWorkerState(state);
+      return json(res, 200, { task: null });
+    }
+    task.status = "running";
+    task.workerId = workerId;
+    task.startedAt = new Date().toISOString();
+    task.attempts = Number(task.attempts || 0) + 1;
+    appendWorkerTaskLog(task, "info", `Tomada por ${workerId}.`);
+    saveWorkerState(state);
+    return json(res, 200, { task: { id: task.id, type: task.type, label: task.label, payload: task.payload || {}, clientSlug: task.clientSlug || "" } });
+  }
+  const workerLogMatch = p.match(/^\/api\/worker\/tasks\/([^/]+)\/log$/);
+  if (workerLogMatch && req.method === "POST") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    const body = await readBody(req);
+    const state = loadWorkerState();
+    const task = state.tasks.find((t) => t.id === decodeURIComponent(workerLogMatch[1]));
+    if (!task) return json(res, 404, { error: "task-not-found" });
+    appendWorkerTaskLog(task, body && body.level, body && body.message);
+    saveWorkerState(state);
+    return json(res, 200, { ok: true });
+  }
+  const workerCompleteMatch = p.match(/^\/api\/worker\/tasks\/([^/]+)\/complete$/);
+  if (workerCompleteMatch && req.method === "POST") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    const body = await readBody(req);
+    const state = loadWorkerState();
+    const task = state.tasks.find((t) => t.id === decodeURIComponent(workerCompleteMatch[1]));
+    if (!task) return json(res, 404, { error: "task-not-found" });
+    const ok = !(body && body.ok === false);
+    task.status = ok ? "done" : "error";
+    task.finishedAt = new Date().toISOString();
+    task.error = ok ? "" : String((body && body.error) || "Error del worker.").slice(0, 1000);
+    task.result = body && body.result && typeof body.result === "object" ? body.result : null;
+    appendWorkerTaskLog(task, ok ? "info" : "error", ok ? "Tarea finalizada." : task.error);
+    saveWorkerState(state);
+    return json(res, 200, { ok: true, task: publicWorkerTask(task) });
+  }
+
   // ---- API ----
   if (p === "/api/me") {
     const u = getSessionUser(req);
@@ -3353,6 +3517,56 @@ const server = http.createServer(async (req, res) => {
       else if (p === "/api/mescurso/export") permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
+  }
+
+  if (p === "/api/admin/worker/status" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const state = loadWorkerState();
+    const workers = Object.values(state.workers || {}).sort((a, b) => String(b.lastSeenAt || "").localeCompare(String(a.lastSeenAt || "")));
+    const tasks = (state.tasks || []).slice().sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))).slice(0, 100).map(publicWorkerTask);
+    return json(res, 200, {
+      ok: true,
+      tokenConfigured: !!WORKER_TOKEN,
+      tokenFromEnv: !!String(process.env.NS_WORKER_TOKEN || process.env.WORKER_API_TOKEN || "").trim(),
+      workers,
+      tasks,
+    });
+  }
+  if (p === "/api/admin/worker/tasks" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const state = loadWorkerState();
+    return json(res, 200, { tasks: (state.tasks || []).map(publicWorkerTask) });
+  }
+  if (p === "/api/admin/worker/tasks" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
+    const allowed = new Set(["healthcheck", "bandeja-sync"]);
+    if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
+    const state = loadWorkerState();
+    const task = {
+      id: crypto.randomUUID(),
+      type,
+      label: String((body && body.label) || (type === "healthcheck" ? "Prueba de worker" : "Sincronizar bandeja")).slice(0, 120),
+      status: "pending",
+      clientSlug: String((body && body.clientSlug) || "").trim().slice(0, 80),
+      payload: body && body.payload && typeof body.payload === "object" ? body.payload : {},
+      createdAt: new Date().toISOString(),
+      createdBy: me.username,
+      attempts: 0,
+      logs: [],
+    };
+    appendWorkerTaskLog(task, "info", `Creada por ${me.username}.`);
+    state.tasks.unshift(task);
+    state.tasks = state.tasks.slice(0, 500);
+    saveWorkerState(state);
+    return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
@@ -4108,6 +4322,44 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
     return json(res, 200, { estados: loadBandejaEstado() || {} });
+  }
+
+  // Refresco on-demand: la web deja un "pedido"; la PC lo sondea y corre la bajada.
+  if (p === "/api/bandeja/refresco/pedir" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
+    const st = loadBandejaRefresco();
+    st.pedidoAt = new Date().toISOString();
+    st.pedidoPor = me.username || "";
+    saveBandejaRefresco(st);
+    return json(res, 200, { ok: true, pedidoAt: st.pedidoAt });
+  }
+  if (p === "/api/bandeja/refresco/estado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const st = loadBandejaRefresco();
+    const pendiente = !!st.pedidoAt && st.pedidoAt !== st.ackAt;
+    return json(res, 200, {
+      pedidoAt: st.pedidoAt || null, ackAt: st.ackAt || null,
+      corriendo: !!st.corriendo, pendiente, terminadoAt: st.terminadoAt || null,
+    });
+  }
+  // La PC avisa que arrancó (corriendo=true) o que terminó (ack del pedido).
+  if (p === "/api/bandeja/refresco/ack" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
+    const b = await readBody(req);
+    const st = loadBandejaRefresco();
+    if (b && b.corriendo) { st.corriendo = true; }
+    else {
+      st.corriendo = false;
+      st.terminadoAt = new Date().toISOString();
+      st.ackAt = (b && b.pedidoAt) ? String(b.pedidoAt) : (st.pedidoAt || st.ackAt);
+    }
+    saveBandejaRefresco(st);
+    return json(res, 200, { ok: true, pendiente: !!st.pedidoAt && st.pedidoAt !== st.ackAt });
   }
 
   // La app reporta el resultado del último sync de cada cliente (ok/error + hora).
