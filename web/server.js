@@ -5132,7 +5132,7 @@ const server = http.createServer(async (req, res) => {
     }
     items.sort((a, b) => padronLib.normNombre(a.nombre).localeCompare(padronLib.normNombre(b.nombre)));
     const total = items.length;
-    const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "100", 10) || 100, 1), 500);
+    const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "2000", 10) || 2000, 1), 10000);
     const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
     const totalPadron = Object.keys(cli).length;
     const conBeneficio = Object.values(cli).filter((it) => it.beneficio).length;

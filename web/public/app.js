@@ -4821,7 +4821,7 @@ async function refreshPadron(){
   var body = document.getElementById('padBody');
   if (!slug){ if (meta) meta.textContent = 'Elegí un cliente.'; if (body) body.innerHTML = ''; return; }
   var q = (document.getElementById('padQ').value || '').trim();
-  var r = await fetch('/api/clientes/' + slug + '/padron?limit=300&q=' + encodeURIComponent(q));
+  var r = await fetch('/api/clientes/' + slug + '/padron?limit=10000&q=' + encodeURIComponent(q));
   var data = {};
   try { data = await r.json(); } catch(e){}
   if (!r.ok){ if (meta) meta.textContent = (data.error || 'No se pudo cargar.'); if (body) body.innerHTML=''; return; }
@@ -4832,7 +4832,10 @@ function renderPadronRows(slug, data){
   var meta = document.getElementById('padResultMeta');
   var items = data.items || [];
   if (meta){
-    meta.textContent = 'Padrón: ' + (data.totalPadron||0) + ' afiliados · ' + (data.conBeneficio||0) + ' con beneficio' + (data.total !== data.totalPadron ? ' · ' + data.total + ' en la búsqueda' : '');
+    var txt = 'Padrón: ' + (data.totalPadron||0) + ' afiliados · ' + (data.conBeneficio||0) + ' con beneficio';
+    if (data.total !== data.totalPadron) txt += ' · ' + data.total + ' en la búsqueda';
+    if (items.length < (data.total||0)) txt += ' · mostrando ' + items.length + ' (afiná la búsqueda para ver el resto)';
+    meta.textContent = txt;
   }
   if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
   body.innerHTML = items.map(function(it){
