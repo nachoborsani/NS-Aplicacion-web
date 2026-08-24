@@ -2537,11 +2537,13 @@ function mesCursoBloqueFuturo(f){
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'
     + '<b>' + esc(f.label || f.period || '') + '</b>'
     + (abarca ? '<span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</div>'
-    + '<div class="mescurso-val-note" style="margin:0 0 8px">' + esc(numberFmt(f.count || 0)) + ' turnos · '
-    + esc(numberFmt(f.consultations || 0)) + ' consultas · ' + esc(numberFmt(f.practices || 0)) + ' prácticas</div>'
-    + (deb > 0
-        ? '<div class="mescurso-line warn"><span>Posibles débitos por adelantado</span><b>' + esc(numberFmt(deb)) + (f.posiblesDebitos ? ' · ' + esc(moneyFmt(f.posiblesDebitos)) : '') + '</b></div>'
-        : '<div class="mescurso-val-note" style="margin:0">Sin posibles débitos detectados</div>')
+    + ((f.count || 0) === 0
+        ? '<div class="mescurso-val-note" style="margin:0">Sin turnos agendados todavía</div>'
+        : ('<div class="mescurso-val-note" style="margin:0 0 8px">' + esc(numberFmt(f.count || 0)) + ' turnos · '
+            + esc(numberFmt(f.consultations || 0)) + ' consultas · ' + esc(numberFmt(f.practices || 0)) + ' prácticas</div>'
+            + (deb > 0
+                ? '<div class="mescurso-line warn"><span>Posibles débitos por adelantado</span><b>' + esc(numberFmt(deb)) + (f.posiblesDebitos ? ' · ' + esc(moneyFmt(f.posiblesDebitos)) : '') + '</b></div>'
+                : '<div class="mescurso-val-note" style="margin:0">Sin posibles débitos detectados</div>')))
     + '</div>';
 }
 function mesCursoCardAdelante(a, futuros){

@@ -285,9 +285,18 @@ function saveClientBandejasFuturas(store) {
 function buildBandejasFuturasResumen(slug) {
   const store = loadClientBandejasFuturas()[slug] || {};
   return Object.keys(store).sort().map((period) => {
-    const r = buildAdelanteResumenDe(store[period]);
-    return r ? { ...r, period } : null;
-  }).filter(Boolean);
+    const b = store[period];
+    const r = buildAdelanteResumenDe(b);
+    if (r) return { ...r, period };
+    // Mes futuro SIN turnos: lo mostramos igual (count 0) para dejar claro que se
+    // analizó y todavía no hay nada agendado (no que "falta").
+    return {
+      period, label: (b && b.monthLabel) || periodLabel(period) || "",
+      count: 0, consultations: 0, practices: 0,
+      posiblesDebitos: 0, posiblesDebitosCount: 0, posiblesDebitosRows: [],
+      coversFrom: "", coversTo: "", uploadedAt: (b && b.uploadedAt) || "",
+    };
+  });
 }
 
 // ---------- Credencial provisoria de PAMI (consulta en vivo) ----------
