@@ -73,6 +73,27 @@ def clasificar_error(msg: str) -> str:
     return "otro"
 
 
+def error_legible(msg: str) -> str:
+    """Traduce el error técnico a algo entendible para el aviso de Telegram."""
+    m = (msg or "").lower()
+    if not m:
+        return "error desconocido"
+    if "execution context was destroyed" in m or "page.evaluate" in m or "navigation" in m:
+        return "PAMI se recargó mientras leía"
+    if "no encontré el botón exportar" in m or "no encontre el boton exportar" in m or "exportar" in m:
+        return "PAMI tardó en mostrar el botón Exportar"
+    if "timeout" in m or "timed out" in m:
+        return "PAMI tardó demasiado en responder"
+    if "502" in m or "503" in m or "504" in m or "bad gateway" in m:
+        return "el servidor estaba caído un momento"
+    if m.startswith("credenciales:"):
+        return "no pude leer la clave desde la web"
+    if "econnreset" in m or "econnrefused" in m or "getaddrinfo" in m or "network" in m or "connection" in m:
+        return "se cortó la conexión"
+    # Si no lo reconozco, devuelvo un recorte corto (sin jerga larga).
+    return str(msg or "").strip()[:50]
+
+
 def armar_aviso_telegram(resultados: list[dict], periodo: str, titulo: str = "Bandejas") -> str:
     """Mensaje de Telegram que separa 'clave equivocada' de 'error transitorio'."""
     ok = [r for r in resultados if r.get("ok")]
@@ -90,8 +111,8 @@ def armar_aviso_telegram(resultados: list[dict], periodo: str, titulo: str = "Ba
         lineas.append("🔒 <b>Sin clave cargada</b>: "
                       + ", ".join(r.get("name", "") for r in sin_clave))
     if otros:
-        det = ", ".join(f"{r.get('name', '')} ({str(r.get('error') or 'error')[:60]})" for r in otros)
-        lineas.append("↻ Error transitorio (se reintenta 22:00): " + det)
+        det = ", ".join(f"{r.get('name', '')} ({error_legible(r.get('error'))})" for r in otros)
+        lineas.append("↻ Se reintenta solo: " + det)
     return "\n".join(lineas)
 
 

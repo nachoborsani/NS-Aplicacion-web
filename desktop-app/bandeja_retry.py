@@ -18,15 +18,15 @@ import bandeja_sync
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
 
 
-def _slugs_con_error(estados: dict) -> list[str]:
+def _slugs_con_error(estados: dict, excluidos: set) -> list[str]:
     """De los estados de la web, los slugs cuyo último sync quedó en error.
 
-    Excluye los que NO bajan bandeja (médicos de cabecera: Navarro, Scheffelaar).
-    Si no, el reintento los corre con only_slugs (que saltea la exclusión del
-    barrido) y el error de login se auto-perpetúa para siempre."""
+    Excluye los que NO bajan bandeja (TODOS los médicos de cabecera + EXCLUIDOS_
+    AUTO). Si no, el reintento los corre con only_slugs (que saltea la exclusión
+    del barrido) y el error de login se auto-perpetúa para siempre."""
     fallados = []
     for slug, est in (estados or {}).items():
-        if slug in bandeja_sync.EXCLUIDOS_AUTO:
+        if slug in excluidos:
             continue
         if isinstance(est, dict) and not est.get("ok"):
             fallados.append(slug)
@@ -45,7 +45,18 @@ def run(period: str | None = None, progress=None) -> dict:
         prog(f"no pude leer los estados de la web: {exc!r}")
         return {"reintentados": 0, "recuperados": 0, "siguen": [], "error": str(exc)}
 
-    fallados = _slugs_con_error(estados)
+    # Excluir del reintento a los que NO bajan bandeja: todos los médicos de
+    # cabecera (por tipo) + EXCLUIDOS_AUTO. Así Navarro/Dubesarky/Scheffelaar no
+    # se reintentan ni ensucian el aviso.
+    excluidos = set(bandeja_sync.EXCLUIDOS_AUTO)
+    try:
+        for c in web.list_clients():
+            if c.get("tipo") == "med_cabecera":
+                excluidos.add(c.get("slug"))
+    except Exception:  # noqa: BLE001 - si no puedo listar, uso al menos EXCLUIDOS_AUTO
+        pass
+
+    fallados = _slugs_con_error(estados, excluidos)
     if not fallados:
         prog("no hay bandejas con error; nada que reintentar.")
         return {"reintentados": 0, "recuperados": 0, "siguen": []}
