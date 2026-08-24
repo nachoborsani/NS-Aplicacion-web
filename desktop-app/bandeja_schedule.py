@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from app_paths import get_base_dir, get_data_dir, get_logs_dir
+from task_utils import actions_hidden_xml, write_vbs_launcher
 
 TASK_NAME = "NS - Refrescar bandeja mes en curso"
 CONFIG_FILE = "refresco_config.json"
@@ -88,6 +89,10 @@ def _bat_path() -> Path:
     return get_base_dir() / "refrescar_bandeja.bat"
 
 
+def _vbs_path() -> Path:
+    return get_base_dir() / "refrescar_bandeja.vbs"
+
+
 def _write_bat() -> Path:
     base = get_base_dir()
     log = get_logs_dir() / "bandeja_sync_last.log"
@@ -135,7 +140,7 @@ def _build_xml(horarios: list[str]) -> str:
         "    <ExecutionTimeLimit>PT2H</ExecutionTimeLimit>\n"
         "    <Priority>7</Priority>\n"
         "  </Settings>\n"
-        f"  <Actions Context=\"Author\"><Exec><Command>{bat}</Command></Exec></Actions>\n"
+        + actions_hidden_xml(_vbs_path()) +
         "</Task>\n"
     )
 
@@ -156,6 +161,7 @@ def apply_schedule(horarios: list[str], enabled: bool, transmitir: bool = False)
         _run(["schtasks", "/delete", "/tn", TASK_NAME, "/f"])
         return True, "Refresco automático desactivado."
     _write_bat()
+    write_vbs_launcher(_bat_path(), _vbs_path())   # wrapper oculto (sin ventana negra)
     xml_path = get_data_dir() / "ns_bandeja_task.xml"
     xml_path.write_text(_build_xml(horarios), encoding="utf-16")
     res = _run(["schtasks", "/create", "/tn", TASK_NAME, "/xml", str(xml_path), "/f"])
