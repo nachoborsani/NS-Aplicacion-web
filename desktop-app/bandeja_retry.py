@@ -19,9 +19,15 @@ from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
 
 
 def _slugs_con_error(estados: dict) -> list[str]:
-    """De los estados de la web, los slugs cuyo último sync quedó en error."""
+    """De los estados de la web, los slugs cuyo último sync quedó en error.
+
+    Excluye los que NO bajan bandeja (médicos de cabecera: Navarro, Scheffelaar).
+    Si no, el reintento los corre con only_slugs (que saltea la exclusión del
+    barrido) y el error de login se auto-perpetúa para siempre."""
     fallados = []
     for slug, est in (estados or {}).items():
+        if slug in bandeja_sync.EXCLUIDOS_AUTO:
+            continue
         if isinstance(est, dict) and not est.get("ok"):
             fallados.append(slug)
     return fallados

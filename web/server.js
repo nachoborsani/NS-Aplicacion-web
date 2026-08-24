@@ -4397,6 +4397,17 @@ const server = http.createServer(async (req, res) => {
 
   // La app reporta el resultado del último sync de cada cliente (ok/error + hora).
   const clientBandejaEstadoMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/estado$/);
+  // Borrar el estado de sync de un cliente (ej. un médico de cabecera que no baja
+  // bandeja y quedó con un error viejo). Solo admin.
+  if (clientBandejaEstadoMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(clientBandejaEstadoMatch[1]);
+    const store = loadBandejaEstado();
+    if (store[slug]) { delete store[slug]; saveBandejaEstado(store); }
+    return json(res, 200, { ok: true });
+  }
   if (clientBandejaEstadoMatch && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
