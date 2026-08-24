@@ -2524,24 +2524,48 @@ function mesCursoCardMesEnCurso(r, estado){
 // Card "Hacia adelante": turnos futuros (día siguiente al corte → fin de mes).
 // Objetivo: detectar posibles débitos ANTES de que ocurran. No estima $ (los
 // turnos futuros no deberían faltar pero faltan → un estimado sería irreal).
-function mesCursoCardAdelante(a){
-  if (!a || !a.count) return '';
-  var abarca = (a.coversFrom && a.coversTo) ? (a.coversFrom + ' al ' + a.coversTo) : '';
-  var debCount = a.posiblesDebitosCount || 0;
-  var djClick = (debCount > 0) ? ' mescurso-click" onclick="toggleDebitosAdelante()' : '';
-  var djCaret = (debCount > 0) ? ' <span class="mescurso-caret" id="mescursoDebitosAdelanteCaret">▸</span>' : '';
-  var head = '<div class="mescurso-head"><span class="mescurso-title">Hacia adelante'
-    + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
-    + '<span class="mescurso-chip">' + esc(a.label || '') + '</span></div>';
-  return '<div class="mescurso-card adelante">' + head
-    + '<div class="mescurso-val-lbl">Turnos agendados</div>'
-    + '<div class="mescurso-val chico">' + esc(numberFmt(a.count || 0)) + '</div>'
-    + '<div class="mescurso-val-note">' + esc(numberFmt(a.consultations || 0)) + ' consultas · ' + esc(numberFmt(a.practices || 0)) + ' prácticas · para detectar débitos antes de que pasen</div>'
-    + '<div class="mescurso-lines">'
-    + '<div class="mescurso-line warn' + djClick + '"><span>Posibles débitos por adelantado' + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (a.posiblesDebitos ? ' · ' + esc(moneyFmt(a.posiblesDebitos)) : '') + '</b></div>'
-    + '</div>'
-    + '<div class="mescurso-foot">Turnos futuros del mes · no suman a facturación</div>'
-    + (a.uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(a.uploadedAt)) + '</b></div>' : '')
+// Bloque compacto de un mes FUTURO (septiembre, octubre…) dentro de la card.
+function mesCursoBloqueFuturo(f){
+  if (!f) return '';
+  var abarca = (f.coversFrom && f.coversTo) ? (f.coversFrom + ' al ' + f.coversTo) : '';
+  var deb = f.posiblesDebitosCount || 0;
+  return '<div class="mescurso-futuro" style="border-top:1px dashed var(--border,#d8dee6);margin-top:14px;padding-top:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'
+    + '<b>' + esc(f.label || f.period || '') + '</b>'
+    + (abarca ? '<span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</div>'
+    + '<div class="mescurso-val-note" style="margin:0 0 8px">' + esc(numberFmt(f.count || 0)) + ' turnos · '
+    + esc(numberFmt(f.consultations || 0)) + ' consultas · ' + esc(numberFmt(f.practices || 0)) + ' prácticas</div>'
+    + (deb > 0
+        ? '<div class="mescurso-line warn"><span>Posibles débitos por adelantado</span><b>' + esc(numberFmt(deb)) + (f.posiblesDebitos ? ' · ' + esc(moneyFmt(f.posiblesDebitos)) : '') + '</b></div>'
+        : '<div class="mescurso-val-note" style="margin:0">Sin posibles débitos detectados</div>')
+    + '</div>';
+}
+function mesCursoCardAdelante(a, futuros){
+  futuros = futuros || [];
+  if ((!a || !a.count) && !futuros.length) return '';
+  var chip = (a && a.label) || (futuros[0] && futuros[0].label) || '';
+  var head = '<div class="mescurso-head"><span class="mescurso-title">Hacia adelante</span>'
+    + '<span class="mescurso-chip">' + esc(chip) + '</span></div>';
+  var body = '';
+  if (a && a.count){
+    var abarca = (a.coversFrom && a.coversTo) ? (a.coversFrom + ' al ' + a.coversTo) : '';
+    var debCount = a.posiblesDebitosCount || 0;
+    var djClick = (debCount > 0) ? ' mescurso-click" onclick="toggleDebitosAdelante()' : '';
+    var djCaret = (debCount > 0) ? ' <span class="mescurso-caret" id="mescursoDebitosAdelanteCaret">▸</span>' : '';
+    body += (abarca ? '<div class="mescurso-abarca" style="margin-bottom:6px">' + esc(abarca) + '</div>' : '')
+      + '<div class="mescurso-val-lbl">Turnos agendados</div>'
+      + '<div class="mescurso-val chico">' + esc(numberFmt(a.count || 0)) + '</div>'
+      + '<div class="mescurso-val-note">' + esc(numberFmt(a.consultations || 0)) + ' consultas · ' + esc(numberFmt(a.practices || 0)) + ' prácticas · para detectar débitos antes de que pasen</div>'
+      + '<div class="mescurso-lines">'
+      + '<div class="mescurso-line warn' + djClick + '"><span>Posibles débitos por adelantado' + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (a.posiblesDebitos ? ' · ' + esc(moneyFmt(a.posiblesDebitos)) : '') + '</b></div>'
+      + '</div>';
+  }
+  // Meses futuros (septiembre, octubre…) — mismo cuadro, apilados.
+  futuros.forEach(function(f){ body += mesCursoBloqueFuturo(f); });
+  var uploadedAt = (a && a.uploadedAt) || (futuros[0] && futuros[0].uploadedAt) || '';
+  return '<div class="mescurso-card adelante">' + head + body
+    + '<div class="mescurso-foot">Turnos futuros · no suman a facturación</div>'
+    + (uploadedAt ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(uploadedAt)) + '</b></div>' : '')
     + '</div>';
 }
 // Card derecha cuando NO hay reporte del mes anterior: cartel "falta reporte".
@@ -2621,6 +2645,7 @@ async function loadClientMesCurso(){
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var estadoSync = (results[0].ok && results[0].data) ? results[0].data.estado : null;
   var adelante = (results[0].ok && results[0].data) ? results[0].data.adelante : null;
+  var futuros = (results[0].ok && results[0].data) ? (results[0].data.futuros || []) : [];
   MESCURSO_FALTAN_INFORMES = (resumen && resumen.missingInformeRows) || [];
   MESCURSO_AUSENTES = (resumen && resumen.ausentesRows) || [];
   MESCURSO_POSIBLES_DEBITOS = (resumen && resumen.posiblesDebitosRows) || [];
@@ -2637,7 +2662,7 @@ async function loadClientMesCurso(){
   MESCURSO_REPORTE_ID = pendiente ? pendiente.id : null;
 
   var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
-  var cardAdel = mesCursoCardAdelante(adelante);
+  var cardAdel = mesCursoCardAdelante(adelante, futuros);
   box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + (cardAdel || '') + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + '</div>'
     + '<div id="mescursoInformesPanel"></div>';
 }

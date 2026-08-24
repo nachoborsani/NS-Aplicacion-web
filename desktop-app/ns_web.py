@@ -268,6 +268,21 @@ class NSWebClient:
             },
         )
 
+    def upload_bandeja_futura(self, slug: str, month: str, rows: list[dict],
+                              columns: list[str] | None = None, month_label: str = "",
+                              generated_at: str = "") -> dict:
+        """Sube la bandeja de un MES FUTURO (septiembre, octubre…), bajada aparte."""
+        return self._request(
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja-futura",
+            body={
+                "month": month,
+                "monthLabel": month_label,
+                "generatedAt": generated_at,
+                "columns": columns or [],
+                "rows": rows,
+            },
+        )
+
     def bandeja_estados(self) -> dict:
         """Estado del último sync de cada cliente {slug: {ok, error, at, ...}}.
 

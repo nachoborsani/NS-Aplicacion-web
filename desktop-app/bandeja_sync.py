@@ -196,6 +196,22 @@ def forward_range(period: str, hasta_hoy: bool = False) -> tuple[str, str, str] 
     return f"{desde_dia:02d}/{month:02d}/{year}", f"{last:02d}/{month:02d}/{year}", f"{_MESES[month]} {year}"
 
 
+def future_month_ranges(period: str, n: int = 2) -> list[tuple[str, str, str, str]]:
+    """Los próximos N meses COMPLETOS después de `period`, cada uno como
+    (period, desde, hasta, label). Se bajan APARTE (un filtro por mes) para no
+    hacer explotar el export. Ej period=2026-08 → sep y oct 2026 completos."""
+    year, month = int(period[:4]), int(period[5:7])
+    out = []
+    for i in range(1, n + 1):
+        m, y = month + i, year
+        while m > 12:
+            m -= 12
+            y += 1
+        last = calendar.monthrange(y, m)[1]
+        out.append((f"{y}-{m:02d}", f"01/{m:02d}/{y}", f"{last:02d}/{m:02d}/{y}", f"{_MESES[m]} {y}"))
+    return out
+
+
 def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     """Lee el Excel exportado y devuelve (filas como dicts, columnas). La primera
     fila no vacía se toma como encabezado."""
@@ -256,6 +272,7 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
     desde, hasta, label = month_range(period, hasta_hoy=es_fin_dia)
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
     transmit_info = None
+    exported_futuros = []  # (fperiod, flabel, path) de los meses futuros
     try:
         from pami_transmision import PamiTransmisionController
 
@@ -299,6 +316,17 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                     progress(f"{name}: bajando turnos futuros ({desde_f} a {hasta_f})…")
                 tmp_f = Path(tempfile.gettempdir()) / f"bandeja_adelante_{slug}_{period}.xlsx"
                 exported_adelante = bot.exportar_excel_panel(str(tmp_f), {"fecha_desde": desde_f, "fecha_hasta": hasta_f})
+            # 4) Meses FUTUROS completos (sep, oct): cada uno APARTE con su propio
+            #    filtro (para no hacer explotar el export en centros grandes).
+            for fperiod, fdesde, fhasta, flabel in future_month_ranges(period, n=2):
+                try:
+                    if progress:
+                        progress(f"{name}: bajando {flabel} ({fdesde} a {fhasta})…")
+                    tmp_fut = Path(tempfile.gettempdir()) / f"bandeja_fut_{slug}_{fperiod}.xlsx"
+                    exp_fut = bot.exportar_excel_panel(str(tmp_fut), {"fecha_desde": fdesde, "fecha_hasta": fhasta})
+                    exported_futuros.append((fperiod, flabel, exp_fut))
+                except Exception:  # noqa: BLE001 - un mes futuro que falla no corta el resto
+                    pass
         finally:
             try:
                 bot.cerrar()
@@ -319,7 +347,20 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                 adelante_count = len(rows_f)
         except Exception:  # noqa: BLE001
             pass
+        # Subir los meses FUTUROS (sep, oct), cada uno aparte. Un fallo no tumba
+        # el sync del mes en curso.
+        futuros_count = 0
+        for fperiod, flabel, exp_fut in exported_futuros:
+            try:
+                rows_fut, cols_fut = parse_bandeja_excel(exp_fut)
+                web.upload_bandeja_futura(slug, fperiod, rows_fut, columns=cols_fut,
+                                          month_label=flabel, generated_at=date.today().isoformat())
+                futuros_count += 1
+            except Exception:  # noqa: BLE001
+                pass
         res = {"slug": slug, "name": name, "ok": True, "count": len(rows)}
+        if futuros_count:
+            res["futuros"] = futuros_count
         if adelante_count is not None:
             res["adelante"] = adelante_count
         if transmit_info is not None:

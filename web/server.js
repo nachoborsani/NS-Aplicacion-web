@@ -269,6 +269,26 @@ function saveClientBandejasAdelante(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasAdelanteFile, JSON.stringify(store, null, 2));
 }
+// Bandejas de MESES FUTUROS (septiembre, octubre…), bajadas por separado para no
+// hacer explotar el export. Estructura: { slug: { "2026-09": {rows,columns,...} } }.
+const clientBandejasFuturasFile = path.join(dataDir, "client_bandejas_futuras.json");
+function loadClientBandejasFuturas() {
+  try { const j = JSON.parse(fs.readFileSync(clientBandejasFuturasFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function saveClientBandejasFuturas(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientBandejasFuturasFile, JSON.stringify(store, null, 2));
+}
+// Resumen de cada mes futuro guardado (ordenados por período). Cada uno reusa el
+// mismo cálculo que "hacia adelante".
+function buildBandejasFuturasResumen(slug) {
+  const store = loadClientBandejasFuturas()[slug] || {};
+  return Object.keys(store).sort().map((period) => {
+    const r = buildAdelanteResumenDe(store[period]);
+    return r ? { ...r, period } : null;
+  }).filter(Boolean);
+}
 
 // ---------- Credencial provisoria de PAMI (consulta en vivo) ----------
 // Replica el POST al formulario público de PAMI (el mismo que hace la app de
@@ -2574,7 +2594,11 @@ function buildBandejaResumen(slug) {
 // faltan → un estimado sería irreal). Es el ÚNICO caso donde el cruce se proyecta
 // sobre turnos ASIGNADOS (sin validar); la lógica del mes en curso no cambia.
 function buildBandejaAdelanteResumen(slug) {
-  const bandeja = loadClientBandejasAdelante()[slug];
+  return buildAdelanteResumenDe(loadClientBandejasAdelante()[slug]);
+}
+// Resumen "hacia adelante" a partir de una bandeja (turnos futuros). Reusado por
+// el mes en curso (resto del mes) y por los meses futuros (septiembre, octubre…).
+function buildAdelanteResumenDe(bandeja) {
   if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) return null;
   const nomStore = loadNomencladorStore();
   let nom = (nomStore.items || {})[bandeja.month] || null;
@@ -4312,7 +4336,7 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(clientBandejaResumenMatch[1]);
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
-    return json(res, 200, { resumen: buildBandejaResumen(slug), adelante: buildBandejaAdelanteResumen(slug), estado: loadBandejaEstado()[slug] || null });
+    return json(res, 200, { resumen: buildBandejaResumen(slug), adelante: buildBandejaAdelanteResumen(slug), futuros: buildBandejasFuturasResumen(slug), estado: loadBandejaEstado()[slug] || null });
   }
 
   // Estados de sync de TODOS los clientes (para el reintento nocturno: saber
@@ -4470,6 +4494,38 @@ const server = http.createServer(async (req, res) => {
       rows,
     };
     saveClientBandejasAdelante(store);
+    return json(res, 200, { ok: true, count: rows.length });
+  }
+
+  // Bandeja de un MES FUTURO (septiembre, octubre…), bajada por separado.
+  const clientBandejaFuturaMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja-futura$/);
+  if (clientBandejaFuturaMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientBandejaFuturaMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const period = String(body.month || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(period)) return json(res, 400, { error: "Falta el período (YYYY-MM)." });
+    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 20000) : [];
+    const columns = Array.isArray(body.columns) && body.columns.length
+      ? body.columns.map(String)
+      : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
+    const store = loadClientBandejasFuturas();
+    if (!store[slug] || typeof store[slug] !== "object") store[slug] = {};
+    store[slug][period] = {
+      month: period,
+      monthLabel: String(body.monthLabel || "").trim(),
+      generatedAt: String(body.generatedAt || "").trim(),
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: me.username,
+      count: rows.length,
+      columns,
+      rows,
+    };
+    saveClientBandejasFuturas(store);
     return json(res, 200, { ok: true, count: rows.length });
   }
 
