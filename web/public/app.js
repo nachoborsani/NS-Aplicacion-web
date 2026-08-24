@@ -76,25 +76,24 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','gastos','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'dash') updateDashClientsTile();
-  if (v === 'resumen') loadResultado();
+  if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
-  if (v === 'gastos') loadGastos();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
     var g = document.getElementById(id);
     if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
   });
   var gPagos = document.getElementById('navGroupPagos');
-  var enAdmin = (v === 'resumen' || v === 'facturas' || v === 'gastos');
+  var enAdmin = (v === 'resumen' || v === 'facturas');
   if (gPagos){ gPagos.classList.toggle('open', enAdmin); gPagos.classList.toggle('active', enAdmin); }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
@@ -307,7 +306,8 @@ function navElFor(v){
 function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'gastos', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -2080,6 +2080,94 @@ async function toggleGastoPagado(id, pagado){
   if (res.ok){ GASTOS.pagos = res.data.pagos || {}; renderGastos(); }
 }
 
+// ===== Resumen de cuenta: sub-pestañas (Resumen · Ingresos · Gastos) =====
+var RES_SECTION = 'resumen';
+function setResSection(sec){
+  RES_SECTION = sec;
+  var secc = { resumen: 'res-sub-resumen', ingresos: 'res-sub-ingresos', gastos: 'res-sub-gastos' };
+  var tabs = { resumen: 'resTabResumen', ingresos: 'resTabIngresos', gastos: 'resTabGastos' };
+  Object.keys(secc).forEach(function(k){
+    var s = document.getElementById(secc[k]); if (s) s.style.display = (k === sec) ? '' : 'none';
+    var t = document.getElementById(tabs[k]); if (t) t.classList.toggle('active', k === sec);
+  });
+  if (sec === 'resumen') loadResultado();
+  else if (sec === 'ingresos') loadIngresosExtra();
+  else if (sec === 'gastos') loadGastos();
+}
+
+// ===== Ingresos extra (fuera de comisiones) =====
+var INGRESOS = { ingresos: [], dolar: { valor: 0, fecha: '' } };
+function ingresosPeriodoActual(){
+  var el = document.getElementById('ingresosPeriodo');
+  if (el && !el.value){ var d = new Date(); el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  return el ? el.value : '';
+}
+async function loadIngresosExtra(){
+  var periodo = ingresosPeriodoActual();
+  var err = document.getElementById('ingresosError'); if (err) err.style.display = 'none';
+  var res = await api('/api/ingresos?mes=' + encodeURIComponent(periodo));
+  if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
+  INGRESOS = { ingresos: res.data.ingresos || [], dolar: res.data.dolar || { valor: 0, fecha: '' } };
+  renderIngresos();
+}
+function renderIngresos(){
+  var body = document.getElementById('ingresosBody'); if (!body) return;
+  var dolarTxt = document.getElementById('ingresosDolar');
+  if (dolarTxt) dolarTxt.innerHTML = INGRESOS.dolar.valor ? ('💵 Dólar oficial: <b>' + moneyFmt(INGRESOS.dolar.valor) + '</b>' + (INGRESOS.dolar.fecha ? ' (' + esc(INGRESOS.dolar.fecha) + ')' : '')) : '';
+  if (!INGRESOS.ingresos.length){ body.innerHTML = '<tr><td colspan="4" class="muted-cell">Sin ingresos extra este mes.</td></tr>'; document.getElementById('ingresosTotal').textContent = moneyFmt(0); return; }
+  var total = 0;
+  body.innerHTML = INGRESOS.ingresos.map(function(g){
+    var ars = g.moneda === 'USD' ? (Number(g.monto) || 0) * (Number(INGRESOS.dolar.valor) || 0) : (Number(g.monto) || 0);
+    total += ars;
+    var montoTxt = g.moneda === 'USD' ? ('US$ ' + (Number(g.monto) || 0)) : moneyFmt(g.monto);
+    var arsTxt = moneyFmt(ars) + (g.moneda === 'USD' && INGRESOS.dolar.valor ? ' <span class="nom-muted">×' + moneyFmt(INGRESOS.dolar.valor) + '</span>' : '');
+    return '<tr>' +
+      '<td>' + esc(g.descripcion) + '</td>' +
+      '<td class="num">' + montoTxt + '</td>' +
+      '<td class="num">' + arsTxt + '</td>' +
+      '<td class="row-actions">' +
+        '<button class="icon-btn mini" type="button" title="Editar" onclick="openIngresoModal(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
+        '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteIngreso(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('ingresosTotal').textContent = moneyFmt(total);
+}
+function openIngresoModal(id){
+  var g = id ? INGRESOS.ingresos.find(function(x){ return x.id === id; }) : null;
+  document.getElementById('ingresoId').value = g ? g.id : '';
+  document.getElementById('ingresoDescripcion').value = g ? (g.descripcion || '') : '';
+  document.getElementById('ingresoMonto').value = g ? (g.monto || '') : '';
+  document.getElementById('ingresoMoneda').value = g ? (g.moneda || 'ARS') : 'ARS';
+  document.getElementById('ingresoTitle').textContent = g ? 'Editar ingreso' : 'Nuevo ingreso';
+  document.getElementById('ingresoModalError').textContent = '';
+  showModal('ingresoModal', 'ingresoScrim');
+  document.getElementById('ingresoDescripcion').focus();
+}
+function closeIngresoModal(){ hideModal('ingresoModal', 'ingresoScrim'); }
+async function saveIngreso(){
+  var errBox = document.getElementById('ingresoModalError'); errBox.textContent = '';
+  var descripcion = document.getElementById('ingresoDescripcion').value.trim();
+  if (!descripcion){ errBox.textContent = 'Poné una descripción.'; return; }
+  var btn = document.getElementById('ingresoSaveBtn'); btn.disabled = true;
+  var res = await req('POST', '/api/ingresos', {
+    id: document.getElementById('ingresoId').value || '',
+    descripcion: descripcion,
+    mes: ingresosPeriodoActual(),
+    monto: facturaParseMonto(document.getElementById('ingresoMonto').value),
+    moneda: document.getElementById('ingresoMoneda').value,
+  });
+  btn.disabled = false;
+  if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+  closeIngresoModal();
+  loadIngresosExtra();
+}
+async function deleteIngreso(id){
+  if (!confirm('¿Borrar este ingreso?')) return;
+  var res = await req('DELETE', '/api/ingresos/' + encodeURIComponent(id));
+  if (res.ok) loadIngresosExtra();
+}
+
 // ===== Inicio: resultado económico del mes (solo admin) =====
 async function loadResultado(){
   var card = document.getElementById('dashResultado'); if (!card) return;
@@ -2114,6 +2202,7 @@ async function loadResultado(){
         '<b>' + moneyFmt(x.monto) + '</b>' +
       '</div>';
     }).join('') || '<div class="mescurso-line"><span class="nom-muted">Sin facturas con cobro en el mes</span><b></b></div>';
+    if ((d.ingresoExtra || 0) > 0) filas += '<div class="mescurso-line"><span>Ingresos extra</span><b>+ ' + moneyFmt(d.ingresoExtra) + '</b></div>';
     filas += '<div class="mescurso-line alert"><span>Gastos fijos</span><b>− ' + moneyFmt(d.gastos) + '</b></div>';
     box.innerHTML = filas;
   }
@@ -4707,7 +4796,7 @@ function aplicarUsuario(u){
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','gastos'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

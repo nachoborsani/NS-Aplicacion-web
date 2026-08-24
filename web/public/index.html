@@ -100,7 +100,6 @@
           <div class="nav-sub">
             <a class="client-nav-item" onclick="go('resumen', this)">Resumen de cuenta</a>
             <a class="client-nav-item" onclick="go('facturas', this)">Facturas</a>
-            <a class="client-nav-item" onclick="go('gastos', this)">Gastos</a>
           </div>
         </div>
         <div class="nav-section ns-only" id="navSectionClientes">clientes</div>
@@ -167,21 +166,72 @@
 
         <!-- ADMINISTRACIÓN / RESUMEN DE CUENTA -->
         <section id="view-resumen" style="display:none">
-          <div id="dashResultado" style="display:none">
-            <div class="mescurso-card res-card">
-              <div class="mescurso-head">
-                <span class="mescurso-title">Resumen de cuenta — NS</span>
-                <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
+          <div class="client-tabs" id="resTabs" style="margin-bottom:14px">
+            <button class="active" id="resTabResumen" type="button" onclick="setResSection('resumen')">Resumen</button>
+            <button id="resTabIngresos" type="button" onclick="setResSection('ingresos')">Ingresos</button>
+            <button id="resTabGastos" type="button" onclick="setResSection('gastos')">Gastos</button>
+          </div>
+
+          <div id="res-sub-resumen">
+            <div id="dashResultado" style="display:none">
+              <div class="mescurso-card res-card">
+                <div class="mescurso-head">
+                  <span class="mescurso-title">Resumen de cuenta — NS</span>
+                  <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
+                </div>
+                <div class="mescurso-val-lbl">En bolsillo</div>
+                <div class="mescurso-val" id="resBolsillo">—</div>
+                <div class="mescurso-val-note">Ingresos <b id="resIngreso">—</b> − Gastos <b id="resGastos">—</b></div>
+                <div class="res-socios-row">
+                  <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
+                  <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
+                </div>
+                <div class="mescurso-lines" id="resDesglose"></div>
+                <div class="mescurso-foot" id="resDetalle"></div>
               </div>
-              <div class="mescurso-val-lbl">En bolsillo</div>
-              <div class="mescurso-val" id="resBolsillo">—</div>
-              <div class="mescurso-val-note">Ingresos <b id="resIngreso">—</b> − Gastos <b id="resGastos">—</b></div>
-              <div class="res-socios-row">
-                <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
-                <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
+            </div>
+          </div>
+
+          <div id="res-sub-ingresos" style="display:none">
+            <div class="card">
+              <div class="client-card-head">
+                <h3>Ingresos extra</h3>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <label class="factura-cfg">Mes <input class="inp mini" id="ingresosPeriodo" type="month" onchange="loadIngresosExtra()" style="width:150px"></label>
+                  <button class="btn btn-primary btn-sm" type="button" onclick="openIngresoModal()">+ Ingreso</button>
+                </div>
               </div>
-              <div class="mescurso-lines" id="resDesglose"></div>
-              <div class="mescurso-foot" id="resDetalle"></div>
+              <div class="nom-muted" style="margin:2px 0 8px">Plata que entra por fuera de las comisiones PAMI. Suma a “En bolsillo” y se reparte 50/50 entre los socios.</div>
+              <div class="nom-muted" id="ingresosDolar" style="margin:2px 0 8px"></div>
+              <div class="msg err" id="ingresosError" style="display:none"></div>
+              <div class="table-scroll">
+                <table class="saved-report-table facturas-table" id="ingresosTable">
+                  <thead><tr><th>Descripción</th><th class="num">Monto</th><th class="num">En ARS</th><th>Acción</th></tr></thead>
+                  <tbody id="ingresosBody"><tr><td colspan="4" class="muted-cell">Cargando…</td></tr></tbody>
+                  <tfoot><tr><th>Total del mes (ARS)</th><th class="num" id="ingresosTotal">—</th><th colspan="2"></th></tr></tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="res-sub-gastos" style="display:none">
+            <div class="card">
+              <div class="client-card-head">
+                <h3>Gastos fijos</h3>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                  <label class="factura-cfg">Mes <input class="inp mini" id="gastosPeriodo" type="month" onchange="loadGastos()" style="width:150px"></label>
+                  <button class="btn btn-primary btn-sm" type="button" onclick="openGastoModal()">+ Gasto</button>
+                </div>
+              </div>
+              <div class="nom-muted" id="gastosDolar" style="margin:2px 0 8px"></div>
+              <div class="msg err" id="gastosError" style="display:none"></div>
+              <div class="table-scroll">
+                <table class="saved-report-table facturas-table" id="gastosTable">
+                  <thead><tr><th>Concepto</th><th class="num">Día</th><th class="num">Monto</th><th class="num">En ARS</th><th class="num">Pagado</th><th>Acción</th></tr></thead>
+                  <tbody id="gastosBody"><tr><td colspan="6" class="muted-cell">Cargando…</td></tr></tbody>
+                  <tfoot><tr><th colspan="3">Total del mes (ARS)</th><th class="num" id="gastosTotal">—</th><th colspan="2"></th></tr></tfoot>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -772,27 +822,6 @@
         </section>
 
         <!-- ADMINISTRACIÓN / GASTOS -->
-        <section id="view-gastos" style="display:none">
-          <div class="card">
-            <div class="client-card-head">
-              <h3>Gastos fijos</h3>
-              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                <label class="factura-cfg">Mes <input class="inp mini" id="gastosPeriodo" type="month" onchange="loadGastos()" style="width:150px"></label>
-                <button class="btn btn-primary btn-sm" type="button" onclick="openGastoModal()">+ Gasto</button>
-              </div>
-            </div>
-            <div class="nom-muted" id="gastosDolar" style="margin:2px 0 8px"></div>
-            <div class="msg err" id="gastosError" style="display:none"></div>
-            <div class="table-scroll">
-              <table class="saved-report-table facturas-table" id="gastosTable">
-                <thead><tr><th>Concepto</th><th class="num">Día</th><th class="num">Monto</th><th class="num">En ARS</th><th class="num">Pagado</th><th>Acción</th></tr></thead>
-                <tbody id="gastosBody"><tr><td colspan="6" class="muted-cell">Cargando…</td></tr></tbody>
-                <tfoot><tr><th colspan="3">Total del mes (ARS)</th><th class="num" id="gastosTotal">—</th><th colspan="2"></th></tr></tfoot>
-              </table>
-            </div>
-          </div>
-        </section>
-
         <section id="view-soon" style="display:none">
           <div class="card general-card">
             <div class="general-card-head">
@@ -862,6 +891,25 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeGastoModal()">Cancelar</button>
         <button class="btn btn-primary" id="gastoSaveBtn" onclick="saveGasto()">Guardar</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: alta / edición de ingreso extra ===== -->
+    <div class="scrim" id="ingresoScrim" onclick="closeIngresoModal()"></div>
+    <div class="modal" id="ingresoModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="ingresoTitle">Nuevo ingreso</h3><button class="x" onclick="closeIngresoModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <input type="hidden" id="ingresoId">
+        <div class="field"><label>Descripción</label><input class="inp" id="ingresoDescripcion" spellcheck="false" placeholder="Ej: Trabajo puntual, otro cliente…"></div>
+        <div class="field"><label>Monto</label><input class="inp" id="ingresoMonto" inputmode="decimal"></div>
+        <div class="field"><label>Moneda</label>
+          <select class="inp" id="ingresoMoneda"><option value="ARS">Pesos (ARS)</option><option value="USD">Dólares (USD)</option></select>
+        </div>
+        <div class="msg err" id="ingresoModalError"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeIngresoModal()">Cancelar</button>
+        <button class="btn btn-primary" id="ingresoSaveBtn" onclick="saveIngreso()">Guardar</button>
       </div>
     </div>
 

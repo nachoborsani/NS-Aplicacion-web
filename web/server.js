@@ -231,6 +231,27 @@ function loadGastosOSemilla() {
   saveGastos(store);
   return store;
 }
+// Ingresos EXTRA (fuera de las comisiones PAMI): entradas por-mes que suman a
+// "En bolsillo". Se reparten 50/50 entre los socios, igual que las comisiones.
+const ingresosFile = path.join(dataDir, "ingresos_extra.json");
+function loadIngresos() {
+  try { const j = JSON.parse(fs.readFileSync(ingresosFile, "utf8")); return { ingresos: Array.isArray(j.ingresos) ? j.ingresos : [] }; }
+  catch { return { ingresos: [] }; }
+}
+function saveIngresos(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(ingresosFile, JSON.stringify(store || { ingresos: [] }, null, 2));
+}
+// Total de ingresos extra de un mes (YYYY-MM), convertido a ARS.
+function ingresosExtraDelMes(mes, dolarValor) {
+  const store = loadIngresos();
+  let total = 0;
+  for (const g of store.ingresos) {
+    if (String(g.mes || "") !== mes) continue;
+    total += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolarValor || 0) : (Number(g.monto) || 0);
+  }
+  return total;
+}
 // Cotización del dólar oficial (venta), cacheada 3h para no golpear la API.
 let _DOLAR_CACHE = { valor: 0, fecha: "", ts: 0 };
 async function getDolarOficial() {
@@ -4257,6 +4278,54 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, pagos: store.pagos });
   }
 
+  // --- Ingresos EXTRA (fuera de comisiones), por mes — admin-only ---
+  if (p === "/api/ingresos" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const mes = String(url.searchParams.get("mes") || "").trim();
+    const store = loadIngresos();
+    const dolar = await getDolarOficial();
+    const lista = mes ? store.ingresos.filter((g) => String(g.mes || "") === mes) : store.ingresos;
+    return json(res, 200, { ingresos: lista, dolar: { valor: dolar.valor, fecha: dolar.fecha } });
+  }
+  if (p === "/api/ingresos" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const descripcion = String((b && b.descripcion) || "").trim();
+    const mes = String((b && b.mes) || "").trim();
+    if (!descripcion) return json(res, 400, { error: "Falta la descripción." });
+    if (!/^\d{4}-\d{2}$/.test(mes)) return json(res, 400, { error: "Falta el mes (YYYY-MM)." });
+    const datos = {
+      descripcion, mes,
+      monto: Math.max(0, Number(b && b.monto) || 0),
+      moneda: (b && b.moneda) === "USD" ? "USD" : "ARS",
+    };
+    const store = loadIngresos();
+    const id = String((b && b.id) || "").trim();
+    if (id) {
+      const g = store.ingresos.find((x) => x.id === id);
+      if (!g) return json(res, 404, { error: "Ingreso no encontrado." });
+      Object.assign(g, datos);
+    } else {
+      store.ingresos.push({ id: crypto.randomUUID(), ...datos });
+    }
+    saveIngresos(store);
+    return json(res, 200, { ok: true, ingresos: store.ingresos });
+  }
+  const ingresoDelMatch = p.match(/^\/api\/ingresos\/([^/]+)$/);
+  if (ingresoDelMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const id = decodeURIComponent(ingresoDelMatch[1]);
+    const store = loadIngresos();
+    const idx = store.ingresos.findIndex((x) => x.id === id);
+    if (idx < 0) return json(res, 404, { error: "Ingreso no encontrado." });
+    store.ingresos.splice(idx, 1);
+    saveIngresos(store);
+    return json(res, 200, { ok: true, ingresos: store.ingresos });
+  }
+
   // Resultado económico del mes (Inicio): ingresos NS (Nacho+Seba) por fecha de
   // cobro, gastos del mes, en bolsillo (total y por socio) + serie mensual. Admin.
   if (p === "/api/resultado" && req.method === "GET") {
@@ -4271,7 +4340,11 @@ const server = http.createServer(async (req, res) => {
     let gastos = 0;
     for (const g of gstore.gastos) gastos += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolar.valor || 0) : (Number(g.monto) || 0);
     const del = ingresoNSDelMes(fstore, mes, nombreCliente);
-    const ingresoNS = del.ingresoNacho + del.ingresoSeba;
+    // Ingresos extra (otros, fuera de comisiones): suman a NS y se reparten 50/50.
+    const extra = ingresosExtraDelMes(mes, dolar.valor);
+    const extraMitad = extra / 2;
+    const ingresoComisiones = del.ingresoNacho + del.ingresoSeba;
+    const ingresoNS = ingresoComisiones + extra;
     const gastosMitad = gastos / 2;
     // Serie mes contra mes: desde el inicio del sistema (ago-2026) hasta el mes
     // elegido, sin pasar de los últimos 12. No mostramos meses previos al arranque.
@@ -4284,16 +4357,17 @@ const server = http.createServer(async (req, res) => {
       const mStr = y + "-" + String(m).padStart(2, "0");
       if (mStr < INICIO_SISTEMA || mStr > mes) continue;
       const d = ingresoNSDelMes(fstore, mStr, nombreCliente);
-      const ing = d.ingresoNacho + d.ingresoSeba;
+      const ing = d.ingresoNacho + d.ingresoSeba + ingresosExtraDelMes(mStr, dolar.valor);
       serie.push({ mes: mStr, ingresoNS: ing, gastos, bolsilloNS: ing - gastos });
     }
     return json(res, 200, {
       mes,
-      ingresoNS, ingresoNacho: del.ingresoNacho, ingresoSeba: del.ingresoSeba,
+      ingresoNS, ingresoComisiones, ingresoExtra: extra,
+      ingresoNacho: del.ingresoNacho + extraMitad, ingresoSeba: del.ingresoSeba + extraMitad,
       gastos, dolar: { valor: dolar.valor, fecha: dolar.fecha },
       bolsilloNS: ingresoNS - gastos,
-      bolsilloNacho: del.ingresoNacho - gastosMitad,
-      bolsilloSeba: del.ingresoSeba - gastosMitad,
+      bolsilloNacho: del.ingresoNacho + extraMitad - gastosMitad,
+      bolsilloSeba: del.ingresoSeba + extraMitad - gastosMitad,
       facturasContadas: del.facturasContadas,
       detalle: del.detalle,
       serie,
