@@ -699,6 +699,22 @@ const ORL_SEED_PRESETS = [
     texto: "PREVIA ANTISEPSIA SE REALIZA ELECTROCOAGULACIÓN DE QUERATOSIS SEBORREICAS EN REGIÓN A ESPECIFICAR. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
   },
   {
+    id: "derma-biopsia-losange", modelo: "caballito-derma-biopsia", nombre: "Biopsia losange",
+    texto: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN REGIÓN A ESPECIFICAR. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
+  },
+  {
+    id: "derma-biopsia-losange-brazo", modelo: "caballito-derma-biopsia", nombre: "Biopsia losange en brazo derecho",
+    texto: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN BRAZO DERECHO. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
+  },
+  {
+    id: "derma-biopsia-shaving", modelo: "caballito-derma-biopsia", nombre: "Biopsia mediante shaving",
+    texto: "PACIENTE CON IDG DE LESIÓN CUTÁNEA A DETERMINAR EN REGIÓN A ESPECIFICAR.\nPREVIA ANTISEPSIA, SE INFILTRA CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA MEDIANTE SHAVING. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO.\nMUESTRA ENTREGADA A PACIENTE EN FORMOL AL 10% ROTULADA Y CON INFORME DE PROCEDIMIENTO.",
+  },
+  {
+    id: "derma-biopsia-shaving-cuello", modelo: "caballito-derma-biopsia", nombre: "Shaving cuello derecho — CEC vs queratoacantoma",
+    texto: "PACIENTE CON IDG DE CEC VS QUERATOACANTOMA DE REGIÓN LATERAL DE CUELLO DERECHO.\nPREVIA ANTISEPSIA, SE INFILTRA CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA MEDIANTE SHAVING. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO.\nMUESTRA ENTREGADA A PACIENTE EN FORMOL AL 10% ROTULADA Y CON INFORME DE PROCEDIMIENTO.",
+  },
+  {
     id: "eco-partes-blandas-normal", modelo: "caballito-eco-musculo", nombre: "Partes blandas normal",
     estudio: "Ecografía de partes blandas", medicoId: "sanchez-jamilyn",
     texto: "EXPLORADA LA REGIÓN SOLICITADA CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
@@ -5711,7 +5727,7 @@ function ensureOrlSeed() {
       { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito },
       { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["cima-orl-videorino"] },
       { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["caballito-derma-crio"] },
-      { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["caballito-derma-electro"] },
+      { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["caballito-derma-electro", "caballito-derma-biopsia"] },
       { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["caballito-eco-musculo"] },
       { id: "nirenberg-alberto", nombre: "Dr. Alberto Nirenberg", matricula: "MN 54398", modelos: ["caballito-eco-musculo"] },
     ];
@@ -5721,8 +5737,11 @@ function ensureOrlSeed() {
         if (!ex) {
           cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula || "", modelos: m.modelos.slice() });
           cambio = true;
-        } else if (m.matricula && !ex.matricula) {   // completar matrícula en configs ya sembradas
-          ex.matricula = m.matricula; cambio = true;
+        } else {
+          if (m.matricula && !ex.matricula) { ex.matricula = m.matricula; cambio = true; }
+          // Sumar modelos nuevos a un médico ya sembrado (ej. Leydy: electro + biopsia).
+          ex.modelos = Array.isArray(ex.modelos) ? ex.modelos : [];
+          for (const k of m.modelos) { if (!ex.modelos.includes(k)) { ex.modelos.push(k); cambio = true; } }
         }
       }
     }

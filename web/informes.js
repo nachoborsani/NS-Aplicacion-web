@@ -366,6 +366,23 @@ const MODELOS = {
     textoDefault: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
     pie: PIE_CABALLITO,
   },
+  // --- Centro Médico Caballito: Dermatología (biopsia de piel) ---
+  "caballito-derma-biopsia": {
+    label: "Caballito — Biopsia de piel (537108)",
+    short: "Caballito · Biopsia de piel",
+    practica: "537108 - Biopsia de piel y/o tejido celular subcutáneo y/o muscular",
+    centro: "Centro Médico Caballito",
+    logo: "cmc_logo.png",
+    logoW: 84,
+    servicio: "SERVICIO DE DERMATOLOGÍA",
+    especialidad: "Dermatología",
+    codigoPractica: "537108",
+    estudio: "BIOPSIA DE PIEL",
+    estudioArchivo: "Biopsia de piel",
+    solicitanteDefault: "Dra. Leydy Henriquez Gomez",
+    textoDefault: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN REGIÓN A ESPECIFICAR. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
+    pie: PIE_CABALLITO,
+  },
   // --- Caballito (Centro de Medicina Ambulatoria): Ecografía musculoesquelética ---
   "caballito-eco-musculo": {
     label: "Caballito — Ecografía musculoesquelética (186001)",
