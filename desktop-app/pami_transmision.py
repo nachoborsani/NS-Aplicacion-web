@@ -1446,29 +1446,46 @@ class PamiTransmisionController:
         # transmisión: validada=S, transmitida=N) al recargar la grilla, y el export
         # sale filtrado (subconjunto en vez de la bandeja completa). Si detectamos
         # que el combo sigue con un valor cuando lo pedimos vacío, re-aplicamos.
+        # La verificación es SOLO una red de seguridad: NUNCA debe tumbar el export.
+        # En centros grandes/lentos (CIMA) la grilla puede estar navegando cuando
+        # corremos el evaluate → "Execution context was destroyed". Si eso pasa,
+        # esperamos y reintentamos; si no se puede leer, seguimos igual con el export.
         if not validada and not transmitida:
             for _ in range(2):
-                actual = page.evaluate(
-                    """() => ({
-                      v: (document.querySelector('select[name="c_validada"]')?.value || '').trim(),
-                      t: (document.querySelector('select[name="transmitida"]')?.value || '').trim()
-                    })"""
-                ) or {}
+                try:
+                    actual = page.evaluate(
+                        """() => ({
+                          v: (document.querySelector('select[name="c_validada"]')?.value || '').trim(),
+                          t: (document.querySelector('select[name="transmitida"]')?.value || '').trim()
+                        })"""
+                    ) or {}
+                except Exception as exc:  # noqa: BLE001 - navegación en curso, etc.
+                    self._log(f"[FILTRO] No pude leer el combo (sigo igual): {exc}")
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=8000)
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(800)
+                    break
                 if not actual.get("v") and not actual.get("t"):
                     break  # ya está en "todas"
                 self._log(
                     f"[FILTRO] El combo quedó filtrado (v={actual.get('v')!r} t={actual.get('t')!r}) "
                     "cuando pedí TODAS; reseteo de nuevo."
                 )
-                page.evaluate(
-                    """() => {
-                      const reset = (sel) => { const el=document.querySelector(sel); if(el){ el.selectedIndex=0; el.dispatchEvent(new Event('change',{bubbles:true})); } };
-                      reset('select[name="c_validada"]'); reset('select[name="transmitida"]');
-                      const cand = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'))
-                        .find(el => ((el.textContent||el.value||'').trim().toLowerCase()==='buscar') && (el.offsetParent!==null || el.getClientRects().length>0));
-                      if (cand) cand.click();
-                    }"""
-                )
+                try:
+                    page.evaluate(
+                        """() => {
+                          const reset = (sel) => { const el=document.querySelector(sel); if(el){ el.selectedIndex=0; el.dispatchEvent(new Event('change',{bubbles:true})); } };
+                          reset('select[name="c_validada"]'); reset('select[name="transmitida"]');
+                          const cand = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'))
+                            .find(el => ((el.textContent||el.value||'').trim().toLowerCase()==='buscar') && (el.offsetParent!==null || el.getClientRects().length>0));
+                          if (cand) cand.click();
+                        }"""
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._log(f"[FILTRO] No pude re-resetear el combo (sigo igual): {exc}")
+                    break
                 try:
                     page.wait_for_load_state("networkidle", timeout=20000)
                 except Exception:
