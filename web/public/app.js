@@ -1174,8 +1174,10 @@ function loteLlenarMedicos(){
   var med = document.getElementById('loteMedico'); if (!med) return;
   var pm = med.value;
   var vals = loteMedicosValidos();
-  med.innerHTML = vals.map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('') + opt('', 'Sin firma / elegir por fila');
-  med.value = (pm && vals.some(function(m){ return m.id === pm; })) ? pm : (vals[0] ? vals[0].id : '');
+  // "Automático" = cada fila usa el médico de SU práctica (lo podés cambiar por fila).
+  med.innerHTML = opt('', '🔄 Automático (según la práctica)')
+    + vals.map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('');
+  med.value = (pm === '' || (pm && vals.some(function(m){ return m.id === pm; }))) ? pm : '';
 }
 // Una línea del pegado (tab-separada tipo Excel; si no hay tabs, 2+ espacios).
 function loteParseLinea(linea){
