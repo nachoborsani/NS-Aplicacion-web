@@ -2384,31 +2384,33 @@ function mesCursoFechaHora(iso){
 }
 // Botón "Actualizar" (mes en curso): deja un pedido de refresco; la PC lo sondea
 // (~10 min) y corre la bajada de TODAS las bandejas. Muestra el progreso.
+// Estado GLOBAL del refresco (pendiente/corriendo): el botón lo respeta en TODOS
+// los clientes, así no se puede pedir dos veces hasta que la PC termine.
+var REFRESCO_ACTIVO = false;
 var REFRESCO_POLL = null;
-async function pedirRefrescoBandejas(btn){
-  if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
-  var r = await req('POST', '/api/bandeja/refresco/pedir', {});
-  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } alert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
-  var desde = (r.data && r.data.pedidoAt) || new Date().toISOString();
-  if (btn){ btn.textContent = '🔄 Pedido — corre en la PC…'; btn.title = 'La PC lo corre en los próximos minutos'; }
-  // Sondea el estado: cuando la PC termina (terminadoAt >= el pedido), recarga.
-  if (REFRESCO_POLL) clearInterval(REFRESCO_POLL);
+function arrancarPollRefresco(){
+  if (REFRESCO_POLL) return;  // ya hay uno sondeando
   var vueltas = 0;
   REFRESCO_POLL = setInterval(async function(){
     vueltas++;
     var e = await req('GET', '/api/bandeja/refresco/estado');
-    if (e.ok && e.data){
-      if (e.data.corriendo && btn) btn.textContent = '🔄 Actualizando…';
-      var termino = e.data.terminadoAt && e.data.terminadoAt >= desde && !e.data.corriendo;
-      if (termino){
-        clearInterval(REFRESCO_POLL); REFRESCO_POLL = null;
-        if (btn){ btn.disabled = false; btn.textContent = '✅ Actualizado'; }
-        try { loadClientMesCurso(); } catch(_){}
-        return;
-      }
+    var activo = !!(e.ok && e.data && (e.data.pendiente || e.data.corriendo));
+    if (!activo){
+      clearInterval(REFRESCO_POLL); REFRESCO_POLL = null; REFRESCO_ACTIVO = false;
+      // Terminó: recargar la card (el botón vuelve, con los datos nuevos).
+      try { if (document.getElementById('view-clientes').style.display !== 'none') loadClientMesCurso(); } catch(_){}
+      return;
     }
-    if (vueltas > 60){ clearInterval(REFRESCO_POLL); REFRESCO_POLL = null; if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } }
+    if (vueltas > 120){ clearInterval(REFRESCO_POLL); REFRESCO_POLL = null; }  // techo ~30 min
   }, 15000);
+}
+async function pedirRefrescoBandejas(btn){
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
+  var r = await req('POST', '/api/bandeja/refresco/pedir', {});
+  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } alert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
+  REFRESCO_ACTIVO = true;
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Actualizando…'; btn.title = 'La PC lo está corriendo'; }
+  arrancarPollRefresco();
 }
 // Indicador de salud: SOLO avisa si el último sync falló o la bandeja quedó
 // desactualizada (>20 hs). Si está todo bien no muestra nada (cero ruido).
@@ -2469,7 +2471,9 @@ function mesCursoCardMesEnCurso(r, estado){
   var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso'
     + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
     + '<span class="mescurso-chip">' + esc(chip) + '</span>'
-    + (puedeRefrescar ? '<button class="btn btn-sm" type="button" id="btnRefrescoBandejas" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>' : '')
+    + (puedeRefrescar ? (REFRESCO_ACTIVO
+        ? '<button class="btn btn-sm" type="button" disabled title="La PC lo está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
+        : '<button class="btn btn-sm" type="button" id="btnRefrescoBandejas" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>') : '')
     + '</div>';
   if (!r){
     if (estado && estado.ok === false){
@@ -2640,12 +2644,15 @@ async function loadClientMesCurso(){
     api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/resumen'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev)),
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
+    api('/api/bandeja/refresco/estado'),
   ]);
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var estadoSync = (results[0].ok && results[0].data) ? results[0].data.estado : null;
   var adelante = (results[0].ok && results[0].data) ? results[0].data.adelante : null;
   var futuros = (results[0].ok && results[0].data) ? (results[0].data.futuros || []) : [];
+  var refEstado = (results[3] && results[3].ok && results[3].data) ? results[3].data : null;
+  REFRESCO_ACTIVO = !!(refEstado && (refEstado.pendiente || refEstado.corriendo));
   MESCURSO_FALTAN_INFORMES = (resumen && resumen.missingInformeRows) || [];
   MESCURSO_AUSENTES = (resumen && resumen.ausentesRows) || [];
   MESCURSO_POSIBLES_DEBITOS = (resumen && resumen.posiblesDebitosRows) || [];
@@ -2665,6 +2672,8 @@ async function loadClientMesCurso(){
   var cardAdel = mesCursoCardAdelante(adelante, futuros);
   box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + (cardAdel || '') + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + '</div>'
     + '<div id="mescursoInformesPanel"></div>';
+  // Si hay un refresco pendiente/corriendo, seguir sondeando (recarga al terminar).
+  if (REFRESCO_ACTIVO) arrancarPollRefresco();
 }
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
