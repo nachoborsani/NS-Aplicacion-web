@@ -2114,17 +2114,20 @@ function renderIngresos(){
   var body = document.getElementById('ingresosBody'); if (!body) return;
   var dolarTxt = document.getElementById('ingresosDolar');
   if (dolarTxt) dolarTxt.innerHTML = INGRESOS.dolar.valor ? ('💵 Dólar oficial: <b>' + moneyFmt(INGRESOS.dolar.valor) + '</b>' + (INGRESOS.dolar.fecha ? ' (' + esc(INGRESOS.dolar.fecha) + ')' : '')) : '';
-  if (!INGRESOS.ingresos.length){ body.innerHTML = '<tr><td colspan="4" class="muted-cell">Sin ingresos extra este mes.</td></tr>'; document.getElementById('ingresosTotal').textContent = moneyFmt(0); return; }
+  if (!INGRESOS.ingresos.length){ body.innerHTML = '<tr><td colspan="5" class="muted-cell">Sin ingresos extra este mes.</td></tr>'; document.getElementById('ingresosTotal').textContent = moneyFmt(0); return; }
   var total = 0;
   body.innerHTML = INGRESOS.ingresos.map(function(g){
-    var ars = g.moneda === 'USD' ? (Number(g.monto) || 0) * (Number(INGRESOS.dolar.valor) || 0) : (Number(g.monto) || 0);
-    total += ars;
+    var partes = Math.max(2, Math.round(Number(g.partes) || 2));
+    var nsShare = (typeof g.nsShareArs === 'number') ? g.nsShareArs
+      : ((g.moneda === 'USD' ? (Number(g.monto) || 0) * (Number(INGRESOS.dolar.valor) || 0) : (Number(g.monto) || 0)) * 2 / partes);
+    total += nsShare;
     var montoTxt = g.moneda === 'USD' ? ('US$ ' + (Number(g.monto) || 0)) : moneyFmt(g.monto);
-    var arsTxt = moneyFmt(ars) + (g.moneda === 'USD' && INGRESOS.dolar.valor ? ' <span class="nom-muted">×' + moneyFmt(INGRESOS.dolar.valor) + '</span>' : '');
+    var divideTxt = partes === 2 ? '2 (todo NS)' : (partes + ' (2/' + partes + ' NS)');
     return '<tr>' +
       '<td>' + esc(g.descripcion) + '</td>' +
       '<td class="num">' + montoTxt + '</td>' +
-      '<td class="num">' + arsTxt + '</td>' +
+      '<td class="num">' + divideTxt + '</td>' +
+      '<td class="num">' + moneyFmt(nsShare) + '</td>' +
       '<td class="row-actions">' +
         '<button class="icon-btn mini" type="button" title="Editar" onclick="openIngresoModal(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
         '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteIngreso(\'' + g.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
@@ -2139,6 +2142,7 @@ function openIngresoModal(id){
   document.getElementById('ingresoDescripcion').value = g ? (g.descripcion || '') : '';
   document.getElementById('ingresoMonto').value = g ? (g.monto || '') : '';
   document.getElementById('ingresoMoneda').value = g ? (g.moneda || 'ARS') : 'ARS';
+  document.getElementById('ingresoPartes').value = String((g && g.partes) || 2);
   document.getElementById('ingresoTitle').textContent = g ? 'Editar ingreso' : 'Nuevo ingreso';
   document.getElementById('ingresoModalError').textContent = '';
   showModal('ingresoModal', 'ingresoScrim');
@@ -2156,6 +2160,7 @@ async function saveIngreso(){
     mes: ingresosPeriodoActual(),
     monto: facturaParseMonto(document.getElementById('ingresoMonto').value),
     moneda: document.getElementById('ingresoMoneda').value,
+    partes: Number(document.getElementById('ingresoPartes').value) || 2,
   });
   btn.disabled = false;
   if (!res.ok){ errBox.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }

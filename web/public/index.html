@@ -201,14 +201,14 @@
                   <button class="btn btn-primary btn-sm" type="button" onclick="openIngresoModal()">+ Ingreso</button>
                 </div>
               </div>
-              <div class="nom-muted" style="margin:2px 0 8px">Plata que entra por fuera de las comisiones PAMI. Suma a “En bolsillo” y se reparte 50/50 entre los socios.</div>
+              <div class="nom-muted" style="margin:2px 0 8px">Plata que entra por fuera de las comisiones PAMI. Suma a “En bolsillo”. Elegís en cuántas partes se divide: NS se queda con 2 (Nacho + Seba); si va en 3, el otro tercio no cuenta.</div>
               <div class="nom-muted" id="ingresosDolar" style="margin:2px 0 8px"></div>
               <div class="msg err" id="ingresosError" style="display:none"></div>
               <div class="table-scroll">
                 <table class="saved-report-table facturas-table" id="ingresosTable">
-                  <thead><tr><th>Descripción</th><th class="num">Monto</th><th class="num">En ARS</th><th>Acción</th></tr></thead>
-                  <tbody id="ingresosBody"><tr><td colspan="4" class="muted-cell">Cargando…</td></tr></tbody>
-                  <tfoot><tr><th>Total del mes (ARS)</th><th class="num" id="ingresosTotal">—</th><th colspan="2"></th></tr></tfoot>
+                  <thead><tr><th>Descripción</th><th class="num">Monto total</th><th class="num">Divide</th><th class="num">Parte NS (ARS)</th><th>Acción</th></tr></thead>
+                  <tbody id="ingresosBody"><tr><td colspan="5" class="muted-cell">Cargando…</td></tr></tbody>
+                  <tfoot><tr><th colspan="3">Parte NS del mes (ARS)</th><th class="num" id="ingresosTotal">—</th><th></th></tr></tfoot>
                 </table>
               </div>
             </div>
@@ -901,9 +901,15 @@
       <div class="modal-body">
         <input type="hidden" id="ingresoId">
         <div class="field"><label>Descripción</label><input class="inp" id="ingresoDescripcion" spellcheck="false" placeholder="Ej: Trabajo puntual, otro cliente…"></div>
-        <div class="field"><label>Monto</label><input class="inp" id="ingresoMonto" inputmode="decimal"></div>
+        <div class="field"><label>Monto (total)</label><input class="inp" id="ingresoMonto" inputmode="decimal"></div>
         <div class="field"><label>Moneda</label>
           <select class="inp" id="ingresoMoneda"><option value="ARS">Pesos (ARS)</option><option value="USD">Dólares (USD)</option></select>
+        </div>
+        <div class="field"><label>Se divide en</label>
+          <select class="inp" id="ingresoPartes">
+            <option value="2">2 partes · NS se queda con todo (Nacho ½ · Seba ½)</option>
+            <option value="3">3 partes · NS se queda con 2/3 (Nacho ⅓ · Seba ⅓)</option>
+          </select>
         </div>
         <div class="msg err" id="ingresoModalError"></div>
       </div>

@@ -242,13 +242,20 @@ function saveIngresos(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(ingresosFile, JSON.stringify(store || { ingresos: [] }, null, 2));
 }
-// Total de ingresos extra de un mes (YYYY-MM), convertido a ARS.
+// Total de ingresos extra de un mes (YYYY-MM), convertido a ARS. Devuelve SOLO la
+// parte de NS: se divide en `partes` iguales y NS se queda con 2 (Nacho + Seba).
+// partes=2 → NS se queda con todo; partes=3 → NS se queda con 2/3.
+function ingresoNSShare(g, dolarValor) {
+  const bruto = g.moneda === "USD" ? (Number(g.monto) || 0) * (dolarValor || 0) : (Number(g.monto) || 0);
+  const partes = Math.max(2, Math.round(Number(g.partes) || 2));
+  return bruto * 2 / partes;
+}
 function ingresosExtraDelMes(mes, dolarValor) {
   const store = loadIngresos();
   let total = 0;
   for (const g of store.ingresos) {
     if (String(g.mes || "") !== mes) continue;
-    total += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolarValor || 0) : (Number(g.monto) || 0);
+    total += ingresoNSShare(g, dolarValor);
   }
   return total;
 }
@@ -4285,7 +4292,8 @@ const server = http.createServer(async (req, res) => {
     const mes = String(url.searchParams.get("mes") || "").trim();
     const store = loadIngresos();
     const dolar = await getDolarOficial();
-    const lista = mes ? store.ingresos.filter((g) => String(g.mes || "") === mes) : store.ingresos;
+    const lista = (mes ? store.ingresos.filter((g) => String(g.mes || "") === mes) : store.ingresos)
+      .map((g) => ({ ...g, partes: Math.max(2, Math.round(Number(g.partes) || 2)), nsShareArs: ingresoNSShare(g, dolar.valor) }));
     return json(res, 200, { ingresos: lista, dolar: { valor: dolar.valor, fecha: dolar.fecha } });
   }
   if (p === "/api/ingresos" && req.method === "POST") {
@@ -4300,6 +4308,7 @@ const server = http.createServer(async (req, res) => {
       descripcion, mes,
       monto: Math.max(0, Number(b && b.monto) || 0),
       moneda: (b && b.moneda) === "USD" ? "USD" : "ARS",
+      partes: Math.max(2, Math.min(10, Math.round(Number(b && b.partes) || 2))),
     };
     const store = loadIngresos();
     const id = String((b && b.id) || "").trim();
