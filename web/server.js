@@ -3030,77 +3030,89 @@ function reportListItem(report) {
     summary,
   };
 }
+// Excel del reporte, pensado para el CLIENTE: contenido limpio (sin datos internos
+// como el nombre del archivo de bandeja o quién lo cerró), moneda formateada y
+// anchos de columna. Usa la librería xlsx (sin dependencias nuevas → sin riesgo).
 function buildClientReportWorkbook(report) {
   const rowsForReport = reportRows(report);
-  const summary = summarizeReportRows(rowsForReport);
-  const wb = XLSX.utils.book_new();
-  const resumen = [
-    ["Reporte", report.title || ""],
-    ["Cliente", clientDisplayName(report.clientSlug) || report.clientName || ""],
-    ["Archivo origen", report.sourceFilename || ""],
-    ["Nomenclador", report.nomencladorLabel || report.nomencladorPeriod || ""],
-    ["Cerrado", report.closedAt || ""],
-    ["Cerrado por", report.closedBy || ""],
-    ["Actualizado", report.updatedAt || ""],
-    ["Actualizado por", report.updatedBy || ""],
-    ["Monto esperado", money(report.expectedAmount)],
-    ["Bruto facturable", money(summary.gross)],
-    ["Debitos", money(summary.debit)],
-    ["Neto estimado", money(summary.net)],
-    ["Proximo periodo por corte", money(summary.nextPeriodCutoff)],
-    ["Falta informe", money(summary.missingInformeAmount)],
-    ["Cantidad falta informe", summary.missingInforme || 0],
-    ["Cantidad de consultas", summary.consultations || 0],
-    ["Importe consultas", money(summary.consultationNet)],
-    ["Cantidad de practicas / estudios", summary.practices || 0],
-    ["Importe practicas / estudios", money(summary.practiceNet)],
-    ["Valor promedio por prestacion", summary.totalRows ? money(summary.net / summary.totalRows) : 0],
-    ["% consultas sobre total", summary.totalRows ? (summary.consultations || 0) / summary.totalRows : 0],
-    ["Ausentes / activas", summary.absent || 0],
-    ["Fuera de corte", summary.outsideCutoff || 0],
-    ["Sin valor", summary.unmatched || 0],
-    [],
-    ["Observaciones"],
-    [report.observations || ""],
-  ];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
-  // Desglose por especialidad (los módulos REALES del reporte, como la comparativa).
+  const summaryAll = summarizeReportRows(rowsForReport);
   const modulos = reportCobradoModules(report);
+  const cob = summarizeReportRows(modulos.flatMap((m) => m.rows));
+  const totalCobrado = modulos.reduce((a, m) => a + m.net, 0);
+  const ausentes = rowsForReport.filter((r) => r.absent && !r.outsideCutoff).length;
+  const clientName = String(clientDisplayName(report.clientSlug) || report.clientName || "");
+  const periodo = String(report.nomencladorLabel || report.nomencladorPeriod || "");
+  const MONEY = '"$"#,##0.00';
+  const wb = XLSX.utils.book_new();
+  // Pone formato de moneda a una celda numérica (por fila/col 0-based).
+  const fmt = (ws, r, c) => {
+    const ref = XLSX.utils.encode_cell({ r, c });
+    if (ws[ref] && typeof ws[ref].v === "number") ws[ref].z = MONEY;
+  };
+
+  // ---- Resumen (client-facing) ----
+  const resumen = [
+    [clientName.toUpperCase()],
+    [[report.title, periodo].filter(Boolean).join("  ·  ") || "Reporte"],
+    [],
+    ["Cantidad de prestaciones", cob.totalRows],
+    ["Consultas", cob.consultations],
+    ["Practicas / estudios", cob.practices],
+    [],
+    ["Bruto facturable", cob.gross],
+    ["Debitos", cob.debit],
+    ["NETO COBRADO", totalCobrado],
+    [],
+    ["Proximo periodo (a cobrar)", summaryAll.nextPeriodCutoff],
+    ["Falta informe (a recuperar)", summaryAll.missingInformeAmount],
+    ["Ausentes (no cobrado)", ausentes],
+    ["Valor promedio por prestacion", cob.totalRows ? totalCobrado / cob.totalRows : 0],
+  ];
+  if (report.observations) resumen.push([], ["Observaciones"], [String(report.observations)]);
+  const wsR = XLSX.utils.aoa_to_sheet(resumen);
+  wsR["!cols"] = [{ wch: 34 }, { wch: 20 }];
+  wsR["!merges"] = [XLSX.utils.decode_range("A1:B1"), XLSX.utils.decode_range("A2:B2")];
+  [7, 8, 9, 11, 12, 14].forEach((r) => fmt(wsR, r, 1)); // celdas de $ del resumen
+  XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
+
+  // ---- Por especialidad (módulos reales + total) ----
   const porEsp = [["Codigo", "Especialidad", "Consultas", "Practicas / estudios", "Neto cobrado"]];
-  let tc = 0, tp = 0, tn = 0;
+  let tc = 0, tp = 0;
   for (const m of modulos) {
     const s = summarizeReportRows(m.rows);
-    porEsp.push([m.code, m.name, s.consultations || 0, s.practices || 0, money(m.net)]);
-    tc += s.consultations || 0; tp += s.practices || 0; tn += m.net;
+    porEsp.push([m.code, m.name, s.consultations || 0, s.practices || 0, m.net]);
+    tc += s.consultations || 0; tp += s.practices || 0;
   }
-  porEsp.push([]);
-  porEsp.push(["", "TOTAL COBRADO", tc, tp, money(tn)]);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(porEsp), "Por especialidad");
-  const rows = rowsForReport.map((row) => ({
-    Paciente: row.patientName || "",
-    Beneficio: row.benefit || "",
-    OME: row.order || "",
-    "Codigo practica": row.practiceCode || "",
-    Prestacion: row.practiceDescription || row.practiceText || "",
-    Modulo: [row.moduleCode || "", row.moduleDescription || ""].filter(Boolean).join(" "),
-    Turno: row.appointmentLabel || row.appointmentAt || "",
-    Transmision: row.transmittedLabel || row.transmittedAt || "",
-    Estado: row.status || "",
-    Bruto: reportRowGross(row),
-    Debito: reportRowDebit(row),
-    Neto: reportRowNet(row),
-    "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : row.debitType === "pay80" ? "Paga 80%" : "Total") : "",
-    "Debito automatico": row.autoDebit ? "Si" : "",
-    "Motivo debito automatico": row.autoDebitReason || "",
-    "Codigo excluyente": row.autoDebitPairCode || "",
-    "Regla PDF": row.autoDebitRulePage ? `Pagina ${row.autoDebitRulePage}` : "",
-    "Codigos regla": row.autoDebitRuleCodes || "",
-    "Valor fuente": row.valueSourceCode || "",
-    "Valor editado": row.valueEdited ? "Si" : "",
-    "Sin valor": (!row.matchFound && !row.valueEdited) ? "Si" : "",
-    "Fuera de corte": row.outsideCutoff ? "Si" : "",
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Practicas");
+  porEsp.push([], ["", "TOTAL COBRADO", tc, tp, totalCobrado]);
+  const wsE = XLSX.utils.aoa_to_sheet(porEsp);
+  wsE["!cols"] = [{ wch: 10 }, { wch: 36 }, { wch: 12 }, { wch: 16 }, { wch: 18 }];
+  for (let r = 1; r <= modulos.length; r += 1) fmt(wsE, r, 4);
+  fmt(wsE, modulos.length + 2, 4); // fila TOTAL
+  XLSX.utils.book_append_sheet(wb, wsE, "Por especialidad");
+
+  // ---- Detalle (columnas útiles, sin campos internos) ----
+  const det = [["Paciente", "Beneficio", "OME", "Codigo", "Prestacion", "Modulo", "Turno", "Estado", "Bruto", "Debito", "Neto"]];
+  for (const row of rowsForReport) {
+    det.push([
+      row.patientName || "",
+      row.benefit || "",
+      row.order || "",
+      row.practiceCode || "",
+      row.practiceDescription || row.practiceText || "",
+      [row.moduleCode || "", row.moduleDescription || ""].filter(Boolean).join(" "),
+      row.appointmentLabel || row.appointmentAt || "",
+      professionalReportStatus(row),
+      reportRowGross(row),
+      reportRowDebit(row),
+      reportRowNet(row),
+    ]);
+  }
+  const wsD = XLSX.utils.aoa_to_sheet(det);
+  wsD["!cols"] = [{ wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 42 }, { wch: 26 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+  wsD["!autofilter"] = { ref: "A1:K1" };
+  for (let r = 1; r < det.length; r += 1) { fmt(wsD, r, 8); fmt(wsD, r, 9); fmt(wsD, r, 10); }
+  XLSX.utils.book_append_sheet(wb, wsD, "Detalle");
+
   return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
 }
 const professionalReportModules = {
