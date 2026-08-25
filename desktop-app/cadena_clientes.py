@@ -28,6 +28,10 @@ CLIENTES = {
         "cols": {"nombre": 1, "benef": 3, "dni": 5, "ome": 7, "credencial": 8,
                  "generada": 11, "activacion": 12},
         "activacion_marca": "ACTIVADA",
+        # Horario de los turnos que se agendan: desde/hasta y cada cuántos min.
+        "activacion_hora_inicio": "10:00",
+        "activacion_hora_tope": "19:00",
+        "activacion_intervalo_min": 15,
     },
     "dubesarky-ezequiel": {
         "nombre": "Dube",
@@ -42,6 +46,10 @@ CLIENTES = {
         "cols": {"benef": 0, "dni": 1, "tramite": 2, "nombre": 3, "dx": 7, "ome": 8,
                  "generada": 11, "activacion": 12, "credencial": 13, "validada": 14},
         "activacion_marca": "FECHA",
+        # Dube: turnos de 08:00 a 19:00, cada 10 min.
+        "activacion_hora_inicio": "08:00",
+        "activacion_hora_tope": "19:00",
+        "activacion_intervalo_min": 10,
     },
 }
 

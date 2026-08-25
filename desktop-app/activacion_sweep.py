@@ -41,13 +41,15 @@ def _cell(row: list, i: int) -> str:
     return str(row[i]).strip() if i < len(row) else ""
 
 
-# --- Contador de turnos ya agendados por (cliente, fecha) ---------------------
-# El turno se agenda desde las 10:00 cada 15 min. Como la cadena corre 3 veces al
-# día (10/17/19:30) y todas apuntan al MISMO día hábil siguiente, sin memoria cada
-# corrida arrancaría de nuevo en 10:00 y pisaría los slots de la corrida anterior.
-# Este contador (persistido en disco) hace que cada corrida siga desde el próximo
-# slot libre. Se guarda por cliente porque Scheffelaar y Dube son prestadores
-# distintos (sus turnos no chocan entre sí).
+# --- Próximo slot de turno libre por cliente ---------------------------------
+# Los turnos se agendan en una ventana [hora_inicio, hora_tope] cada N min (según
+# el cliente: Scheffelaar 10:00-19:00 c/15, Dube 08:00-19:00 c/10). Como la cadena
+# corre 3 veces al día (10/17/19:30) y todas apuntan al MISMO día hábil, sin
+# memoria cada corrida arrancaría de nuevo en la hora de inicio y pisaría los slots
+# de la corrida anterior. Guardamos el PRÓXIMO slot libre por cliente (persistido)
+# para que cada corrida siga desde ahí. Si un día se llena (pasa del tope), el slot
+# desborda al próximo día hábil. Scheffelaar y Dube llevan cuentas separadas
+# (prestadores distintos, sus turnos no chocan entre sí).
 _SLOTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "activacion_slots.json")
 
 
@@ -60,37 +62,48 @@ def _slots_load() -> dict:
         return {}
 
 
-def _slots_key(cliente_slug: str, fecha: str) -> str:
-    return f"{cliente_slug}|{fecha}"
-
-
-def slots_reservados(cliente_slug: str, fecha: str) -> int:
-    """Cuántos turnos ya se agendaron para esa fecha (persistido entre corridas)."""
+def _parse_hhmm(s, default: str = "10:00") -> tuple[int, int]:
     try:
-        return int(_slots_load().get(_slots_key(cliente_slug, fecha), 0))
+        h, m = str(s).split(":")
+        return int(h), int(m)
     except Exception:
-        return 0
+        h, m = default.split(":")
+        return int(h), int(m)
 
 
-def slots_reservar(cliente_slug: str, fecha: str) -> None:
-    """Suma 1 al contador de esa fecha y descarta fechas ya pasadas."""
+def _proximo_habil_desde(d: date) -> date:
+    while d.weekday() >= 5:      # 5=sábado, 6=domingo → saltar al lunes
+        d += timedelta(days=1)
+    return d
+
+
+def siguiente_slot(dt: datetime, h_ini: int, m_ini: int, h_top: int, m_top: int, intervalo: int) -> datetime:
+    """El slot que sigue a dt; si pasa del tope, salta al próximo día hábil al inicio."""
+    nxt = dt + timedelta(minutes=intervalo)
+    tope = nxt.replace(hour=h_top, minute=m_top, second=0, microsecond=0)
+    if nxt <= tope:
+        return nxt
+    d = _proximo_habil_desde(nxt.date() + timedelta(days=1))
+    return datetime(d.year, d.month, d.day, h_ini, m_ini)
+
+
+def slots_next(cliente_slug: str):
+    """Próximo slot libre guardado para ese cliente (datetime) o None."""
+    v = _slots_load().get(cliente_slug)
+    try:
+        return datetime.strptime(v, "%Y-%m-%d %H:%M") if v else None
+    except Exception:
+        return None
+
+
+def slots_set_next(cliente_slug: str, dt: datetime) -> None:
     d = _slots_load()
-    key = _slots_key(cliente_slug, fecha)
-    d[key] = int(d.get(key, 0) or 0) + 1
-    # limpieza: sacar las fechas cuyo turno ya pasó (no sirven más)
-    hoy = date.today()
-    for k in list(d.keys()):
-        try:
-            f = k.split("|", 1)[1]
-            if datetime.strptime(f, "%d/%m/%Y").date() < hoy:
-                del d[k]
-        except Exception:
-            pass
+    d[cliente_slug] = dt.strftime("%Y-%m-%d %H:%M")
     try:
         with open(_SLOTS_FILE, "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        log(f"  (aviso: no pude guardar el contador de turnos: {e})")
+        log(f"  (aviso: no pude guardar el próximo turno: {e})")
 
 
 def _solo_digitos(s: str) -> str:
@@ -172,14 +185,18 @@ def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, limite: int | None = None,
     if not candidatos:
         return {"candidatos": 0, "activadas": 0, "errores": 0}
 
-    fecha = proximo_habil()
-    ya = slots_reservados(cliente_slug, fecha)
-    cur = datetime.strptime(f"{fecha} {HORA_INICIO}", "%d/%m/%Y %H:%M") + timedelta(minutes=INTERVALO_MIN * ya)
-    if ya:
-        log(f"Ya hay {ya} turno(s) agendados hoy para {fecha}: sigo desde {cur.strftime('%H:%M')} "
-            f"(no piso los de las corridas anteriores).")
+    h_ini, m_ini = _parse_hhmm(C.get("activacion_hora_inicio", HORA_INICIO))
+    h_top, m_top = _parse_hhmm(C.get("activacion_hora_tope", "19:00"))
+    intervalo = int(C.get("activacion_intervalo_min", INTERVALO_MIN) or INTERVALO_MIN)
+    d0 = _proximo_habil_desde(date.today() + timedelta(days=1))
+    base = datetime(d0.year, d0.month, d0.day, h_ini, m_ini)   # primer slot del próximo día hábil
+    prev = slots_next(cliente_slug)
+    cur = prev if (prev and prev >= base) else base
+    if cur > base:
+        log(f"Sigo desde el próximo slot libre: {cur:%d/%m/%Y %H:%M} "
+            f"(no piso los turnos de corridas anteriores).")
     else:
-        log(f"Fecha de los turnos: {fecha} (desde {HORA_INICIO}, cada {INTERVALO_MIN} min).")
+        log(f"Turnos desde {cur:%d/%m/%Y %H:%M}, cada {intervalo} min, tope {h_top:02d}:{m_top:02d}.")
 
     ctrl = PamiActivarController(log_callback=log, status_callback=lambda m: None)
     ctrl.abrir_panel(usuario=user, clave=clave, headless=True)
@@ -210,8 +227,8 @@ def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, limite: int | None = None,
                     body={"values": [[marca]]},
                 ).execute()
                 activadas += 1
-                slots_reservar(cliente_slug, fecha)   # el slot quedó ocupado
-                cur += timedelta(minutes=INTERVALO_MIN)  # el próximo turno va 15 min después
+                cur = siguiente_slot(cur, h_ini, m_ini, h_top, m_top, intervalo)  # avanza (con tope/desborde)
+                slots_set_next(cliente_slug, cur)     # persistir el próximo libre
                 log(f"  fila {c['sheet_row']} · {c['nombre']} · OME {c['ome']} → ACTIVADA "
                     f"({entry['fecha']} {entry['hora']}:{entry['minuto']})")
             else:
