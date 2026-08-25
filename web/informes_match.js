@@ -1,0 +1,108 @@
+"use strict";
+// Matcher de informes contra la bandeja, usando el padrón de afiliados.
+//
+// Estrategia (en orden de confianza):
+//   1. Beneficio exacto: del informe, o resuelto vía padrón (DNI -> beneficio).
+//      Clava el paciente sin ambigüedad. Entre sus OMEs se elige la práctica.
+//   2. Nombre (fallback): fuzzy contra la bandeja cuando no hay beneficio.
+// Todo lo dudoso queda marcado para revisión manual (nunca se matchea en silencio).
+
+function soloDigitos(v) { return String(v == null ? "" : v).replace(/\D+/g, ""); }
+function norm(v) {
+  return String(v == null ? "" : v)
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+function tokens(v) { return norm(v).split(" ").filter((t) => t.length >= 2); }
+
+// Similitud de nombres por tokens: cuántos tokens del informe están en el de la
+// bandeja (el informe suele ser prefijo del nombre completo). 0..1.
+function scoreNombre(a, b) {
+  const ta = tokens(a), tb = new Set(tokens(b));
+  if (!ta.length || !tb.size) return 0;
+  let hit = 0;
+  for (const t of ta) if (tb.has(t)) hit += 1;
+  return hit / ta.length;
+}
+
+const CODIGO_CONSULTA = /(^|\D)(8201\d\d|4201\d\d|consulta)/i;
+function esConsulta(practica) { return CODIGO_CONSULTA.test(String(practica || "")); }
+
+// Resuelve el beneficio de un informe: el que trae, o el del padrón por DNI.
+function resolverBeneficio(informe, padronCliente) {
+  const b = soloDigitos(informe.beneficio);
+  if (b) return { beneficio: b, via: "informe" };
+  const dni = soloDigitos(informe.dni);
+  if (dni && padronCliente && padronCliente[dni] && padronCliente[dni].beneficio) {
+    return { beneficio: soloDigitos(padronCliente[dni].beneficio), via: "padron" };
+  }
+  return { beneficio: "", via: null };
+}
+
+// Elige, entre las prestaciones de un mismo paciente, la que corresponde al
+// informe. practicaHint = código/keywords detectados del informe (opcional).
+function elegirPractica(prestaciones, practicaHint) {
+  if (prestaciones.length === 1) return { elegida: prestaciones[0], ambiguo: false };
+  const hint = norm(practicaHint);
+  if (hint) {
+    const porCodigo = prestaciones.filter((p) => soloDigitos(practicaHint) && String(p.practica || "").includes(soloDigitos(practicaHint)));
+    if (porCodigo.length === 1) return { elegida: porCodigo[0], ambiguo: false };
+    const porTexto = prestaciones.filter((p) => hint && norm(p.practica).includes(hint));
+    if (porTexto.length === 1) return { elegida: porTexto[0], ambiguo: false };
+  }
+  const noConsulta = prestaciones.filter((p) => !esConsulta(p.practica));
+  if (noConsulta.length === 1) return { elegida: noConsulta[0], ambiguo: false };
+  return { elegida: null, ambiguo: true };
+}
+
+// informe: { dni, beneficio, nombre, practicaHint }
+// bandeja: [ { nOrden, beneficio, nombre, practica, turno, validada, transmitida } ]
+// padronCliente: { [dni]: { beneficio, ... } }
+// Devuelve { estado, ome, prestacion, via, confianza, candidatos }
+function matchInforme(informe, bandeja, padronCliente) {
+  const { beneficio, via } = resolverBeneficio(informe, padronCliente || {});
+
+  // 1) Camino exacto por beneficio
+  if (beneficio) {
+    const delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio);
+    if (delPaciente.length) {
+      const { elegida, ambiguo } = elegirPractica(delPaciente, informe.practicaHint);
+      if (elegida) {
+        return {
+          estado: elegida.transmitida ? "ya_transmitido" : "ok",
+          ome: elegida.nOrden || "",
+          prestacion: elegida,
+          via: via === "padron" ? "beneficio_padron" : "beneficio_informe",
+          confianza: "alta",
+          candidatos: delPaciente,
+        };
+      }
+      // paciente clavado pero con varias prácticas posibles -> revisar cuál
+      return { estado: "revisar_practica", ome: "", prestacion: null,
+        via: via === "padron" ? "beneficio_padron" : "beneficio_informe",
+        confianza: "media", candidatos: delPaciente };
+    }
+    // tiene beneficio pero no está en la bandeja de este período
+    return { estado: "sin_ome", ome: "", prestacion: null, via: "beneficio", confianza: "media", candidatos: [] };
+  }
+
+  // 2) Fallback por nombre
+  const conScore = bandeja
+    .map((p) => ({ p, s: scoreNombre(informe.nombre, p.nombre) }))
+    .filter((x) => x.s >= 0.6)
+    .sort((a, b) => b.s - a.s);
+  if (!conScore.length) {
+    return { estado: "sin_match", ome: "", prestacion: null, via: null, confianza: "baja", candidatos: [] };
+  }
+  const top = conScore[0].s;
+  const mejores = conScore.filter((x) => x.s >= Math.max(0.6, top - 0.01)).map((x) => x.p);
+  const { elegida, ambiguo } = elegirPractica(mejores, informe.practicaHint);
+  if (elegida && top >= 0.8) {
+    return { estado: elegida.transmitida ? "ya_transmitido" : "ok", ome: elegida.nOrden || "",
+      prestacion: elegida, via: "nombre", confianza: top >= 0.99 ? "media" : "baja", candidatos: mejores };
+  }
+  return { estado: "revisar_nombre", ome: "", prestacion: null, via: "nombre", confianza: "baja",
+    candidatos: mejores.slice(0, 8) };
+}
+
+module.exports = { matchInforme, resolverBeneficio, scoreNombre, soloDigitos, normNombre: norm };

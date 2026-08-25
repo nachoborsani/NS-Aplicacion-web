@@ -81,3 +81,6 @@ ns_bandeja_task.xml
 # Firmas de medicos (dato sensible) — NO van al repo (publico). Van al volumen.
 web/assets/informes/firma-*.png
 web/assets/informes/firma-*.jpg
+
+# OCR: cache descomprimido en runtime (se regenera del .gz)
+web/ocr_data/spa.traineddata
