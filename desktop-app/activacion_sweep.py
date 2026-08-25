@@ -17,6 +17,8 @@ Uso:  python activacion_sweep.py 1     # prueba: solo 1 candidata
 """
 from __future__ import annotations
 
+import json
+import os
 import sys
 from datetime import date, datetime, timedelta
 
@@ -37,6 +39,58 @@ def log(m: str) -> None:
 
 def _cell(row: list, i: int) -> str:
     return str(row[i]).strip() if i < len(row) else ""
+
+
+# --- Contador de turnos ya agendados por (cliente, fecha) ---------------------
+# El turno se agenda desde las 10:00 cada 15 min. Como la cadena corre 3 veces al
+# día (10/17/19:30) y todas apuntan al MISMO día hábil siguiente, sin memoria cada
+# corrida arrancaría de nuevo en 10:00 y pisaría los slots de la corrida anterior.
+# Este contador (persistido en disco) hace que cada corrida siga desde el próximo
+# slot libre. Se guarda por cliente porque Scheffelaar y Dube son prestadores
+# distintos (sus turnos no chocan entre sí).
+_SLOTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "activacion_slots.json")
+
+
+def _slots_load() -> dict:
+    try:
+        with open(_SLOTS_FILE, encoding="utf-8") as f:
+            d = json.load(f)
+            return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _slots_key(cliente_slug: str, fecha: str) -> str:
+    return f"{cliente_slug}|{fecha}"
+
+
+def slots_reservados(cliente_slug: str, fecha: str) -> int:
+    """Cuántos turnos ya se agendaron para esa fecha (persistido entre corridas)."""
+    try:
+        return int(_slots_load().get(_slots_key(cliente_slug, fecha), 0))
+    except Exception:
+        return 0
+
+
+def slots_reservar(cliente_slug: str, fecha: str) -> None:
+    """Suma 1 al contador de esa fecha y descarta fechas ya pasadas."""
+    d = _slots_load()
+    key = _slots_key(cliente_slug, fecha)
+    d[key] = int(d.get(key, 0) or 0) + 1
+    # limpieza: sacar las fechas cuyo turno ya pasó (no sirven más)
+    hoy = date.today()
+    for k in list(d.keys()):
+        try:
+            f = k.split("|", 1)[1]
+            if datetime.strptime(f, "%d/%m/%Y").date() < hoy:
+                del d[k]
+        except Exception:
+            pass
+    try:
+        with open(_SLOTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log(f"  (aviso: no pude guardar el contador de turnos: {e})")
 
 
 def _solo_digitos(s: str) -> str:
@@ -119,8 +173,13 @@ def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, limite: int | None = None,
         return {"candidatos": 0, "activadas": 0, "errores": 0}
 
     fecha = proximo_habil()
-    cur = datetime.strptime(f"{fecha} {HORA_INICIO}", "%d/%m/%Y %H:%M")
-    log(f"Fecha de los turnos: {fecha} (desde {HORA_INICIO}, cada {INTERVALO_MIN} min).")
+    ya = slots_reservados(cliente_slug, fecha)
+    cur = datetime.strptime(f"{fecha} {HORA_INICIO}", "%d/%m/%Y %H:%M") + timedelta(minutes=INTERVALO_MIN * ya)
+    if ya:
+        log(f"Ya hay {ya} turno(s) agendados hoy para {fecha}: sigo desde {cur.strftime('%H:%M')} "
+            f"(no piso los de las corridas anteriores).")
+    else:
+        log(f"Fecha de los turnos: {fecha} (desde {HORA_INICIO}, cada {INTERVALO_MIN} min).")
 
     ctrl = PamiActivarController(log_callback=log, status_callback=lambda m: None)
     ctrl.abrir_panel(usuario=user, clave=clave, headless=True)
@@ -151,13 +210,15 @@ def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, limite: int | None = None,
                     body={"values": [[marca]]},
                 ).execute()
                 activadas += 1
+                slots_reservar(cliente_slug, fecha)   # el slot quedó ocupado
+                cur += timedelta(minutes=INTERVALO_MIN)  # el próximo turno va 15 min después
                 log(f"  fila {c['sheet_row']} · {c['nombre']} · OME {c['ome']} → ACTIVADA "
                     f"({entry['fecha']} {entry['hora']}:{entry['minuto']})")
             else:
                 errores += 1
+                # NO avanzamos el reloj: el slot no se ocupó, lo usa el próximo candidato.
                 log(f"  fila {c['sheet_row']} · {c['nombre']} · OME {c['ome']} → {estado} "
                     f"({getattr(det, 'mensaje', '') if det else ''})")
-            cur += timedelta(minutes=INTERVALO_MIN)
     finally:
         ctrl.cerrar_navegador()
 

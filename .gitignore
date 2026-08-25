@@ -84,3 +84,6 @@ web/assets/informes/firma-*.jpg
 
 # OCR: cache descomprimido en runtime (se regenera del .gz)
 web/ocr_data/spa.traineddata
+
+# estado runtime del contador de turnos de activación
+desktop-app/activacion_slots.json
