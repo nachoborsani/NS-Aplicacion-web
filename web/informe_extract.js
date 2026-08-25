@@ -81,7 +81,12 @@ function extraerDatos(texto, filename) {
   }
   nombre = nombre.replace(/\b(PAMI|RENAL|VESICAL|HOLTER|ETT|ECO|VC)\b/gi, "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
 
-  return { dni, beneficio, nombre, nombreKey: norm(nombre) };
+  // Práctica / estudio (pista para elegir la OME cuando el paciente tiene varias).
+  let practica = "";
+  m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,80})/i);
+  if (m) practica = m[1].replace(/\s+/g, " ").trim();
+
+  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica };
 }
 
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está

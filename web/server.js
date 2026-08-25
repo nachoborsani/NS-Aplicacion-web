@@ -6,6 +6,14 @@ const XLSX = require("xlsx");
 const XLSXStyle = require("xlsx-js-style"); // solo para el Excel con estilo del reporte
 const informes = require("./informes");
 const padronLib = require("./padron");
+const cabinaLib = require("./informes_cabina");
+const informeMatch = require("./informes_match");
+// El motor de extracción usa libs (pdf-parse/mammoth/word-extractor; OCR en diferido
+// con mupdf+tesseract). Se carga GUARDADO: si una dependencia falla al instalar en
+// Railway, el server igual arranca y solo queda deshabilitada la cabina de informes.
+let informeExtract = null;
+try { informeExtract = require("./informe_extract"); }
+catch (e) { console.warn("[informes] motor de extracción no disponible:", e && e.message); }
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -320,6 +328,48 @@ function loadPadron() {
 function savePadron(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(padronFile, JSON.stringify(store, null, 2));
+}
+
+// Cabina de informes: índice por cliente + archivos originales en disco.
+// { [slug]: { items: [ {id, filename, ext, stored, origen, storedAt, extract, match, resuelto, error} ], updatedAt } }
+const informesDir = path.join(dataDir, "informes");
+const informesIndexFile = path.join(dataDir, "informes_index.json");
+function loadInformes() {
+  try { const j = JSON.parse(fs.readFileSync(informesIndexFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function saveInformes(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(informesIndexFile, JSON.stringify(store, null, 2));
+}
+// Corre el match de un informe ya extraído contra la bandeja + padrón del cliente.
+function matchearInforme(slug, extract) {
+  const bandejaRows = cabinaLib.bandejaParaMatcher(loadClientBandejas()[slug]);
+  const padronCliente = loadPadron()[slug] || {};
+  const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre, practicaHint: extract.practica };
+  const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);
+  return {
+    estado: m.estado, ome: m.ome, via: m.via, confianza: m.confianza,
+    etiqueta: cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado,
+    prestacion: m.prestacion ? cabinaLib.candidatoLiviano(m.prestacion) : null,
+    candidatos: (m.candidatos || []).slice(0, 8).map(cabinaLib.candidatoLiviano),
+  };
+}
+// Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
+async function procesarInforme(slug, storedPath, id, stored, filename, origen) {
+  let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
+  let error = null;
+  if (informeExtract) {
+    const r = await informeExtract.procesar(storedPath);
+    extract = { dni: r.dni || "", beneficio: r.beneficio || "", nombre: r.nombre || "",
+                practica: r.practica || "", ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
+    error = r.error || null;
+  } else {
+    error = "El motor de lectura de informes no está disponible en el servidor.";
+  }
+  const match = matchearInforme(slug, extract);
+  return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
+           storedAt: new Date().toISOString(), extract, match, resuelto: null, error };
 }
 // Resumen de cada mes futuro guardado (ordenados por período). Cada uno reusa el
 // mismo cálculo que "hacia adelante".
@@ -3538,6 +3588,33 @@ function extractMultipart(buffer, contentType) {
   if (!result.file) throw new Error("No encontre ningun archivo en la carga.");
   return result;
 }
+
+// Igual que extractMultipart pero junta TODOS los archivos (subida de varios informes).
+function extractMultipartFiles(buffer, contentType) {
+  const match = String(contentType || "").match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw new Error("No se recibió un archivo válido.");
+  const bnd = match[1] || match[2];
+  const boundary = Buffer.from(`--${bnd}`);
+  const result = { fields: {}, files: [] };
+  let cursor = buffer.indexOf(boundary);
+  while (cursor >= 0) {
+    const headerStart = cursor + boundary.length + 2;
+    const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), headerStart);
+    if (headerEnd < 0) break;
+    const headers = buffer.slice(headerStart, headerEnd).toString("latin1");
+    const fieldNameMatch = headers.match(/name="([^"]+)"/i);
+    const fileNameMatch = headers.match(/filename="([^"]+)"/i);
+    const dataStart = headerEnd + 4;
+    const dataEnd = buffer.indexOf(Buffer.from(`\r\n--${bnd}`), dataStart);
+    if (dataEnd >= 0 && fieldNameMatch) {
+      const data = buffer.slice(dataStart, dataEnd);
+      if (fileNameMatch) { if (fileNameMatch[1]) result.files.push({ filename: path.basename(fileNameMatch[1]), data }); }
+      else result.fields[fieldNameMatch[1]] = data.toString("utf8").trim();
+    }
+    cursor = buffer.indexOf(boundary, headerEnd + 4);
+  }
+  return result;
+}
 function sendFile(res, filePath) {
   fs.readFile(filePath, (error, data) => {
     if (error) {
@@ -5250,6 +5327,138 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     return json(res, 404, { error: "No está en el padrón." });
+  }
+
+  // ---- Cabina de informes por cliente (solo admin) ----
+  // Subir informes a mano -> los lee (texto/OCR) y los matchea contra bandeja + padrón.
+  const informesUp = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/upload$/);
+  if (informesUp && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = informesUp[1];
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    if (!informeExtract) return json(res, 503, { error: "El motor de lectura de informes no está disponible en el servidor." });
+    try {
+      const raw = await readBuffer(req, 80 * 1024 * 1024);
+      const mp = extractMultipartFiles(raw, req.headers["content-type"]);
+      if (!mp.files.length) return json(res, 400, { error: "No subiste ningún informe." });
+      const store = loadInformes();
+      if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
+      const destDir = path.join(informesDir, slug);
+      fs.mkdirSync(destDir, { recursive: true });
+      const nuevos = [];
+      for (const f of mp.files) {
+        const ext = path.extname(f.filename).toLowerCase();
+        const id = crypto.randomBytes(8).toString("hex");
+        const stored = id + ext;
+        fs.writeFileSync(path.join(destDir, stored), f.data);
+        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "upload");
+        store[slug].items.unshift(rec);
+        nuevos.push(rec);
+      }
+      store[slug].updatedAt = new Date().toISOString();
+      saveInformes(store);
+      return json(res, 200, { procesados: nuevos.length, items: nuevos });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudieron procesar los informes." });
+    }
+  }
+
+  // Listar los informes de un cliente (con su estado de match).
+  const informesList = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes$/);
+  if (informesList && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = informesList[1];
+    const cli = loadInformes()[slug] || { items: [], updatedAt: "" };
+    const items = cli.items || [];
+    // Contadores por estado para el encabezado.
+    const resumen = {};
+    for (const it of items) {
+      const e = (it.resuelto ? "resuelto" : (it.match && it.match.estado) || "sin_match");
+      resumen[e] = (resumen[e] || 0) + 1;
+    }
+    return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", resumen, items });
+  }
+
+  // Servir el archivo original de un informe (para verlo en la cabina).
+  const informeArch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/archivo$/);
+  if (informeArch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeArch;
+    const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const file = path.join(informesDir, slug, it.stored);
+    if (!fs.existsSync(file)) return json(res, 404, { error: "Archivo no encontrado." });
+    const MIME = { ".pdf": "application/pdf", ".doc": "application/msword",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".tif": "image/tiff", ".tiff": "image/tiff" };
+    const mime = MIME[it.ext] || "application/octet-stream";
+    const inline = /pdf|image/.test(mime);
+    const buf = fs.readFileSync(file);
+    res.writeHead(200, {
+      "content-type": mime,
+      "content-disposition": `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(it.filename)}"`,
+      "content-length": buf.length,
+      "cache-control": "no-store",
+    });
+    return res.end(buf);
+  }
+
+  // Re-matchear un informe (después de actualizar padrón/bandeja) sin volver a leerlo.
+  const informeRe = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/rematch$/);
+  if (informeRe && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeRe;
+    const store = loadInformes();
+    const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    it.match = matchearInforme(slug, it.extract);
+    it.resuelto = null;
+    saveInformes(store);
+    return json(res, 200, { item: it });
+  }
+
+  // Resolver a mano: fijar la OME (y opcionalmente el beneficio) que el operador eligió.
+  const informeResolver = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/resolver$/);
+  if (informeResolver && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeResolver;
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const store = loadInformes();
+    const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const ome = cabinaLib.digs(body.ome);
+    if (!ome) return json(res, 400, { error: "Indicá el número de OME." });
+    it.resuelto = { ome, beneficio: cabinaLib.digs(body.beneficio) || "", por: me.username || me.name || "", at: new Date().toISOString() };
+    saveInformes(store);
+    return json(res, 200, { item: it });
+  }
+
+  // Borrar un informe (y su archivo).
+  const informeDel = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)$/);
+  if (informeDel && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeDel;
+    const store = loadInformes();
+    const cli = store[slug] || { items: [] };
+    const idx = (cli.items || []).findIndex((x) => x.id === id);
+    if (idx < 0) return json(res, 404, { error: "Informe no encontrado." });
+    const [it] = cli.items.splice(idx, 1);
+    try { fs.unlinkSync(path.join(informesDir, slug, it.stored)); } catch {}
+    saveInformes(store);
+    return json(res, 200, { ok: true });
   }
 
   // ---- Credencial provisoria: consulta en vivo a PAMI y devuelve el PDF ----

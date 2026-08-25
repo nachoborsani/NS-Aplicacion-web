@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Padrón de afiliados', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Padrón de afiliados', cabina:'Informes recibidos', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 function togglePagosGroup(el){
@@ -76,8 +76,8 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  if (v === 'padron' && !(ME && ME.role === 'admin')){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','padron','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  if ((v === 'padron' || v === 'cabina') && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -87,6 +87,7 @@ function go(v, el){
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'padron') loadPadronView();
+  if (v === 'cabina') loadCabinaView();
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -309,7 +310,7 @@ function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
   if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -4888,6 +4889,165 @@ async function deletePadronItem(slug, dni){
   if (r.ok) await refreshPadron();
 }
 
+// ===== Cabina de informes recibidos (admin) =====
+var CAB_ITEMS = [];      // items del cliente actual (para abrir el modal sin re-fetch)
+var CAB_ITEM = null;     // item abierto en el modal
+async function loadCabinaView(){
+  var sel = document.getElementById('cabCliente');
+  if (sel && !sel.options.length){
+    try {
+      var r = await fetch('/api/clientes');
+      var raw = await r.json();
+      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+    } catch(e){}
+  }
+  await refreshCabina();
+}
+async function refreshCabina(){
+  var sel = document.getElementById('cabCliente');
+  var slug = sel ? sel.value : '';
+  var body = document.getElementById('cabBody');
+  var meta = document.getElementById('cabResultMeta');
+  var res = document.getElementById('cabResumen');
+  if (!slug){ if(body) body.innerHTML=''; if(res) res.innerHTML=''; if(meta) meta.textContent='Elegí un cliente.'; return; }
+  try {
+    var r = await fetch('/api/clientes/' + slug + '/informes');
+    var d = await r.json();
+    if (!r.ok){ if(meta) meta.textContent = d.error || 'No se pudo cargar.'; return; }
+    CAB_ITEMS = d.items || [];
+    renderCabinaResumen(d.resumen || {}, d.total || 0);
+    renderCabinaRows(slug, CAB_ITEMS);
+    if (meta) meta.textContent = (d.total || 0) + ' informe(s)';
+  } catch(e){ if(meta) meta.textContent = 'Error de red.'; }
+}
+var CAB_ESTADOS = {
+  ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
+  ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
+  revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'}
+};
+function renderCabinaResumen(resumen, total){
+  var res = document.getElementById('cabResumen'); if (!res) return;
+  var orden = ['ok','resuelto','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','sin_match'];
+  var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
+    var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
+    return '<span class="cab-chip '+m.c+'">'+resumen[k]+' '+esc(m.t)+'</span>';
+  });
+  res.innerHTML = total ? chips.join('') : '';
+}
+function cabBadge(it){
+  if (it.resuelto) return '<span class="cab-badge ok">Resuelto a mano</span>';
+  if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
+  var e = it.match ? it.match.estado : 'sin_match';
+  var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
+  return '<span class="cab-badge '+m.c+'">'+esc(m.t)+'</span>';
+}
+function renderCabinaRows(slug, items){
+  var body = document.getElementById('cabBody'); if (!body) return;
+  if (!items.length){ body.innerHTML = '<tr><td colspan="6" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; return; }
+  body.innerHTML = items.map(function(it){
+    var ome = (it.resuelto && it.resuelto.ome) || (it.match && it.match.ome) || '';
+    var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
+    var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
+    return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
+      + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
+      + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
+      + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
+      + '<td>'+cabBadge(it)+'</td>'
+      + '<td>'+(ome?('<b>'+esc(ome)+'</b>'):'—')+'</td>'
+      + '<td class="cab-actions" onclick="event.stopPropagation()">'
+        + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
+        + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
+        + '<button class="rowbtn danger" title="Borrar" onclick="borrarInforme(\''+esc(it.id)+'\')">'+ (typeof SVG_TRASH!=='undefined'?SVG_TRASH:'🗑') +'</button>'
+      + '</td></tr>';
+  }).join('');
+}
+async function uploadInformes(files){
+  if (!files || !files.length) return;
+  var slug = document.getElementById('cabCliente').value;
+  if (!slug){ alert('Elegí un cliente primero.'); document.getElementById('cabFiles').value=''; return; }
+  var fd = new FormData();
+  for (var i=0;i<files.length;i++) fd.append('archivo'+i, files[i]);
+  var meta = document.getElementById('cabResultMeta');
+  if (meta) meta.textContent = 'Leyendo '+files.length+' informe(s)… los escaneados tardan un poco.';
+  try {
+    var r = await fetch('/api/clientes/'+slug+'/informes/upload', { method:'POST', body:fd });
+    var d = await r.json();
+    if (!r.ok) alert(d.error || 'No se pudieron subir los informes.');
+  } catch(e){ alert('Error de red al subir.'); }
+  document.getElementById('cabFiles').value = '';
+  await refreshCabina();
+}
+function abrirInforme(id){
+  var it = CAB_ITEMS.find(function(x){ return x.id === id; }); if (!it) return;
+  CAB_ITEM = it;
+  var slug = document.getElementById('cabCliente').value;
+  document.getElementById('cabModalTitle').textContent = it.filename;
+  document.getElementById('cabModalErr').textContent = '';
+  document.getElementById('cabOmeManual').value = (it.resuelto && it.resuelto.ome) || '';
+  // Vista del archivo original: pdf/imagen embebido; Word no se previsualiza -> link.
+  var frame = document.getElementById('cabFrame');
+  var urlArch = '/api/clientes/'+slug+'/informes/'+id+'/archivo';
+  var esPreview = /\.(pdf|jpe?g|png|tiff?)$/i.test(it.filename);
+  if (esPreview){ frame.style.display=''; frame.src = urlArch; }
+  else { frame.style.display='none'; frame.removeAttribute('src'); }
+  // Datos extraídos.
+  var via = it.match && it.match.via ? it.match.via.replace('beneficio_padron','beneficio (padrón)').replace('beneficio_informe','beneficio (informe)') : '';
+  var datos = '<div class="cab-datos-grid">'
+    + cabDato('Paciente', (it.extract&&it.extract.nombre)||'—')
+    + cabDato('DNI', (it.extract&&it.extract.dni)||'—')
+    + cabDato('Beneficio', (it.extract&&it.extract.beneficio)||'—')
+    + cabDato('Práctica', (it.extract&&it.extract.practica)||'—')
+    + '</div>'
+    + '<div class="cab-estado-line">'+cabBadge(it)+ (via?(' <span class="cab-sub">por '+esc(via)+'</span>'):'')
+    + (it.extract&&it.extract.ocrUsado?' <span class="cab-ocr">OCR</span>':'')
+    + (!esPreview?(' · <a href="'+urlArch+'" target="_blank" rel="noopener">Abrir el Word original</a>'):'') + '</div>';
+  document.getElementById('cabDatos').innerHTML = datos;
+  // Candidatos de la bandeja.
+  var cands = (it.match && it.match.candidatos) || [];
+  var cont = document.getElementById('cabCandidatos');
+  if (!cands.length){ cont.innerHTML = '<div class="cab-sub">Sin candidatos en la bandeja. Fijá la OME a mano si la conocés.</div>'; }
+  else {
+    cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja</div>' + cands.map(function(c){
+      var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
+      return '<div class="cab-cand">'
+        + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
+        + estado
+        + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\')">Usar</button>'
+        + '</div>';
+    }).join('');
+  }
+  showModal('cabinaModal', 'cabinaScrim');
+}
+function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
+function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); CAB_ITEM=null; }
+function usarCandidato(ome){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(); }
+async function resolverInformeManual(){
+  if (!CAB_ITEM) return;
+  var slug = document.getElementById('cabCliente').value;
+  var ome = document.getElementById('cabOmeManual').value.replace(/\D+/g,'');
+  var err = document.getElementById('cabModalErr');
+  if (!ome){ err.textContent = 'Escribí el número de OME.'; return; }
+  var benef = (CAB_ITEM.extract && CAB_ITEM.extract.beneficio) || '';
+  var r = await fetch('/api/clientes/'+slug+'/informes/'+CAB_ITEM.id+'/resolver', {
+    method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ ome:ome, beneficio:benef }) });
+  var d = await r.json();
+  if (!r.ok){ err.textContent = d.error || 'No se pudo confirmar.'; return; }
+  cerrarCabinaModal();
+  await refreshCabina();
+}
+async function reanalizarInforme(id){
+  var slug = document.getElementById('cabCliente').value;
+  var r = await fetch('/api/clientes/'+slug+'/informes/'+id+'/rematch', { method:'POST' });
+  if (r.ok) await refreshCabina(); else { var d=await r.json().catch(function(){return{};}); alert(d.error||'No se pudo reanalizar.'); }
+}
+async function borrarInforme(id){
+  if (!confirm('¿Borrar este informe recibido?')) return;
+  var slug = document.getElementById('cabCliente').value;
+  var r = await fetch('/api/clientes/'+slug+'/informes/'+id, { method:'DELETE' });
+  if (r.ok) await refreshCabina();
+}
+
 var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
 var ME_REAL = null;    // usuario realmente logueado (siempre el admin real)
 var ESPEJO = false;    // modo espejo activo (solo lectura)
@@ -4898,6 +5058,7 @@ function aplicarUsuario(u){
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
   var np = document.getElementById('navPadron'); if (np) np.style.display = (u.role === 'admin') ? '' : 'none';
+  var nc = document.getElementById('navCabina'); if (nc) nc.style.display = (u.role === 'admin') ? '' : 'none';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
@@ -4917,7 +5078,7 @@ function aplicarUsuario(u){
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;
