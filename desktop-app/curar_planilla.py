@@ -203,6 +203,14 @@ def curar(slug: str, apply: bool, todo: bool):
     )
     print(f"\n[APLICADO] {len(updates)} celdas escritas en la planilla.")
 
+    # La credencial se escribió como texto "DESCARGADA" (RAW, para no romper los
+    # ceros de DNI/trámite en las otras celdas). Pero la columna es un link
+    # (=HYPERLINK...): copiamos la fórmula del gemelo para que quede el link vivo.
+    if n_reuso:
+        import credencial_pendientes
+        r = credencial_pendientes.corregir_links_planos(cli)
+        print(f"[LINKS] {r.get('corregidas', 0)} credenciales pasaron de texto a link.")
+
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
