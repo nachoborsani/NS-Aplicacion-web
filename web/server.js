@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
+const XLSXStyle = require("xlsx-js-style"); // solo para el Excel con estilo del reporte
 const informes = require("./informes");
 const padronLib = require("./padron");
 const nomExport = require("./nomenclador_export");
@@ -3030,10 +3031,10 @@ function reportListItem(report) {
     summary,
   };
 }
-// Excel del reporte, pensado para el CLIENTE: contenido limpio (sin datos internos
-// como el nombre del archivo de bandeja o quién lo cerró), moneda formateada y
-// anchos de columna. Usa la librería xlsx (sin dependencias nuevas → sin riesgo).
+// Excel del reporte, client-facing y CON ESTILO (encabezados con color, negrita,
+// bordes, moneda formateada). Usa xlsx-js-style (misma base que xlsx + estilos).
 function buildClientReportWorkbook(report) {
+  const XS = XLSXStyle;
   const rowsForReport = reportRows(report);
   const summaryAll = summarizeReportRows(rowsForReport);
   const modulos = reportCobradoModules(report);
@@ -3043,11 +3044,15 @@ function buildClientReportWorkbook(report) {
   const clientName = String(clientDisplayName(report.clientSlug) || report.clientName || "");
   const periodo = String(report.nomencladorLabel || report.nomencladorPeriod || "");
   const MONEY = '"$"#,##0.00';
-  const wb = XLSX.utils.book_new();
-  // Pone formato de moneda a una celda numérica (por fila/col 0-based).
-  const fmt = (ws, r, c) => {
-    const ref = XLSX.utils.encode_cell({ r, c });
-    if (ws[ref] && typeof ws[ref].v === "number") ws[ref].z = MONEY;
+  const bd = { style: "thin", color: { rgb: "D9DEE1" } };
+  const BORDER = { top: bd, bottom: bd, left: bd, right: bd };
+  const HEAD = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center" }, border: BORDER };
+  const wb = XS.utils.book_new();
+  const setS = (ws, ref, s) => { if (ws[ref]) ws[ref].s = Object.assign({}, ws[ref].s, s); };
+  const styleRow = (ws, rowIdx, ncols, s) => { for (let c = 0; c < ncols; c += 1) setS(ws, XS.utils.encode_cell({ r: rowIdx, c }), s); };
+  const money = (ws, r, c, extra) => {
+    const ref = XS.utils.encode_cell({ r, c });
+    if (ws[ref] && typeof ws[ref].v === "number") { ws[ref].z = MONEY; ws[ref].s = Object.assign({ numFmt: MONEY, alignment: { horizontal: "right" } }, extra || {}); }
   };
 
   // ---- Resumen (client-facing) ----
@@ -3069,11 +3074,15 @@ function buildClientReportWorkbook(report) {
     ["Valor promedio por prestacion", cob.totalRows ? totalCobrado / cob.totalRows : 0],
   ];
   if (report.observations) resumen.push([], ["Observaciones"], [String(report.observations)]);
-  const wsR = XLSX.utils.aoa_to_sheet(resumen);
+  const wsR = XS.utils.aoa_to_sheet(resumen);
   wsR["!cols"] = [{ wch: 34 }, { wch: 20 }];
-  wsR["!merges"] = [XLSX.utils.decode_range("A1:B1"), XLSX.utils.decode_range("A2:B2")];
-  [7, 8, 9, 11, 12, 14].forEach((r) => fmt(wsR, r, 1)); // celdas de $ del resumen
-  XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
+  wsR["!merges"] = [XS.utils.decode_range("A1:B1"), XS.utils.decode_range("A2:B2")];
+  setS(wsR, "A1", { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } });
+  setS(wsR, "A2", { font: { italic: true, color: { rgb: "667079" } } });
+  [7, 8, 11, 12, 14].forEach((r) => money(wsR, r, 1));
+  money(wsR, 9, 1, { font: { bold: true }, fill: { fgColor: { rgb: "E8F1EA" } } });
+  setS(wsR, "A10", { font: { bold: true }, fill: { fgColor: { rgb: "E8F1EA" } } });
+  XS.utils.book_append_sheet(wb, wsR, "Resumen");
 
   // ---- Por especialidad (módulos reales + total) ----
   const porEsp = [["Codigo", "Especialidad", "Consultas", "Practicas / estudios", "Neto cobrado"]];
@@ -3084,11 +3093,14 @@ function buildClientReportWorkbook(report) {
     tc += s.consultations || 0; tp += s.practices || 0;
   }
   porEsp.push([], ["", "TOTAL COBRADO", tc, tp, totalCobrado]);
-  const wsE = XLSX.utils.aoa_to_sheet(porEsp);
+  const wsE = XS.utils.aoa_to_sheet(porEsp);
   wsE["!cols"] = [{ wch: 10 }, { wch: 36 }, { wch: 12 }, { wch: 16 }, { wch: 18 }];
-  for (let r = 1; r <= modulos.length; r += 1) fmt(wsE, r, 4);
-  fmt(wsE, modulos.length + 2, 4); // fila TOTAL
-  XLSX.utils.book_append_sheet(wb, wsE, "Por especialidad");
+  styleRow(wsE, 0, 5, HEAD);
+  for (let r = 1; r <= modulos.length; r += 1) money(wsE, r, 4);
+  const trIdx = modulos.length + 2;
+  styleRow(wsE, trIdx, 5, { font: { bold: true }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
+  money(wsE, trIdx, 4, { font: { bold: true } });
+  XS.utils.book_append_sheet(wb, wsE, "Por especialidad");
 
   // ---- Detalle (columnas útiles, sin campos internos) ----
   const det = [["Paciente", "Beneficio", "OME", "Codigo", "Prestacion", "Modulo", "Turno", "Estado", "Bruto", "Debito", "Neto"]];
@@ -3107,13 +3119,15 @@ function buildClientReportWorkbook(report) {
       reportRowNet(row),
     ]);
   }
-  const wsD = XLSX.utils.aoa_to_sheet(det);
+  const wsD = XS.utils.aoa_to_sheet(det);
   wsD["!cols"] = [{ wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 42 }, { wch: 26 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
   wsD["!autofilter"] = { ref: "A1:K1" };
-  for (let r = 1; r < det.length; r += 1) { fmt(wsD, r, 8); fmt(wsD, r, 9); fmt(wsD, r, 10); }
-  XLSX.utils.book_append_sheet(wb, wsD, "Detalle");
+  wsD["!freeze"] = { xSplit: 0, ySplit: 1 };
+  styleRow(wsD, 0, 11, HEAD);
+  for (let r = 1; r < det.length; r += 1) { money(wsD, r, 8); money(wsD, r, 9); money(wsD, r, 10); }
+  XS.utils.book_append_sheet(wb, wsD, "Detalle");
 
-  return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+  return XS.write(wb, { bookType: "xlsx", type: "buffer" });
 }
 const professionalReportModules = {
   "543": "CARDIOLOGIA",
