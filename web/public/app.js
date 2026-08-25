@@ -4902,6 +4902,49 @@ async function loadCabinaView(){
       list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     } catch(e){}
   }
+  await cargarEstadoMail();
+  await refreshCabina();
+}
+async function cargarEstadoMail(){
+  var card = document.getElementById('cabMailCard');
+  var info = document.getElementById('cabMailInfo');
+  try {
+    var r = await fetch('/api/informes-gmail-estado');
+    var d = await r.json();
+    if (d && d.conectado){
+      if (card) card.style.display = '';
+      if (info) info.textContent = 'Casilla: ' + (d.email || 'conectada');
+      var hoy = new Date().toISOString().slice(0,10);
+      var de = document.getElementById('cabDesde'), ha = document.getElementById('cabHasta');
+      if (de && !de.value) de.value = hoy;
+      if (ha && !ha.value) ha.value = hoy;
+    } else {
+      if (card) card.style.display = 'none';
+    }
+  } catch(e){ if (card) card.style.display = 'none'; }
+}
+async function traerDelMail(){
+  var slug = document.getElementById('cabCliente').value;
+  if (!slug){ alert('Elegí un cliente primero.'); return; }
+  var de = document.getElementById('cabDesde').value, ha = document.getElementById('cabHasta').value;
+  if (!de){ alert('Elegí la fecha desde.'); return; }
+  // Gmail usa "before" exclusivo -> sumamos un día al "hasta" para incluirlo.
+  var desde = de.replace(/-/g,'/');
+  var hastaD = ha ? new Date(ha+'T00:00:00') : new Date(de+'T00:00:00');
+  hastaD.setDate(hastaD.getDate()+1);
+  var hasta = hastaD.getFullYear()+'/'+String(hastaD.getMonth()+1).padStart(2,'0')+'/'+String(hastaD.getDate()).padStart(2,'0');
+  var btn = document.getElementById('cabMailBtn');
+  var meta = document.getElementById('cabResultMeta');
+  if (btn) btn.disabled = true;
+  if (meta) meta.textContent = 'Buscando en el mail y leyendo los informes… puede tardar.';
+  try {
+    var r = await fetch('/api/clientes/'+slug+'/informes/gmail', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ desde:desde, hasta:hasta }) });
+    var d = await r.json();
+    if (!r.ok){ alert(d.error || 'No se pudieron traer los informes.'); }
+    else if (d.procesados === 0){ alert('No había informes nuevos en ese rango.'); }
+    else if (d.hayMas){ alert('Se trajeron '+d.procesados+' informes. Había más: volvé a tocar "Traer del mail" para seguir.'); }
+  } catch(e){ alert('Error de red al traer del mail.'); }
+  if (btn) btn.disabled = false;
   await refreshCabina();
 }
 async function refreshCabina(){

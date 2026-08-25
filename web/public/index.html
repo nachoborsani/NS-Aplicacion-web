@@ -705,6 +705,16 @@
             </div>
           </div>
 
+          <div class="nom-filters card" id="cabMailCard" style="display:none;align-items:end">
+            <div class="field"><label>Desde</label><input class="inp" id="cabDesde" type="date"></div>
+            <div class="field"><label>Hasta</label><input class="inp" id="cabHasta" type="date"></div>
+            <button class="btn btn-primary" id="cabMailBtn" onclick="traerDelMail()">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" style="margin-right:4px"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.7"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Traer del mail
+            </button>
+            <span class="cab-sub" id="cabMailInfo" style="margin-left:auto"></span>
+          </div>
+
           <div id="cabResumen" class="cab-resumen"></div>
 
           <div class="tablecard nom-table">

@@ -14,6 +14,9 @@ const informeMatch = require("./informes_match");
 let informeExtract = null;
 try { informeExtract = require("./informe_extract"); }
 catch (e) { console.warn("[informes] motor de extracción no disponible:", e && e.message); }
+let gmailInformes = null;
+try { gmailInformes = require("./gmail_informes"); }
+catch (e) { console.warn("[informes] descarga de Gmail no disponible:", e && e.message); }
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -5362,6 +5365,70 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { procesados: nuevos.length, items: nuevos });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudieron procesar los informes." });
+    }
+  }
+
+  // Estado de la casilla de mail conectada (para el botón "Traer del mail").
+  if (p === "/api/informes-gmail-estado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!gmailInformes) return json(res, 200, { conectado: false, motivo: "Descarga de mail no disponible." });
+    const token = gmailInformes.cargarToken(dataDir);
+    if (!token) return json(res, 200, { conectado: false, motivo: "Falta autorizar la casilla de informes." });
+    try {
+      const email = await gmailInformes.emailConectado(token);
+      return json(res, 200, { conectado: true, email });
+    } catch (e) {
+      return json(res, 200, { conectado: false, motivo: "No se pudo conectar: " + (e && e.message || e) });
+    }
+  }
+
+  // Traer informes del mail (rango de fechas) -> los baja, los lee y los matchea.
+  const informesGmail = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/gmail$/);
+  if (informesGmail && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = informesGmail[1];
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    if (!informeExtract) return json(res, 503, { error: "El motor de lectura de informes no está disponible." });
+    if (!gmailInformes) return json(res, 503, { error: "La descarga de mail no está disponible." });
+    const token = gmailInformes.cargarToken(dataDir);
+    if (!token) return json(res, 400, { error: "Falta autorizar la casilla de informes (token_gmail_informes.json)." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    // Rango en formato YYYY/MM/DD (before es exclusivo). Por defecto: solo hoy.
+    const fmt = (d) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+    const hoy = new Date();
+    const manana = new Date(hoy.getTime() + 24 * 3600 * 1000);
+    const desde = /^\d{4}\/\d{2}\/\d{2}$/.test(body.desde || "") ? body.desde : fmt(hoy);
+    const hasta = /^\d{4}\/\d{2}\/\d{2}$/.test(body.hasta || "") ? body.hasta : fmt(manana);
+    const TOPE = 40; // por corrida, para no pasar el timeout HTTP de Railway (60s)
+    try {
+      const store = loadInformes();
+      if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
+      const existentes = new Set((store[slug].items || []).map((x) => x.filename));
+      let bajados = await gmailInformes.descargarAdjuntos(token, desde, hasta, (fn) => existentes.has(fn));
+      const hayMas = bajados.length > TOPE;
+      bajados = bajados.slice(0, TOPE);
+      const destDir = path.join(informesDir, slug);
+      fs.mkdirSync(destDir, { recursive: true });
+      const nuevos = [];
+      for (const f of bajados) {
+        const ext = path.extname(f.filename).toLowerCase();
+        const id = crypto.randomBytes(8).toString("hex");
+        const stored = id + ext;
+        fs.writeFileSync(path.join(destDir, stored), f.buffer);
+        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail");
+        store[slug].items.unshift(rec);
+        nuevos.push(rec);
+      }
+      store[slug].updatedAt = new Date().toISOString();
+      saveInformes(store);
+      return json(res, 200, { procesados: nuevos.length, hayMas, desde, hasta, items: nuevos });
+    } catch (error) {
+      return json(res, 400, { error: (error && error.message) || "No se pudieron traer los informes del mail." });
     }
   }
 
