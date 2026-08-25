@@ -25,9 +25,12 @@ CLIENTES = {
         "practicas": ["427122", "427121", "427120", "427109"],
         # A Fecha·B Nombre·C Sexo·D Benef·E Capita·F DNI·G Tramite·H OME·
         # I Credencial·J Motivo·K Datos·L GENERADA·M Validacion·N transmisión
-        "cols": {"nombre": 1, "benef": 3, "dni": 5, "ome": 7, "credencial": 8,
+        "cols": {"nombre": 1, "benef": 3, "dni": 5, "tramite": 6, "ome": 7, "credencial": 8,
                  "generada": 11, "activacion": 12},
         "activacion_marca": "ACTIVADA",
+        # La curación NO exige trámite para reusar credencial: Scheffelaar
+        # identifica al paciente por DNI/benef (su OME no usa el trámite).
+        "curacion_reusa_requiere_tramite": False,
         # Horario de los turnos que se agendan: desde/hasta y cada cuántos min.
         "activacion_hora_inicio": "10:00",
         "activacion_hora_tope": "19:00",
