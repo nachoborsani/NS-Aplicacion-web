@@ -3,7 +3,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
-const ExcelJS = require("exceljs");
 const informes = require("./informes");
 const padronLib = require("./padron");
 const nomExport = require("./nomenclador_export");
@@ -3031,133 +3030,78 @@ function reportListItem(report) {
     summary,
   };
 }
-// Excel del reporte, con estilo y pensado para el CLIENTE (sin datos internos como
-// el nombre del archivo o quién lo cerró). Usa exceljs para encabezados con color,
-// moneda formateada y bordes. Async: exceljs.writeBuffer devuelve promesa.
-async function buildClientReportWorkbook(report) {
+function buildClientReportWorkbook(report) {
   const rowsForReport = reportRows(report);
-  const summaryAll = summarizeReportRows(rowsForReport);
-  const modulos = reportCobradoModules(report);
-  const cobradoRows = modulos.flatMap((m) => m.rows);
-  const cob = summarizeReportRows(cobradoRows);
-  const totalCobrado = modulos.reduce((a, m) => a + m.net, 0);
-  const ausentes = rowsForReport.filter((r) => r.absent && !r.outsideCutoff).length;
-  const clientName = String(clientDisplayName(report.clientSlug) || report.clientName || "");
-  const periodo = String(report.nomencladorLabel || report.nomencladorPeriod || "");
-
-  const MONEY = '"$"#,##0.00';
-  const HEAD_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F4E5F" } };
-  const HEAD_FONT = { bold: true, color: { argb: "FFFFFFFF" } };
-  const thin = { style: "thin", color: { argb: "FFD9DEE1" } };
-  const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
-  const styleHead = (row) => row.eachCell((c) => { c.fill = HEAD_FILL; c.font = HEAD_FONT; c.alignment = { vertical: "middle" }; c.border = BORDER; });
-
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "N&S Salud";
-
-  // ---------- Resumen (client-facing) ----------
-  const rs = wb.addWorksheet("Resumen");
-  rs.columns = [{ width: 36 }, { width: 20 }];
-  rs.mergeCells("A1:B1");
-  const tt = rs.getCell("A1"); tt.value = clientName.toUpperCase();
-  tt.font = { bold: true, size: 16, color: { argb: "FF1F4E5F" } };
-  rs.mergeCells("A2:B2");
-  const st = rs.getCell("A2");
-  st.value = [report.title, periodo].filter(Boolean).join("  ·  ") || "Reporte";
-  st.font = { italic: true, color: { argb: "FF667079" } };
-  let r = 4;
-  const put = (label, value, o) => {
-    o = o || {};
-    const a = rs.getCell(`A${r}`), b = rs.getCell(`B${r}`);
-    a.value = label; b.value = value;
-    a.border = BORDER; b.border = BORDER;
-    b.alignment = { horizontal: "right" };
-    if (o.money) b.numFmt = MONEY;
-    if (o.bold) { a.font = { bold: true }; b.font = { bold: true }; }
-    if (o.fill) { const f = { type: "pattern", pattern: "solid", fgColor: { argb: o.fill } }; a.fill = f; b.fill = f; }
-    r += 1;
-  };
-  put("Cantidad de prestaciones", cob.totalRows);
-  put("Consultas", cob.consultations);
-  put("Practicas / estudios", cob.practices);
-  r += 1;
-  put("Bruto facturable", cob.gross, { money: true });
-  put("Debitos", cob.debit, { money: true });
-  put("NETO COBRADO", totalCobrado, { money: true, bold: true, fill: "FFE8F1EA" });
-  r += 1;
-  put("Proximo periodo (a cobrar)", summaryAll.nextPeriodCutoff, { money: true });
-  put("Falta informe (a recuperar)", summaryAll.missingInformeAmount, { money: true });
-  put("Ausentes (no cobrado)", ausentes);
-  put("Valor promedio por prestacion", cob.totalRows ? totalCobrado / cob.totalRows : 0, { money: true });
-  if (report.observations) {
-    r += 1;
-    const o1 = rs.getCell(`A${r}`); o1.value = "Observaciones"; o1.font = { bold: true }; r += 1;
-    rs.mergeCells(`A${r}:B${r}`);
-    const o2 = rs.getCell(`A${r}`); o2.value = String(report.observations); o2.alignment = { wrapText: true };
-  }
-
-  // ---------- Por especialidad ----------
-  const pe = wb.addWorksheet("Por especialidad");
-  pe.columns = [
-    { header: "Codigo", width: 10 },
-    { header: "Especialidad", width: 36 },
-    { header: "Consultas", width: 12 },
-    { header: "Practicas", width: 12 },
-    { header: "Neto cobrado", width: 18 },
+  const summary = summarizeReportRows(rowsForReport);
+  const wb = XLSX.utils.book_new();
+  const resumen = [
+    ["Reporte", report.title || ""],
+    ["Cliente", clientDisplayName(report.clientSlug) || report.clientName || ""],
+    ["Archivo origen", report.sourceFilename || ""],
+    ["Nomenclador", report.nomencladorLabel || report.nomencladorPeriod || ""],
+    ["Cerrado", report.closedAt || ""],
+    ["Cerrado por", report.closedBy || ""],
+    ["Actualizado", report.updatedAt || ""],
+    ["Actualizado por", report.updatedBy || ""],
+    ["Monto esperado", money(report.expectedAmount)],
+    ["Bruto facturable", money(summary.gross)],
+    ["Debitos", money(summary.debit)],
+    ["Neto estimado", money(summary.net)],
+    ["Proximo periodo por corte", money(summary.nextPeriodCutoff)],
+    ["Falta informe", money(summary.missingInformeAmount)],
+    ["Cantidad falta informe", summary.missingInforme || 0],
+    ["Cantidad de consultas", summary.consultations || 0],
+    ["Importe consultas", money(summary.consultationNet)],
+    ["Cantidad de practicas / estudios", summary.practices || 0],
+    ["Importe practicas / estudios", money(summary.practiceNet)],
+    ["Valor promedio por prestacion", summary.totalRows ? money(summary.net / summary.totalRows) : 0],
+    ["% consultas sobre total", summary.totalRows ? (summary.consultations || 0) / summary.totalRows : 0],
+    ["Ausentes / activas", summary.absent || 0],
+    ["Fuera de corte", summary.outsideCutoff || 0],
+    ["Sin valor", summary.unmatched || 0],
+    [],
+    ["Observaciones"],
+    [report.observations || ""],
   ];
-  styleHead(pe.getRow(1));
-  let tc = 0, tp = 0;
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+  // Desglose por especialidad (los módulos REALES del reporte, como la comparativa).
+  const modulos = reportCobradoModules(report);
+  const porEsp = [["Codigo", "Especialidad", "Consultas", "Practicas / estudios", "Neto cobrado"]];
+  let tc = 0, tp = 0, tn = 0;
   for (const m of modulos) {
     const s = summarizeReportRows(m.rows);
-    const row = pe.addRow([m.code, m.name, s.consultations || 0, s.practices || 0, m.net]);
-    row.getCell(5).numFmt = MONEY;
-    row.eachCell((c) => { c.border = BORDER; });
-    tc += s.consultations || 0; tp += s.practices || 0;
+    porEsp.push([m.code, m.name, s.consultations || 0, s.practices || 0, money(m.net)]);
+    tc += s.consultations || 0; tp += s.practices || 0; tn += m.net;
   }
-  const totalRow = pe.addRow(["", "TOTAL COBRADO", tc, tp, totalCobrado]);
-  totalRow.font = { bold: true };
-  totalRow.getCell(5).numFmt = MONEY;
-  totalRow.eachCell((c) => { c.border = { top: { style: "double", color: { argb: "FF1F4E5F" } } }; });
-  pe.views = [{ state: "frozen", ySplit: 1 }];
-
-  // ---------- Detalle (columnas útiles, sin campos internos) ----------
-  const dt = wb.addWorksheet("Detalle");
-  dt.columns = [
-    { header: "Paciente", key: "pac", width: 26 },
-    { header: "Beneficio", key: "ben", width: 16 },
-    { header: "OME", key: "ome", width: 16 },
-    { header: "Codigo", key: "cod", width: 10 },
-    { header: "Prestacion", key: "pre", width: 42 },
-    { header: "Modulo", key: "mod", width: 26 },
-    { header: "Turno", key: "tur", width: 18 },
-    { header: "Estado", key: "est", width: 16 },
-    { header: "Bruto", key: "bru", width: 14 },
-    { header: "Debito", key: "deb", width: 14 },
-    { header: "Neto", key: "net", width: 14 },
-  ];
-  styleHead(dt.getRow(1));
-  for (const row of rowsForReport) {
-    const rr = dt.addRow({
-      pac: row.patientName || "",
-      ben: row.benefit || "",
-      ome: row.order || "",
-      cod: row.practiceCode || "",
-      pre: row.practiceDescription || row.practiceText || "",
-      mod: [row.moduleCode || "", row.moduleDescription || ""].filter(Boolean).join(" "),
-      tur: row.appointmentLabel || row.appointmentAt || "",
-      est: professionalReportStatus(row),
-      bru: reportRowGross(row),
-      deb: reportRowDebit(row),
-      net: reportRowNet(row),
-    });
-    rr.getCell("bru").numFmt = MONEY;
-    rr.getCell("deb").numFmt = MONEY;
-    rr.getCell("net").numFmt = MONEY;
-  }
-  dt.views = [{ state: "frozen", ySplit: 1 }];
-  dt.autoFilter = "A1:K1";
-
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  porEsp.push([]);
+  porEsp.push(["", "TOTAL COBRADO", tc, tp, money(tn)]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(porEsp), "Por especialidad");
+  const rows = rowsForReport.map((row) => ({
+    Paciente: row.patientName || "",
+    Beneficio: row.benefit || "",
+    OME: row.order || "",
+    "Codigo practica": row.practiceCode || "",
+    Prestacion: row.practiceDescription || row.practiceText || "",
+    Modulo: [row.moduleCode || "", row.moduleDescription || ""].filter(Boolean).join(" "),
+    Turno: row.appointmentLabel || row.appointmentAt || "",
+    Transmision: row.transmittedLabel || row.transmittedAt || "",
+    Estado: row.status || "",
+    Bruto: reportRowGross(row),
+    Debito: reportRowDebit(row),
+    Neto: reportRowNet(row),
+    "Tipo debito": row.manualDebit ? (row.debitType === "pay40" ? "Paga 40%" : row.debitType === "pay60" ? "Paga 60%" : row.debitType === "pay80" ? "Paga 80%" : "Total") : "",
+    "Debito automatico": row.autoDebit ? "Si" : "",
+    "Motivo debito automatico": row.autoDebitReason || "",
+    "Codigo excluyente": row.autoDebitPairCode || "",
+    "Regla PDF": row.autoDebitRulePage ? `Pagina ${row.autoDebitRulePage}` : "",
+    "Codigos regla": row.autoDebitRuleCodes || "",
+    "Valor fuente": row.valueSourceCode || "",
+    "Valor editado": row.valueEdited ? "Si" : "",
+    "Sin valor": (!row.matchFound && !row.valueEdited) ? "Si" : "",
+    "Fuera de corte": row.outsideCutoff ? "Si" : "",
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Practicas");
+  return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
 }
 const professionalReportModules = {
   "543": "CARDIOLOGIA",
@@ -4816,7 +4760,7 @@ const server = http.createServer(async (req, res) => {
     const id = decodeURIComponent(clientReportDownloadMatch[2]);
     const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
-    const buffer = await buildClientReportWorkbook(report);
+    const buffer = buildClientReportWorkbook(report);
     const filename = `${downloadName(report.title || report.sourceFilename || report.id)}.xlsx`;
     res.writeHead(200, {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
