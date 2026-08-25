@@ -20,6 +20,7 @@ import time
 
 import activacion_sweep
 import benef_sweep
+import credencial_pendientes
 import ome_cabecera_sweep
 from cadena_clientes import get_cliente
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
@@ -46,6 +47,24 @@ def _correr_cliente(slug: str, web) -> None:
     except Exception as e:  # noqa: BLE001
         log(f"benef falló (sigo con credencial/OME): {e!r}")
 
+    # --- Paso 1.5: filas ya completas (benef+dni+trámite) SIN credencial → disparar
+    #     la descarga. La cadena por sí sola no las agarra (solo dispara para las filas
+    #     nuevas del barrido); estas ya venían con beneficio. Las que ya tienen la
+    #     credencial en Drive (gemelo) se marcan DESCARGADA en la auto-curación y NO
+    #     entran acá (no se re-bajan, no se duplican). ---
+    log("=== [1.5/4] Credencial de filas completas sin credencial ===")
+    try:
+        r = credencial_pendientes.preparar(C)
+        if r["reusadas"]:
+            log(f"→ {r['reusadas']} fila(s) reusaron credencial ya en Drive (marca DESCARGADA, no se re-baja).")
+        if r["bajar"]:
+            web.correr_credenciales(cred_key, rows=r["bajar"])
+            log(f"→ Disparada la descarga de credencial de {len(r['bajar'])} fila(s) sin credencial.")
+        if not r["reusadas"] and not r["bajar"]:
+            log("Nada pendiente de credencial.")
+    except Exception as e:  # noqa: BLE001
+        log(f"credencial de pendientes falló (sigo): {e!r}")
+
     # --- Paso 2: esperar a que termine la descarga de credenciales. ---
     log("=== [2/4] Descarga de credenciales (espera) ===")
     try:
@@ -59,11 +78,23 @@ def _correr_cliente(slug: str, web) -> None:
         log(f"espera de credencial falló (sigo con OME): {e!r}")
 
     # --- Paso 3: OME de cabecera (solo a los que tienen credencial). ---
+    # En TANDAS: cada run() abre su propio navegador y lo cierra, así procesar un
+    # backlog grande (ej. 46) no acumula contextos y no cierra el navegador a mitad
+    # (el TargetClosedError que vimos con 46 de golpe). Operación normal = 1 tanda.
     log("=== [3/4] Generación de OME de cabecera ===")
     filas_generadas = []
     try:
-        resumen_ome = ome_cabecera_sweep.run(cliente_slug=slug, progress=lambda m: None) or {}
-        filas_generadas = list(resumen_ome.get("filas_con_ome") or [])
+        for _tanda in range(1, 13):  # reintentos con navegador fresco (tope por seguridad)
+            # SIN limite: cada tanda procesa TODAS las candidatas que quedan (las que
+            # ya tienen OME quedan afuera solas). Si una tanda se cae a mitad, la
+            # siguiente arranca con navegador nuevo y termina el resto. (OJO: `limite`
+            # en el sweep limita la VENTANA DE FILAS, no la cantidad de candidatas.)
+            resumen_ome = ome_cabecera_sweep.run(cliente_slug=slug, progress=lambda m: None) or {}
+            nuevas = list(resumen_ome.get("filas_con_ome") or [])
+            filas_generadas.extend(nuevas)
+            log(f"  tanda {_tanda}: {len(nuevas)} OME(s).")
+            if not nuevas:
+                break  # no quedó nada por generar (o lo que queda falla)
     except Exception as e:  # noqa: BLE001
         log(f"OME falló: {e!r}")
 
