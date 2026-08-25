@@ -3099,13 +3099,34 @@ function openDebitosModal(){
   }).join('') : '<tr><td colspan="3" class="muted-cell">No hay debitos en este mes.</td></tr>';
   showModal('debitosModal', 'debitosScrim');
 }
-function openReportPdfModal(id){ REPORT_PDF_ID = id; showModal('reportPdfModal', 'reportPdfScrim'); }
+function openReportPdfModal(id){
+  REPORT_PDF_ID = id;
+  var box = document.getElementById('reportPdfModulesList');
+  if (box) box.innerHTML = '<div class="modal-note" style="padding:8px 2px">Cargando especialidades…</div>';
+  showModal('reportPdfModal', 'reportPdfScrim');
+  loadReportPdfModules(id);
+}
 function closeReportPdfModal(){ hideModal('reportPdfModal', 'reportPdfScrim'); }
+// Arma un botón por cada especialidad REAL del reporte (dinámico, no cardio/traumato fijos).
+async function loadReportPdfModules(id){
+  var box = document.getElementById('reportPdfModulesList');
+  if (!box || !ACTIVE_CLIENT) return;
+  try {
+    var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/reportes/' + encodeURIComponent(id) + '/modulos');
+    var data = await r.json();
+    if (REPORT_PDF_ID !== id) return; // cambió de reporte mientras cargaba
+    var mods = (data && data.modules) || [];
+    box.innerHTML = mods.map(function(m){
+      return '<button type="button" onclick="reportPdfChoose(\'mod:' + esc(String(m.code)) + '\')">'
+        + '<b>🩺 ' + esc(m.name) + '</b><span>Módulo ' + esc(String(m.code)) + ' · ' + esc(moneyFmt(m.net)) + '</span></button>';
+    }).join('');
+  } catch(e){ box.innerHTML = ''; }
+}
 function reportPdfChoose(kind){
   var id = REPORT_PDF_ID; if (!id) return;
   closeReportPdfModal();
   if (kind === 'general') downloadGeneralReportPdf(id);
-  else if (kind === '543' || kind === '546') downloadProfessionalReport(id, kind);
+  else if (kind.indexOf('mod:') === 0) downloadProfessionalReport(id, kind.slice(4));
   else downloadSpecialReportPdf(id, kind);
 }
 var REPORT_DELETE_ID = '';

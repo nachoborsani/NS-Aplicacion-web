@@ -3036,7 +3036,7 @@ function buildClientReportWorkbook(report) {
   const wb = XLSX.utils.book_new();
   const resumen = [
     ["Reporte", report.title || ""],
-    ["Cliente", report.clientName || ""],
+    ["Cliente", clientDisplayName(report.clientSlug) || report.clientName || ""],
     ["Archivo origen", report.sourceFilename || ""],
     ["Nomenclador", report.nomencladorLabel || report.nomencladorPeriod || ""],
     ["Cerrado", report.closedAt || ""],
@@ -3064,6 +3064,18 @@ function buildClientReportWorkbook(report) {
     [report.observations || ""],
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), "Resumen");
+  // Desglose por especialidad (los módulos REALES del reporte, como la comparativa).
+  const modulos = reportCobradoModules(report);
+  const porEsp = [["Codigo", "Especialidad", "Consultas", "Practicas / estudios", "Neto cobrado"]];
+  let tc = 0, tp = 0, tn = 0;
+  for (const m of modulos) {
+    const s = summarizeReportRows(m.rows);
+    porEsp.push([m.code, m.name, s.consultations || 0, s.practices || 0, money(m.net)]);
+    tc += s.consultations || 0; tp += s.practices || 0; tn += m.net;
+  }
+  porEsp.push([]);
+  porEsp.push(["", "TOTAL COBRADO", tc, tp, money(tn)]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(porEsp), "Por especialidad");
   const rows = rowsForReport.map((row) => ({
     Paciente: row.patientName || "",
     Beneficio: row.benefit || "",
@@ -3257,15 +3269,17 @@ function buildRowsPdf(options) {
   return buildPdfBuffer(pageStreams, width, height);
 }
 function buildProfessionalPdf(report, moduleCode) {
-  const moduleLabel = professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
   const rows = reportRows(report).filter((row) =>
     String(row.moduleCode || "") === String(moduleCode)
     && !row.outsideCutoff
     && !reportRowMissingInforme(row)
   );
+  // Nombre del módulo desde las filas reales (o el dict viejo, o "MODULO x").
+  const moduleLabel = (rows.find((r) => r.moduleDescription) || {}).moduleDescription
+    || professionalReportModules[String(moduleCode)] || `MODULO ${moduleCode}`;
   const summary = summarizeReportRows(rows);
   return buildRowsPdf({
-    heading: `SALA MILLON - INFORME ${moduleLabel}`,
+    heading: `${asciiText(clientDisplayName(report.clientSlug))} - INFORME ${asciiText(moduleLabel)}`,
     title: report.title || "Reporte",
     rows,
     total: summary.net,
@@ -3325,43 +3339,57 @@ function buildSpecialReportPdf(report, section) {
     summaryText: `Resumen: prestaciones ${rows.length} - valor recuperable ${pdfMoney(total)}`,
   });
 }
+// Nombre visible del cliente a partir del slug (para encabezados de PDF).
+function clientDisplayName(slug) {
+  try {
+    const c = loadClientsStore().find((x) => x.slug === slug);
+    return (c && c.name) || slug || "";
+  } catch { return slug || ""; }
+}
+// Módulos (especialidades) REALES presentes en lo cobrado del reporte: transmitido,
+// dentro de corte y con informe. Cada uno con sus filas y su neto. Ordenados por neto.
+// Reemplaza el hardcodeo cardio(543)+traumato(546): sirve para cualquier cliente.
+function reportCobradoModules(report) {
+  const rows = reportRows(report).filter((row) => !row.outsideCutoff && !reportRowMissingInforme(row));
+  const map = new Map();
+  for (const row of rows) {
+    const code = String(row.moduleCode || "").trim() || "otros";
+    const name = String(row.moduleDescription || "").trim() || code || "OTROS";
+    if (!map.has(code)) map.set(code, { code, name, rows: [], net: 0 });
+    const m = map.get(code);
+    m.rows.push(row);
+    m.net += reportRowNet(row);
+  }
+  return Array.from(map.values()).sort((a, b) => b.net - a.net);
+}
 function buildGeneralReportPdf(report) {
   const allRows = reportRows(report);
-  const cardioRows = allRows.filter((row) => String(row.moduleCode || "") === "543" && !row.outsideCutoff && !reportRowMissingInforme(row));
-  const traumatoRows = allRows.filter((row) => String(row.moduleCode || "") === "546" && !row.outsideCutoff && !reportRowMissingInforme(row));
+  const modules = reportCobradoModules(report);
   const cutoffRows = allRows.filter((row) => row.outsideCutoff);
   const missingInformeRows = allRows.filter((row) => reportRowMissingInforme(row));
-  const cardioSummary = summarizeReportRows(cardioRows);
-  const traumatoSummary = summarizeReportRows(traumatoRows);
   const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
   const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
-  // El TOTAL del encabezado es SOLO lo cobrado (cardio + traumato = transmitido).
-  // Proximo periodo y falta informe NO estan cobrados: se muestran como secciones
-  // aparte pero no suman al total, para no confundir.
-  const totalCobrado = cardioSummary.net + traumatoSummary.net;
-  const total = totalCobrado;
+  // El TOTAL cobrado es la suma de TODOS los módulos transmitidos (no solo 2).
+  // Próximo período y falta informe NO están cobrados: van como secciones aparte.
+  const totalCobrado = modules.reduce((acc, m) => acc + m.net, 0);
+  const clientName = clientDisplayName(report.clientSlug);
+  const moduleSections = modules.map((m, i) => ({
+    title: `${m.name} - ${pdfMoney(m.net)}`,
+    rows: m.rows,
+    statusForRow: professionalReportStatus,
+    amountForRow: reportRowNet,
+    emptyText: `Sin practicas cobradas de ${m.name}.`,
+    pageBreakBefore: i > 0,
+  }));
+  const resumenModulos = modules.map((m) => `${m.name} ${pdfMoney(m.net)}`).join(" + ");
   return buildRowsPdf({
-    heading: "SALA MILLON - INFORME GENERAL",
+    heading: `${asciiText(clientName)} - INFORME GENERAL`.toUpperCase(),
     title: report.title || "Reporte",
-    total,
+    total: totalCobrado,
     totalLabel: "Total cobrado",
-    detailText: `Solo cardio + traumato. Detalle abajo.`,
+    detailText: `Todos los modulos transmitidos (${modules.length}). Detalle abajo.`,
     sections: [
-      {
-        title: `CARDIOLOGIA - ${pdfMoney(cardioSummary.net)}`,
-        rows: cardioRows,
-        statusForRow: professionalReportStatus,
-        amountForRow: reportRowNet,
-        emptyText: "Sin practicas cobradas de cardiologia.",
-      },
-      {
-        title: `TRAUMATOLOGIA - ${pdfMoney(traumatoSummary.net)}`,
-        rows: traumatoRows,
-        statusForRow: professionalReportStatus,
-        amountForRow: reportRowNet,
-        emptyText: "Sin practicas cobradas de traumatologia.",
-        pageBreakBefore: true,
-      },
+      ...moduleSections,
       {
         title: `PROXIMO PERIODO - a cobrar - ${pdfMoney(cutoffTotal)}`,
         rows: cutoffRows,
@@ -3379,7 +3407,7 @@ function buildGeneralReportPdf(report) {
         pageBreakBefore: true,
       },
     ],
-    summaryText: `Cobrado: cardio ${pdfMoney(cardioSummary.net)} + traumato ${pdfMoney(traumatoSummary.net)} = ${pdfMoney(total)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)}.`,
+    summaryText: `Cobrado (${modules.length} modulos): ${resumenModulos || "-"} = ${pdfMoney(totalCobrado)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)}.`,
   });
 }
 // PDF genérico de una tabla (título + columnas + filas). Reparte el ancho en
@@ -4737,12 +4765,12 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(clientProfessionalReportMatch[1]);
     const id = decodeURIComponent(clientProfessionalReportMatch[2]);
     const moduleCode = decodeURIComponent(clientProfessionalReportMatch[3]);
-    const moduleLabel = professionalReportModules[String(moduleCode)];
-    if (!moduleLabel) return json(res, 400, { error: "Modulo sin informe profesional configurado." });
     const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
     if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const mod = reportCobradoModules(report).find((m) => String(m.code) === String(moduleCode));
+    if (!mod) return json(res, 400, { error: "El reporte no tiene ese modulo." });
     const buffer = buildProfessionalPdf(report, moduleCode);
-    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(moduleLabel)}.pdf`;
+    const filename = `${downloadName(report.title || report.sourceFilename || report.id)}-${downloadName(mod.name)}.pdf`;
     res.writeHead(200, {
       "content-type": "application/pdf",
       "content-disposition": `attachment; filename="${filename}"`,
@@ -4788,6 +4816,20 @@ const server = http.createServer(async (req, res) => {
       "cache-control": "no-store",
     });
     return res.end(buffer);
+  }
+
+  // Módulos (especialidades) reales de un reporte, para armar el modal de descarga
+  // por-especialidad dinámico (en vez del hardcodeo cardio/traumato).
+  const clientReportModulesMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/([^/]+)\/modulos$/);
+  if (clientReportModulesMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientReportModulesMatch[1]);
+    const id = decodeURIComponent(clientReportModulesMatch[2]);
+    const report = (loadClientReportsStore().items || []).find((item) => item.clientSlug === slug && item.id === id);
+    if (!report) return json(res, 404, { error: "Reporte no encontrado." });
+    const modules = reportCobradoModules(report).map((m) => ({ code: m.code, name: m.name, net: m.net, count: m.rows.length }));
+    return json(res, 200, { modules });
   }
 
   if (clientReportDetailMatch && req.method === "PUT") {
