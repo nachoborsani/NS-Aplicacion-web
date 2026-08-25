@@ -3350,7 +3350,7 @@ function clientDisplayName(slug) {
 // dentro de corte y con informe. Cada uno con sus filas y su neto. Ordenados por neto.
 // Reemplaza el hardcodeo cardio(543)+traumato(546): sirve para cualquier cliente.
 function reportCobradoModules(report) {
-  const rows = reportRows(report).filter((row) => !row.outsideCutoff && !reportRowMissingInforme(row));
+  const rows = reportRows(report).filter((row) => !row.outsideCutoff && !reportRowMissingInforme(row) && !row.absent);
   const map = new Map();
   for (const row of rows) {
     const code = String(row.moduleCode || "").trim() || "otros";
@@ -3369,6 +3369,11 @@ function buildGeneralReportPdf(report) {
   const missingInformeRows = allRows.filter((row) => reportRowMissingInforme(row));
   const cutoffTotal = cutoffRows.reduce((acc, row) => acc + reportRowNextPeriodCutoff(row), 0);
   const missingInformeTotal = missingInformeRows.reduce((acc, row) => acc + reportRowMissingInformeAmount(row), 0);
+  // Ausentes (pacientes que faltaron al turno): no se cobran ($0). Van aparte para
+  // no ensuciar lo cobrado. Fuera de corte se muestra en su propia seccion.
+  const absentRows = allRows.filter((row) => row.absent && !row.outsideCutoff);
+  const cobradoRows = modules.flatMap((m) => m.rows);
+  const cobradoSummary = summarizeReportRows(cobradoRows);
   // El TOTAL cobrado es la suma de TODOS los módulos transmitidos (no solo 2).
   // Próximo período y falta informe NO están cobrados: van como secciones aparte.
   const totalCobrado = modules.reduce((acc, m) => acc + m.net, 0);
@@ -3381,13 +3386,12 @@ function buildGeneralReportPdf(report) {
     emptyText: `Sin practicas cobradas de ${m.name}.`,
     pageBreakBefore: i > 0,
   }));
-  const resumenModulos = modules.map((m) => `${m.name} ${pdfMoney(m.net)}`).join(" + ");
   return buildRowsPdf({
     heading: `${asciiText(clientName)} - INFORME GENERAL`.toUpperCase(),
     title: report.title || "Reporte",
     total: totalCobrado,
     totalLabel: "Total cobrado",
-    detailText: `Todos los modulos transmitidos (${modules.length}). Detalle abajo.`,
+    detailText: `Modulos ${modules.length} - Bruto ${pdfMoney(cobradoSummary.gross)} - Debitos ${pdfMoney(cobradoSummary.debit)} = Neto cobrado ${pdfMoney(totalCobrado)}.`,
     sections: [
       ...moduleSections,
       {
@@ -3406,8 +3410,16 @@ function buildGeneralReportPdf(report) {
         emptyText: "Sin practicas con falta de informe.",
         pageBreakBefore: true,
       },
+      {
+        title: `AUSENTES - no cobrado (${absentRows.length})`,
+        rows: absentRows,
+        statusForRow: () => "Ausente",
+        amountForRow: () => 0,
+        emptyText: "Sin ausentes.",
+        pageBreakBefore: true,
+      },
     ],
-    summaryText: `Cobrado (${modules.length} modulos): ${resumenModulos || "-"} = ${pdfMoney(totalCobrado)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)}.`,
+    summaryText: `Cobrado (${modules.length} modulos): Bruto ${pdfMoney(cobradoSummary.gross)} - Debitos ${pdfMoney(cobradoSummary.debit)} = Neto ${pdfMoney(totalCobrado)}. Aparte (no cobrado): proximo periodo ${pdfMoney(cutoffTotal)} - falta informe ${pdfMoney(missingInformeTotal)} - ausentes ${absentRows.length}.`,
   });
 }
 // PDF genérico de una tabla (título + columnas + filas). Reparte el ancho en
