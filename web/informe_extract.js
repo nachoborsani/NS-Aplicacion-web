@@ -39,6 +39,20 @@ async function extraerTexto(filePath) {
 const dig = (s) => String(s == null ? "" : s).replace(/\D+/g, "");
 const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
 
+// Sigla del estudio (en el nombre del archivo o el texto) -> palabra clave con la
+// que aparece en la bandeja, para que el matcher elija la práctica correcta. Solo
+// las inequívocas; "doppler"/"ecografía"/"cardio" son ambiguas (varias prácticas)
+// y se dejan para revisión a mano.
+const _PRACTICA_MAP = [
+  [/\bETT\b|ECOCARDIOGRAMA|ECODOPPLER\s+CARDIACO/i, "ECODOPPLER CARDIACO"],
+  [/\bMAPA\b|PRESUROMETR|MONITOREO\s+AMBULATORIO\s+DE\s+PRESION|PRESION\s+ARTERIAL\s+24/i, "PRESUROMETRIA"],
+  [/\bHOLTER\b/i, "HOLTER"],
+];
+function practicaDe(fuente) {
+  for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente)) return kw;
+  return "";
+}
+
 // Extrae {dni, beneficio, nombre, nombreKey} del texto + nombre de archivo.
 // Porta los patrones que probamos en el motor Python (varios formatos de Caballito).
 function extraerDatos(texto, filename) {
@@ -91,9 +105,13 @@ function extraerDatos(texto, filename) {
   nombre = nombre.replace(/\b(PAMI|RENAL|VESICAL|HOLTER|ETT|ECO|VC)\b/gi, "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
 
   // Práctica / estudio (pista para elegir la OME cuando el paciente tiene varias).
-  let practica = "";
-  m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,80})/i);
-  if (m) practica = m[1].replace(/\s+/g, " ").trim();
+  // 1º la sigla del estudio mapeada a la palabra con que figura en la bandeja
+  // (ETT→ECODOPPLER CARDIACO, MAPA→PRESUROMETRIA, HOLTER); si no, el texto libre.
+  let practica = practicaDe((fn + " " + t.slice(0, 400)).replace(/_/g, " "));
+  if (!practica) {
+    m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,80})/i);
+    if (m) practica = m[1].replace(/\s+/g, " ").trim();
+  }
 
   return { dni, beneficio, nombre, nombreKey: norm(nombre), practica };
 }
