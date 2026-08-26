@@ -740,6 +740,11 @@
               <div class="cab-datos" id="cabDatos"></div>
               <div class="cab-candidatos" id="cabCandidatos"></div>
               <div class="cab-manual">
+                <label class="field" style="flex:1"><span style="font-size:12px;font-weight:750;color:var(--text-2)">Cargar beneficio (lo aprende el padrón por DNI)</span>
+                  <input class="inp" id="cabBenefManual" inputmode="numeric" placeholder="N° de beneficio" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></label>
+                <button class="btn btn-primary" onclick="guardarBeneficioInforme()">Guardar beneficio</button>
+              </div>
+              <div class="cab-manual">
                 <label class="field" style="flex:1"><span style="font-size:12px;font-weight:750;color:var(--text-2)">Fijar OME a mano</span>
                   <input class="inp" id="cabOmeManual" inputmode="numeric" placeholder="N° de OME" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></label>
                 <button class="btn btn-primary" onclick="resolverInformeManual()">Confirmar OME</button>

@@ -43,7 +43,7 @@ function beneficioLimpio(v) {
 
 // Deja un candidato liviano para el índice (no guardamos toda la fila de la bandeja).
 function candidatoLiviano(p) {
-  return { ome: p.nOrden || "", nombre: p.nombre || "", practica: p.practica || "",
+  return { ome: p.nOrden || "", beneficio: p.beneficio || "", nombre: p.nombre || "", practica: p.practica || "",
            turno: p.turno || "", transmitida: !!p.transmitida, validada: !!p.validada };
 }
 

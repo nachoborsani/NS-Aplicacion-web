@@ -5056,7 +5056,7 @@ function abrirInforme(id){
       return '<div class="cab-cand">'
         + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
         + estado
-        + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\')">Usar</button>'
+        + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
         + '</div>';
     }).join('');
   }
@@ -5064,20 +5064,36 @@ function abrirInforme(id){
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); CAB_ITEM=null; }
-function usarCandidato(ome){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(); }
-async function resolverInformeManual(){
+function usarCandidato(ome, beneficio){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(beneficio||''); }
+async function resolverInformeManual(benefOverride){
   if (!CAB_ITEM) return;
   var slug = document.getElementById('cabCliente').value;
   var ome = document.getElementById('cabOmeManual').value.replace(/\D+/g,'');
   var err = document.getElementById('cabModalErr');
   if (!ome){ err.textContent = 'Escribí el número de OME.'; return; }
-  var benef = (CAB_ITEM.extract && CAB_ITEM.extract.beneficio) || '';
+  var benef = benefOverride || (CAB_ITEM.extract && CAB_ITEM.extract.beneficio) || '';
   var r = await fetch('/api/clientes/'+slug+'/informes/'+CAB_ITEM.id+'/resolver', {
     method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ ome:ome, beneficio:benef }) });
   var d = await r.json();
   if (!r.ok){ err.textContent = d.error || 'No se pudo confirmar.'; return; }
   cerrarCabinaModal();
   await refreshCabina();
+}
+// Guardar el beneficio (lo aprende en el padrón por DNI) y re-matchear. Para los
+// "No se encontró": el operador lo busca en PAMI y lo carga una sola vez.
+async function guardarBeneficioInforme(){
+  if (!CAB_ITEM) return;
+  var slug = document.getElementById('cabCliente').value;
+  var ben = (document.getElementById('cabBenefManual').value||'').replace(/\D+/g,'');
+  var err = document.getElementById('cabModalErr');
+  if (ben.length < 10){ err.textContent = 'El beneficio tiene que tener al menos 10 dígitos.'; return; }
+  var r = await fetch('/api/clientes/'+slug+'/informes/'+CAB_ITEM.id+'/beneficio', {
+    method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ beneficio:ben }) });
+  var d = await r.json();
+  if (!r.ok){ err.textContent = d.error || 'No se pudo guardar.'; return; }
+  var idAct = CAB_ITEM.id;
+  await refreshCabina();               // actualiza la lista con el re-match
+  abrirInforme(idAct);                 // reabre con el resultado (quedó ok, o hay que elegir práctica)
 }
 async function reanalizarInforme(id){
   var slug = document.getElementById('cabCliente').value;

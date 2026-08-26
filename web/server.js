@@ -5506,9 +5506,53 @@ const server = http.createServer(async (req, res) => {
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
     const ome = cabinaLib.digs(body.ome);
     if (!ome) return json(res, 400, { error: "Indicá el número de OME." });
-    it.resuelto = { ome, beneficio: cabinaLib.digs(body.beneficio) || "", por: me.username || me.name || "", at: new Date().toISOString() };
+    const benef = cabinaLib.digs(body.beneficio) || "";
+    it.resuelto = { ome, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString() };
+    // Al resolver con "Usar", aprendemos el DNI↔beneficio en el padrón: la próxima
+    // vez ese paciente matchea solo (sin volver a resolver a mano).
+    const dniR = cabinaLib.digs(it.extract && it.extract.dni);
+    if (dniR && benef) {
+      const pad = loadPadron();
+      if (!pad[slug]) pad[slug] = {};
+      padronLib.mergeRows(pad[slug], [{ dni: dniR, beneficio: benef, nombre: (it.extract && it.extract.nombre) || "", tramite: "" }],
+        "cabina:" + (me.username || me.name || "admin"), new Date().toISOString());
+      savePadron(pad);
+    }
     saveInformes(store);
     return json(res, 200, { item: it });
+  }
+
+  // Cargarle el beneficio a un informe: lo aprende en el padrón (por DNI, si lo
+  // tiene) y re-matchea. Sirve para los "No se encontró": el operador busca el
+  // paciente en PAMI, trae el beneficio y con esto queda cargado para siempre.
+  const informeBenef = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/beneficio$/);
+  if (informeBenef && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeBenef;
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const ben = cabinaLib.digs(body.beneficio);
+    if (!ben || ben.length < 10) return json(res, 400, { error: "El beneficio tiene que tener al menos 10 dígitos." });
+    const store = loadInformes();
+    const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const dni = cabinaLib.digs(it.extract && it.extract.dni);
+    let padronActualizado = false;
+    if (dni) {
+      const pad = loadPadron();
+      if (!pad[slug]) pad[slug] = {};
+      const r = padronLib.mergeRows(pad[slug], [{ dni, beneficio: ben, nombre: (it.extract && it.extract.nombre) || "", tramite: "" }],
+        "cabina:" + (me.username || me.name || "admin"), new Date().toISOString());
+      savePadron(pad);
+      padronActualizado = (r.creados + r.actualizados) > 0;
+    }
+    // También lo dejamos en el propio informe, así matchea aunque no tenga DNI.
+    it.extract = { ...(it.extract || {}), beneficio: ben };
+    it.match = matchearInforme(slug, it.extract);
+    saveInformes(store);
+    return json(res, 200, { item: it, padronActualizado, dni });
   }
 
   // Borrar un informe (y su archivo).
