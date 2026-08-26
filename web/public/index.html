@@ -720,7 +720,10 @@
           <div class="tablecard nom-table">
             <div class="table-head">
               <div><b id="cabResultTitle">Informes</b><span id="cabResultMeta">Elegí un cliente.</span></div>
-              <div style="display:flex;gap:6px">
+              <div style="display:flex;gap:6px;align-items:center">
+                <span id="cabTareaEstado" style="font-size:12px;color:#51657a"></span>
+                <button class="btn btn-ghost btn-sm" onclick="tareaCabina('auditar-informes')" title="Verificar en PAMI qué está subido">🔍 Auditar</button>
+                <button class="btn btn-primary btn-sm" onclick="tareaCabina('subir-informes')" title="Subir los informes a PAMI">⬆️ Subir a PAMI</button>
                 <button class="btn btn-ghost btn-sm" onclick="descargarCabina('xlsx')" title="Descargar Excel">📊 Excel</button>
                 <button class="btn btn-ghost btn-sm" onclick="descargarCabina('pdf')" title="Descargar PDF">📄 PDF</button>
               </div>

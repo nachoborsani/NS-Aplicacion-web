@@ -4923,6 +4923,54 @@ function descargarCabina(fmt){
   a.href = '/api/clientes/' + slug + '/informes/export.' + fmt;
   document.body.appendChild(a); a.click(); a.remove();
 }
+// Informes a mandar a PAMI: los VISIBLES (filtrados por fecha). Para subir, solo
+// los "listo para subir" / resueltos; para auditar, todos los del rango.
+function cabIdsParaTarea(tipo){
+  var de=(document.getElementById('cabDesde')||{}).value||'', ha=(document.getElementById('cabHasta')||{}).value||'';
+  var vis=CAB_ITEMS.filter(function(it){ var f=cabFecha(it); if(!f)return true; if(de&&f<de)return false; if(ha&&f>ha)return false; return true; });
+  if (tipo==='subir-informes'){
+    return vis.filter(function(it){ var e=it.resuelto?'resuelto':(it.match&&it.match.estado); return e==='ok'||e==='resuelto'; }).map(function(it){return it.id;});
+  }
+  return vis.map(function(it){return it.id;});
+}
+async function tareaCabina(tipo){
+  var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
+  var ids=cabIdsParaTarea(tipo);
+  if(!ids.length){ alert(tipo==='subir-informes'?'No hay informes listos para subir en este rango.':'No hay informes para auditar en este rango.'); return; }
+  if(tipo==='subir-informes' && !confirm('Vas a SUBIR '+ids.length+' informe(s) a PAMI.\n\nEsto es real e irreversible. ¿Confirmás?')) return;
+  var est=document.getElementById('cabTareaEstado'); if(est) est.textContent='Creando tarea…';
+  try{
+    var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:tipo,clientSlug:slug,payload:{informeIds:ids}})});
+    var d=await r.json();
+    if(!r.ok){ if(est) est.textContent=''; alert(d.error||'No se pudo crear la tarea.'); return; }
+    seguirTarea(d.task.id, tipo);
+  }catch(e){ if(est) est.textContent=''; alert('Error de red al crear la tarea.'); }
+}
+function seguirTarea(id, tipo){
+  var est=document.getElementById('cabTareaEstado');
+  var etiqueta=(tipo==='subir-informes')?'Subiendo':'Auditando';
+  var vueltas=0;
+  var timer=setInterval(async function(){
+    vueltas++;
+    try{
+      var d=await fetch('/api/admin/worker/tasks').then(function(r){return r.json();});
+      var t=(d.tasks||[]).find(function(x){return x.id===id;});
+      if(!t) return;
+      if(t.status==='pending'){ if(est) est.textContent=etiqueta+'… (esperando al worker de la PC'+(vueltas>6?' — ¿está prendido?':'')+')'; return; }
+      if(t.status==='running'){ var lg=(t.logs&&t.logs.length)?t.logs[t.logs.length-1].message:''; if(est) est.textContent=etiqueta+'… '+String(lg).slice(0,60); return; }
+      clearInterval(timer);
+      if(est) est.textContent='';
+      if(t.status==='done'){
+        var res=t.result||{};
+        if(tipo==='subir-informes') alert('Subida terminada: '+(res.subidos||0)+' de '+(res.total||0)+' informe(s) subidos a PAMI.');
+        else alert('Auditoría en PAMI: '+(res.con_doc||0)+' de '+(res.total||0)+' con documentación cargada.');
+        await refreshCabina();
+      } else {
+        alert('La tarea falló: '+(t.error||'error del worker.'));
+      }
+    }catch(e){}
+  }, 3000);
+}
 async function cargarEstadoMail(){
   var card = document.getElementById('cabMailCard');
   var info = document.getElementById('cabMailInfo');

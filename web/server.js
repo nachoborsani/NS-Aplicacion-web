@@ -3840,19 +3840,30 @@ const server = http.createServer(async (req, res) => {
     const state = loadWorkerState();
     return json(res, 200, { tasks: (state.tasks || []).map(publicWorkerTask) });
   }
+  // El worker se autoconfigura: logueado como admin obtiene el token de la cola.
+  if (p === "/api/admin/worker/token" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    return json(res, 200, { token: WORKER_TOKEN || "" });
+  }
   if (p === "/api/admin/worker/tasks" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
-    const allowed = new Set(["healthcheck", "bandeja-sync"]);
+    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes"]);
     if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
+    const LABELS = {
+      healthcheck: "Prueba de worker", "bandeja-sync": "Sincronizar bandeja",
+      "auditar-informes": "Verificar informes en PAMI", "subir-informes": "Subir informes a PAMI",
+    };
     const state = loadWorkerState();
     const task = {
       id: crypto.randomUUID(),
       type,
-      label: String((body && body.label) || (type === "healthcheck" ? "Prueba de worker" : "Sincronizar bandeja")).slice(0, 120),
+      label: String((body && body.label) || LABELS[type] || type).slice(0, 120),
       status: "pending",
       clientSlug: String((body && body.clientSlug) || "").trim().slice(0, 80),
       payload: body && body.payload && typeof body.payload === "object" ? body.payload : {},
