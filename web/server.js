@@ -5332,6 +5332,54 @@ const server = http.createServer(async (req, res) => {
     return json(res, 404, { error: "No está en el padrón." });
   }
 
+  // DNIs que necesitan que les busquen el beneficio en PAMI: afiliados del padrón
+  // con DNI y sin beneficio + informes sin resolver que traen DNI. Lo consume el
+  // barrido de la PC (completar_padron_pami.py).
+  const padronFaltan = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron\/faltan-beneficio$/);
+  if (padronFaltan && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = padronFaltan[1];
+    const pad = loadPadron()[slug] || {};
+    const faltan = new Map(); // dni -> nombre
+    for (const it of Object.values(pad)) {
+      if (it.dni && !it.beneficio) faltan.set(it.dni, it.nombre || "");
+    }
+    const infs = ((loadInformes()[slug] || {}).items) || [];
+    for (const it of infs) {
+      const dni = ((it.extract && it.extract.dni) || "").replace(/\D+/g, "");
+      const ben = ((it.extract && it.extract.beneficio) || "").replace(/\D+/g, "");
+      const est = it.match && it.match.estado;
+      if (!dni || ben || est === "ok" || est === "ya_transmitido") continue;
+      if (pad[dni] && pad[dni].beneficio) continue;
+      if (!faltan.has(dni)) faltan.set(dni, (it.extract && it.extract.nombre) || "");
+    }
+    return json(res, 200, { total: faltan.size, items: [...faltan].map(([dni, nombre]) => ({ dni, nombre })) });
+  }
+
+  // Carga masiva de beneficios al padrón (lo que trae el barrido de PAMI).
+  const padronCompletar = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron\/completar$/);
+  if (padronCompletar && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = padronCompletar[1];
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const rows = (Array.isArray(body.items) ? body.items : []).map((x) => ({
+      dni: String(x.dni || "").replace(/\D+/g, ""),
+      beneficio: String(x.beneficio || "").replace(/\D+/g, ""),
+      nombre: String(x.nombre || "").trim(),
+      tramite: String(x.tramite || "").replace(/\D+/g, ""),
+    })).filter((r) => r.dni && r.beneficio);
+    const store = loadPadron();
+    if (!store[slug]) store[slug] = {};
+    const r = padronLib.mergeRows(store[slug], rows, "pami-sweep", new Date().toISOString());
+    savePadron(store);
+    return json(res, 200, { creados: r.creados, actualizados: r.actualizados, sinCambio: r.sinCambio, recibidos: rows.length });
+  }
+
   // ---- Cabina de informes por cliente (solo admin) ----
   // Subir informes a mano -> los lee (texto/OCR) y los matchea contra bandeja + padrón.
   const informesUp = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/upload$/);
