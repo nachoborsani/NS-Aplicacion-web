@@ -274,7 +274,7 @@ def _contar_transmitidas(rows: list[dict]) -> int:
 
 
 def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
-                transmitir: bool = False) -> dict:
+                transmitir: bool = False, forzar_transmision: bool = False) -> dict:
     """Baja la bandeja de un cliente y la sube. Si transmitir=True y todavía no se
     transmitió hoy, corre el bot de transmisión ANTES de exportar (1x/día). Nunca
     lanza: devuelve el resultado."""
@@ -289,7 +289,10 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
 
     # La corrida de la tarde (fin del día) transmite y baja HASTA HOY (los
     # consultorios ya cerraron); la del mediodía es read-only y hasta ayer.
-    es_fin_dia = datetime.now().hour >= _HORA_FIN_DIA_H
+    # forzar_transmision (corrida manual): transmite a CUALQUIER hora. El user lo
+    # pidió explícito — "cada vez que bajes la bandeja, antes transmití, no importa
+    # el horario". El scheduler automático NO fuerza (conserva la ventana de las 19h).
+    es_fin_dia = forzar_transmision or datetime.now().hour >= _HORA_FIN_DIA_H
     desde, hasta, label = month_range(period, hasta_hoy=es_fin_dia)
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
     transmit_info = None
@@ -394,7 +397,8 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
 
 def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
              base_url: str = "", admin_user: str = "", admin_pass: str = "",
-             progress=None, transmitir: bool | None = None) -> list[dict]:
+             progress=None, transmitir: bool | None = None,
+             forzar_transmision: bool = False) -> list[dict]:
     """Recorre los clientes de la web y sincroniza la bandeja de cada uno.
 
     Se conecta con una cuenta ADMIN (el endpoint de credenciales es admin-only).
@@ -405,6 +409,8 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
     web = NSWebClient(base_url or cfg.get("base_url") or DEFAULT_BASE_URL)
     web.login(admin_user or cfg.get("username", ""), admin_pass or cfg.get("password", ""))
     period = period or _current_period()
+    if forzar_transmision:
+        transmitir = True  # forzar implica transmitir sí o sí
     if transmitir is None:
         try:
             import bandeja_schedule
@@ -425,7 +431,8 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
             if progress:
                 progress(f"{client.get('name', slug)}: omitido (no baja bandeja)")
             continue
-        res = sync_client(web, client, period, progress=progress, transmitir=transmitir)
+        res = sync_client(web, client, period, progress=progress, transmitir=transmitir,
+                          forzar_transmision=forzar_transmision)
         # Reportamos el resultado (ok/error + transmisión) para el indicador de salud.
         try:
             t = res.get("transmit") or {}
@@ -442,10 +449,19 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
 
 
 if __name__ == "__main__":  # pragma: no cover
-    period_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    slugs_arg = sys.argv[2].split(",") if len(sys.argv) > 2 else None
-    print(f"Sincronizando bandeja {period_arg or _current_period()} …")
-    resultados = sync_all(period_arg, only_slugs=slugs_arg, progress=lambda m: print("  ", m))
+    # Flags: --transmitir (fuerza transmitir=True), --forzar (transmite a cualquier
+    # hora, saltando el candado de las 19h; implica --transmitir). Uso manual:
+    #   python bandeja_sync.py 2026-08 caballito-pediatrico --forzar
+    _pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    _flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    period_arg = _pos[0] if len(_pos) > 0 else None
+    slugs_arg = _pos[1].split(",") if len(_pos) > 1 else None
+    forzar = "--forzar" in _flags
+    transmitir_arg = True if ("--transmitir" in _flags or forzar) else None
+    print(f"Sincronizando bandeja {period_arg or _current_period()} "
+          + ("(transmitiendo, forzado) …" if forzar else "…"))
+    resultados = sync_all(period_arg, only_slugs=slugs_arg, transmitir=transmitir_arg,
+                          forzar_transmision=forzar, progress=lambda m: print("  ", m))
     for r in resultados:
         estado = f"OK — {r.get('count')} filas" if r.get("ok") else f"FALLO — {r.get('error')}"
         print(f"  {r['name'][:32]:32} -> {estado}")
