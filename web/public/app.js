@@ -5032,6 +5032,9 @@ function abrirInforme(id){
   document.getElementById('cabModalTitle').textContent = it.filename;
   document.getElementById('cabModalErr').textContent = '';
   document.getElementById('cabOmeManual').value = (it.resuelto && it.resuelto.ome) || '';
+  // El beneficio a mano arranca vacío en cada paciente (o con el que ya tenga el
+  // informe). Sin esto quedaba pegado el del paciente anterior -> riesgo de guardarlo mal.
+  document.getElementById('cabBenefManual').value = (it.extract && it.extract.beneficio) || '';
   // Vista del archivo original: pdf/imagen embebido; Word no se previsualiza -> link.
   var frame = document.getElementById('cabFrame');
   var urlArch = '/api/clientes/'+slug+'/informes/'+id+'/archivo';
