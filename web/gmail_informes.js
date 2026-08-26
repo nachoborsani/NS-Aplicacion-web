@@ -69,6 +69,9 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
     let msg;
     try { msg = await gmail.users.messages.get({ userId: "me", id, format: "full" }); }
     catch { continue; }
+    // Fecha del mail (YYYY-MM-DD) para poder filtrar los informes por período.
+    let fecha = "";
+    try { const d = new Date(Number(msg.data.internalDate)); if (!isNaN(d)) fecha = d.toISOString().slice(0, 10); } catch { /* sin fecha */ }
     for (const part of iterarPartes(msg.data.payload || {})) {
       const filename = String(part.filename || "").trim();
       if (!filename || !TIPOS_ACEPTADOS.has(part.mimeType)) continue;
@@ -85,7 +88,7 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
       }
       if (!data) continue;
       vistos.add(safe);
-      bajados.push({ filename: safe, buffer: Buffer.from(data, "base64") });
+      bajados.push({ filename: safe, buffer: Buffer.from(data, "base64"), fecha });
     }
   }
   return bajados;

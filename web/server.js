@@ -359,7 +359,7 @@ function matchearInforme(slug, extract) {
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
-async function procesarInforme(slug, storedPath, id, stored, filename, origen) {
+async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha) {
   let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
   let error = null;
   if (informeExtract) {
@@ -372,7 +372,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen) {
   }
   const match = matchearInforme(slug, extract);
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
-           storedAt: new Date().toISOString(), extract, match, resuelto: null, error };
+           storedAt: new Date().toISOString(), fecha: fecha || "", extract, match, resuelto: null, error };
 }
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
 function informesExportRows(items) {
@@ -5532,7 +5532,7 @@ const server = http.createServer(async (req, res) => {
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
         fs.writeFileSync(path.join(destDir, stored), f.buffer);
-        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail");
+        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha);
         store[slug].items.unshift(rec);
         nuevos.push(rec);
       }

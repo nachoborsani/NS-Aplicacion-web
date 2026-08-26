@@ -4906,6 +4906,11 @@ async function loadCabinaView(){
           .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     } catch(e){}
   }
+  // Las fechas también filtran qué informes se muestran (no solo la bajada del mail).
+  ['cabDesde','cabHasta'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el && !el._cabHooked){ el._cabHooked = true; el.addEventListener('change', aplicarFiltroCabina); }
+  });
   await cargarEstadoMail();
   await refreshCabina();
 }
@@ -4972,10 +4977,36 @@ async function refreshCabina(){
     var d = await r.json();
     if (!r.ok){ if(meta) meta.textContent = d.error || 'No se pudo cargar.'; return; }
     CAB_ITEMS = d.items || [];
-    renderCabinaResumen(d.resumen || {}, d.total || 0);
-    renderCabinaRows(slug, CAB_ITEMS);
-    if (meta) meta.textContent = (d.total || 0) + ' informe(s)';
+    aplicarFiltroCabina();
   } catch(e){ if(meta) meta.textContent = 'Error de red.'; }
+}
+// Fecha del informe para filtrar/mostrar: la del mail si la tenemos, si no cuándo se bajó.
+function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').slice(0,10); }
+function cabResumenDe(items){
+  var r = {};
+  items.forEach(function(it){
+    var e = it.resuelto ? 'resuelto' : (it.match ? it.match.estado : 'sin_match');
+    r[e] = (r[e]||0)+1;
+  });
+  return r;
+}
+// Filtra los informes por el rango Desde/Hasta (inclusive, para mostrar) y renderiza.
+function aplicarFiltroCabina(){
+  var slug = (document.getElementById('cabCliente')||{}).value || '';
+  var de = (document.getElementById('cabDesde')||{}).value || '';
+  var ha = (document.getElementById('cabHasta')||{}).value || '';
+  var vis = CAB_ITEMS.filter(function(it){
+    var f = cabFecha(it);
+    if (!f) return true;                 // sin fecha -> siempre visible
+    if (de && f < de) return false;
+    if (ha && f > ha) return false;      // "hasta" INCLUSIVE al mostrar
+    return true;
+  });
+  renderCabinaResumen(cabResumenDe(vis), vis.length);
+  renderCabinaRows(slug, vis);
+  var meta = document.getElementById('cabResultMeta');
+  if (meta) meta.textContent = vis.length + ' informe(s)' +
+    (vis.length !== CAB_ITEMS.length ? ' (de ' + CAB_ITEMS.length + ' — el resto queda fuera del rango de fechas)' : '');
 }
 var CAB_ESTADOS = {
   ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
