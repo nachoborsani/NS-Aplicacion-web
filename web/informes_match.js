@@ -39,6 +39,24 @@ function resolverBeneficio(informe, padronCliente) {
   return { beneficio: "", via: null };
 }
 
+// Cuando el informe SOLO trae nombre (MAPA, escaneados): lo cruza contra el padrón
+// por nombre para recuperar el beneficio. Exige que TODOS los tokens del informe
+// estén en un ÚNICO afiliado (sin empate) — si hay dos candidatos, no adivina.
+function resolverPorNombre(nombre, padronCliente) {
+  if (!tokens(nombre).length) return null;
+  let mejor = null, mejorScore = 0, empate = false;
+  for (const it of Object.values(padronCliente || {})) {
+    if (!it || !it.beneficio) continue;
+    const s = scoreNombre(nombre, it.nombre);
+    if (s > mejorScore) { mejorScore = s; mejor = it; empate = false; }
+    else if (s === mejorScore && s > 0 && it.nombre !== (mejor && mejor.nombre)) empate = true;
+  }
+  if (mejor && mejorScore >= 1 && !empate) {
+    return { beneficio: soloDigitos(mejor.beneficio), via: "padron_nombre" };
+  }
+  return null;
+}
+
 // Elige, entre las prestaciones de un mismo paciente, la que corresponde al
 // informe. practicaHint = código/keywords detectados del informe (opcional).
 function elegirPractica(prestaciones, practicaHint) {
@@ -60,7 +78,12 @@ function elegirPractica(prestaciones, practicaHint) {
 // padronCliente: { [dni]: { beneficio, ... } }
 // Devuelve { estado, ome, prestacion, via, confianza, candidatos }
 function matchInforme(informe, bandeja, padronCliente) {
-  const { beneficio, via } = resolverBeneficio(informe, padronCliente || {});
+  let { beneficio, via } = resolverBeneficio(informe, padronCliente || {});
+  // Si no hay beneficio por informe ni por DNI, probar por NOMBRE contra el padrón.
+  if (!beneficio && informe.nombre) {
+    const porNom = resolverPorNombre(informe.nombre, padronCliente || {});
+    if (porNom) { beneficio = porNom.beneficio; via = porNom.via; }
+  }
 
   // 1) Camino exacto por beneficio
   if (beneficio) {
@@ -72,14 +95,14 @@ function matchInforme(informe, bandeja, padronCliente) {
           estado: elegida.transmitida ? "ya_transmitido" : "ok",
           ome: elegida.nOrden || "",
           prestacion: elegida,
-          via: via === "padron" ? "beneficio_padron" : "beneficio_informe",
+          via: "beneficio_" + via,
           confianza: "alta",
           candidatos: delPaciente,
         };
       }
       // paciente clavado pero con varias prácticas posibles -> revisar cuál
       return { estado: "revisar_practica", ome: "", prestacion: null,
-        via: via === "padron" ? "beneficio_padron" : "beneficio_informe",
+        via: "beneficio_" + via,
         confianza: "media", candidatos: delPaciente };
     }
     // tiene beneficio pero no está en la bandeja de este período
