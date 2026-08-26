@@ -71,12 +71,21 @@ function extraerDatos(texto, filename) {
   if (!nombre) { m = t.match(/Apellidos?\s+([A-Za-zÁÉÍÓÚÑñ]+)\s+Nombre\s+([A-Za-zÁÉÍÓÚÑñ]+)/i); if (m) nombre = m[1] + " " + m[2]; }
   // "Paciente: X" / "Nombre: X" acotado (se corta antes de Edad/Sexo/Fecha/Documento)
   if (!nombre) { m = t.match(/(?:Paciente|Nombre)\s*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑñ, ]{3,}?)(?=\s{2,}|\s*\||\s+(?:Edad|Sexo|Fecha|Documento|Tipo|N[°º]|DNI)|\s*$)/im); if (m) nombre = m[1]; }
-  if (/^(NOMBRE|FECHA|PACIENTE|EDAD|SEXO|DOCUMENTO)\b/i.test(nombre.trim())) nombre = "";
+  if (/^(NOMBRE|FECHA|PACIENTE|EDAD|SEXO|DOCUMENTO|HOMBRE|MUJER|MASCULINO|FEMENINO|VAR[OÓ]N)\b/i.test(nombre.trim())) nombre = "";
   // fallback: el nombre del archivo (Caballito nombra los archivos por paciente)
   if (!nombre.trim()) {
     let base = path.basename(fn, path.extname(fn));
     const sp = base.match(/^\d+~([^~]+)~([^~]*)~/); // espirometría "benef~Apellido~Inicial~..."
-    base = sp ? `${sp[1]} ${sp[2]}` : base.replace(/^\d+[_-]+/, "").replace(/[_~].*$/, "").replace(/\s*-\s*.*$/, "");
+    if (sp) {
+      base = `${sp[1]} ${sp[2]}`;
+    } else {
+      base = base
+        .replace(/^\d+[_\-\s]+/, "")   // prefijo numérico (ej. "04JUN_01_")
+        .replace(/[_]+/g, " ")          // guiones bajos -> espacios (nombre en varias partes)
+        .replace(/\s*-\s*.*$/, "")      // corta en " - <estudio>" (ej. "RODRIGUEZ LUIS - MAPA")
+        // corta cuando arranca el tipo de estudio o una fecha/número (ej. "... HOLTER 10 08 2025")
+        .replace(/\s+(HOLTER|MAPA|ETT|ECG|ECO|DOPPLER|ESPIRO\w*|RMN|TAC|RX|LAB|ID\d+|N?\d).*$/i, "");
+    }
     nombre = base;
   }
   nombre = nombre.replace(/\b(PAMI|RENAL|VESICAL|HOLTER|ETT|ECO|VC)\b/gi, "").replace(/[,;]+/g, " ").replace(/\s+/g, " ").trim();
@@ -92,7 +101,7 @@ function extraerDatos(texto, filename) {
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está
 // escaneado) y devuelve {dni, beneficio, nombre, nombreKey, necesitaOcr, ocrUsado, texto}.
 // El módulo de OCR se carga en diferido para no exigir sus libs si no hace falta.
-async function procesar(filePath) {
+async function procesar(filePath, nombreArchivo) {
   let { texto, necesitaOcr, error } = await extraerTexto(filePath);
   let ocrUsado = false;
   if (necesitaOcr && !error) {
@@ -104,7 +113,9 @@ async function procesar(filePath) {
       error = "OCR: " + String((e && e.message) || e);
     }
   }
-  const datos = extraerDatos(texto || "", filePath);
+  // El nombre del archivo GUARDADO es un id (id.pdf); para el fallback de nombre y
+  // los patrones que miran el filename hay que usar el ORIGINAL (ej. "RODRIGUEZ LUIS - MAPA.pdf").
+  const datos = extraerDatos(texto || "", nombreArchivo || filePath);
   return { ...datos, necesitaOcr, ocrUsado, error: error || null, texto: texto || "" };
 }
 

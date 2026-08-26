@@ -363,7 +363,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen) {
   let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
   let error = null;
   if (informeExtract) {
-    const r = await informeExtract.procesar(storedPath);
+    const r = await informeExtract.procesar(storedPath, filename);
     extract = { dni: r.dni || "", beneficio: r.beneficio || "", nombre: r.nombre || "",
                 practica: r.practica || "", ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
     error = r.error || null;
