@@ -4899,7 +4899,11 @@ async function loadCabinaView(){
       var r = await fetch('/api/clientes');
       var raw = await r.json();
       var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+      // Solo los clientes que usan el sistema de informes (por ahora, solo Caballito).
+      // Cuando se sume otro, agregar su slug acá.
+      var CON_INFORMES = ['caballito-pediatrico'];
+      list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
+          .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     } catch(e){}
   }
   await cargarEstadoMail();
