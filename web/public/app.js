@@ -4909,6 +4909,15 @@ async function loadCabinaView(){
   await cargarEstadoMail();
   await refreshCabina();
 }
+// Descarga la cabina en Excel o PDF (para compartir con el socio). El endpoint
+// manda el archivo como adjunto; el navegador lo baja con la cookie de sesión.
+function descargarCabina(fmt){
+  var slug = document.getElementById('cabCliente').value;
+  if (!slug){ return; }
+  var a = document.createElement('a');
+  a.href = '/api/clientes/' + slug + '/informes/export.' + fmt;
+  document.body.appendChild(a); a.click(); a.remove();
+}
 async function cargarEstadoMail(){
   var card = document.getElementById('cabMailCard');
   var info = document.getElementById('cabMailInfo');

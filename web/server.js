@@ -374,6 +374,70 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen) {
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
            storedAt: new Date().toISOString(), extract, match, resuelto: null, error };
 }
+// Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
+function informesExportRows(items) {
+  return (items || []).map((it) => {
+    const m = it.match || {};
+    const ex = it.extract || {};
+    const pr = m.prestacion || {};
+    const ome = (it.resuelto && it.resuelto.ome) || m.ome || pr.ome || "";
+    const practica = pr.practica || ex.practica || "";
+    const beneficio = ex.beneficio || (it.resuelto && it.resuelto.beneficio) || pr.beneficio || "";
+    const estado = it.resuelto ? "Resuelto a mano" : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
+    return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
+             beneficio, practica, estado, ome };
+  });
+}
+
+// Excel de la cabina (estilo del reporte: header teal, negrita).
+function buildInformesWorkbook(items, clientName) {
+  const XS = XLSXStyle;
+  const rows = informesExportRows(items);
+  const aoa = [
+    [`Informes recibidos - ${clientName}`],
+    [`${rows.length} informe(s)`],
+    [],
+    ["Archivo", "Paciente", "DNI", "Beneficio", "Practica", "Estado", "N OME"],
+    ...rows.map((r) => [r.archivo, r.paciente, r.dni, r.beneficio, r.practica, r.estado, r.ome]),
+  ];
+  const ws = XS.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 12 }, { wch: 16 }, { wch: 26 }, { wch: 18 }, { wch: 16 }];
+  const head = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center" } };
+  if (ws["A1"]) ws["A1"].s = { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } };
+  if (ws["A2"]) ws["A2"].s = { font: { italic: true, color: { rgb: "667079" } } };
+  ["A4", "B4", "C4", "D4", "E4", "F4", "G4"].forEach((a) => { if (ws[a]) ws[a].s = head; });
+  const wb = XS.utils.book_new();
+  XS.utils.book_append_sheet(wb, ws, "Informes");
+  return XS.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+// PDF de la cabina (tabla simple).
+async function buildInformesPdf(items, clientName) {
+  const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+  const rows = informesExportRows(items);
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const teal = rgb(0.12, 0.31, 0.37), gris = rgb(0.4, 0.44, 0.47), negro = rgb(0.1, 0.1, 0.1);
+  const cols = [{ k: "paciente", w: 150, t: "Paciente" }, { k: "practica", w: 175, t: "Practica" },
+                { k: "estado", w: 95, t: "Estado" }, { k: "ome", w: 100, t: "N OME" }];
+  let page = doc.addPage([595, 842]);
+  const M = 36; let y = 800;
+  const put = (t, x, yy, f, sz, col) => page.drawText(asciiText(String(t == null ? "" : t)).slice(0, 46), { x, y: yy, size: sz, font: f, color: col || negro });
+  put(`Informes recibidos - ${clientName}`, M, y, bold, 15, teal); y -= 17;
+  put(`${rows.length} informe(s)`, M, y, font, 10, gris); y -= 20;
+  const head = () => {
+    page.drawRectangle({ x: M, y: y - 4, width: 523, height: 17, color: teal });
+    let x = M + 4; cols.forEach((c) => { page.drawText(c.t, { x, y, size: 9, font: bold, color: rgb(1, 1, 1) }); x += c.w; }); y -= 21;
+  };
+  head();
+  for (const r of rows) {
+    if (y < 42) { page = doc.addPage([595, 842]); y = 800; head(); }
+    let x = M + 4; cols.forEach((c) => { put(r[c.k], x, y, font, 8.5); x += c.w; }); y -= 14;
+  }
+  return Buffer.from(await doc.save());
+}
+
 // Resumen de cada mes futuro guardado (ordenados por período). Cada uno reusa el
 // mismo cálculo que "hacia adelante".
 function buildBandejasFuturasResumen(slug) {
@@ -5478,6 +5542,28 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 400, { error: (error && error.message) || "No se pudieron traer los informes del mail." });
     }
+  }
+
+  // Exportar la cabina a Excel o PDF (para compartir: "esto se subió / se va a subir").
+  const informesExport = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/export\.(xlsx|pdf)$/);
+  if (informesExport && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, fmt] = informesExport;
+    const items = ((loadInformes()[slug] || {}).items) || [];
+    const nombre = clientDisplayName(slug);
+    if (fmt === "xlsx") {
+      const buf = buildInformesWorkbook(items, nombre);
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="informes_${slug}.xlsx"`,
+      });
+      return res.end(buf);
+    }
+    const buf = await buildInformesPdf(items, nombre);
+    res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="informes_${slug}.pdf"` });
+    return res.end(buf);
   }
 
   // Listar los informes de un cliente (con su estado de match).
