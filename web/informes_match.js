@@ -28,6 +28,15 @@ function scoreNombre(a, b) {
 const CODIGO_CONSULTA = /(^|\D)(8201\d\d|4201\d\d|consulta)/i;
 function esConsulta(practica) { return CODIGO_CONSULTA.test(String(practica || "")); }
 
+// Equivalencias de práctica: un informe de una práctica también vale para otra.
+// ECG: un electrocardiograma sirve para una CONSULTA DE CARDIOLOGÍA (que incluye
+// electro). Se prueban solo si no hubo match directo por texto (se prefiere la
+// práctica específica; si no está, cae a la consulta de cardio). norm() ya devuelve
+// mayúsculas sin acentos, así que las patterns van en mayúscula.
+const _EQUIV_PRACTICA = {
+  ELECTROCARDIOGRAMA: [/ELECTROCARDIOGRAMA/, /CARDIOLOG/, /\b570129\b/, /\b820113\b/],
+};
+
 // Resuelve el beneficio de un informe: el que trae, o el del padrón por DNI.
 function resolverBeneficio(informe, padronCliente) {
   const b = soloDigitos(informe.beneficio);
@@ -67,6 +76,12 @@ function elegirPractica(prestaciones, practicaHint) {
     if (porCodigo.length === 1) return { elegida: porCodigo[0], ambiguo: false };
     const porTexto = prestaciones.filter((p) => hint && norm(p.practica).includes(hint));
     if (porTexto.length === 1) return { elegida: porTexto[0], ambiguo: false };
+    // Equivalencias (ej. ECG → consulta cardio): solo si no hubo match directo.
+    const equivs = _EQUIV_PRACTICA[hint];
+    if (equivs && porTexto.length === 0) {
+      const porEquiv = prestaciones.filter((p) => equivs.some((re) => re.test(norm(p.practica))));
+      if (porEquiv.length === 1) return { elegida: porEquiv[0], ambiguo: false };
+    }
   }
   const noConsulta = prestaciones.filter((p) => !esConsulta(p.practica));
   if (noConsulta.length === 1) return { elegida: noConsulta[0], ambiguo: false };

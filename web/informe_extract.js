@@ -49,6 +49,7 @@ const _PRACTICA_MAP = [
   [/\bHOLTER\b/i, "HOLTER"],
   [/ECO\s*VC\b|VASOS\s+DEL?\s+CUELLO/i, "VASOS DEL CUELLO"],
   [/\bESPIRO\w*|SPIROMETR/i, "ESPIROMETRIA"],
+  [/\bECG\b|ELECTROCARDIOGRAMA|ELECTRO\s*CARDIO/i, "ELECTROCARDIOGRAMA"],
 ];
 function practicaDe(fuente) {
   for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente)) return kw;
