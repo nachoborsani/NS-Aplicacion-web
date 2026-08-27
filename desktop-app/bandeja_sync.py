@@ -37,7 +37,7 @@ _TRANSMIT_TIMEOUT_S = 1800
 _HORA_FIN_DIA_H = 19
 # Clientes que NO se bajan en el barrido automático (por ahora, por decisión del
 # user). Se pueden bajar igual pidiéndolos explícitamente por only_slugs.
-EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc"}
+EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc", "uom-matanza"}
 
 
 def _current_period() -> str:
