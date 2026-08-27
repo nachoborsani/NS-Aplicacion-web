@@ -5187,7 +5187,20 @@ function abrirInforme(id){
   // Candidatos de la bandeja.
   var cands = (it.match && it.match.candidatos) || [];
   var cont = document.getElementById('cabCandidatos');
-  if (!cands.length){ cont.innerHTML = '<div class="cab-sub">Sin candidatos en la bandeja. Fijá la OME a mano si la conocés.</div>'; }
+  if (!cands.length){
+    var sug = (it.match && it.match.sugerencias) || [];
+    var h = '<div class="cab-sub">Sin candidatos en la bandeja. Fijá la OME a mano si la conocés.</div>';
+    if (sug.length){
+      h += '<div class="cab-cand-title" style="margin-top:10px">¿Es alguno de estos? (del padrón)</div>'
+        + sug.map(function(s){
+          return '<div class="cab-cand">'
+            + '<div class="cab-cand-main"><b>'+esc(s.nombre||'')+'</b><div class="cab-sub">DNI '+esc(s.dni||'—')+' · benef '+esc(s.beneficio||'—')+' · '+Math.round((s.score||0)*100)+'% parecido</div></div>'
+            + '<button class="btn btn-ghost btn-sm" onclick="usarSugerencia(\''+esc(s.beneficio||'')+'\')">Usar</button>'
+            + '</div>';
+        }).join('');
+    }
+    cont.innerHTML = h;
+  }
   else {
     cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja</div>' + cands.map(function(c){
       var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
@@ -5203,6 +5216,8 @@ function abrirInforme(id){
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); CAB_ITEM=null; }
 function usarCandidato(ome, beneficio){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(beneficio||''); }
+// Usar una sugerencia del padrón: carga su beneficio (lo aprende) y re-matchea.
+function usarSugerencia(beneficio){ if(!beneficio){ return; } document.getElementById('cabBenefManual').value = beneficio; guardarBeneficioInforme(); }
 async function resolverInformeManual(benefOverride){
   if (!CAB_ITEM) return;
   var slug = document.getElementById('cabCliente').value;

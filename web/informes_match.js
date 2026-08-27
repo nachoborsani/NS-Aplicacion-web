@@ -151,4 +151,19 @@ function matchInforme(informe, bandeja, padronCliente) {
     candidatos: mejores.slice(0, 8) };
 }
 
-module.exports = { matchInforme, resolverBeneficio, scoreNombre, soloDigitos, normNombre: norm };
+// Para los que NO matchean confiado: sugiere los afiliados del padrón con el
+// nombre más parecido (bidireccional), para que el operador confirme en 1 clic.
+// Devuelve [{ nombre, dni, beneficio, score }] ordenado por parecido.
+function sugerirPadron(nombre, padronCliente, limite) {
+  if (!tokens(nombre).length) return [];
+  const arr = [];
+  for (const it of Object.values(padronCliente || {})) {
+    if (!it || !it.beneficio) continue;
+    const s = Math.max(scoreNombre(nombre, it.nombre), scoreNombre(it.nombre, nombre));
+    if (s >= 0.5) arr.push({ nombre: it.nombre || "", dni: it.dni || "", beneficio: soloDigitos(it.beneficio), score: Math.round(s * 100) / 100 });
+  }
+  arr.sort((a, b) => b.score - a.score || a.nombre.localeCompare(b.nombre));
+  return arr.slice(0, limite || 5);
+}
+
+module.exports = { matchInforme, resolverBeneficio, sugerirPadron, scoreNombre, soloDigitos, normNombre: norm };

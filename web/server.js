@@ -351,11 +351,18 @@ function matchearInforme(slug, extract) {
   const padronCliente = loadPadron()[slug] || {};
   const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre, practicaHint: extract.practica };
   const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);
+  // Cuando no matcheó confiado, sugerir afiliados del padrón con nombre parecido
+  // (para confirmar en 1 clic los typos / abreviados / nombres con ruido).
+  let sugerencias = [];
+  if (["sin_match", "revisar_nombre", "sin_ome", "revisar_practica"].includes(m.estado) && extract.nombre) {
+    sugerencias = informeMatch.sugerirPadron(extract.nombre, padronCliente, 5);
+  }
   return {
     estado: m.estado, ome: m.ome, via: m.via, confianza: m.confianza,
     etiqueta: cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado,
     prestacion: m.prestacion ? cabinaLib.candidatoLiviano(m.prestacion) : null,
     candidatos: (m.candidatos || []).slice(0, 8).map(cabinaLib.candidatoLiviano),
+    sugerencias,
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
