@@ -98,15 +98,20 @@ def _correr_cliente(slug: str, web) -> None:
     except Exception as e:  # noqa: BLE001
         log(f"OME falló: {e!r}")
 
-    # --- Paso 4: activar SOLO las OMEs generadas en ESTA tanda. ---
-    log(f"=== [4/4] Activación de turnos ({len(filas_generadas)} de esta tanda) ===")
-    if filas_generadas:
-        try:
-            activacion_sweep.run(cliente_slug=slug, progress=lambda m: None, solo_filas=filas_generadas)
-        except Exception as e:  # noqa: BLE001
-            log(f"activación falló: {e!r}")
-    else:
-        log("No hubo OMEs nuevas para activar en esta tanda.")
+    # --- Paso 4: activar TODO lo que tenga OME sin activar (no solo la tanda). ---
+    # Antes se pasaba solo_filas=filas_generadas, así que una fila que se generaba en
+    # una corrida que NO llegaba a activar (se cortó / falló) quedaba HUÉRFANA para
+    # siempre: las corridas siguientes la veían "ya tenía OME", no entraba en la tanda
+    # y nunca se activaba. Sin solo_filas, el barrido levanta esas huérfanas también.
+    # Es seguro: el sweep ya saltea las que tienen la col de activación marcada (no
+    # re-activa, no duplica turnos), así que en régimen solo activa lo realmente nuevo.
+    log("=== [4/4] Activación de turnos (todo lo que tenga OME sin activar) ===")
+    try:
+        res_act = activacion_sweep.run(cliente_slug=slug, progress=lambda m: None) or {}
+        log(f"  {res_act.get('activadas', 0)} activada(s) · {res_act.get('errores', 0)} error(es) "
+            f"· de {res_act.get('candidatos', 0)} candidata(s).")
+    except Exception as e:  # noqa: BLE001
+        log(f"activación falló: {e!r}")
 
 
 def run() -> None:
