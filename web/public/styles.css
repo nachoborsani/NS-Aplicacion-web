@@ -247,10 +247,14 @@
   .demo button{background:transparent;border:0;color:#b8c8db;padding:6px 13px;border-radius:999px;font-weight:600}
   .demo button.on{background:var(--turq);color:#04302f}
 
+  /* Fondo del menú lateral en celular: oscurece el contenido y se cierra al tocarlo.
+     Fuera de mobile no existe (el menú es fijo). z-index entre contenido (30) y sidebar (40). */
+  .nav-scrim{position:fixed;inset:0;background:rgba(11,31,58,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:38}
   @media(max-width:860px){
     .tiles{grid-template-columns:repeat(2,1fr)}
     .sidebar{transform:translateX(-100%);box-shadow:10px 0 40px rgba(0,0,0,.3)}
     body.nav-open .sidebar{transform:none}
+    body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
     .main{margin-left:0}
     .hamb{display:grid;place-items:center}
     .em-hide{display:none}
@@ -258,6 +262,13 @@
     .side-collapse{display:none}
     body.sidebar-collapsed .sidebar{width:var(--sidebar-w)}
     body.sidebar-collapsed .main{margin-left:0}
+  }
+  /* En celular: más ancho útil (menos padding) y botones de fila más cómodos al toque. */
+  @media(max-width:560px){
+    .content{padding:16px 13px 30px}
+    .page-head h1{font-size:18px}
+    .rowbtn{padding:7px 10px}
+    .row-actions,.cab-actions{gap:8px}
   }
   /* fila de encabezado con acción a la derecha */
   .head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
