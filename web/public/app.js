@@ -103,6 +103,19 @@ function go(v, el){
   if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
 }
 
+// Que el menú permita "abrir en pestaña nueva" (click derecho / rueda / Ctrl+click):
+// le damos a cada ítem el href de su hash. El left-click sigue navegando por go()
+// (que pone el mismo hash), así que el href queda como no-op y no duplica.
+function ponerHrefsNav(){
+  document.querySelectorAll("a[onclick*=\"go('\"]").forEach(function(a){
+    if (a.getAttribute('href')) return;
+    var m = /go\('([a-z]+)'/i.exec(a.getAttribute('onclick') || '');
+    if (m) a.setAttribute('href', '#' + m[1]);
+  });
+}
+if (document.readyState !== 'loading') ponerHrefsNav();
+else document.addEventListener('DOMContentLoaded', ponerHrefsNav);
+
 // ---------- Credencial provisoria: consulta en vivo a PAMI ----------
 async function descargarCredencial(){
   var btn = document.getElementById('credBtn');
@@ -1405,7 +1418,7 @@ function renderClientList(){
   }
   var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
-    return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
+    return '<a class="client-nav-item' + active + '" href="#clientes/' + esc(client.slug) + '" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</a>';
   };
   var pot = document.getElementById('clientNavListPotenciales');
   var potGroup = document.getElementById('navGroupPotenciales');
@@ -1423,7 +1436,10 @@ function renderClientList(){
   var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
   if (medHdr) medHdr.textContent = 'Med. Cabecera';
   document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug], #clientNavListPotenciales [data-client-slug]').forEach(function(button){
-    button.addEventListener('click', function(){
+    button.addEventListener('click', function(e){
+      // Ctrl/Cmd/Shift+click: dejar que el navegador abra el href en pestaña/ventana nueva.
+      if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
       go('clientes');
       selectClient(button.getAttribute('data-client-slug'));
     });
