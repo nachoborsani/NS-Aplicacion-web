@@ -5018,12 +5018,24 @@ async function traerDelMail(){
   var meta = document.getElementById('cabResultMeta');
   if (btn) btn.disabled = true;
   if (meta) meta.textContent = 'Buscando en el mail y leyendo los informes… puede tardar.';
+  // Trae de a tandas (tope 40/corrida por el timeout de Railway) pero AUTOMÁTICO:
+  // sigue solo hasta que no queden más. El backend saltea los ya bajados (por
+  // nombre), así cada vuelta trae los próximos 40 sin repetir.
   try {
-    var r = await fetch('/api/clientes/'+slug+'/informes/gmail', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ desde:desde, hasta:hasta }) });
-    var d = await r.json();
-    if (!r.ok){ alert(d.error || 'No se pudieron traer los informes.'); }
-    else if (d.procesados === 0){ alert('No había informes nuevos en ese rango.'); }
-    else if (d.hayMas){ alert('Se trajeron '+d.procesados+' informes. Había más: volvé a tocar "Traer del mail" para seguir.'); }
+    var total = 0, vueltas = 0;
+    while (vueltas < 30) {   // tope de seguridad (~1200 informes)
+      vueltas++;
+      if (meta) meta.textContent = 'Trayendo del mail… ' + (total ? '(' + total + ' hasta ahora)' : 'puede tardar') + (vueltas > 1 ? ' · tanda ' + vueltas : '');
+      var r = await fetch('/api/clientes/'+slug+'/informes/gmail', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ desde:desde, hasta:hasta }) });
+      var d = await r.json();
+      if (!r.ok){ alert(d.error || 'No se pudieron traer los informes.'); break; }
+      total += (d.procesados || 0);
+      await refreshCabina();                 // que se vea entrar cada tanda
+      if (!d.hayMas || !d.procesados){        // no queda más (o una tanda no trajo nada)
+        alert(total === 0 ? 'No había informes nuevos en ese rango.' : 'Listo: se trajeron ' + total + ' informe(s) en total.');
+        break;
+      }
+    }
   } catch(e){ alert('Error de red al traer del mail.'); }
   if (btn) btn.disabled = false;
   await refreshCabina();
