@@ -345,9 +345,30 @@ function saveInformes(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(informesIndexFile, JSON.stringify(store, null, 2));
 }
+// Mes anterior de un período "YYYY-MM" -> "YYYY-MM".
+function mesAnteriorYM(ym) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ""));
+  if (!m) return "";
+  let y = Number(m[1]), mo = Number(m[2]) - 1;
+  if (mo < 1) { mo = 12; y -= 1; }
+  return y + "-" + String(mo).padStart(2, "0");
+}
+
 // Corre el match de un informe ya extraído contra la bandeja + padrón del cliente.
 function matchearInforme(slug, extract) {
-  const bandejaRows = cabinaLib.bandejaParaMatcher(loadClientBandejas()[slug]);
+  const bandeja = loadClientBandejas()[slug];
+  let bandejaRows = cabinaLib.bandejaParaMatcher(bandeja);
+  // + el reporte del MES ANTERIOR (bandeja cerrada que subió el user): los informes
+  // que llegan a principio de mes suelen ser de estudios de fin del mes pasado, y su
+  // OME está en la bandeja anterior. Solo para matchear; la facturación no se toca.
+  const prevPeriodo = mesAnteriorYM(bandeja && bandeja.month);
+  if (prevPeriodo) {
+    const rep = (loadClientReportsStore().items || []).find(
+      (r) => r.clientSlug === slug && String(r.nomencladorPeriod) === prevPeriodo);
+    if (rep && Array.isArray(rep.rows)) {
+      bandejaRows = bandejaRows.concat(cabinaLib.reporteParaMatcher(rep.rows));
+    }
+  }
   const padronCliente = loadPadron()[slug] || {};
   const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre, practicaHint: extract.practica };
   const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);

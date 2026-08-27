@@ -41,6 +41,22 @@ function beneficioLimpio(v) {
   return digs(s);
 }
 
+// El "reporte" (la bandeja transmitida de un mes cerrado que sube el user, ej.
+// julio) guarda las filas ya sanitizadas. Las llevamos al MISMO shape del matcher,
+// para poder cruzar informes de estudios de fin del mes anterior (que llegan a
+// principio del mes en curso, ej. Otero: estudio 31/07 con informe en agosto).
+function reporteParaMatcher(rows) {
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    nOrden: digs(r.order),
+    beneficio: beneficioLimpio(r.benefit),
+    nombre: String(r.patientName || "").trim(),
+    practica: [r.practiceCode, r.practiceDescription || r.practiceText].filter(Boolean).join(" - ").trim(),
+    turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
+    validada: !!r.validated,
+    transmitida: !!r.transmitted,
+  }));
+}
+
 // Deja un candidato liviano para el índice (no guardamos toda la fila de la bandeja).
 function candidatoLiviano(p) {
   return { ome: p.nOrden || "", beneficio: p.beneficio || "", nombre: p.nombre || "", practica: p.practica || "",
@@ -57,4 +73,4 @@ const ETIQUETA_ESTADO = {
   sin_match: "No se encontró",
 };
 
-module.exports = { bandejaParaMatcher, beneficioLimpio, candidatoLiviano, ETIQUETA_ESTADO, normTxt, digs };
+module.exports = { bandejaParaMatcher, reporteParaMatcher, beneficioLimpio, candidatoLiviano, ETIQUETA_ESTADO, normTxt, digs };
