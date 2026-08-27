@@ -1133,6 +1133,8 @@
   .cab-cand{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:8px 11px;margin-top:7px}
   .cab-cand-main{flex:1;min-width:0}
   .cab-cand-main b{font-size:12.5px;word-break:break-word}
+  .cab-cand-ck{width:17px;height:17px;flex:0 0 auto;cursor:pointer;accent-color:var(--brand,#0aa)}
+  .cab-selbar{display:flex;justify-content:flex-end;margin-top:9px}
   .btn-sm{padding:5px 12px;font-size:12px}
   .cab-manual{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:12px}
   @media(max-width:820px){ .cab-modal-body{grid-template-columns:1fr}.cab-modal-file{border-right:0;border-bottom:1px solid var(--border);min-height:300px}.cab-datos-grid{grid-template-columns:1fr} }

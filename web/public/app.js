@@ -5114,7 +5114,7 @@ function renderCabinaResumen(resumen, total){
   res.innerHTML = total ? chips.join('') : '';
 }
 function cabBadge(it){
-  if (it.resuelto) return '<span class="cab-badge ok">Resuelto a mano</span>';
+  if (it.resuelto) { var no=(it.resuelto.omes&&it.resuelto.omes.length)||1; return '<span class="cab-badge ok">Resuelto a mano'+(no>1?' · '+no+' OMEs':'')+'</span>'; }
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
   var e = it.match ? it.match.estado : 'sin_match';
   var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
@@ -5124,7 +5124,8 @@ function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
   if (!items.length){ body.innerHTML = '<tr><td colspan="6" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; return; }
   body.innerHTML = items.map(function(it){
-    var ome = (it.resuelto && it.resuelto.ome) || (it.match && it.match.ome) || '';
+    var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
+    var ome = omesArr.join(', ');
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
@@ -5213,20 +5214,54 @@ function abrirInforme(id){
     cont.innerHTML = h;
   }
   else {
-    cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja</div>' + cands.map(function(c){
-      var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
-      return '<div class="cab-cand">'
-        + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
-        + estado
-        + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
-        + '</div>';
-    }).join('');
+    // Un informe puede cubrir varias OMEs (otorrino: otomicroscopía + rinomanometría).
+    // Tildás las que correspondan y "Usar los N tildados" las pega todas; el "Usar" de
+    // cada fila sigue sirviendo para el caso de una sola.
+    var yaSel = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || [];
+    cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
+      + cands.map(function(c){
+        var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
+        var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
+        return '<div class="cab-cand">'
+          + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
+          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
+          + estado
+          + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
+          + '</div>';
+      }).join('')
+      + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>';
+    actualizarSelOmes();
   }
   showModal('cabinaModal', 'cabinaScrim');
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); var t=document.getElementById('cabTexto'); if(t){ t.textContent=''; t.style.display='none'; } CAB_ITEM=null; }
 function usarCandidato(ome, beneficio){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(beneficio||''); }
+// Muestra/oculta la barra "Usar los N tildados" según cuántos candidatos se marcaron.
+function actualizarSelOmes(){
+  var cks = document.querySelectorAll('.cab-cand-ck:checked');
+  var bar = document.getElementById('cabSelBar');
+  if (!bar) return;
+  var n = document.getElementById('cabSelN'); if (n) n.textContent = cks.length;
+  bar.style.display = cks.length ? '' : 'none';
+}
+// Resuelve el informe contra VARIAS OMEs de una (el archivo se sube a cada una).
+async function usarSeleccionados(){
+  if (!CAB_ITEM) return;
+  var cks = document.querySelectorAll('.cab-cand-ck:checked');
+  if (!cks.length) return;
+  var omes = [], benef = '';
+  cks.forEach(function(c){ omes.push(c.value); if(!benef) benef = c.getAttribute('data-benef')||''; });
+  benef = benef || (CAB_ITEM.extract && CAB_ITEM.extract.beneficio) || '';
+  var slug = document.getElementById('cabCliente').value;
+  var err = document.getElementById('cabModalErr');
+  var r = await fetch('/api/clientes/'+slug+'/informes/'+CAB_ITEM.id+'/resolver', {
+    method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ omes:omes, beneficio:benef }) });
+  var d = await r.json();
+  if (!r.ok){ err.textContent = d.error || 'No se pudo confirmar.'; return; }
+  cerrarCabinaModal();
+  await refreshCabina();
+}
 // Usar una sugerencia del padrón: carga su beneficio (lo aprende) y re-matchea.
 function usarSugerencia(beneficio){ if(!beneficio){ return; } document.getElementById('cabBenefManual').value = beneficio; guardarBeneficioInforme(); }
 async function resolverInformeManual(benefOverride){

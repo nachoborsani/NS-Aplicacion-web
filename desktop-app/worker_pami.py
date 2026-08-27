@@ -104,10 +104,20 @@ def _informes(web, slug, ids):
 
 
 def _ome_de(it):
+    omes = _omes_de(it)
+    return omes[0] if omes else ""
+
+
+def _omes_de(it):
+    """OMEs a las que va este informe. Un informe puede cubrir varias (otorrino:
+    otomicroscopía + rinomanometría) → se sube el mismo archivo a cada una."""
     r = it.get("resuelto") or {}
+    if r.get("omes"):
+        return [str(o) for o in r["omes"] if o]
     if r.get("ome"):
-        return str(r["ome"])
-    return str((it.get("match") or {}).get("ome") or "")
+        return [str(r["ome"])]
+    m = str((it.get("match") or {}).get("ome") or "")
+    return [m] if m else []
 
 
 def _creds(web, slug):
@@ -142,11 +152,12 @@ def tarea_auditar(web, slug, payload, tlog):
     for it in infos:
         ex = it.get("extract") or {}
         p = (it.get("match") or {}).get("prestacion") or {}
-        filas.append({
-            "beneficio": p.get("beneficio") or ex.get("beneficio") or "",
-            "paciente": ex.get("nombre", ""), "dni": ex.get("dni", ""),
-            "practica": ex.get("practica", ""), "turno": "", "ome": _ome_de(it), "id": it.get("id"),
-        })
+        for ome in (_omes_de(it) or [""]):  # una fila por OME (el informe puede cubrir varias)
+            filas.append({
+                "beneficio": p.get("beneficio") or ex.get("beneficio") or "",
+                "paciente": ex.get("nombre", ""), "dni": ex.get("dni", ""),
+                "practica": ex.get("practica", ""), "turno": "", "ome": ome, "id": it.get("id"),
+            })
     tlog(f"Verificando {len(filas)} informe(s) en PAMI…")
     res = auditar_filas(filas, usuario=user, clave=clave, headless=True)
     con_doc = sum(1 for r in res if r.get("documentacion_cargada") == "SI")
@@ -166,23 +177,26 @@ def tarea_subir(web, slug, payload, tlog):
     tmp = Path(tempfile.mkdtemp(prefix="ns_subir_"))
     items = []
     for it in infos:
-        ome = _ome_de(it)
-        if not ome:
+        omes = _omes_de(it)
+        if not omes:
             tlog(f"{it.get('filename','')[:24]} sin OME → salteado")
             continue
         ex = it.get("extract") or {}
         p = (it.get("match") or {}).get("prestacion") or {}
         dest = tmp / (it.get("stored") or (str(it.get("id", "")) + str(it.get("ext", ""))))
         try:
-            _descargar_archivo(web, slug, it["id"], dest)
+            _descargar_archivo(web, slug, it["id"], dest)  # se baja una vez y se sube a cada OME
         except Exception as e:  # noqa: BLE001
             tlog(f"No pude bajar {it.get('filename','')}: {e}")
             continue
-        items.append({
-            "archivo": str(dest), "filename": it.get("filename", ""),
-            "prestacion": {"n_orden": ome, "beneficio": p.get("beneficio") or ex.get("beneficio") or "",
-                           "nombre": ex.get("nombre", ""), "practica": ex.get("practica", "")},
-        })
+        if len(omes) > 1:
+            tlog(f"{it.get('filename','')[:24]} cubre {len(omes)} OMEs → se sube a cada una")
+        for ome in omes:
+            items.append({
+                "archivo": str(dest), "filename": it.get("filename", ""),
+                "prestacion": {"n_orden": ome, "beneficio": p.get("beneficio") or ex.get("beneficio") or "",
+                               "nombre": ex.get("nombre", ""), "practica": ex.get("practica", "")},
+            })
     if not items:
         return {"total": 0, "subidos": 0, "detalle": []}
     tlog(f"Subiendo {len(items)} informe(s) a PAMI…")

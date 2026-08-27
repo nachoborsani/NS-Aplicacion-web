@@ -408,7 +408,7 @@ function informesExportRows(items) {
     const m = it.match || {};
     const ex = it.extract || {};
     const pr = m.prestacion || {};
-    const ome = (it.resuelto && it.resuelto.ome) || m.ome || pr.ome || "";
+    const ome = (it.resuelto && it.resuelto.omes ? it.resuelto.omes.join(", ") : (it.resuelto && it.resuelto.ome)) || m.ome || pr.ome || "";
     const practica = pr.practica || ex.practica || "";
     const beneficio = ex.beneficio || (it.resuelto && it.resuelto.beneficio) || pr.beneficio || "";
     const estado = it.resuelto ? "Resuelto a mano" : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
@@ -5705,10 +5705,16 @@ const server = http.createServer(async (req, res) => {
     const store = loadInformes();
     const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
-    const ome = cabinaLib.digs(body.ome);
-    if (!ome) return json(res, 400, { error: "Indicá el número de OME." });
+    // Un informe puede cubrir VARIAS OMEs (típico en otorrino: otomicroscopía +
+    // rinomanometría en el mismo estudio). Aceptamos una lista `omes`; `ome` suelto
+    // sigue andando para la subida de una sola. El archivo se sube a cada OME.
+    let omes = Array.isArray(body.omes) ? body.omes.map((o) => cabinaLib.digs(o)).filter(Boolean) : [];
+    const single = cabinaLib.digs(body.ome);
+    if (single) omes.push(single);
+    omes = [...new Set(omes)]; // sin repetidos, respetando el orden en que se tildaron
+    if (!omes.length) return json(res, 400, { error: "Indicá el número de OME." });
     const benef = cabinaLib.digs(body.beneficio) || "";
-    it.resuelto = { ome, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString() };
+    it.resuelto = { ome: omes[0], omes, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString() };
     // Al resolver con "Usar", aprendemos el DNI↔beneficio en el padrón: la próxima
     // vez ese paciente matchea solo (sin volver a resolver a mano).
     const dniR = cabinaLib.digs(it.extract && it.extract.dni);
