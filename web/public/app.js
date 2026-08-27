@@ -5166,12 +5166,23 @@ function abrirInforme(id){
   // El beneficio a mano arranca vacío en cada paciente (o con el que ya tenga el
   // informe). Sin esto quedaba pegado el del paciente anterior -> riesgo de guardarlo mal.
   document.getElementById('cabBenefManual').value = (it.extract && it.extract.beneficio) || '';
-  // Vista del archivo original: pdf/imagen embebido; Word no se previsualiza -> link.
+  // Vista del archivo original: pdf/imagen embebido; el Word el navegador no lo dibuja,
+  // así que mostramos el TEXTO extraído (para leer el contenido sin abrir Word).
   var frame = document.getElementById('cabFrame');
+  var cajaTxt = document.getElementById('cabTexto');
   var urlArch = '/api/clientes/'+slug+'/informes/'+id+'/archivo';
   var esPreview = /\.(pdf|jpe?g|png|tiff?)$/i.test(it.filename);
-  if (esPreview){ frame.style.display=''; frame.src = urlArch; }
-  else { frame.style.display='none'; frame.removeAttribute('src'); }
+  if (esPreview){ frame.style.display=''; frame.src = urlArch; cajaTxt.style.display='none'; }
+  else {
+    frame.style.display='none'; frame.removeAttribute('src');
+    cajaTxt.style.display=''; cajaTxt.textContent = 'Leyendo el documento…';
+    var reqId = id;
+    fetch('/api/clientes/'+slug+'/informes/'+id+'/texto').then(function(r){ return r.json(); }).then(function(d){
+      if (!CAB_ITEM || CAB_ITEM.id !== reqId) return; // cambió de informe mientras cargaba
+      var txt = (d && d.texto || '').trim();
+      cajaTxt.textContent = txt || (d && d.error ? 'No se pudo leer: '+d.error : 'El documento no tiene texto.');
+    }).catch(function(){ if (CAB_ITEM && CAB_ITEM.id===reqId) cajaTxt.textContent = 'No se pudo leer el documento.'; });
+  }
   // Datos extraídos.
   var via = it.match && it.match.via ? it.match.via.replace('beneficio_padron','beneficio (padrón)').replace('beneficio_informe','beneficio (informe)') : '';
   var datos = '<div class="cab-datos-grid">'
@@ -5214,7 +5225,7 @@ function abrirInforme(id){
   showModal('cabinaModal', 'cabinaScrim');
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
-function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); CAB_ITEM=null; }
+function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); var t=document.getElementById('cabTexto'); if(t){ t.textContent=''; t.style.display='none'; } CAB_ITEM=null; }
 function usarCandidato(ome, beneficio){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(beneficio||''); }
 // Usar una sugerencia del padrón: carga su beneficio (lo aprende) y re-matchea.
 function usarSugerencia(beneficio){ if(!beneficio){ return; } document.getElementById('cabBenefManual').value = beneficio; guardarBeneficioInforme(); }

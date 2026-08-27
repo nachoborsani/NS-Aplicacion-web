@@ -5654,6 +5654,29 @@ const server = http.createServer(async (req, res) => {
     return res.end(buf);
   }
 
+  // Texto del informe para previsualizar en pantalla. Los .doc/.docx el navegador no
+  // los dibuja como al PDF; devolvemos el texto ya extraído (word-extractor/mammoth)
+  // para poder leer el contenido sin abrir Word. Se re-lee del archivo guardado (no
+  // guardamos el texto entero por informe). Para escaneados corre OCR, que puede tardar.
+  const informeTxt = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/texto$/);
+  if (informeTxt && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeTxt;
+    const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    if (!informeExtract) return json(res, 503, { error: "El motor de lectura no está disponible." });
+    const file = path.join(informesDir, slug, it.stored);
+    if (!fs.existsSync(file)) return json(res, 404, { error: "Archivo no encontrado." });
+    try {
+      const r = await informeExtract.procesar(file, it.filename);
+      return json(res, 200, { texto: r.texto || "", ocrUsado: !!r.ocrUsado, error: r.error || null });
+    } catch (e) {
+      return json(res, 500, { error: String((e && e.message) || e) });
+    }
+  }
+
   // Re-matchear un informe (después de actualizar padrón/bandeja) sin volver a leerlo.
   const informeRe = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/rematch$/);
   if (informeRe && req.method === "POST") {
