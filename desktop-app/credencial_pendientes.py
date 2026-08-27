@@ -78,12 +78,20 @@ def preparar(cli: dict) -> dict:
         benef, dni, tram = _dig(cell(r, ci_b)), _dig(cell(r, ci_d)), _dig(cell(r, ci_t))
         cel_c = cell(r, ci_c)
         ome = str(cell(r, ci_o)).strip()
-        if not (benef and dni and tram) or ome or _tiene_descargada(cel_c):
+        if ome or _tiene_descargada(cel_c):
             continue
         gemelo = cred_dni.get(dni) or cred_benef.get(benef)
         if gemelo:
+            # REUSAR no necesita trámite: el PDF de ese paciente ya está en Drive y
+            # el paso de OME lo identifica por benef/DNI (no usa el trámite). Alcanza
+            # con que el DNI o el beneficio casen con un gemelo DESCARGADA. Antes se
+            # exigía trámite acá y las filas sin trámite quedaban colgadas para
+            # siempre aunque el paciente ya tuviera la credencial (ej. fila del mismo
+            # DNI unas líneas más arriba).
             updates.append({"range": f"'{sheet_name}'!{_column_letter(ci_c)}{sheet_row}", "values": [[gemelo]]})
-        else:
+        elif benef and dni and tram:
+            # BAJAR una credencial nueva de PAMI sí necesita el trámite. Sin gemelo y
+            # sin trámite no se puede hacer nada: se deja como está.
             bajar.append(sheet_row)
 
     if updates:
