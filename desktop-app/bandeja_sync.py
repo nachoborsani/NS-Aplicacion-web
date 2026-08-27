@@ -37,7 +37,7 @@ _TRANSMIT_TIMEOUT_S = 1800
 _HORA_FIN_DIA_H = 19
 # Clientes que NO se bajan en el barrido automático (por ahora, por decisión del
 # user). Se pueden bajar igual pidiéndolos explícitamente por only_slugs.
-EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc", "uom-matanza"}
+EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc"}
 
 
 def _current_period() -> str:
@@ -286,6 +286,12 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         return {"slug": slug, "name": name, "ok": False, "error": f"credenciales: {exc}"}
     if not cred.get("pamiUser") or not cred.get("pamiPassword"):
         return {"slug": slug, "name": name, "ok": False, "error": "sin usuario/clave PAMI cargados en la web"}
+
+    # Cliente EN ANÁLISIS (potencial): se baja la bandeja para analizar pero NUNCA
+    # se transmite (no somos su facturador). El flag manda por sobre todo, incluso
+    # una corrida forzada. Reemplaza al hardcode de EXCLUIDOS_AUTO.
+    if client.get("enAnalisis"):
+        transmitir = False
 
     # La corrida de la tarde (fin del día) transmite y baja HASTA HOY (los
     # consultorios ya cerraron); la del mediodía es read-only y hasta ayer.

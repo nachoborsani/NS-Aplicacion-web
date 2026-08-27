@@ -1534,6 +1534,9 @@ function normalizeClient(client, fallback) {
     status: String(client.status || base.status || "Activo").trim() || "Activo",
     // Tipo de cliente: "consultorio" (default) o "med_cabecera" (médico de cabecera).
     tipo: (String(client.tipo || base.tipo || "consultorio").trim() === "med_cabecera") ? "med_cabecera" : "consultorio",
+    // Cliente EN ANÁLISIS (potencial): va a la sección "Potenciales clientes", se le
+    // baja la bandeja para analizar pero NUNCA se transmite (no somos su facturador).
+    enAnalisis: !!(client.enAnalisis !== undefined ? client.enAnalisis : base.enAnalisis),
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
   };
 }
@@ -4042,6 +4045,7 @@ const server = http.createServer(async (req, res) => {
     const ugl = String(body.ugl || "").replace(/\s+/g, " ").trim();
     const sap = String(body.sap || "").replace(/\s+/g, " ").trim();
     const tipo = String(body.tipo || "consultorio").trim();
+    const enAnalisis = !!body.enAnalisis;
     const slug = clientSlugFromName(name);
     const modules = normalizeClientModules(body.activeModules);
     if (!name) return json(res, 400, { error: "Ingresa el nombre del cliente." });
@@ -4051,7 +4055,7 @@ const server = http.createServer(async (req, res) => {
     if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
     const clients = loadClientsStore();
     if (clients.some((client) => client.slug === slug)) return json(res, 409, { error: "Ya existe un cliente con ese nombre." });
-    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", tipo, activeModules: modules });
+    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", tipo, enAnalisis, activeModules: modules });
     clients.push(client);
     saveClientsStore(clients);
     return json(res, 201, { client, clients });
@@ -4100,6 +4104,7 @@ const server = http.createServer(async (req, res) => {
       // Si la edición no manda tipo, conservamos el que tenía (no forzar a
       // "consultorio", que fue el bug que devolvía a la dra a Consultorios).
       tipo: body.tipo !== undefined ? body.tipo : clients[idx].tipo,
+      enAnalisis: body.enAnalisis !== undefined ? body.enAnalisis : clients[idx].enAnalisis,
       activeModules: clients[idx].activeModules,
     });
     saveClientsStore(clients);

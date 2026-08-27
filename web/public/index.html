@@ -121,6 +121,14 @@
           </button>
           <div class="nav-sub" id="clientNavListMedCab"></div>
         </div>
+        <div class="nav-group" id="navGroupPotenciales" style="display:none">
+          <button class="nav-parent" type="button" onclick="toggleClientGroup('potenciales', this)">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-5.2-5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>Potenciales clientes</span>
+            <svg class="nav-caret" viewBox="0 0 24 24" fill="none"><path d="M8 10l4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="nav-sub" id="clientNavListPotenciales"></div>
+        </div>
         <button class="client-new-btn" id="clientNewBtn" type="button" onclick="openClientCreateModal()">+ Nuevo cliente</button>
       </nav>
       <div class="side-foot">
@@ -1144,6 +1152,7 @@
           <label>UGL<input class="inp" id="clientCreateUgl" placeholder="Ej: UGL XXXV (opcional)"></label>
           <label>SAP<input class="inp" id="clientCreateSap" placeholder="Ej: 110853"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientCreateTipo" onchange="onClientCreateTipoChange()"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
+          <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientCreateEnAnalisis" style="width:auto;flex:0 0 auto"> En análisis (potencial) — se baja la bandeja pero NO se transmite</label>
         </div>
         <p class="modal-note">Módulos activos</p>
         <div class="module-edit-list" id="clientCreateModulesOptions"></div>
@@ -1182,6 +1191,7 @@
           <label>UGL<input class="inp" id="clientEditUgl" placeholder="Ej: UGL XXXV"></label>
           <label>SAP<input class="inp" id="clientEditSap" placeholder="Ej: 112553"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientEditTipo"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
+          <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientEditEnAnalisis" style="width:auto;flex:0 0 auto"> En análisis (potencial) — no se transmite</label>
         </div>
         <p class="modal-note">Los módulos activos se editan aparte, desde la tarjeta "Módulos activos".</p>
         <div class="msg err" id="clientEditError"></div>

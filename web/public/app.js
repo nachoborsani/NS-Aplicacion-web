@@ -32,7 +32,7 @@ function toggleSidebar(){
 // Click en el padre "Clientes": si ya estás en Clientes con el submenú abierto,
 // lo cierra (colapsa la lista); si no, entra a Clientes y lo abre.
 function toggleClientGroup(tipo, el){
-  var group = document.getElementById(tipo === 'medcab' ? 'navGroupMedCab' : 'navGroupConsultorios');
+  var group = document.getElementById(tipo === 'medcab' ? 'navGroupMedCab' : (tipo === 'potenciales' ? 'navGroupPotenciales' : 'navGroupConsultorios'));
   // Tocar el grupo SOLO despliega/pliega la lista; NO abre ningún cliente.
   // Recién se entra a un consultorio al hacer clic en uno puntual de la lista.
   var eraColapsada = document.body.classList.contains('sidebar-collapsed');
@@ -91,7 +91,7 @@ function go(v, el){
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
-  ['navGroupConsultorios', 'navGroupMedCab'].forEach(function(id){
+  ['navGroupConsultorios', 'navGroupMedCab', 'navGroupPotenciales'].forEach(function(id){
     var g = document.getElementById(id);
     if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
   });
@@ -1407,16 +1407,22 @@ function renderClientList(){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<button class="client-nav-item' + active + '" type="button" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</button>';
   };
-  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera'; });
-  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera'; });
+  var pot = document.getElementById('clientNavListPotenciales');
+  var potGroup = document.getElementById('navGroupPotenciales');
+  // Los "en análisis" (potenciales) van a su propia sección, salen de Consultorios/MedCab.
+  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
+  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
+  var potenciales = CLIENTS.filter(function(c){ return c.enAnalisis; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
+  if (pot) pot.innerHTML = potenciales.map(itemHtml).join('');
+  if (potGroup) potGroup.style.display = potenciales.length ? '' : 'none';
   var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
   if (consHdr) consHdr.textContent = 'Consultorios';
   var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
   if (medHdr) medHdr.textContent = 'Med. Cabecera';
-  document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug]').forEach(function(button){
+  document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug], #clientNavListPotenciales [data-client-slug]').forEach(function(button){
     button.addEventListener('click', function(){
       go('clientes');
       selectClient(button.getAttribute('data-client-slug'));
@@ -2616,6 +2622,11 @@ function mesCursoCardMesEnCurso(r, estado){
   var cobroReal = r.grossTransmitido || 0;
   var faltaInf = r.missingInformeAmount || 0;
   var estimado = cobroReal + faltaInf;
+  // En un cliente EN ANÁLISIS no transmitimos, así que lo validado-sin-transmitir
+  // no es "falta informe" (deuda) sino "faltante de transmisión" (potencial).
+  var enAnalisisCli = ACTIVE_CLIENT && ACTIVE_CLIENT.enAnalisis;
+  var lblFalta = enAnalisisCli ? 'Faltante de transmisión' : 'Faltan informes';
+  var lblFaltaNota = enAnalisisCli ? 'Faltante de transmisión' : 'Falta informe';
   // Cobro real en $0 habiendo prestaciones = casi siempre un error (la
   // actualización no captó las transmitidas, o falló). Lo marcamos en rojo.
   var cobroCeroWarn = (cobroReal === 0 && (r.count || 0) > 0)
@@ -2631,12 +2642,12 @@ function mesCursoCardMesEnCurso(r, estado){
   return '<div class="mescurso-card">' + head + salud + cobroCeroWarn
     + '<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
-    + '<div class="mescurso-val-note">+ Falta informe <b>' + esc(moneyFmt(faltaInf)) + '</b> → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
+    + '<div class="mescurso-val-note">+ ' + lblFaltaNota + ' <b>' + esc(moneyFmt(faltaInf)) + '</b> → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
-    + '<div class="mescurso-line alert' + faltanClick + '"><span>Faltan informes' + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
+    + '<div class="mescurso-line alert' + faltanClick + '"><span>' + lblFalta + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b></div>'
     + '</div>'
     + ausentesHtml
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
@@ -2919,6 +2930,7 @@ async function openClientCreateModal(){
   });
   var tipoSel = document.getElementById('clientCreateTipo');
   if (tipoSel) tipoSel.value = 'consultorio';
+  var eaC = document.getElementById('clientCreateEnAnalisis'); if (eaC) eaC.checked = false;
   showModal('clientCreateModal','ccScrim');
   await renderClientModuleOptions('clientCreateModulesOptions', []);
 }
@@ -2935,6 +2947,7 @@ async function saveClientCreate(){
     ugl: (document.getElementById('clientCreateUgl') || {}).value || '',
     sap: (document.getElementById('clientCreateSap') || {}).value || '',
     tipo: (document.getElementById('clientCreateTipo') || {}).value || 'consultorio',
+    enAnalisis: !!((document.getElementById('clientCreateEnAnalisis') || {}).checked),
     activeModules: selected
   };
   var btn = document.getElementById('clientCreateSave');
@@ -2983,6 +2996,7 @@ function openClientEditModal(){
   set('clientEditUgl', ACTIVE_CLIENT.ugl);
   set('clientEditSap', ACTIVE_CLIENT.sap);
   set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
+  var enAn = document.getElementById('clientEditEnAnalisis'); if (enAn) enAn.checked = !!ACTIVE_CLIENT.enAnalisis;
   showModal('clientEditModal', 'ceScrim');
 }
 function closeClientEditModal(){ hideModal('clientEditModal', 'ceScrim'); }
@@ -2995,7 +3009,8 @@ async function saveClientEdit(){
     cuit: (document.getElementById('clientEditCuit') || {}).value || '',
     ugl: (document.getElementById('clientEditUgl') || {}).value || '',
     sap: (document.getElementById('clientEditSap') || {}).value || '',
-    tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio'
+    tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio',
+    enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked)
   };
   var btn = document.getElementById('clientEditSave'); if (btn) btn.disabled = true;
   var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug), payload);
