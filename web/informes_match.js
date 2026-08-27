@@ -52,11 +52,19 @@ function resolverBeneficio(informe, padronCliente) {
 // por nombre para recuperar el beneficio. Exige que TODOS los tokens del informe
 // estén en un ÚNICO afiliado (sin empate) — si hay dos candidatos, no adivina.
 function resolverPorNombre(nombre, padronCliente) {
-  if (!tokens(nombre).length) return null;
+  if (tokens(nombre).length < 2) return null;   // muy poco para desambiguar
   let mejor = null, mejorScore = 0, empate = false;
   for (const it of Object.values(padronCliente || {})) {
-    if (!it || !it.beneficio) continue;
-    const s = scoreNombre(nombre, it.nombre);
+    const tp = tokens(it.nombre);
+    if (!it || !it.beneficio || tp.length < 2) continue;
+    // Dirección segura: todos los tokens del INFORME están en el padrón (el informe
+    // suele ser prefijo del nombre completo — "GOTTIG ERMINIA" ⊆ "GOTTIG ERMINIA
+    // CELESTINA"). Dirección con ruido: todos los del PADRÓN en el informe (el
+    // informe trae el estudio pegado — "OTERO CARLOS ALBERTO VENOSO"), pero SOLO si
+    // el padrón tiene nombre completo (≥3 tokens); si no, un "GOMEZ ANA" matchearía
+    // cualquier "Gomez Ana ...".
+    let s = scoreNombre(nombre, it.nombre);
+    if (s < 1 && tp.length >= 3) s = Math.max(s, scoreNombre(it.nombre, nombre));
     if (s > mejorScore) { mejorScore = s; mejor = it; empate = false; }
     else if (s === mejorScore && s > 0 && it.nombre !== (mejor && mejor.nombre)) empate = true;
   }
