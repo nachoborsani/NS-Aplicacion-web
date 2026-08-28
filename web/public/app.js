@@ -4048,6 +4048,7 @@ function getClientReportVisibleRows(){
   var moduleValue = CLIENT_REPORT_MODULE || '';
   var transFrom = CLIENT_REPORT_TRANS_FROM || '';
   var transTo = CLIENT_REPORT_TRANS_TO || '';
+  var __tmFiltro = reportTieneMotivos();   // para filtrar por categoría de débito
   var rows = (CLIENT_REPORT_ROWS || []).map(function(row, index){ return { row:row, index:index }; }).filter(function(item){
     if (q) {
       var haystack = normalizeReportSearch([
@@ -4066,7 +4067,13 @@ function getClientReportVisibleRows(){
       if (practiceHaystack.indexOf(practiceQ) < 0) return false;
     }
     if (moduleValue && String(item.row.moduleCode || '') !== moduleValue) return false;
-    if (CLIENT_REPORT_STATUS && reportDisplayStatus(item.row) !== CLIENT_REPORT_STATUS) return false;
+    if (CLIENT_REPORT_STATUS){
+      if (CLIENT_REPORT_STATUS.indexOf('deb:') === 0){
+        // Filtro por categoría de débito (umbral / excluyente / otro).
+        var __cat = CLIENT_REPORT_STATUS.slice(4);
+        if (!(reportDebitAmount(item.row) > 0) || debitoCategoria(item.row, __tmFiltro) !== __cat) return false;
+      } else if (reportDisplayStatus(item.row) !== CLIENT_REPORT_STATUS) return false;
+    }
     var transDate = String(item.row.transmittedAt || '').slice(0, 10);
     if (transFrom && (!transDate || transDate < transFrom)) return false;
     if (transTo && (!transDate || transDate > transTo)) return false;
@@ -4334,11 +4341,22 @@ function renderClientReportStatusFilter(){
   var el = document.getElementById('clientReportStatusFilter');
   if (!el) return;
   var estados = {};
-  (CLIENT_REPORT_ROWS || []).forEach(function(row){ var s = reportDisplayStatus(row); if (s && s !== '-') estados[s] = true; });
+  var tm = reportTieneMotivos();
+  var catCount = { umbral:0, excluyente:0, otro:0 };
+  (CLIENT_REPORT_ROWS || []).forEach(function(row){
+    var s = reportDisplayStatus(row); if (s && s !== '-') estados[s] = true;
+    if (reportDebitAmount(row) > 0){ var c = debitoCategoria(row, tm); if (c in catCount) catCount[c]++; }
+  });
   var current = CLIENT_REPORT_STATUS;
   var options = Object.keys(estados).sort().map(function(s){ return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
-  el.innerHTML = '<option value="">Todos los estados</option>' + options;
-  if (current && estados[current]) el.value = current;
+  // Filtrar por categoría de débito (mismo desglose que la tarjeta de Débitos).
+  var etq = { umbral:'Umbrales', excluyente:'Excluyentes', otro:'Otros' };
+  var debOpts = '';
+  ['umbral','excluyente','otro'].forEach(function(c){ if (catCount[c]) debOpts += '<option value="deb:' + c + '">' + etq[c] + ' (' + catCount[c] + ')</option>'; });
+  el.innerHTML = '<option value="">Todos los estados</option>' + options
+    + (debOpts ? '<optgroup label="Débitos">' + debOpts + '</optgroup>' : '');
+  var vigente = !current || estados[current] || (current.indexOf('deb:') === 0 && catCount[current.slice(4)]);
+  if (vigente) el.value = current;
   else { CLIENT_REPORT_STATUS = ''; el.value = ''; }
 }
 function toggleClientReportPracticeSort(){
