@@ -3716,7 +3716,13 @@ function closeCotejoModal(){ hideModal('cotejoModal', 'cotejoScrim'); }
 function reportTieneMotivos(){ return (CLIENT_REPORT_ROWS || []).some(function(r){ return r.debitMotivo; }); }
 function esFilaUmbral(r, tieneMotivos){
   if (!r || !r.manualDebit) return false;
-  return tieneMotivos ? (r.debitMotivo === 'umbral') : (['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0);
+  if (tieneMotivos) return r.debitMotivo === 'umbral';
+  // Sin motivos: pay40/60/80 = umbral, PERO un débito de CRUCE (regla mismo día,
+  // ej. ecodoppler arterial+venoso al 40%) NO es umbral aunque sea pay40 — es otra
+  // cosa (Resol 2713). Mismo criterio que debitoCategoria() en el server; sin esto
+  // el cotejo ofrecía "ajustar umbrales" sobre cruces y los ponía en 0% (doble castigo).
+  if (r.debitSource === 'regla' || r.autoDebit) return false;
+  return ['pay40', 'pay60', 'pay80'].indexOf(r.debitType) >= 0;
 }
 function reportTieneUmbrales(){ var tm = reportTieneMotivos(); return (CLIENT_REPORT_ROWS || []).some(function(r){ return esFilaUmbral(r, tm); }); }
 // Categoría de un débito para el desglose (umbral / excluyente / otro).
