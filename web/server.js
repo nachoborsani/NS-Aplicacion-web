@@ -2652,6 +2652,9 @@ function buildBandejaResumen(slug) {
   // Filas sintéticas con el shape que esperan las reglas de débito
   // (para reusar applyAutomaticExclusionDebits).
   const synth = [];
+  // Desglose por módulo (consultas/prácticas/bruto), para el resumen que se abre al
+  // tocar "Consultas · prácticas" en la card del mes en curso.
+  const moduloAgr = new Map();
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
@@ -2673,6 +2676,13 @@ function buildBandejaResumen(slug) {
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
     if (nomRow) { matched++; grossEstimado += valueGross; }
     else unmatched++;
+    // Acumular por módulo.
+    const modCode = String((nomRow && nomRow.moduleCode) || "");
+    const modKey = modCode || "sin";
+    let modAgr = moduloAgr.get(modKey);
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0 }; moduloAgr.set(modKey, modAgr); }
+    if (esConsulta) modAgr.consultations++; else modAgr.practices++;
+    modAgr.gross += valueGross;
     if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
       benef: String(row[kBenef] || "").trim(),
       nombre: String(row[kNombre] || "").trim(),
@@ -2801,6 +2811,7 @@ function buildBandejaResumen(slug) {
     missingInformeRows, ausentesRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
+    modules: [...moduloAgr.values()].map((m) => ({ ...m, gross: money(m.gross) })).sort((a, b) => b.gross - a.gross),
     coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
     coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
     nomencladorPeriod: nom ? (nom.period || "") : "",
