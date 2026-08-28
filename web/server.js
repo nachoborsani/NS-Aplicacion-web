@@ -3148,6 +3148,10 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   if (comparePeriod === selectedPeriod) comparePeriod = "";
   const current = periods.find((item) => item.period === selectedPeriod) || emptyDashboardPeriod(selectedPeriod);
   const previous = periods.find((item) => item.period === comparePeriod) || emptyDashboardPeriod(comparePeriod);
+  // Arrastre: el "próximo corte" del mes CALENDARIO anterior se cobra en el corte de
+  // ESTE mes. Se lo pasamos a la card para sumarlo y mostrar el total real del corte.
+  const prevCalendarPeriod = periods.find((item) => item.period === mesAnteriorYM(current.period));
+  current.prevPeriodCutoff = prevCalendarPeriod ? Number(prevCalendarPeriod.nextPeriodCutoff || 0) : 0;
   return {
     periods: periods.map((item) => ({ period: item.period, label: item.label, reportCount: item.reportCount })),
     // serie para el mini-grafico de tendencia (ultimos 8 meses, ascendente)

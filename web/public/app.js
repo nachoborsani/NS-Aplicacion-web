@@ -2793,6 +2793,14 @@ function mesCursoCardFaltaReporte(period){
     + '<div class="mescurso-empty"><b>Falta el reporte de ' + esc(label) + '</b>'
     + '<span>Todavía no subiste el reporte transmitido de ' + esc(label) + '. Cuando lo subas, vas a ver acá la facturación, los informes que faltan y los ausentes.</span></div></div>';
 }
+// Línea de "arrastre": el próximo corte del mes anterior entra en el corte de este
+// mes → se suma a la facturación y se muestra el total real del corte.
+function mescArrastreHtml(current){
+  var arr = Number(current && current.prevPeriodCutoff) || 0;
+  if (arr <= 0) return '';
+  var total = Number((current && current.net) || 0) + arr;
+  return '<div class="mescurso-arrastre">+ <b>' + esc(moneyFmt(arr)) + '</b> del corte anterior · Total del corte <b>' + esc(moneyFmt(total)) + '</b></div>';
+}
 function mesCursoCardSinCerrar(current, reporte){
   if (!current || !current.period){
     return '<div class="mescurso-card sincerrar"><div class="mescurso-head">'
@@ -2826,7 +2834,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
-    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
     + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
     + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
     + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
@@ -2867,7 +2875,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-head"><span class="mescurso-title">Cerrado</span>'
     + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
-    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
     + '<div class="mescurso-val-note">Valor aproximado'
     + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
     + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'

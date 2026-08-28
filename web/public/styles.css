@@ -757,6 +757,8 @@
   .mescurso-val{font-size:30px;font-weight:750;line-height:1.05;letter-spacing:-.5px;color:var(--text);font-variant-numeric:tabular-nums}
   .mescurso-val.chico{font-size:24px}
   .mescurso-val-note{font-size:10.5px;color:var(--text-2);margin-top:3px}
+  .mescurso-arrastre{font-size:12px;color:var(--text-2);margin-top:4px}
+  .mescurso-arrastre b{color:var(--text);font-variant-numeric:tabular-nums}
   .mescurso-desglose{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .mescurso-desglose span{font-size:11px;border-radius:999px;padding:3px 9px;color:var(--text-2);background:var(--hover)}
   .mescurso-desglose b{font-variant-numeric:tabular-nums;font-weight:750}
