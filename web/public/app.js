@@ -2597,6 +2597,14 @@ function mesCursoPeriodoAnterior(){
   if (m < 0){ m = 11; y -= 1; }
   return y + '-' + String(m + 1).padStart(2, '0');
 }
+// Un mes calendario antes de un período "YYYY-MM" (ej. 2026-07 -> 2026-06).
+function mesCursoMesAntes(period){
+  var m = /^(\d{4})-(\d{2})$/.exec(String(period || ''));
+  if (!m) return '';
+  var y = +m[1], mo = +m[2] - 1;
+  if (mo < 1){ mo = 12; y -= 1; }
+  return y + '-' + String(mo).padStart(2, '0');
+}
 function mesCursoLabelPeriodo(period){
   var mm = /^(\d{4})-(\d{2})$/.exec(String(period || ''));
   if (!mm) return String(period || '');
@@ -2780,6 +2788,35 @@ function irAReporteSinCerrar(){
   var id = MESCURSO_REPORTE_ID;
   setTimeout(function(){ openClientReport(id); }, 30);
 }
+function mesCursoAbrirReporte(id){
+  if (!id) return;
+  setClientSection('reportes');
+  setTimeout(function(){ openClientReport(id); }, 30);
+}
+// Card estática de un mes YA cerrado (ej. el ante-último: junio cuando el actual es
+// agosto). No trae los desplegables interactivos (esos están cableados al mes "sin
+// cerrar"); muestra el resumen y, al tocar, abre el reporte de ese mes.
+function mesCursoCardMesCerrado(current, reporte){
+  var fechaRep = (reporte && reporte.closedAt) ? mesCursoFechaCorta(reporte.closedAt) : '';
+  var debMonto = current.debit || 0, debCount = current.debitCount || 0;
+  var faltan = current.missingInforme || 0, faltanMonto = current.missingInformeAmount || 0;
+  var ausentes = current.absent || 0, ausMonto = current.absentAmount || 0;
+  var foot = fechaRep ? '<div class="mescurso-foot">Reporte del ' + esc(fechaRep) + '</div>' : '';
+  var clickable = reporte ? ' mescurso-click" onclick="mesCursoAbrirReporte(\'' + esc(reporte.id) + '\')' : '';
+  return '<div class="mescurso-card cerrado' + clickable + '">'
+    + '<div class="mescurso-head"><span class="mescurso-title">Cerrado</span>'
+    + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
+    + '<div class="mescurso-val-lbl">Facturación</div>'
+    + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
+    + '<div class="mescurso-val-note">Valor aproximado'
+    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de posibles débitos descontados' : '') + '</div>'
+    + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
+    + '<div class="mescurso-line warn"><span>Posibles débitos</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line alert"><span>Faltan informes</span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line"><span>Ausentes sin activar</span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
+    + '</div>' + foot + '</div>';
+}
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
@@ -2788,11 +2825,13 @@ async function loadClientMesCurso(){
   // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
   // cartel de "falta reporte" (no se cae a un mes más viejo).
   var prev = mesCursoPeriodoAnterior();
+  var prev2 = mesCursoMesAntes(prev);   // el mes ANTES del "sin cerrar" (ej. junio)
   var results = await Promise.all([
     api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/resumen'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev)),
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
     api('/api/bandeja/refresco/estado'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2)),
   ]);
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
@@ -2819,7 +2858,15 @@ async function loadClientMesCurso(){
 
   var cardDer = hayAnterior ? mesCursoCardSinCerrar(current, pendiente) : mesCursoCardFaltaReporte(prev);
   var cardAdel = mesCursoCardAdelante(adelante, futuros);
-  box.innerHTML = '<div class="mescurso-cards' + (cardAdel ? ' tres' : '') + '">' + (cardAdel || '') + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + '</div>'
+  // Card extra del mes ANTES del "sin cerrar" (ej. junio), solo si hay reporte de ese
+  // mes. Deja ver dos meses cerrados de un vistazo (útil para evaluar potenciales).
+  var dash2 = (results[4] && results[4].ok && results[4].data) ? results[4].data : null;
+  var current2 = dash2 && dash2.current ? dash2.current : null;
+  var hayJunio = current2 && current2.period === prev2 && ((current2.reportCount || 0) > 0 || (current2.totalRows || 0) > 0);
+  var reporte2 = hayJunio ? (reportes.filter(function(r){ return r.dashboardPeriod === prev2; })[0] || null) : null;
+  var cardCerrado = hayJunio ? mesCursoCardMesCerrado(current2, reporte2) : '';
+  var gridClass = cardCerrado ? ' cuatro' : (cardAdel ? ' tres' : '');
+  box.innerHTML = '<div class="mescurso-cards' + gridClass + '">' + (cardAdel || '') + mesCursoCardMesEnCurso(resumen, estadoSync) + cardDer + cardCerrado + '</div>'
     + '<div id="mescursoInformesPanel"></div>';
   // Si hay un refresco pendiente/corriendo, seguir sondeando (recarga al terminar).
   if (REFRESCO_ACTIVO) arrancarPollRefresco();

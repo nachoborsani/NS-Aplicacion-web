@@ -735,9 +735,17 @@
   .debit-breakdown b{font-size:9.5px;color:var(--text-2);font-weight:750;font-variant-numeric:tabular-nums}
   .mescurso-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
   .mescurso-cards.tres{grid-template-columns:1fr 1fr 1fr}
+  .mescurso-cards.cuatro{grid-template-columns:repeat(4,1fr);gap:10px}
   @media(max-width:1100px){ .mescurso-cards.tres{grid-template-columns:1fr 1fr} }
-  @media(max-width:640px){ .mescurso-cards, .mescurso-cards.tres{grid-template-columns:1fr} }
+  @media(max-width:1340px){ .mescurso-cards.cuatro{grid-template-columns:1fr 1fr} }
+  @media(max-width:640px){ .mescurso-cards, .mescurso-cards.tres, .mescurso-cards.cuatro{grid-template-columns:1fr} }
   .mescurso-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm);padding:15px 16px;min-width:0}
+  /* Con 4 cuadros achicamos un toque para que entren cómodos. */
+  .mescurso-cards.cuatro .mescurso-card{padding:13px 13px}
+  .mescurso-cards.cuatro .mescurso-val{font-size:25px}
+  .mescurso-cards.cuatro .mescurso-val.chico{font-size:20px}
+  .mescurso-card.cerrado{border-color:var(--border)}
+  .mescurso-card.cerrado .mescurso-chip{background:var(--celeste);color:var(--turq-d, #139a96)}
   .mescurso-card.sincerrar{border-color:var(--warning)}
   .mescurso-card.adelante{border-color:var(--accent, #6c5ce7);border-style:dashed}
   .mescurso-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}

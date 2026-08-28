@@ -470,7 +470,13 @@ async function buildInformesPdf(items, clientName) {
 // mismo cálculo que "hacia adelante".
 function buildBandejasFuturasResumen(slug) {
   const store = loadClientBandejasFuturas()[slug] || {};
-  return Object.keys(store).sort().map((period) => {
+  // "Hacia adelante" son meses POSTERIORES al mes en curso. Si se sincronizó un mes
+  // pasado (ej. para bajar su reporte) y después se volvió al mes actual, las futuras
+  // viejas (ese mes y el propio mes en curso) quedaban guardadas y se colaban acá
+  // como si fueran turnos futuros. Filtramos por > mes en curso (period es "YYYY-MM",
+  // el orden alfabético coincide con el cronológico).
+  const actual = String((loadClientBandejas()[slug] || {}).month || "");
+  return Object.keys(store).sort().filter((period) => !actual || period > actual).map((period) => {
     const b = store[period];
     const r = buildAdelanteResumenDe(b);
     if (r) return { ...r, period };
