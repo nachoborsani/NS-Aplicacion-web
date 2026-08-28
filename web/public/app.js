@@ -93,7 +93,12 @@ function go(v, el){
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab', 'navGroupPotenciales'].forEach(function(id){
     var g = document.getElementById(id);
-    if (g){ g.classList.toggle('open', v === 'clientes'); g.classList.toggle('active', v === 'clientes'); }
+    if (!g) return;
+    g.classList.toggle('active', v === 'clientes');
+    // Al SALIR de Clientes se pliegan los tres. Al entrar NO abrimos los tres (antes
+    // sí, y por eso tocar un potencial desplegaba también Med. Cabecera): renderClientList
+    // abre solo el grupo del cliente activo.
+    if (v !== 'clientes') g.classList.remove('open');
   });
   var gPagos = document.getElementById('navGroupPagos');
   var enAdmin = (v === 'resumen' || v === 'facturas');
@@ -1447,6 +1452,14 @@ function renderClientList(){
   var createBtn = document.getElementById('clientNewBtn');
   // Clase (no style inline) para que el modo colapsado pueda ocultarlo.
   if (createBtn) createBtn.classList.toggle('is-admin', !!(ME && ME.role === 'admin'));
+  // Abrir SOLO el grupo del cliente activo (consultorios / med. cabecera / potenciales),
+  // sin tocar los otros. Así entrar a un potencial no despliega Med. Cabecera.
+  if (ACTIVE_CLIENT){
+    var gid = ACTIVE_CLIENT.enAnalisis ? 'navGroupPotenciales'
+      : (ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'navGroupMedCab' : 'navGroupConsultorios');
+    var ga = document.getElementById(gid);
+    if (ga) ga.classList.add('open');
+  }
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
