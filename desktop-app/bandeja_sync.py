@@ -458,6 +458,13 @@ if __name__ == "__main__":  # pragma: no cover
     # Flags: --transmitir (fuerza transmitir=True), --forzar (transmite a cualquier
     # hora, saltando el candado de las 19h; implica --transmitir). Uso manual:
     #   python bandeja_sync.py 2026-08 caballito-pediatrico --forzar
+    # La consola de Windows (cp1252) no sabe imprimir algunos unicode: el "→" del
+    # aviso final cortaba con UnicodeEncodeError. UTF-8 con reemplazo: ningún print corta.
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     _pos = [a for a in sys.argv[1:] if not a.startswith("--")]
     _flags = [a for a in sys.argv[1:] if a.startswith("--")]
     period_arg = _pos[0] if len(_pos) > 0 else None
