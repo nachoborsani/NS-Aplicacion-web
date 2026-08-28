@@ -2778,16 +2778,17 @@ function mesCursoCardSinCerrar(current, reporte){
   if (fechaRep) footParts.push('Reporte del ' + esc(fechaRep));
   if (cierre) footParts.push('los débitos cierran el ' + esc(cierre));
   var foot = footParts.length ? '<div class="mescurso-foot">' + footParts.join(' · ') + '</div>' : '';
+  var confDeb = reporte && reporte.debitStatus === 'confirmado';
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
     + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
-    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de posibles débitos descontados' : '') + '</div>'
+    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '') + '</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
-    + '<div class="mescurso-line warn' + djClick + '"><span>Posibles débitos' + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line warn' + djClick + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + fjClick + '"><span>Faltan informes' + fjCaret + '</span>'
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + clickable + '"' + onclick + '><span>Ausentes sin activar</span>'
@@ -2816,16 +2817,18 @@ function mesCursoCardMesCerrado(current, reporte){
   var ausentes = current.absent || 0, ausMonto = current.absentAmount || 0;
   var foot = fechaRep ? '<div class="mescurso-foot">Reporte del ' + esc(fechaRep) + '</div>' : '';
   var clickable = reporte ? ' mescurso-click" onclick="mesCursoAbrirReporte(\'' + esc(reporte.id) + '\')' : '';
+  // Confirmados = ya cotejados contra PAMI → dejan de ser "posibles".
+  var confDeb = reporte && reporte.debitStatus === 'confirmado';
   return '<div class="mescurso-card cerrado' + clickable + '">'
     + '<div class="mescurso-head"><span class="mescurso-title">Cerrado</span>'
     + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>'
     + '<div class="mescurso-val-note">Valor aproximado'
-    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de posibles débitos descontados' : '') + '</div>'
+    + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '') + '</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line"><span>Consultas · prácticas</span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
-    + '<div class="mescurso-line warn"><span>Posibles débitos</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line warn"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert"><span>Faltan informes</span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line"><span>Ausentes sin activar</span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>' + foot + '</div>';
