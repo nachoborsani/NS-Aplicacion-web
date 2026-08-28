@@ -2402,6 +2402,7 @@ function buildDebitoDetalle(rows) {
       turno: String(r.appointmentLabel || r.appointmentAt || ""),
       practica: [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
       estado: estadoDe(r),
+      categoria: debitoMotivoLabel(r),
       cruce: cruce.join(" + "),
       monto: money(d),
     });
@@ -2771,6 +2772,7 @@ function buildBandejaResumen(slug) {
       turno: r._turno || "",
       practica: r._practica || "",
       estado: estadoDe(r),
+      categoria: debitoMotivoLabel(r),
       cruce: cruce.join(" + "),
       motivo: r.autoDebitReason || "",
       monto: money(d),
@@ -2793,6 +2795,7 @@ function buildBandejaResumen(slug) {
       turno: r._turno || "",
       practica: r._practica || "",
       estado: "Afiliado inactivo",
+      categoria: "Inactivo",
       cruce: r._inactivoMotivo || "Afiliado inactivo al momento de la prestación",
       motivo: "Afiliado inactivo",
       monto: money(monto),
@@ -2886,7 +2889,7 @@ function buildAdelanteResumenDe(bandeja) {
       .map((g) => g._practica + (g._turno ? " · " + g._turno : "")).filter(Boolean);
     if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
       benef: r.benefit, nombre: r._nombre || "", turno: r._turno || "", practica: r._practica || "",
-      estado: "Turno asignado", cruce: cruce.join(" + "), motivo: r.autoDebitReason || "", monto: money(d),
+      estado: "Turno asignado", categoria: debitoMotivoLabel(r), cruce: cruce.join(" + "), motivo: r.autoDebitReason || "", monto: money(d),
     });
   }
   return {
@@ -2989,6 +2992,10 @@ function debitoCategoria(row) {
   if (row && row.debitSource === "regla") return "otro";
   // Sin motivo (reporte viejo): parcial = umbral, total = otro.
   return ["pay40", "pay60", "pay80"].includes(row && row.debitType) ? "umbral" : "otro";
+}
+// Etiqueta legible de la categoría, para la columna "Motivo" del detalle de débitos.
+function debitoMotivoLabel(row) {
+  return { umbral: "Umbral", excluyente: "Excluyente", otro: "Otro" }[debitoCategoria(row)] || "Otro";
 }
 function addRowToDashboardPeriod(target, row) {
   target.totalRows += 1;
