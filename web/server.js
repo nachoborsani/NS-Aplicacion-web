@@ -1385,11 +1385,15 @@ function readBody(req) {
   });
 }
 function publicUser(u) {
-  return { username: u.username, name: u.name, role: u.role, centro: u.centro || "", mustChange: !!u.mustChange };
+  return { username: u.username, name: u.name, role: u.role, centro: u.centro || "",
+           clientes: Array.isArray(u.clientes) ? u.clientes : [], mustChange: !!u.mustChange };
 }
 
 // Perfiles validos y reglas de nombre de usuario
-const ROLES = new Set(["admin", "operador", "medico", "clinica"]);
+// "demo": usuario de demostración (para mostrar la app sin poder usarla). Ve las
+// herramientas con datos reales y puede descargar, pero NO escribe nada y solo
+// accede a los clientes de su lista (u.clientes).
+const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo"]);
 const DEFAULT_CLIENTS = [
   {
     slug: "sala-millon",
@@ -3875,6 +3879,35 @@ const server = http.createServer(async (req, res) => {
       else if (p === "/api/mescurso/export") permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
+
+    // --- Gate del rol "demo" (usuario de demostración): SOLO LECTURA.
+    // Ve las herramientas con datos reales y puede descargar, pero no crea, no
+    // modifica y no borra NADA; y solo entra a los clientes de su lista.
+    // Es fail-closed a propósito: se permite lo que está listado y todo lo demás se
+    // niega. Así no depende de acordarse de proteger cada endpoint nuevo — el que
+    // decide es el backend, esconder el botón en la pantalla no es proteger.
+    if (meGate && meGate.role === "demo") {
+      const esGet = (req.method === "GET" || !req.method);
+      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
+      const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
+      const permitidos = Array.isArray(meGate.clientes) ? meGate.clientes : [];
+      const suCliente = !mCli || permitidos.includes(decodeURIComponent(mCli[1]));
+      // Los accesos PAMI del cliente (usuario/clave) NUNCA, ni de lectura: es
+      // justamente lo que no queremos que se lleve.
+      const esCredencial = /\/pami(\/|$)/.test(p) || /\/credenciales(\/|$)/.test(p) || /\/claves(\/|$)/.test(p);
+      let permitido = false;
+      if (permitidoSiempre) permitido = true;
+      else if (esCredencial) permitido = false;
+      else if (esGet && suCliente) permitido = true;
+      // Descarga que se pide por POST: solo arma el archivo con las filas que ya
+      // están en pantalla (no lee la base), así que es segura.
+      else if (p === "/api/mescurso/export") permitido = true;
+      if (!permitido) {
+        return json(res, 403, { error: (mCli && !suCliente)
+          ? "Tu usuario no tiene acceso a ese cliente."
+          : "Te faltan permisos. Este es un usuario de demostración: podés ver todo, pero no modificar." });
+      }
+    }
   }
 
   if (p === "/api/admin/worker/status" && req.method === "GET") {
@@ -3949,6 +3982,7 @@ const server = http.createServer(async (req, res) => {
         name: u.name,
         role: u.role,
         centro: u.centro || "",
+        clientes: Array.isArray(u.clientes) ? u.clientes : [],
         email: u.email || "",
         active: u.active !== false,
         mustChange: !!u.mustChange,
@@ -3961,23 +3995,29 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password, email, centro } = await readBody(req);
+    const { username, name, role, password, email, centro, clientes } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
     const pw = String(password || "");
     const em = String(email || "").trim().toLowerCase();
     const ce = String(centro || "").trim();
+    // Clientes que puede ver el usuario de demostración (solo slugs que existen).
+    const slugsExistentes = new Set(loadClientsStore().map((c) => c.slug));
+    const cls = (Array.isArray(clientes) ? clientes : []).map((s) => String(s || "").trim()).filter((s) => slugsExistentes.has(s));
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
     // El rol "clinica" (dueño del centro) DEBE estar atado a un centro existente.
     if (rl === "clinica" && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece el usuario clínica." });
+    // El rol "demo" DEBE tener al menos un cliente asignado (si no, no ve nada).
+    if (rl === "demo" && !cls.length) return json(res, 400, { error: "Elegí qué clientes puede ver el usuario de demostración." });
     if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
     if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
     const users = loadUsers() || [];
     if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
-    users.push({ username: uname, name: nm, role: rl, email: em, centro: rl === "clinica" ? ce : "", password: hashPassword(pw), mustChange: true, active: true });
+    users.push({ username: uname, name: nm, role: rl, email: em, centro: rl === "clinica" ? ce : "",
+                 clientes: rl === "demo" ? cls : [], password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
   }
@@ -4030,9 +4070,18 @@ const server = http.createServer(async (req, res) => {
         users[idx].email = em;
       }
       if (body.centro !== undefined) users[idx].centro = String(body.centro).trim();
+      if (body.clientes !== undefined) {
+        const existentes = new Set(loadClientsStore().map((c) => c.slug));
+        users[idx].clientes = (Array.isArray(body.clientes) ? body.clientes : [])
+          .map((s) => String(s || "").trim()).filter((s) => existentes.has(s));
+      }
       // Un usuario clínica siempre debe tener un centro válido.
       if (users[idx].role === "clinica" && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
         return json(res, 400, { error: "El usuario clínica tiene que estar atado a un centro válido." });
+      }
+      // Un usuario de demostración siempre debe tener al menos un cliente asignado.
+      if (users[idx].role === "demo" && !(users[idx].clientes || []).length) {
+        return json(res, 400, { error: "El usuario de demostración tiene que tener al menos un cliente asignado." });
       }
       saveUsers(users);
       return json(res, 200, { ok: true });
@@ -4087,6 +4136,11 @@ const server = http.createServer(async (req, res) => {
     let clients = loadClientsStore();
     // El rol clínica solo ve SU centro.
     if (me.role === "clinica") clients = clients.filter((c) => c.slug === me.centro);
+    // El usuario de demostración solo ve los clientes que se le asignaron.
+    if (me.role === "demo") {
+      const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
+      clients = clients.filter((c) => permitidos.has(c.slug));
+    }
     return json(res, 200, { clients });
   }
 

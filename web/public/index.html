@@ -1079,12 +1079,18 @@
           <div class="hint">Con esto inicia sesión. Letras, números, punto o guion.</div>
         </div>
         <div class="field"><label>Perfil</label>
-          <select class="inp" id="umRole">
+          <select class="inp" id="umRole" onchange="umToggleClientes()">
             <option value="operador">Operador</option>
             <option value="medico">Médico</option>
             <option value="clinica">Clínica</option>
+            <option value="demo">Demostración (solo ver)</option>
             <option value="admin">Administrador</option>
           </select>
+        </div>
+        <div class="field" id="umClientesField" style="display:none">
+          <label>Clientes que puede ver</label>
+          <div class="module-edit-list" id="umClientes" style="max-height:180px"></div>
+          <div class="hint">Solo ve estos clientes. Puede mirar todo y descargar, pero no modificar nada.</div>
         </div>
         <div class="field">
           <label>Email <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label>

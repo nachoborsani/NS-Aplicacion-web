@@ -800,13 +800,14 @@ function initials(name){
   return (name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
 }
 function roleLabel(r){
-  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica' }[r] || r;
+  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración' }[r] || r;
 }
 var ROLE = {
   admin:    { chip:'admin', label:'Admin',    bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
   operador: { chip:'oper',  label:'Operador', bg:'linear-gradient(135deg,#18B7B2,#0f7f7c)' },
   medico:   { chip:'med',   label:'Médico',   bg:'linear-gradient(135deg,#3B82C4,#2a5f96)' },
   clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
+  demo:     { chip:'demo',  label:'Demo',     bg:'linear-gradient(135deg,#667085,#475467)' },
 };
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 var USERS = [];
@@ -4920,8 +4921,27 @@ function openUserModal(mode, un){
   document.getElementById('umUserField').style.display = isEdit ? 'none' : '';
   document.getElementById('umPwdField').style.display = isEdit ? 'none' : '';
   document.getElementById('umActiveField').style.display = isEdit ? 'flex' : 'none';
+  umPintarClientes(u && u.clientes);
+  umToggleClientes();
   showModal('userModal','umScrim');
   document.getElementById('umName').focus();
+}
+// Lista de clientes para el perfil "Demostración" (ve solo los que se tilden).
+function umPintarClientes(sel){
+  var cont = document.getElementById('umClientes');
+  if (!cont) return;
+  var elegidos = Array.isArray(sel) ? sel : [];
+  cont.innerHTML = (CLIENTS || []).map(function(c){
+    var ck = elegidos.indexOf(c.slug) >= 0 ? ' checked' : '';
+    return '<label class="module-edit-option"><input type="checkbox" value="' + esc(c.slug) + '"' + ck + '><span>' + esc(c.name) + '</span></label>';
+  }).join('') || '<div class="hint">No hay clientes cargados.</div>';
+}
+function umToggleClientes(){
+  var f = document.getElementById('umClientesField');
+  if (f) f.style.display = (document.getElementById('umRole').value === 'demo') ? '' : 'none';
+}
+function umClientesElegidos(){
+  return [].slice.call(document.querySelectorAll('#umClientes input:checked')).map(function(i){ return i.value; });
 }
 function closeUserModal(){ hideModal('userModal','umScrim'); }
 async function saveUser(){
@@ -4934,10 +4954,10 @@ async function saveUser(){
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, clientes: umClientesElegidos() });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, clientes: umClientesElegidos() });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
