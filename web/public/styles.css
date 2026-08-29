@@ -168,8 +168,15 @@
   .topbar.client-mode #pageTitle{display:none}
   .topbar.client-mode .top-client-meta{display:flex}
   .top-client-meta h2{font-size:17px;line-height:1.15;margin:0}
+  /* min-width:0 en el bloque de texto: sin esto un ítem flex no se achica más que su
+     contenido, el ellipsis del crumb nunca aplica y el texto se mete abajo de los
+     botones de la derecha (se veía en celular). */
+  .top-client-meta > div{min-width:0}
+  .top-client-meta h2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .top-client-meta .crumb{margin:0 0 2px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .topbar .sp{flex:1}
+  /* Los botones de la derecha nunca se achican ni se deforman. */
+  .topbar .icon-btn,.topbar .avatar{flex:0 0 auto}
   .icon-btn{position:relative;width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);display:grid;place-items:center}
   .icon-btn:hover{border-color:var(--turq)}
   .icon-btn svg{width:18px;height:18px}
@@ -258,6 +265,12 @@
     .main{margin-left:0}
     .hamb{display:grid;place-items:center}
     .em-hide{display:none}
+    /* Barra de arriba en celular: más lugar para el nombre del cliente. El crumb
+       ("Dashboard cliente / X") se esconde porque repite el título que está debajo. */
+    .topbar{padding:0 12px;gap:8px}
+    .top-client-meta{gap:8px}
+    .top-client-meta .crumb{display:none}
+    .top-client-meta h2{font-size:15.5px}
     /* En mobile manda el drawer (hamburguesa), no el modo colapsado */
     .side-collapse{display:none}
     body.sidebar-collapsed .sidebar{width:var(--sidebar-w)}
