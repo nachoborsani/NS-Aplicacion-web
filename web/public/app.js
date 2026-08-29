@@ -5390,7 +5390,10 @@ function abrirInforme(id){
     // Un informe puede cubrir varias OMEs (otorrino: otomicroscopía + rinomanometría).
     // Tildás las que correspondan y "Usar los N tildados" las pega todas; el "Usar" de
     // cada fila sigue sirviendo para el caso de una sola.
-    var yaSel = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || [];
+    // Ya tildadas: lo que resolvió el operador, o —si todavía no lo tocó— las que
+    // el matcher encontró solo cuando el informe cubre varias prácticas.
+    var yaSel = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : [])))
+      || (it.match && it.match.omes) || [];
     cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
       + cands.map(function(c){
         var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');

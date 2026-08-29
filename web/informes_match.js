@@ -96,7 +96,28 @@ function elegirPractica(prestaciones, practicaHint) {
   return { elegida: null, ambiguo: true };
 }
 
-// informe: { dni, beneficio, nombre, practicaHint }
+// Un informe puede cubrir VARIAS prácticas (otorrino: "OTOMICROSCOPIA +
+// RINOMANOMETRÍA" son dos OMEs distintas). Busca una prestación para CADA pista.
+// Es conservador a propósito: si alguna pista no encuentra exactamente una
+// prestación libre, devuelve vacío y se cae al camino de siempre (elegir una sola
+// o mandar a revisar). Preferimos no resolver antes que resolver mal.
+function elegirPracticas(prestaciones, hints) {
+  const usados = new Set();
+  const out = [];
+  for (const h of (Array.isArray(hints) ? hints : [])) {
+    const hint = norm(h);
+    if (!hint) continue;
+    const idxs = prestaciones
+      .map((_, i) => i)
+      .filter((i) => !usados.has(i) && norm(prestaciones[i].practica).includes(hint));
+    if (idxs.length !== 1) return [];
+    usados.add(idxs[0]);
+    out.push(prestaciones[idxs[0]]);
+  }
+  return out;
+}
+
+// informe: { dni, beneficio, nombre, practicaHint, practicaHints }
 // bandeja: [ { nOrden, beneficio, nombre, practica, turno, validada, transmitida } ]
 // padronCliente: { [dni]: { beneficio, ... } }
 // Devuelve { estado, ome, prestacion, via, confianza, candidatos }
@@ -112,6 +133,25 @@ function matchInforme(informe, bandeja, padronCliente) {
   if (beneficio) {
     const delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio);
     if (delPaciente.length) {
+      // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
+      const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
+      if (hints.length > 1) {
+        const varias = elegirPracticas(delPaciente, hints);
+        if (varias.length > 1) {
+          const pendientes = varias.filter((p) => !p.transmitida);
+          const principal = pendientes[0] || varias[0];
+          return {
+            estado: pendientes.length ? "ok" : "ya_transmitido",
+            ome: principal.nOrden || "",
+            omes: varias.map((p) => p.nOrden).filter(Boolean),
+            prestacion: principal,
+            prestaciones: varias,
+            via: "beneficio_" + via,
+            confianza: "alta",
+            candidatos: delPaciente,
+          };
+        }
+      }
       const { elegida, ambiguo } = elegirPractica(delPaciente, informe.practicaHint);
       if (elegida) {
         return {

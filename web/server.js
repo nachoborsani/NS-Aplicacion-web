@@ -370,7 +370,17 @@ function matchearInforme(slug, extract) {
     }
   }
   const padronCliente = loadPadron()[slug] || {};
-  const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre, practicaHint: extract.practica };
+  // Pistas de práctica: las que guardó la lectura del archivo y, si el informe es
+  // viejo (se leyó antes de que existiera la lista), se releen del texto guardado
+  // — ahí suele estar "OTOMICROSCOPIA + RINOMANOMETRÍA". Así el botón Re-analizar
+  // también resuelve los que ya estaban cargados, sin volver a leer el archivo.
+  let hints = Array.isArray(extract.practicas) ? extract.practicas : [];
+  if (hints.length < 2 && extract.practica && informeExtract && informeExtract.practicasDe) {
+    const releidas = informeExtract.practicasDe(String(extract.practica));
+    if (releidas.length > hints.length) hints = releidas;
+  }
+  const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre,
+                    practicaHint: extract.practica, practicaHints: hints };
   const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);
   // Cuando no matcheó confiado, sugerir afiliados del padrón con nombre parecido
   // (para confirmar en 1 clic los typos / abreviados / nombres con ruido).
@@ -382,6 +392,9 @@ function matchearInforme(slug, extract) {
     estado: m.estado, ome: m.ome, via: m.via, confianza: m.confianza,
     etiqueta: cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado,
     prestacion: m.prestacion ? cabinaLib.candidatoLiviano(m.prestacion) : null,
+    // Cuando el informe cubre varias prácticas, las OMEs de todas (ver elegirPracticas).
+    omes: Array.isArray(m.omes) ? m.omes : [],
+    prestaciones: (m.prestaciones || []).map(cabinaLib.candidatoLiviano),
     candidatos: (m.candidatos || []).slice(0, 8).map(cabinaLib.candidatoLiviano),
     sugerencias,
   };
@@ -393,7 +406,8 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   if (informeExtract) {
     const r = await informeExtract.procesar(storedPath, filename);
     extract = { dni: r.dni || "", beneficio: r.beneficio || "", nombre: r.nombre || "",
-                practica: r.practica || "", ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
+                practica: r.practica || "", practicas: r.practicas || [],
+                ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
     error = r.error || null;
   } else {
     error = "El motor de lectura de informes no está disponible en el servidor.";

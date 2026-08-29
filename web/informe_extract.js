@@ -52,10 +52,20 @@ const _PRACTICA_MAP = [
   [/\bECG\b|ELECTROCARDIOGRAMA|ELECTRO\s*CARDIO/i, "ELECTROCARDIOGRAMA"],
   [/VENOSO\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+VENOSO/i, "VENOSO DE MIEMBROS INFERIORES"],
   [/ARTERIAL\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+ARTERIAL/i, "ARTERIAL DE MIEMBROS INFERIORES"],
+  // Otorrino: un mismo informe suele traer las dos juntas ("OTOMICROSCOPIA +
+  // RINOMANOMETRÍA") y son DOS prácticas distintas de la bandeja.
+  [/OTOMICROSCOP[IÍ]A/i, "OTOMICROSCOPIA"],
+  [/RINOMANOMETR[IÍ]A/i, "RINOMANOMETRIA"],
+  [/VIDEO\s*RINOFIBROLARINGOSCOP[IÍ]A|RINOFIBROLARINGOSCOP[IÍ]A/i, "RINOFIBROLARINGOSCOPIA"],
 ];
+// Todas las prácticas nombradas en el informe (un informe puede cubrir varias).
+function practicasDe(fuente) {
+  const out = [];
+  for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente) && !out.includes(kw)) out.push(kw);
+  return out;
+}
 function practicaDe(fuente) {
-  for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente)) return kw;
-  return "";
+  return practicasDe(fuente)[0] || "";
 }
 
 // Extrae {dni, beneficio, nombre, nombreKey} del texto + nombre de archivo.
@@ -112,13 +122,16 @@ function extraerDatos(texto, filename) {
   // Práctica / estudio (pista para elegir la OME cuando el paciente tiene varias).
   // 1º la sigla del estudio mapeada a la palabra con que figura en la bandeja
   // (ETT→ECODOPPLER CARDIACO, MAPA→PRESUROMETRIA, HOLTER); si no, el texto libre.
-  let practica = practicaDe((fn + " " + t.slice(0, 400)).replace(/_/g, " "));
+  // Un informe puede cubrir VARIAS prácticas (otorrino: otomicroscopía +
+  // rinomanometría). Guardamos todas: el matcher busca una OME para cada una.
+  const practicas = practicasDe((fn + " " + t.slice(0, 400)).replace(/_/g, " "));
+  let practica = practicas[0] || "";
   if (!practica) {
     m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,80})/i);
     if (m) practica = m[1].replace(/\s+/g, " ").trim();
   }
 
-  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica };
+  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas };
 }
 
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está
@@ -142,4 +155,4 @@ async function procesar(filePath, nombreArchivo) {
   return { ...datos, necesitaOcr, ocrUsado, error: error || null, texto: texto || "" };
 }
 
-module.exports = { extraerTexto, extraerDatos, procesar };
+module.exports = { extraerTexto, extraerDatos, procesar, practicasDe };
