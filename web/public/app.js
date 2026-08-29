@@ -1429,9 +1429,18 @@ function renderClientList(){
   var pot = document.getElementById('clientNavListPotenciales');
   var potGroup = document.getElementById('navGroupPotenciales');
   // Los "en análisis" (potenciales) van a su propia sección, salen de Consultorios/MedCab.
-  var consultorios = CLIENTS.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
-  var medCab = CLIENTS.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
-  var potenciales = CLIENTS.filter(function(c){ return c.enAnalisis; });
+  // El usuario de demostración ve SOLO los clientes que se le asignaron. En el
+  // servidor ya se filtra, pero el modo espejo no cambia la sesión (sigue siendo la
+  // del admin y trae la lista completa), así que el filtro va también acá para que
+  // la vista previa muestre exactamente lo que va a ver esa persona.
+  var VISIBLES = CLIENTS;
+  if (ME && ME.role === 'demo'){
+    var permitidosDemo = ME.clientes || [];
+    VISIBLES = CLIENTS.filter(function(c){ return permitidosDemo.indexOf(c.slug) >= 0; });
+  }
+  var consultorios = VISIBLES.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
+  var medCab = VISIBLES.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
+  var potenciales = VISIBLES.filter(function(c){ return c.enAnalisis; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
@@ -5479,8 +5488,11 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
-  var np = document.getElementById('navPadron'); if (np) np.style.display = (u.role === 'admin') ? '' : 'none';
-  var nc = document.getElementById('navCabina'); if (nc) nc.style.display = (u.role === 'admin') ? '' : 'none';
+  // Padrón e Informes recibidos: admin y el usuario de demostración (los ve, pero
+  // no puede usarlos: cualquier acción rebota con "te faltan permisos").
+  var verHerramientas = (u.role === 'admin' || u.role === 'demo');
+  var np = document.getElementById('navPadron'); if (np) np.style.display = verHerramientas ? '' : 'none';
+  var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
