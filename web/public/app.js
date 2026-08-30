@@ -4786,6 +4786,164 @@ function setDefaultUploadPeriod(){
   if (!el) return;
   el.value = '';
 }
+// ===== Calculadora de proyecciones (pestaña de Nomencladores) =====
+var CALC = { data:null, items:[], saved:[], loaded:false, wired:false };
+function calcMoney(n){ try{ return Number(n||0).toLocaleString('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2,maximumFractionDigits:2}); }catch(e){ return '$ '+(Number(n)||0).toFixed(2); } }
+function switchNomTab(which){
+  var buscar = which!=='calc';
+  var tb=document.getElementById('nom-tab-buscar'), tc=document.getElementById('nom-tab-calc');
+  if(tb) tb.style.display = buscar?'':'none';
+  if(tc) tc.style.display = buscar?'none':'';
+  var bb=document.getElementById('nomTabBuscarBtn'), cb=document.getElementById('nomTabCalcBtn');
+  if(bb) bb.classList.toggle('active', buscar);
+  if(cb) cb.classList.toggle('active', !buscar);
+  if(!buscar) loadCalcData();   // recarga con el nomenclador elegido en ese momento
+}
+function calcWire(){
+  if(CALC.wired) return; CALC.wired=true;
+  document.getElementById('calcMod').addEventListener('change', calcFillCods);
+  document.getElementById('calcCod').addEventListener('change', calcPreview);
+  document.getElementById('calcSoloPract').addEventListener('change', calcFillCods);
+  document.getElementById('calcAdd').addEventListener('click', calcAdd);
+  ['calcPctIB','calcPctGan','calcPctOtros','calcIB','calcGan','calcOtros'].forEach(function(id){
+    var el=document.getElementById(id); el.addEventListener('input',calcCalc); el.addEventListener('change',calcCalc);
+  });
+  document.getElementById('calcSave').addEventListener('click', calcGuardar);
+  document.getElementById('calcDownload').addEventListener('click', calcDescargar);
+  document.getElementById('calcClear').addEventListener('click', function(){ CALC.saved=[]; calcPersistSaved(); calcRenderSaved(); });
+}
+async function loadCalcData(){
+  calcWire();
+  var period = (document.getElementById('nomPeriod')||{}).value || '';
+  var res = await api('/api/nomencladores/calc-data' + (period?('?period='+encodeURIComponent(period)):''));
+  if(!res.ok){ return; }
+  CALC.data = res.data; CALC.loaded = true;
+  var lab=document.getElementById('calcNomLabel'); if(lab) lab.textContent = res.data.label || '';
+  var noNom=document.getElementById('calcNoNom'), grid=document.getElementById('calcGrid');
+  if(!(res.data.modulos||[]).length){ if(noNom) noNom.style.display=''; if(grid) grid.style.display='none'; return; }
+  if(noNom) noNom.style.display='none'; if(grid) grid.style.display='';
+  try{ CALC.saved = JSON.parse(localStorage.getItem('ns-calc-saved')||'[]'); }catch(e){ CALC.saved=[]; }
+  calcFillMods(); calcRenderSaved();
+}
+function calcModObj(){ var c=document.getElementById('calcMod').value; return (CALC.data.modulos||[]).filter(function(m){return m.code===c;})[0]; }
+function calcVisibles(m){ var solo=document.getElementById('calcSoloPract').checked; return (m?m.practicas:[]).filter(function(p){ return !(solo && p.consulta); }); }
+function calcFillMods(){
+  var s=document.getElementById('calcMod'); s.innerHTML='';
+  (CALC.data.modulos||[]).forEach(function(m){ var o=document.createElement('option'); o.value=m.code; o.textContent=(m.code||'—')+' · '+m.desc; s.appendChild(o); });
+  calcFillCods();
+}
+function calcFillCods(){
+  var m=calcModObj(), s=document.getElementById('calcCod'); s.innerHTML='';
+  var vs=calcVisibles(m);
+  var all=document.createElement('option'); all.value='__all__'; all.textContent='★ Agregar TODAS las prácticas del módulo ('+vs.length+')'; s.appendChild(all);
+  vs.forEach(function(p){ var o=document.createElement('option'); o.value=p.cod; o.textContent=p.cod+' · '+p.desc+(p.excluye&&p.excluye.length?'  ⚠ excluyente':''); s.appendChild(o); });
+  calcPreview();
+}
+function calcPracActual(){ var m=calcModObj(); var c=document.getElementById('calcCod').value; return m&&m.practicas.filter(function(p){return p.cod===c;})[0]; }
+function calcPreview(){
+  var sel=document.getElementById('calcCod').value, prev=document.getElementById('calcPreview'), btn=document.getElementById('calcAdd');
+  if(sel==='__all__'){ var vs=calcVisibles(calcModObj()), suma=vs.reduce(function(s,p){return s+p.valor;},0); prev.textContent='Agrega '+vs.length+' · '+calcMoney(suma); btn.disabled=!vs.length; return; }
+  var p=calcPracActual(); prev.textContent=p?'Valoriza '+calcMoney(p.valor):''; btn.disabled=!p;
+}
+function calcAgregar(mcode,mdesc,p){
+  var ex=CALC.items.filter(function(it){return it.mod===mcode&&it.cod===p.cod;})[0];
+  if(ex){ ex.qty++; }
+  else CALC.items.push({mod:mcode,modDesc:mdesc,cod:p.cod,desc:p.desc,valor:p.valor,qty:1,honMode:'monto',honVal:Math.round(p.valor*0.4),excluye:p.excluye||[],excNota:p.excNota||''});
+}
+function calcAdd(){
+  var m=calcModObj(); if(!m) return;
+  if(document.getElementById('calcCod').value==='__all__'){ var vs=calcVisibles(m); if(!vs.length) return; vs.forEach(function(p){calcAgregar(m.code,m.desc,p);}); calcRender(); return; }
+  var p=calcPracActual(); if(!p) return; calcAgregar(m.code,m.desc,p); calcRender();
+}
+function calcConflictos(i){
+  var a=CALC.items[i], out=[];
+  CALC.items.forEach(function(b,j){ if(j===i) return;
+    var choca=(a.excluye&&a.excluye.indexOf(b.cod)>=0)||(b.excluye&&b.excluye.indexOf(a.cod)>=0);
+    if(choca) out.push(b.cod);
+  });
+  return out;
+}
+function calcHonDe(it){ return it.honMode==='pct' ? it.valor*it.qty*(it.honVal/100) : it.honVal*it.qty; }
+function calcRenderItems(){
+  var box=document.getElementById('calcItems'), cb=document.getElementById('calcConflict');
+  if(!CALC.items.length){ box.innerHTML='<div class="calc-empty"><b>Todavía no agregaste prácticas</b>Elegí un módulo y una práctica arriba, y sumala.</div>'; cb.innerHTML=''; document.getElementById('calcCount').textContent='0 prácticas'; return; }
+  var hay=false;
+  var rows=CALC.items.map(function(it,i){
+    var ch=calcConflictos(i); if(ch.length) hay=true;
+    var warn=ch.length?'<div class="calc-warn-chip">⚠ Se pisa con '+esc(ch.join(', '))+(it.excNota?' · '+esc(it.excNota):'')+'</div>':'';
+    return '<tr>'+
+      '<td><div class="ccode">'+esc(it.cod)+'</div><div class="cdesc">'+esc(it.desc)+'</div><span class="calc-mod-chip">'+esc(it.mod)+' · '+esc(it.modDesc||'')+'</span>'+warn+'</td>'+
+      '<td class="num">'+calcMoney(it.valor)+'</td>'+
+      '<td><input class="qty" type="number" min="1" step="1" value="'+it.qty+'" data-q="'+i+'"></td>'+
+      '<td><div class="calc-hon"><input type="number" min="0" step="1" value="'+it.honVal+'" data-h="'+i+'">'+
+        '<div class="calc-tgl"><button data-m="'+i+'" data-mode="monto" class="'+(it.honMode==='monto'?'on':'')+'">$</button>'+
+        '<button data-m="'+i+'" data-mode="pct" class="'+(it.honMode==='pct'?'on':'')+'">%</button></div></div></td>'+
+      '<td class="num" style="font-weight:700">'+calcMoney(it.valor*it.qty)+'</td>'+
+      '<td style="text-align:right"><button class="calc-x" data-del="'+i+'" title="Quitar">×</button></td>'+
+    '</tr>';
+  }).join('');
+  box.innerHTML='<table><thead><tr><th>Práctica</th><th class="num">Unitario</th><th>Cant.</th><th class="num">Honorario méd.</th><th class="num">Bruto</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  cb.innerHTML = hay ? '<div class="calc-conflict"><span>⚠</span><span>Hay prácticas <b>excluyentes entre sí</b> en la proyección. PAMI no paga todas — revisá las marcadas.</span></div>' : '';
+  var tot=CALC.items.reduce(function(s,it){return s+it.qty;},0);
+  document.getElementById('calcCount').textContent=tot+' práctica'+(tot!==1?'s':'');
+  box.querySelectorAll('[data-q]').forEach(function(inp){ inp.addEventListener('input',function(){ CALC.items[+this.dataset.q].qty=Math.max(1,parseInt(this.value)||1); calcRender(); }); });
+  box.querySelectorAll('[data-h]').forEach(function(inp){ inp.addEventListener('input',function(){ CALC.items[+this.dataset.h].honVal=Math.max(0,parseFloat(this.value)||0); calcCalc(); }); });
+  box.querySelectorAll('[data-m]').forEach(function(b){ b.addEventListener('click',function(){ CALC.items[+this.dataset.m].honMode=this.dataset.mode; calcRender(); }); });
+  box.querySelectorAll('[data-del]').forEach(function(b){ b.addEventListener('click',function(){ CALC.items.splice(+this.dataset.del,1); calcRender(); }); });
+}
+function calcTotales(){
+  var bruto=CALC.items.reduce(function(s,it){return s+it.valor*it.qty;},0);
+  var hon=CALC.items.reduce(function(s,it){return s+calcHonDe(it);},0);
+  var pct=function(id){ return (parseFloat(document.getElementById(id).value)||0)/100; };
+  var ib=document.getElementById('calcIB').checked?bruto*pct('calcPctIB'):0;
+  var gan=document.getElementById('calcGan').checked?bruto*pct('calcPctGan'):0;
+  var otr=document.getElementById('calcOtros').checked?bruto*pct('calcPctOtros'):0;
+  var imp=ib+gan+otr, rent=bruto-hon-imp, margin=bruto?rent/bruto*100:0;
+  return {bruto:bruto,hon:hon,ib:ib,gan:gan,otr:otr,imp:imp,rent:rent,margin:margin};
+}
+function calcCalc(){
+  var t=calcTotales();
+  document.getElementById('calcAmtIB').textContent=calcMoney(t.ib);
+  document.getElementById('calcAmtGan').textContent=calcMoney(t.gan);
+  document.getElementById('calcAmtOtros').textContent=calcMoney(t.otr);
+  document.getElementById('calcBruto').textContent=calcMoney(t.bruto);
+  document.getElementById('calcHon').textContent='− '+calcMoney(t.hon);
+  document.getElementById('calcImp').textContent='− '+calcMoney(t.imp);
+  document.getElementById('calcRent').textContent=calcMoney(t.rent);
+  document.getElementById('calcMargin').textContent=(t.bruto?Math.round(t.margin):0)+'%';
+  document.getElementById('calcFinal').classList.toggle('warn', t.bruto>0 && t.margin<25);
+}
+function calcRender(){ calcRenderItems(); calcCalc(); }
+function calcPersistSaved(){ try{ localStorage.setItem('ns-calc-saved', JSON.stringify(CALC.saved)); }catch(e){} }
+function calcRenderSaved(){
+  var l=document.getElementById('calcSavedList'); document.getElementById('calcSavedCount').textContent=CALC.saved.length;
+  if(!CALC.saved.length){ l.innerHTML='<div class="calc-saved-empty">Guardá una proyección para compararla con otra.</div>'; return; }
+  l.innerHTML=CALC.saved.map(function(s,i){
+    return '<div class="calc-saved"><div><div class="sv-name">'+esc(s.nombre)+'</div><div class="sv-meta">Bruto '+calcMoney(s.bruto)+'</div></div>'+
+      '<div><div class="sv-val">'+calcMoney(s.rent)+'</div><div class="sv-margin">'+Math.round(s.margin)+'% margen</div></div>'+
+      '<button class="calc-x" data-sdel="'+i+'" title="Quitar">×</button></div>';
+  }).join('');
+  l.querySelectorAll('[data-sdel]').forEach(function(b){ b.addEventListener('click',function(){ CALC.saved.splice(+this.dataset.sdel,1); calcPersistSaved(); calcRenderSaved(); }); });
+}
+function calcGuardar(){
+  if(!CALC.items.length){ return; }
+  var nombre=(document.getElementById('calcSaveName').value||'').trim() || ('Proyección '+(CALC.saved.length+1));
+  var t=calcTotales();
+  CALC.saved.push({nombre:nombre,bruto:t.bruto,hon:t.hon,imp:t.imp,rent:t.rent,margin:t.margin});
+  document.getElementById('calcSaveName').value=''; calcPersistSaved(); calcRenderSaved();
+}
+function calcDescargar(){
+  if(!CALC.saved.length){ return; }
+  var sc=function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; };
+  var head=['Proyeccion','Bruto','Honorarios','Impuestos','Rentabilidad','Margen %'];
+  var lines=[head.join(';')].concat(CALC.saved.map(function(s){
+    return [sc(s.nombre), s.bruto.toFixed(2), s.hon.toFixed(2), s.imp.toFixed(2), s.rent.toFixed(2), Math.round(s.margin)].join(';');
+  }));
+  var blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='proyecciones_totales.csv';
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+
 async function loadNomencladorSummary(period){
   var st = document.getElementById('nomStatusText');
   if (!st) return;

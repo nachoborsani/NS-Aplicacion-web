@@ -5345,6 +5345,60 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, nomencladorSummary(store, payload));
   }
 
+  // Datos para la Calculadora de proyecciones: módulos con sus prácticas (código,
+  // descripción, valor, si es consulta) y qué prácticas se pisan entre sí, tomado de
+  // las reglas de débito ya cargadas. Todo en una sola llamada.
+  if (p === "/api/nomencladores/calc-data" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const store = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
+    if (!payload) return json(res, 200, { periodo: "", label: "", modulos: [] });
+    // Mapa de exclusiones desde las reglas: código -> { con:[códigos], nota }.
+    const excl = {};
+    const addExcl = (cod, conArr, nota) => {
+      if (!cod) return;
+      const e = excl[cod] || (excl[cod] = { con: new Set(), nota: "" });
+      (conArr || []).forEach((c) => { if (c && c !== cod) e.con.add(c); });
+      if (nota && !e.nota) e.nota = nota;
+    };
+    for (const r of loadDebitoReglas()) {
+      if (!r || r.activa === false) continue;
+      if (r.tipo === "par") {
+        const cs = (r.codigos || []).map(cleanIdentifier).filter(Boolean);
+        cs.forEach((c) => addExcl(c, cs.filter((x) => x !== c), r.nota || r.codigosNombre));
+      } else {
+        const debita = cleanIdentifier(r.debita);
+        addExcl(debita, (r.conCodigos || []).map(cleanIdentifier).filter(Boolean), r.nota || r.debitaNombre);
+      }
+    }
+    // Agrupar prácticas por módulo (una fila por código, la de mayor valor si repite).
+    const mods = new Map();
+    for (const row of (payload.rows || [])) {
+      const cod = String(row.practiceCode || "").trim();
+      if (!cod) continue;
+      const mcod = String(row.moduleCode || "").trim();
+      const mkey = mcod || "sin";
+      let m = mods.get(mkey);
+      if (!m) { m = { code: mcod, desc: row.moduleDescription || "Sin módulo", _byCode: new Map() }; mods.set(mkey, m); }
+      const prev = m._byCode.get(cod);
+      const valor = money(row.total || 0);
+      if (!prev || valor > prev.valor) {
+        const e = excl[cod];
+        m._byCode.set(cod, {
+          cod, desc: row.practiceDescription || "", valor,
+          consulta: isConsultationRow(row),
+          excluye: e ? [...e.con] : [], excNota: e ? e.nota : "",
+        });
+      }
+    }
+    const modulos = [...mods.values()]
+      .map((m) => ({ code: m.code, desc: m.desc, practicas: [...m._byCode.values()].sort((a, b) => a.cod.localeCompare(b.cod)) }))
+      .filter((m) => m.practicas.length)
+      .sort((a, b) => Number(a.code) - Number(b.code) || a.desc.localeCompare(b.desc));
+    return json(res, 200, { periodo: payload.period || "", label: payload.label || periodLabel(payload.period), modulos });
+  }
+
   if (p === "/api/nomencladores/search" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

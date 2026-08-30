@@ -601,6 +601,12 @@
             </div>
           </div>
 
+          <div class="client-tabs" id="nomTabs" style="margin:14px 0 18px">
+            <button id="nomTabBuscarBtn" type="button" class="active" onclick="switchNomTab('buscar')">Buscar prestación</button>
+            <button id="nomTabCalcBtn" type="button" onclick="switchNomTab('calc')">Calculadora</button>
+          </div>
+
+          <div id="nom-tab-buscar">
           <div class="nom-increase" id="nomIncrease" style="display:none"></div>
 
           <div class="nom-filters card">
@@ -659,6 +665,75 @@
                 <thead><tr><th>Módulo</th><th>Prestación</th><th>Tipo</th><th>Ámbito</th><th>Total</th><th>Autorización</th></tr></thead>
                 <tbody id="nomBody"></tbody>
               </table>
+            </div>
+          </div>
+          </div><!-- /nom-tab-buscar -->
+
+          <!-- CALCULADORA DE PROYECCIONES -->
+          <div id="nom-tab-calc" style="display:none">
+            <div id="calcNoNom" class="nom-status card" style="display:none">
+              <div><b>No hay nomenclador cargado</b><span>Subí un Excel arriba para poder calcular proyecciones.</span></div>
+            </div>
+            <div class="calc-grid" id="calcGrid">
+              <div class="calc-col">
+                <div class="card">
+                  <div class="table-head"><div><b>Elegí las prácticas</b><span id="calcNomLabel">—</span></div></div>
+                  <div class="card-pad">
+                    <div class="calc-pick">
+                      <div class="field"><label>Módulo</label><select class="inp" id="calcMod"></select></div>
+                      <div class="field"><label>Código / práctica</label><select class="inp" id="calcCod"></select></div>
+                    </div>
+                    <div class="calc-filter">
+                      <label class="chk-mini"><input type="checkbox" id="calcSoloPract" checked> Solo prácticas (esconder consultas)</label>
+                      <span class="calc-preview tnum" id="calcPreview"></span>
+                    </div>
+                    <button class="btn btn-primary" id="calcAdd" style="width:100%;margin-top:12px">+ Agregar a la proyección</button>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="table-head"><div><b>Prácticas de la proyección</b><span id="calcCount">0 prácticas</span></div></div>
+                  <div class="card-pad">
+                    <div id="calcConflict"></div>
+                    <div class="calc-items" id="calcItems"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="calc-col calc-result">
+                <div class="card">
+                  <div class="table-head"><div><b>Impuestos y costos</b><span>sobre el bruto</span></div></div>
+                  <div class="card-pad calc-taxes">
+                    <div class="calc-tax"><label class="chk-mini"><input type="checkbox" id="calcIB" checked> Ingresos Brutos</label><div class="calc-tax-r"><span class="calc-amt" id="calcAmtIB">$ 0,00</span><span class="calc-pct"><input type="number" id="calcPctIB" value="4" min="0" max="100" step="0.5"></span></div></div>
+                    <div class="calc-tax"><label class="chk-mini"><input type="checkbox" id="calcGan"> Retención Ganancias</label><div class="calc-tax-r"><span class="calc-amt" id="calcAmtGan">$ 0,00</span><span class="calc-pct"><input type="number" id="calcPctGan" value="2" min="0" max="100" step="0.5"></span></div></div>
+                    <div class="calc-tax"><label class="chk-mini"><input type="checkbox" id="calcOtros"> Otros costos</label><div class="calc-tax-r"><span class="calc-amt" id="calcAmtOtros">$ 0,00</span><span class="calc-pct"><input type="number" id="calcPctOtros" value="0" min="0" max="100" step="0.5"></span></div></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="table-head"><div><b>Resultado estimado</b></div></div>
+                  <div class="card-pad">
+                    <div class="calc-line"><span>Facturación (bruto)</span><b class="tnum" id="calcBruto">$ 0,00</b></div>
+                    <div class="calc-line neg"><span>− Honorarios médicos</span><b class="tnum" id="calcHon">$ 0,00</b></div>
+                    <div class="calc-line neg"><span>− Impuestos y costos</span><b class="tnum" id="calcImp">$ 0,00</b></div>
+                    <div class="calc-final" id="calcFinal">
+                      <div class="calc-final-top"><span class="calc-final-lbl">Rentabilidad</span><span class="calc-final-margin" id="calcMargin">0%</span></div>
+                      <div class="calc-final-val tnum" id="calcRent">$ 0,00</div>
+                    </div>
+                    <div class="calc-save">
+                      <input class="inp" type="text" id="calcSaveName" placeholder="Nombre (ej. Julio con 2 cardiólogos)">
+                      <button class="btn btn-ghost" id="calcSave">Guardar</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="table-head"><div><b>Guardadas para comparar</b><span id="calcSavedCount">0</span></div></div>
+                  <div class="card-pad">
+                    <div class="calc-saved-list" id="calcSavedList"></div>
+                    <div class="calc-saved-actions">
+                      <button class="btn btn-ghost" id="calcDownload">⬇ Descargar totales</button>
+                      <button class="btn btn-ghost" id="calcClear">Vaciar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
