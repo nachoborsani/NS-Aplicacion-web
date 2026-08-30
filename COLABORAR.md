@@ -36,6 +36,25 @@ cd NS-Aplicacion-web
 La primera vez GitHub te va a pedir loguearte. Si usás la terminal, lo más fácil es
 [GitHub CLI](https://cli.github.com): `gh auth login` y listo.
 
+### Configurá tu identidad (una sola vez, importante)
+
+Git firma cada cambio con tu nombre. Para que quede claro que fuiste vos y no otra
+persona, configurá tu identidad **con tu propio nombre y mail**:
+
+```bash
+git config --global user.name "Sebastian Lavorato"
+git config --global user.email "tu-mail@ejemplo.com"
+```
+
+- Si usás **GitHub Desktop** logueado con tu cuenta, esto ya sale automático — no hace
+  falta el comando.
+- **No trabajes desde la compu de otro** ni con la config de otro: ahí tus cambios
+  quedarían firmados con el nombre equivocado.
+
+Así, en el historial de GitHub (y en el "blame", que muestra línea por línea quién
+escribió qué) cada cambio queda atribuido a vos correctamente. Trabajando con Claude
+Code, los commits quedan como **autor: vos** + una línea *"Co-Authored-By: Claude"*.
+
 ---
 
 ## 3. Trabajar con Claude Code
