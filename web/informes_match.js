@@ -112,9 +112,14 @@ function elegirPracticas(prestaciones, hints) {
   for (const h of (Array.isArray(hints) ? hints : [])) {
     const hint = norm(h);
     if (!hint) continue;
+    // Las CONSULTAS quedan afuera de este camino. Un informe que cubre varias
+    // prácticas cubre ESTUDIOS, no consultas; y como la consulta de cardiología
+    // "incluye electrocardiograma", el cuerpo de un Holter ("registro
+    // electrocardiográfico de 24 hs") se llevaba puesta la consulta del paciente.
     const idxs = prestaciones
       .map((_, i) => i)
-      .filter((i) => !usados.has(i) && norm(prestaciones[i].practica).includes(hint));
+      .filter((i) => !usados.has(i) && !esConsulta(prestaciones[i].practica)
+        && norm(prestaciones[i].practica).includes(hint));
     if (idxs.length !== 1) { todas = false; continue; }
     usados.add(idxs[0]);
     out.push(prestaciones[idxs[0]]);
