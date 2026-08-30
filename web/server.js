@@ -3986,6 +3986,38 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Limpieza puntual de restos de GAUSS que quedaron en el volumen de NS (NS no los
+  // usa; verificado: no hay una sola referencia en el código). Borra SOLO esta lista
+  // fija — nunca una ruta que venga del pedido. Admin + confirmar=true.
+  if (p === "/api/admin/_limpiar-restos-gauss" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (String(url.searchParams.get("confirmar") || "") !== "true") {
+      return json(res, 400, { error: "Falta ?confirmar=true." });
+    }
+    const BASURA = ["gauss.db", "gauss.db-wal", "gauss.db-shm", "cost_updates"];
+    const borrado = [];
+    let liberados = 0;
+    const tamDir = (dir) => {
+      let t = 0; const st = [dir];
+      while (st.length) { const d = st.pop(); let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+        for (const e of es) { const f = path.join(d, e.name); if (e.isDirectory()) st.push(f); else { try { t += fs.statSync(f).size; } catch {} } } }
+      return t;
+    };
+    for (const nombre of BASURA) {
+      const full = path.join(dataDir, nombre);
+      try {
+        const stat = fs.statSync(full);
+        const bytes = stat.isDirectory() ? tamDir(full) : stat.size;
+        fs.rmSync(full, { recursive: true, force: true });
+        borrado.push({ nombre, MB: Math.round(bytes / 1048576 * 10) / 10 });
+        liberados += bytes;
+      } catch { /* no existe, nada que borrar */ }
+    }
+    return json(res, 200, { borrado, liberadosMB: Math.round(liberados / 1048576 * 10) / 10 });
+  }
+
   if (p === "/api/admin/worker/tasks" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
