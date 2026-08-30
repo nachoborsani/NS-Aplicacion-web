@@ -11,11 +11,17 @@ const path = require("path");
 
 const ASSETS = path.join(__dirname, "assets", "informes");
 
-const PIE_CABALLITO = ["Centro médico Caballito", "Av. directorio 1662", "Tel: 6338713 / 46330078 / 46324002"];
-// Ecografía / Diagnóstico por imágenes usa el membrete "Centro de Medicina
-// Ambulatoria" (otra sede, Av. Directorio 1658).
+// El membrete (logo arriba + nombre/dirección/teléfono al pie) YA NO se
+// hardcodea por cliente acá: sale del Cliente elegido al generar. server.js
+// arma `logoName` / `pieLines` a partir de los datos "Logo, Dirección,
+// Teléfono" de ese cliente y se los pasa a buildInformePdf en `input`. Así
+// cualquier modelo sirve para cualquier cliente sin duplicar nada acá.
+//
+// Única excepción: un estudio que sale siempre desde una sede propia sin
+// importar de qué cliente sea la cuenta — Ecografía musculoesquelética usa el
+// membrete de "Centro de Medicina Ambulatoria" (otra sede, Av. Directorio
+// 1658) en vez del cliente. Por eso ese modelo fija su propio membreteTexto/pie.
 const PIE_CABALLITO_AMB = ["Caballito. Centro de Medicina Ambulatoria.", "Av. Directorio 1658. 1406 Cap. Fed.", "TE: 4633-8713 / 4633-9320"];
-const PIE_CIMA = ["CIMA - Innovación en Medicina", "Islas Malvinas 2722 - Isidro Casanova"];
 
 // Campos de la caja técnica del Holter. Base = Caballito; CIMA suma 4 más.
 const HOLTER_CAMPOS = [
@@ -145,252 +151,139 @@ const FLUJO_CAMPOS = [
   { key: "tiempoDescenso", label: "Tiempo de descenso", default: "" },
   { key: "tiempoEntrePausas", label: "Tiempo entre pausas", default: "" },
 ];
+// Catálogo de estudios (modelos), UNO por tipo de estudio — ya no uno por
+// cliente. Lo que cambiaba solo por cliente (logo, nombre/dirección/teléfono
+// al pie, y qué médico firma) sale ahora del Cliente elegido al generar, no
+// de acá. Agregar un cliente nuevo no requiere tocar este archivo: alcanza
+// con cargarle Logo/Dirección/Teléfono y asignarle médicos.
 const MODELOS = {
-  // --- Centro Médico Caballito: misma doctora, cambia el estudio realizado ---
-  "caballito-consulta-570129": {
-    label: "Caballito — Consulta cardiología c/ ECG (570129)",
-    short: "Caballito · Consulta ECG",
+  "consulta-570129": {
+    label: "Consulta cardiología c/ ECG (570129)",
+    short: "Consulta ECG",
     practica: "Consulta cardiológica c/ ECG — 570129",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología",
     codigoPractica: "570129",
     estudio: "Consulta con especialista en cardiología (incluye ECG)",
     estudioArchivo: "Consulta Cardiologia ECG",
-    solicitanteDefault: "Dra. Naiara, Jacinto",
     textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
-    pie: PIE_CABALLITO,
   },
-  "caballito-electro": {
-    label: "Caballito — Electrocardiograma simple",
-    short: "Caballito · ECG",
+  "electro": {
+    label: "Electrocardiograma simple",
+    short: "ECG",
     practica: "ECG simple",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología",
     codigoPractica: "",
     estudio: "Electrocardiograma",
-    solicitanteDefault: "Dra. Naiara, Jacinto",
     textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
-    pie: PIE_CABALLITO,
   },
-  "caballito-holter": {
-    label: "Caballito — Holter cardíaco 24 hs",
-    short: "Caballito · Holter",
+  "holter": {
+    label: "Holter cardíaco 24 hs",
+    short: "Holter",
     practica: "Holter cardíaco 24 hs",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología",
     codigoPractica: "",
     estudio: "Holter cardíaco de 3 canales 24 hs.",
     estudioArchivo: "Holter 24 hs",
-    solicitanteDefault: "Dra. Naiara, Jacinto",
     textoDefault: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
-    pie: PIE_CABALLITO,
-    // Caja "DATOS TÉCNICOS DEL REGISTRO": valores estándar precargados, todos editables.
-    tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
-    campos: HOLTER_CAMPOS,
-  },
-  // --- CIMA (Innovación en Medicina): electro, firma Dr. Savia ---
-  "cima-electro": {
-    label: "CIMA — Electrocardiograma",
-    short: "CIMA · ECG",
-    practica: "Electrocardiograma",
-    centro: "CIMA",
-    logo: "cima_logo.png",
-    logoW: 150,
-    servicio: "SERVICIO DE CARDIOLOGÍA",
-    especialidad: "Cardiología",
-    codigoPractica: "",
-    estudio: "Electrocardiograma",
-    solicitanteDefault: "Gerardo Savia",
-    textoDefault: "Trazado sin valor patológico.",
-    pie: PIE_CIMA,
-  },
-  "cima-consulta-570129": {
-    label: "CIMA — Consulta cardiología c/ ECG (570129)",
-    short: "CIMA · Consulta ECG",
-    practica: "Consulta cardiológica c/ ECG — 570129",
-    centro: "CIMA",
-    logo: "cima_logo.png",
-    logoW: 150,
-    servicio: "SERVICIO DE CARDIOLOGÍA",
-    especialidad: "Cardiología",
-    codigoPractica: "570129",
-    estudio: "Consulta con especialista en cardiología (incluye ECG)",
-    estudioArchivo: "Consulta Cardiologia ECG",
-    solicitanteDefault: "Gerardo Savia",
-    textoDefault: "Trazado sin valor patológico.",
-    pie: PIE_CIMA,
-  },
-  "cima-holter": {
-    label: "CIMA — Holter cardíaco 24 hs",
-    short: "CIMA · Holter",
-    practica: "Holter cardíaco 24 hs",
-    centro: "CIMA",
-    logo: "cima_logo.png",
-    logoW: 150,
-    servicio: "SERVICIO DE CARDIOLOGÍA",
-    especialidad: "Cardiología",
-    codigoPractica: "",
-    estudio: "Holter cardíaco de 3 canales 24 hs.",
-    estudioArchivo: "Holter 24 hs",
-    solicitanteDefault: "Gerardo Savia",
-    textoDefault: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
-    pie: PIE_CIMA,
+    // Caja "DATOS TÉCNICOS DEL REGISTRO": valores estándar precargados, todos
+    // editables. Usa el set completo (antes solo lo tenía el modelo de CIMA) —
+    // son campos opcionales de más, no le quitan nada a nadie.
     tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
     campos: HOLTER_CAMPOS_CIMA,
   },
   // ===================== ORL / Otorrinolaringología =====================
   // Mismo layout que cardiología (sin caja técnica). Cambia el servicio y, en
   // algunas prácticas, se elige el lado (el texto del preset cambia según el lado).
-  "caballito-orl-cerumen": {
-    label: "Caballito — Extracción tapón de cerumen / cuerpo extraño (717111)",
-    short: "Caballito · Cerumen",
+  "orl-cerumen": {
+    label: "Extracción tapón de cerumen / cuerpo extraño (717111)",
+    short: "Cerumen",
     practica: "717111 - Extracción de tapón de cerumen / cuerpo extraño",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
     codigoPractica: "717111",
     estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN",
     estudioArchivo: "Extraccion tapon cerumen",
-    solicitanteDefault: "",
     textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
-    pie: PIE_CABALLITO,
     requiereLado: true,
   },
-  "caballito-orl-quimico": {
-    label: "Caballito — Tratamiento químico ORL (717125)",
-    short: "Caballito · Trat. químico",
+  "orl-quimico": {
+    label: "Tratamiento químico ORL (717125)",
+    short: "Trat. químico",
     practica: "717125 - Tratamiento de lesiones ORL por medios físicos o químicos",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
     codigoPractica: "717125",
     estudio: "TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
     estudioArchivo: "Tratamiento quimico ORL",
-    solicitanteDefault: "",
     textoDefault: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
-    pie: PIE_CABALLITO,
   },
-  "caballito-orl-combinado": {
-    label: "Caballito — Cerumen + Tratamiento químico (717111 + 717125)",
-    short: "Caballito · Combinado",
+  "orl-combinado": {
+    label: "Cerumen + Tratamiento químico (717111 + 717125)",
+    short: "Combinado",
     practica: "717111 + 717125 - Cerumen + Tratamiento químico (combinado)",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
     codigoPractica: "717111 + 717125",
     estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN + TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
     estudioArchivo: "Cerumen y tratamiento quimico",
-    solicitanteDefault: "",
     textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
-    pie: PIE_CABALLITO,
     requiereLado: true,
   },
-  "caballito-orl-videorino": {
-    label: "Caballito — Video rinofibrolaringoscopia (717132)",
-    short: "Caballito · Videorino",
+  "orl-videorino": {
+    label: "Video rinofibrolaringoscopia (717132)",
+    short: "Videorino",
     practica: "717132 - Video rinofibrolaringoscopia",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
     codigoPractica: "717132",
     estudio: "VIDEO RINOFIBROLARINGOSCOPIA",
     estudioArchivo: "Video rinofibrolaringoscopia",
-    solicitanteDefault: "",
     textoDefault: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
-    pie: PIE_CABALLITO,
   },
-  "cima-orl-videorino": {
-    label: "CIMA — Video rinofibrolaringoscopia (717132)",
-    short: "CIMA · Videorino",
-    practica: "717132 - Video rinofibrolaringoscopia",
-    centro: "CIMA",
-    logo: "cima_logo.png",
-    logoW: 150,
-    servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
-    especialidad: "Otorrinolaringología",
-    codigoPractica: "717132",
-    estudio: "VIDEO RINOFIBROLARINGOSCOPIA",
-    estudioArchivo: "Video rinofibrolaringoscopia",
-    solicitanteDefault: "",
-    textoDefault: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
-    pie: PIE_CIMA,
-  },
-  // --- Centro Médico Caballito: Dermatología (criocirugía) ---
-  "caballito-derma-crio": {
-    label: "Caballito — Criocirugía de piel (510320)",
-    short: "Caballito · Criocirugía",
+  // --- Dermatología ---
+  "derma-crio": {
+    label: "Criocirugía de piel (510320)",
+    short: "Criocirugía",
     practica: "510320 - Ablación de lesiones de piel por criocirugía",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE DERMATOLOGÍA",
     especialidad: "Dermatología",
     codigoPractica: "510320",
     estudio: "ABLACIÓN DE LESIONES DE PIEL EN GENERAL POR CRIOCIRUGÍA",
     estudioArchivo: "Ablacion de piel por criocirugia",
-    solicitanteDefault: "",
     textoDefault: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
-    pie: PIE_CABALLITO,
   },
-  // --- Centro Médico Caballito: Dermatología (electrocoagulación / TCA) ---
-  "caballito-derma-electro": {
-    label: "Caballito — Destrucción de lesión de piel (537106)",
-    short: "Caballito · TCA/Electro",
+  "derma-electro": {
+    label: "Destrucción de lesión de piel (537106)",
+    short: "TCA/Electro",
     practica: "537106 - Destrucción de lesión de piel por electrocoagulación o TCA",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE DERMATOLOGÍA",
     especialidad: "Dermatología",
     codigoPractica: "537106",
     estudio: "TOPICACION CON TCA",
     estudioArchivo: "Destruccion de lesion de piel",
-    solicitanteDefault: "Dra. Leydy Henriquez Gomez",
     textoDefault: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
-    pie: PIE_CABALLITO,
   },
-  // --- Centro Médico Caballito: Dermatología (biopsia de piel) ---
-  "caballito-derma-biopsia": {
-    label: "Caballito — Biopsia de piel (537108)",
-    short: "Caballito · Biopsia de piel",
+  "derma-biopsia": {
+    label: "Biopsia de piel (537108)",
+    short: "Biopsia de piel",
     practica: "537108 - Biopsia de piel y/o tejido celular subcutáneo y/o muscular",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     servicio: "SERVICIO DE DERMATOLOGÍA",
     especialidad: "Dermatología",
     codigoPractica: "537108",
     estudio: "BIOPSIA DE PIEL",
     estudioArchivo: "Biopsia de piel",
-    solicitanteDefault: "Dra. Leydy Henriquez Gomez",
     textoDefault: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN REGIÓN A ESPECIFICAR. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
-    pie: PIE_CABALLITO,
   },
-  // --- Caballito (Centro de Medicina Ambulatoria): Ecografía musculoesquelética ---
-  "caballito-eco-musculo": {
-    label: "Caballito — Ecografía musculoesquelética (186001)",
-    short: "Caballito · Eco musculoesquelética",
+  // --- Ecografía musculoesquelética: sale siempre desde la sede de Medicina
+  // Ambulatoria, sin importar de qué cliente sea la cuenta (ver comentario
+  // arriba de PIE_CABALLITO_AMB) — por eso es el único que fija su membrete.
+  "eco-musculo": {
+    label: "Ecografía musculoesquelética (186001)",
+    short: "Eco musculoesquelética",
     practica: "186001 - Ecografía musculoesquelética",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     membreteTexto: PIE_CABALLITO_AMB,   // encabezado de texto (no servicio grande)
     mostrarCobertura: true,             // muestra "Cobertura:" (default PAMI)
     estudioEditable: true,              // "Estudio solicitado" se edita / lo pisa el preset
@@ -400,86 +293,104 @@ const MODELOS = {
     estudio: "Ecografía de partes blandas",
     estudioLabel: "Estudio solicitado:",
     estudioArchivo: "Ecografia musculoesqueletica",
-    solicitanteDefault: "",
     textoDefault: "EXPLORADA LA REGIÓN SOLICITADA CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
     pie: PIE_CABALLITO_AMB,
   },
-  // --- Centro Médico Caballito: Test de SIBO (aire espirado) — layout propio ---
-  "caballito-sibo": {
-    label: "Caballito — Test de SIBO (607130)",
-    short: "Caballito · SIBO",
+  // --- Test de SIBO (aire espirado) — layout propio ---
+  "sibo": {
+    label: "Test de SIBO (607130)",
+    short: "SIBO",
     practica: "607130 - Test de aire espirado (SIBO)",
-    centro: "Centro Médico Caballito",
-    logo: "cmc_logo.png",
-    logoW: 84,
     especialidad: "Gastroenterología / Estudios funcionales",
     codigoPractica: "607130",
     estudio: "TEST DE AIRE ESPIRADO PARA SOBRECRECIMIENTO BACTERIANO",
     estudioArchivo: "Test de SIBO",
     tipo: "sibo",
     testType: "SIBO 2026",
+    // Se usa solo si no se eligió médico al generar (ver buildSiboPdf).
     profesionalDefault: ["DR. RAMIRO CALCAGNO", "MN 149098   MP 232961"],
     campos: SIBO_CAMPOS,
-    solicitanteDefault: "",
     textoDefault: "Estudio negativo para SIBO",
-    pie: PIE_CABALLITO,
   },
-  // --- CIMA: MAPA / Presurometría 24 hs — layout propio (página resumen) ---
-  "cima-mapa": {
-    label: "CIMA — MAPA / Presurometría 24 hs (570120)",
-    short: "CIMA · MAPA",
+  // --- MAPA / Presurometría 24 hs — layout propio (página resumen) ---
+  "mapa": {
+    label: "MAPA / Presurometría 24 hs (570120)",
+    short: "MAPA",
     practica: "570120 - Presurometría 24 hs / MAPA",
-    centro: "CIMA",
     especialidad: "Cardiología",
     codigoPractica: "570120",
     estudio: "PRESUROMETRÍA POR 24 HS / MAPA",
     estudioArchivo: "MAPA Presurometria 24hs",
     tipo: "mapa",
-    encabezado: "CIMA SALUD",
-    subtitulo: "Islas malvinas 2722 - Isidro Casanova",
     campos: MAPA_CAMPOS,
-    solicitanteDefault: "",
     textoDefault: "REGISTRO DE PRESIÓN ARTERIAL DENTRO DE PARÁMETROS CONSERVADOS. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
-    pie: PIE_CIMA,
   },
-  // --- CIMA: Ergometría computarizada — layout propio (página resumen) ---
-  "cima-ergo": {
-    label: "CIMA — Ergometría (570124)",
-    short: "CIMA · Ergometría",
+  // --- Ergometría computarizada — layout propio (página resumen) ---
+  "ergo": {
+    label: "Ergometría (570124)",
+    short: "Ergometría",
     practica: "570124 - Ergometría computarizada 12 derivaciones",
-    centro: "CIMA",
     especialidad: "Cardiología",
     codigoPractica: "570124",
     estudio: "ERGOMETRÍA COMPUTARIZADA DE DOCE DERIVACIONES CON OXIMETRÍA",
     estudioArchivo: "Ergometria",
     tipo: "ergo",
-    encabezado: "CIMA",
     depto: "Dpto. de Cardiología",
-    subtitulo: "Islas Malvinas 2722 - Isidro Casanova",
     titulo: "Estudio CardioVex Ergometría",
     campos: ERGO_CAMPOS,
-    solicitanteDefault: "",
     textoDefault: "PRUEBA SUBMÁXIMA SUFICIENTE. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
-    pie: PIE_CIMA,
   },
-  // --- Caballito: Flujometría urinaria computarizada (ECUD) — layout propio ---
-  "caballito-flujometria": {
-    label: "Caballito — Flujometría urinaria computarizada (507315)",
-    short: "Caballito · Flujometría",
+  // --- Flujometría urinaria computarizada (ECUD) — layout propio ---
+  "flujometria": {
+    label: "Flujometría urinaria computarizada (507315)",
+    short: "Flujometría",
     practica: "507315 - Flujometría urinaria computarizada",
-    centro: "Centro Médico Caballito",
     especialidad: "Urología",
-    logo: "cmc_logo.png",
-    logoW: 84,
     codigoPractica: "507315",
     estudio: "FLUJOMETRÍA URINARIA COMPUTARIZADA",
     estudioArchivo: "Flujometria urinaria",
     tipo: "flujo",
     campos: FLUJO_CAMPOS,
-    solicitanteDefault: "",
     textoDefault: "Estudio normal",
-    pie: PIE_CABALLITO,
   },
+};
+// Modelo -> modelo viejo, para migrar configuraciones guardadas (médicos y
+// resultados asignados a un modelo puntual, cargados con la clave anterior).
+// Ver ensureModelosUnificados() en server.js.
+const MODELO_RENOMBRADOS = {
+  "caballito-consulta-570129": "consulta-570129",
+  "cima-consulta-570129": "consulta-570129",
+  "caballito-electro": "electro",
+  "cima-electro": "electro",
+  "caballito-holter": "holter",
+  "cima-holter": "holter",
+  "caballito-orl-cerumen": "orl-cerumen",
+  "caballito-orl-quimico": "orl-quimico",
+  "caballito-orl-combinado": "orl-combinado",
+  "caballito-orl-videorino": "orl-videorino",
+  "cima-orl-videorino": "orl-videorino",
+  "caballito-derma-crio": "derma-crio",
+  "caballito-derma-electro": "derma-electro",
+  "caballito-derma-biopsia": "derma-biopsia",
+  "caballito-eco-musculo": "eco-musculo",
+  "caballito-sibo": "sibo",
+  "cima-mapa": "mapa",
+  "cima-ergo": "ergo",
+  "caballito-flujometria": "flujometria",
+};
+// Clientes a los que pertenecía cada modelo viejo, para inferir a qué cliente
+// scopear a los médicos que ya estaban asignados a ese modelo (una sola vez).
+const MODELO_VIEJO_CLIENTE = {
+  "caballito-consulta-570129": "caballito-pediatrico", "cima-consulta-570129": "cima",
+  "caballito-electro": "caballito-pediatrico", "cima-electro": "cima",
+  "caballito-holter": "caballito-pediatrico", "cima-holter": "cima",
+  "caballito-orl-cerumen": "caballito-pediatrico", "caballito-orl-quimico": "caballito-pediatrico",
+  "caballito-orl-combinado": "caballito-pediatrico",
+  "caballito-orl-videorino": "caballito-pediatrico", "cima-orl-videorino": "cima",
+  "caballito-derma-crio": "caballito-pediatrico", "caballito-derma-electro": "caballito-pediatrico",
+  "caballito-derma-biopsia": "caballito-pediatrico", "caballito-eco-musculo": "caballito-pediatrico",
+  "caballito-sibo": "caballito-pediatrico", "cima-mapa": "cima", "cima-ergo": "cima",
+  "caballito-flujometria": "caballito-pediatrico",
 };
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
@@ -488,7 +399,6 @@ function listarModelos() {
     label: MODELOS[k].label || k,
     short: MODELOS[k].short || MODELOS[k].label || k,
     practica: MODELOS[k].practica || MODELOS[k].estudio || k,
-    centro: MODELOS[k].centro || "",
     especialidad: MODELOS[k].especialidad || "",
     codigoPractica: MODELOS[k].codigoPractica || "",
     campos: MODELOS[k].campos || [],
@@ -528,7 +438,7 @@ function sanitizeFilename(value) {
     .trim() || "informe";
 }
 
-const DEFAULT_MODELO = "caballito-consulta-570129";
+const DEFAULT_MODELO = "consulta-570129";
 
 function informeFilename(modeloKey, paciente) {
   const modelo = MODELOS[modeloKey] || MODELOS[DEFAULT_MODELO];
@@ -549,7 +459,9 @@ async function buildInformePdf(modeloKey, input) {
   if (modelo.tipo === "flujo") return buildFlujoPdf(modelo, input || {});
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
-  const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault;
+  // El solicitante ya no es un default fijo por modelo: server.js lo completa
+  // con el nombre del médico elegido si el operador no escribió uno propio.
+  const solicitante = ((input && input.solicitante) || "").trim() || modelo.solicitanteDefault || "";
   // "Estudio realizado/solicitado": del input si el modelo lo deja editar; si no, fijo.
   const estudioTxt = ((input && input.estudio) || "").trim() || modelo.estudio || "";
   // Cobertura (default PAMI) solo si el modelo la muestra.
@@ -594,11 +506,12 @@ async function buildInformePdf(modeloKey, input) {
 
   let y = height - 50;
 
-  // Logo centrado (fondo blanco)
-  const logoBuf = readAsset(modelo.logo);
+  // Logo centrado (fondo blanco). Sale del cliente elegido al generar
+  // (input.logoName); el modelo solo lo fija si necesita uno propio fijo.
+  const logoBuf = readAsset(modelo.logo || (input && input.logoName));
   if (logoBuf) {
     const logo = await doc.embedPng(logoBuf);
-    const lw = modelo.logoW || 84, lh = (logo.height / logo.width) * lw;
+    const lw = modelo.logoW || (input && input.logoW) || 100, lh = (logo.height / logo.width) * lw;
     page.drawImage(logo, { x: (width - lw) / 2, y: y - lh, width: lw, height: lh });
     y -= lh + 6;
   }
@@ -727,13 +640,18 @@ async function buildInformePdf(modeloKey, input) {
     if (medicoMatricula) { centerIn(medicoMatricula, firmaAreaX, width - Mx, my, { size: 9.5, color: soft }); }
   }
 
-  // Caja: pie del centro (abajo)
-  {
+  // Caja: pie del centro (abajo). Nombre/dirección/teléfono salen del cliente
+  // elegido al generar (input.pieLines); el modelo solo lo fija si necesita
+  // un pie propio fijo (ver comentario de PIE_CABALLITO_AMB, arriba de todo).
+  // Si el cliente todavía no cargó esos datos ("de a poco"), no dibujamos una
+  // caja vacía — el informe sale igual, sin ese renglón.
+  const pieLines = modelo.pie || (input && input.pieLines) || [];
+  if (pieLines.length) {
     const top = 100, h = 52;
     drawBox(top, h);
     let py = top - 18;
-    centerT(modelo.pie[0], py, { bold: true, size: 12 }); py -= 15;
-    for (let i = 1; i < modelo.pie.length; i++) { centerT(modelo.pie[i], py, { bold: true, size: 10.5 }); py -= 14; }
+    centerT(pieLines[0], py, { bold: true, size: 12 }); py -= 15;
+    for (let i = 1; i < pieLines.length; i++) { centerT(pieLines[i], py, { bold: true, size: 10.5 }); py -= 14; }
   }
 
   return await doc.save();
@@ -748,7 +666,13 @@ async function buildSiboPdf(modelo, input, lib) {
   for (let i = 1; i <= 10; i++) { const n = Number(String(val["ppm" + i]).replace(",", ".")); ppm.push(isFinite(n) ? n : 0); }
   const umbral = (() => { const n = Number(String(val.umbral).replace(",", ".")); return isFinite(n) && n > 0 ? n : 25; })();
   const interpretacion = ((input.textoInforme || "").trim()) || modelo.textoDefault || "";
-  const profes = modelo.profesionalDefault || [];
+  // El médico sale del elegido al generar; si no se eligió ninguno (o no tiene
+  // matrícula cargada), se usa el profesional fijo del modelo como respaldo.
+  const medNombre = (input.medicoNombre || "").trim();
+  const medMatricula = (input.medicoMatricula || "").trim();
+  const profes = (medNombre || medMatricula)
+    ? [medNombre, medMatricula].filter(Boolean)
+    : (modelo.profesionalDefault || []);
 
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]);
@@ -775,9 +699,9 @@ async function buildSiboPdf(modelo, input, lib) {
   };
 
   let y = H - M;
-  // Logo centrado
-  const logoBuf = readAsset(modelo.logo);
-  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const lw = modelo.logoW || 84, lh = (img.height / img.width) * lw; page.drawImage(img, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 16; } catch {} }
+  // Logo centrado (del cliente elegido al generar)
+  const logoBuf = readAsset(modelo.logo || input.logoName);
+  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const lw = modelo.logoW || input.logoW || 100, lh = (img.height / img.width) * lw; page.drawImage(img, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 16; } catch {} }
 
   const colGap = 20, colW = (W - 2 * M - colGap) / 2;
   const c1 = M, c2 = M + colW + colGap;
@@ -987,9 +911,10 @@ async function buildMapaPdf(modelo, input) {
   const wrap = (text, f, s, maxW) => { const words = String(text || "").split(/\s+/).filter(Boolean); const L = []; let c = ""; for (const w of words) { const t = c ? c + " " + w : w; if (ws(t, f, s) > maxW && c) { L.push(c); c = w; } else c = t; } if (c) L.push(c); return L; };
 
   let y = H - M;
-  // Encabezado
-  center(modelo.encabezado || "CIMA SALUD", M, W - M, y - 18, { bold: true, size: 20 });
-  center(modelo.subtitulo || "", M, W - M, y - 34, { size: 10, color: soft });
+  // Encabezado: nombre/dirección del cliente elegido al generar (el modelo
+  // puede fijar los suyos propios si alguna vez hace falta, pero hoy no).
+  center(modelo.encabezado || input.clienteNombre || "", M, W - M, y - 18, { bold: true, size: 20 });
+  center(modelo.subtitulo || input.clienteDireccion || "", M, W - M, y - 34, { size: 10, color: soft });
   y -= 54;
   // Barra gris con paciente
   page.drawRectangle({ x: M, y: y - 20, width: W - 2 * M, height: 20, color: band });
@@ -1118,12 +1043,13 @@ async function buildErgoPdf(modelo, input) {
   const wrap = (text, f, s, maxW) => { const words = String(text || "").split(/\s+/).filter(Boolean); const L = []; let c = ""; for (const w of words) { const t = c ? c + " " + w : w; if (ws(t, f, s) > maxW && c) { L.push(c); c = w; } else c = t; } if (c) L.push(c); return L; };
 
   let y = H - M;
-  // Encabezado (caja): CIMA / Dpto. de Cardiología / dirección
+  // Encabezado (caja): nombre del cliente / departamento (del modelo, es la
+  // especialidad del estudio) / dirección del cliente.
   { const h = 62; box(M, y, W - 2 * M, h);
-    T(modelo.encabezado || "CIMA", M + 70, y - 22, { bold: true, size: 20 });
+    T(modelo.encabezado || input.clienteNombre || "", M + 70, y - 22, { bold: true, size: 20 });
     T(modelo.depto || "", M + 70, y - 38, { font: ital, size: 11 });
     page.drawLine({ start: { x: M + 70, y: y - 43 }, end: { x: W - M - 8, y: y - 43 }, thickness: 0.5, color: soft });
-    T(modelo.subtitulo || "", M + 70, y - 55, { size: 9, color: soft });
+    T(modelo.subtitulo || input.clienteDireccion || "", M + 70, y - 55, { size: 9, color: soft });
     y -= h + 12;
   }
   // Título
@@ -1188,4 +1114,4 @@ async function buildErgoPdf(modelo, input) {
   return await doc.save();
 }
 
-module.exports = { MODELOS, buildInformePdf, informeFilename, listarModelos };
+module.exports = { MODELOS, buildInformePdf, informeFilename, listarModelos, MODELO_RENOMBRADOS, MODELO_VIEJO_CLIENTE };

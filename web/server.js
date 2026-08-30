@@ -806,12 +806,12 @@ const debitoReglasFile = path.join(dataDir, "debito_reglas.json");
 // Presets "Normal" de cada Holter, con sus valores estándar (todos editables).
 const HOLTER_SEED_PRESETS = [
   {
-    id: "holter-normal", modelo: "caballito-holter", nombre: "Holter normal",
+    id: "holter-normal", modelo: "holter", nombre: "Holter normal",
     texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
     valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
   },
   {
-    id: "cima-holter-normal", modelo: "cima-holter", nombre: "Holter normal",
+    id: "cima-holter-normal", modelo: "holter", nombre: "Holter normal",
     texto: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
     valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
   },
@@ -820,7 +820,7 @@ const HOLTER_SEED_PRESETS = [
 // elegido (derecho/izquierdo/bilateral/noesp); `texto` es el default sin lado.
 const ORL_SEED_PRESETS = [
   {
-    id: "orl-cerumen-normal", modelo: "caballito-orl-cerumen", nombre: "Tapón de cerumen normal",
+    id: "orl-cerumen-normal", modelo: "orl-cerumen", nombre: "Tapón de cerumen normal",
     texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
     ladoTextos: {
       derecho: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN OÍDO DERECHO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO DERECHO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
@@ -830,100 +830,100 @@ const ORL_SEED_PRESETS = [
     },
   },
   {
-    id: "orl-cerumen-cuerpo", modelo: "caballito-orl-cerumen", nombre: "Cuerpo extraño + tapón de cerumen",
+    id: "orl-cerumen-cuerpo", modelo: "orl-cerumen", nombre: "Cuerpo extraño + tapón de cerumen",
     texto: "SE REALIZA OTOMICROSCOPIA. SE OBSERVA CUERPO EXTRAÑO EN CONDUCTO AUDITIVO EXTERNO, SE PROCEDE A SU EXTRACCIÓN. SE EVIDENCIA TAPÓN DE CERUMEN, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
   },
   {
-    id: "orl-quimico-epistaxis", modelo: "caballito-orl-quimico", nombre: "Cauterización / epistaxis anterior",
+    id: "orl-quimico-epistaxis", modelo: "orl-quimico", nombre: "Cauterización / epistaxis anterior",
     texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "orl-quimico-vaso", modelo: "caballito-orl-quimico", nombre: "Cauterización de vaso septal",
+    id: "orl-quimico-vaso", modelo: "orl-quimico", nombre: "Cauterización de vaso septal",
     texto: "SE REALIZA EXAMEN OTORRINOLARINGOLÓGICO. SE OBSERVA VASO SEPTAL PROMINENTE, SE PROCEDE A CAUTERIZACIÓN QUÍMICA POR EPÍSTAXIS RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "orl-combinado-normal", modelo: "caballito-orl-combinado", nombre: "Cerumen + tratamiento químico",
+    id: "orl-combinado-normal", modelo: "orl-combinado", nombre: "Cerumen + tratamiento químico",
     texto: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
     ladoTextos: {
       bilateral: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIAN TAPONES DE CERUMEN BILATERALES, LOS CUALES SE EXTRAEN EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA AMBOS CONDUCTOS AUDITIVOS PERMEABLES, CON MEMBRANAS TIMPÁNICAS NORMOLÚCIDAS. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
     },
   },
   {
-    id: "orl-videorino-normal", modelo: "caballito-orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
+    id: "orl-videorino-normal", modelo: "orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
     texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "cima-orl-videorino-normal", modelo: "cima-orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
+    id: "cima-orl-videorino-normal", modelo: "orl-videorino", nombre: "Videorinofibrolaringoscopía normal",
     texto: "SE REALIZA VIDEO RINOFIBROLARINGOSCOPIA. SE OBSERVAN FOSAS NASALES PERMEABLES, CAVUM LIBRE, FARINGE Y LARINGE SIN LESIONES EVIDENTES. CUERDAS VOCALES MÓVILES Y SIMÉTRICAS, CON BUENA COAPTACIÓN GLÓTICA. PROCEDIMIENTO BIEN TOLERADO.",
   },
   {
-    id: "derma-crio-queratosis", modelo: "caballito-derma-crio", nombre: "Criocirugía de queratosis actínicas y seborreicas",
+    id: "derma-crio-queratosis", modelo: "derma-crio", nombre: "Criocirugía de queratosis actínicas y seborreicas",
     texto: "SE REALIZA CRIOCIRUGÍA DE QUERATOSIS ACTÍNICAS Y SEBORREICAS EN CUERO CABELLUDO Y ROSTRO. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS.",
   },
   {
-    id: "derma-crio-lesiones", modelo: "caballito-derma-crio", nombre: "Criocirugía de lesiones cutáneas",
+    id: "derma-crio-lesiones", modelo: "derma-crio", nombre: "Criocirugía de lesiones cutáneas",
     texto: "SE REALIZA CRIOCIRUGÍA DE LESIONES CUTÁNEAS EN REGIÓN A ESPECIFICAR. PROCEDIMIENTO BIEN TOLERADO, SIN COMPLICACIONES INMEDIATAS. SE INDICAN PAUTAS DE CUIDADO LOCAL Y CONTROL EVOLUTIVO.",
   },
   {
-    id: "derma-electro-tca-queratosis", modelo: "caballito-derma-electro", nombre: "Topicación con TCA por queratosis seborreicas en rostro",
+    id: "derma-electro-tca-queratosis", modelo: "derma-electro", nombre: "Topicación con TCA por queratosis seborreicas en rostro",
     texto: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
   },
   {
-    id: "derma-electro-tca-multiples", modelo: "caballito-derma-electro", nombre: "Topicación con TCA por múltiples queratosis seborreicas en rostro",
+    id: "derma-electro-tca-multiples", modelo: "derma-electro", nombre: "Topicación con TCA por múltiples queratosis seborreicas en rostro",
     texto: "PREVIA ANTISEPSIA SE REALIZA TOPICACIÓN CON TCA AL 50% DE MÚLTIPLES QUERATOSIS SEBORREICAS EN ROSTRO. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
   },
   {
-    id: "derma-electro-electrocoag", modelo: "caballito-derma-electro", nombre: "Electrocoagulación de queratosis seborreicas",
+    id: "derma-electro-electrocoag", modelo: "derma-electro", nombre: "Electrocoagulación de queratosis seborreicas",
     texto: "PREVIA ANTISEPSIA SE REALIZA ELECTROCOAGULACIÓN DE QUERATOSIS SEBORREICAS EN REGIÓN A ESPECIFICAR. TOLERA PROCEDIMIENTO, SIN COMPLICACIONES.",
   },
   {
-    id: "derma-biopsia-losange", modelo: "caballito-derma-biopsia", nombre: "Biopsia losange",
+    id: "derma-biopsia-losange", modelo: "derma-biopsia", nombre: "Biopsia losange",
     texto: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN REGIÓN A ESPECIFICAR. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
   },
   {
-    id: "derma-biopsia-losange-brazo", modelo: "caballito-derma-biopsia", nombre: "Biopsia losange en brazo derecho",
+    id: "derma-biopsia-losange-brazo", modelo: "derma-biopsia", nombre: "Biopsia losange en brazo derecho",
     texto: "PREVIA ANTISEPSIA SE REALIZA INFILTRACIÓN CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA LOSANGE EN BRAZO DERECHO. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO SIN COMPLICACIONES.\nPACIENTE SE LLEVA MUESTRA EN FORMOL AL 10% ROTULADA Y CON RESUMEN DE HISTORIA CLÍNICA.",
   },
   {
-    id: "derma-biopsia-shaving", modelo: "caballito-derma-biopsia", nombre: "Biopsia mediante shaving",
+    id: "derma-biopsia-shaving", modelo: "derma-biopsia", nombre: "Biopsia mediante shaving",
     texto: "PACIENTE CON IDG DE LESIÓN CUTÁNEA A DETERMINAR EN REGIÓN A ESPECIFICAR.\nPREVIA ANTISEPSIA, SE INFILTRA CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA MEDIANTE SHAVING. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO.\nMUESTRA ENTREGADA A PACIENTE EN FORMOL AL 10% ROTULADA Y CON INFORME DE PROCEDIMIENTO.",
   },
   {
-    id: "derma-biopsia-shaving-cuello", modelo: "caballito-derma-biopsia", nombre: "Shaving cuello derecho — CEC vs queratoacantoma",
+    id: "derma-biopsia-shaving-cuello", modelo: "derma-biopsia", nombre: "Shaving cuello derecho — CEC vs queratoacantoma",
     texto: "PACIENTE CON IDG DE CEC VS QUERATOACANTOMA DE REGIÓN LATERAL DE CUELLO DERECHO.\nPREVIA ANTISEPSIA, SE INFILTRA CON LIDOCAÍNA SIN EPINEFRINA AL 2%, SE PROCEDE A TOMA DE BIOPSIA MEDIANTE SHAVING. SE LOGRA HEMOSTASIA. TOLERA PROCEDIMIENTO.\nMUESTRA ENTREGADA A PACIENTE EN FORMOL AL 10% ROTULADA Y CON INFORME DE PROCEDIMIENTO.",
   },
   {
-    id: "eco-partes-blandas-normal", modelo: "caballito-eco-musculo", nombre: "Partes blandas normal",
+    id: "eco-partes-blandas-normal", modelo: "eco-musculo", nombre: "Partes blandas normal",
     estudio: "Ecografía de partes blandas", medicoId: "sanchez-jamilyn",
     texto: "EXPLORADA LA REGIÓN SOLICITADA CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
   },
   {
-    id: "eco-partes-blandas-planta", modelo: "caballito-eco-musculo", nombre: "Partes blandas normal — planta del pie derecho",
+    id: "eco-partes-blandas-planta", modelo: "eco-musculo", nombre: "Partes blandas normal — planta del pie derecho",
     estudio: "Ecografía de partes blandas", medicoId: "sanchez-jamilyn",
     texto: "EXPLORADA LA REGIÓN SOLICITADA (PLANTA DEL PIE DERECHO) CON TRANSDUCTOR DE PARTES BLANDAS, EN RELACIÓN A SITIO DOLOROSO REFERIDO POR EL/LA PACIENTE, NO SE OBSERVAN ALTERACIONES ECOGRÁFICAS AL MOMENTO DEL ESTUDIO.",
   },
   {
-    id: "eco-hombro-derecho", modelo: "caballito-eco-musculo", nombre: "Hombro derecho — líquido peritendinoso supraespinoso",
+    id: "eco-hombro-derecho", modelo: "eco-musculo", nombre: "Hombro derecho — líquido peritendinoso supraespinoso",
     estudio: "Ecografía de hombro derecho", medicoId: "nirenberg-alberto",
     texto: "SE EVALUÓ EL HOMBRO DERECHO, OBSERVÁNDOSE LÍQUIDO PERITENDINOSO DEL SUPRAESPINOSO, LO QUE SUGIERE PROBABLE ETIOLOGÍA INFLAMATORIA.",
   },
   {
-    id: "eco-ambos-hombros", modelo: "caballito-eco-musculo", nombre: "Ambos hombros — líquido peritendinoso supraespinoso",
+    id: "eco-ambos-hombros", modelo: "eco-musculo", nombre: "Ambos hombros — líquido peritendinoso supraespinoso",
     estudio: "Ecografía de ambos hombros", medicoId: "nirenberg-alberto",
     texto: "SE EVALUARON AMBOS HOMBROS, OBSERVÁNDOSE EN LOS DOS, MÁS DEL LADO IZQUIERDO, LÍQUIDO PERITENDINOSO DEL SUPRAESPINOSO, LO QUE SUGIERE PROBABLE ETIOLOGÍA INFLAMATORIA.",
   },
   {
-    id: "sibo-negativo", modelo: "caballito-sibo", nombre: "Estudio negativo para SIBO",
+    id: "sibo-negativo", modelo: "sibo", nombre: "Estudio negativo para SIBO",
     texto: "Estudio negativo para SIBO",
     valores: { umbral: "25", ppm1: "5", ppm2: "7", ppm3: "7", ppm4: "6", ppm5: "4", ppm6: "6", ppm7: "7", ppm8: "11", ppm9: "3", ppm10: "4" },
   },
   {
-    id: "sibo-positivo", modelo: "caballito-sibo", nombre: "Estudio compatible con SIBO",
+    id: "sibo-positivo", modelo: "sibo", nombre: "Estudio compatible con SIBO",
     texto: "Estudio compatible con SIBO",
     valores: { umbral: "25", ppm1: "4", ppm2: "4", ppm3: "5", ppm4: "4", ppm5: "33", ppm6: "62", ppm7: "44", ppm8: "41", ppm9: "79", ppm10: "82" },
   },
   {
-    id: "mapa-normal", modelo: "cima-mapa", nombre: "MAPA normal / técnicamente satisfactorio",
+    id: "mapa-normal", modelo: "mapa", nombre: "MAPA normal / técnicamente satisfactorio",
     texto: "PRESIÓN ARTERIAL SISTÓLICA MÁXIMA 156, MÍNIMA 96, MEDIA 126 MMHG.\nPRESIÓN ARTERIAL DIASTÓLICA MÁXIMA 84, MÍNIMA 52, MEDIA 72 MMHG.\nSE REALIZARON 62 MEDICIONES VALIDABLES. DEL PROMEDIO DE LAS MISMAS SE CONCLUYE:\nREGISTRO DE PRESIÓN ARTERIAL DENTRO DE PARÁMETROS CONSERVADOS.\nPATRÓN DIPPER CONSERVADO.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
     valores: {
       nTot: "62", nVig: "42", nSue: "20",
@@ -935,25 +935,25 @@ const ORL_SEED_PRESETS = [
     },
   },
   {
-    id: "mapa-hta-nondipper", modelo: "cima-mapa", nombre: "HTA sistólica / patrón non-dipper",
+    id: "mapa-hta-nondipper", modelo: "mapa", nombre: "HTA sistólica / patrón non-dipper",
     texto: "SE OBSERVA HIPERTENSIÓN ARTERIAL SISTÓLICA, CON PREDOMINIO DURANTE TODO EL ESTUDIO.\nPATRÓN NON-DIPPER.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
   },
   {
-    id: "mapa-hipotension-dipper", modelo: "cima-mapa", nombre: "Hipotensión diastólica nocturna / patrón dipper",
+    id: "mapa-hipotension-dipper", modelo: "mapa", nombre: "Hipotensión diastólica nocturna / patrón dipper",
     texto: "HIPOTENSIÓN ARTERIAL DIASTÓLICA NOCTURNA.\nPATRÓN DIPPER.\nESTUDIO TÉCNICAMENTE SATISFACTORIO.",
   },
   {
-    id: "ergo-submax-suficiente", modelo: "cima-ergo", nombre: "Ergometría normal / submáxima suficiente",
+    id: "ergo-submax-suficiente", modelo: "ergo", nombre: "Ergometría normal / submáxima suficiente",
     texto: "PRUEBA SUBMÁXIMA SUFICIENTE.\nDETENIDA A LOS 450 KGM POR FATIGA MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST HASTA LA CARGA ALCANZADA.\nNO REFIRIÓ ANGOR NI DISNEA.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nMETS 5.3. CF II B.",
     valores: { protocolo: "Astrand", fcPrevMax: "145 lpm", fcPrevSub: "123 lpm", fcAlcanzada: "126 lpm", pctFcMax: "87%", pctFcSub: "102%", taSis: "160 mmHg", taDia: "80 mmHg", mets: "5.3", dobleProd: "20160", vo2: "18.6", carga: "450 KGM", motivoDeten: "Fatiga muscular" },
   },
   {
-    id: "ergo-max-suficiente", modelo: "cima-ergo", nombre: "Ergometría normal / máxima suficiente",
+    id: "ergo-max-suficiente", modelo: "ergo", nombre: "Ergometría normal / máxima suficiente",
     texto: "PRUEBA MÁXIMA SUFICIENTE.\nDETENIDA A LOS 450 KGM POR AGOTAMIENTO MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST DURANTE EL ESFUERZO NI EN LA RECUPERACIÓN.\nNO REFIRIÓ ANGOR NI DISNEA.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nMETS 5.3. CF II B.",
     valores: { protocolo: "Astrand", fcPrevMax: "145 lpm", fcPrevSub: "123 lpm", fcAlcanzada: "138 lpm", pctFcMax: "95%", pctFcSub: "112%", taSis: "170 mmHg", taDia: "80 mmHg", mets: "5.3", dobleProd: "23460", vo2: "18.6", carga: "450 KGM", motivoDeten: "Agotamiento muscular" },
   },
   {
-    id: "ergo-submax-insuficiente", modelo: "cima-ergo", nombre: "Ergometría submáxima insuficiente",
+    id: "ergo-submax-insuficiente", modelo: "ergo", nombre: "Ergometría submáxima insuficiente",
     texto: "PRUEBA SUBMÁXIMA INSUFICIENTE.\nDETENIDA A LOS 300 KGM POR FATIGA MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST HASTA LA CARGA ALCANZADA.\nNO REFIRIÓ ANGOR.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nBAJA CAPACIDAD FUNCIONAL PARA LA EDAD.",
     valores: { protocolo: "Astrand", fcPrevMax: "135 lpm", fcPrevSub: "115 lpm", fcAlcanzada: "82 lpm", pctFcMax: "61%", pctFcSub: "71%", taSis: "140 mmHg", taDia: "80 mmHg", mets: "4.6", dobleProd: "11480", vo2: "16.1", carga: "300 KGM", motivoDeten: "Fatiga muscular / baja tolerancia al esfuerzo" },
   },
@@ -966,7 +966,7 @@ const ORL_SEED_PRESETS = [
 // La posición va por textoPorSexo; el diagnóstico por valoresPorSexo.
 const FLUJO_SEED_PRESETS = [
   {
-    id: "flujo-normal", modelo: "caballito-flujometria", nombre: "Flujometría normal",
+    id: "flujo-normal", modelo: "flujometria", nombre: "Flujometría normal",
     texto: "Pte parado\nMicción espontánea\nCurva de forma y amplitud normal\n\nEstudio normal",
     textoPorSexo: {
       masculino: "Pte parado\nMicción espontánea\nCurva de forma y amplitud normal\n\nEstudio normal",
@@ -984,7 +984,7 @@ const FLUJO_SEED_PRESETS = [
     },
   },
   {
-    id: "flujo-oiv", modelo: "caballito-flujometria", nombre: "Flujometría con retardo / compatible con OIV",
+    id: "flujo-oiv", modelo: "flujometria", nombre: "Flujometría con retardo / compatible con OIV",
     texto: "Pte parado\nRetardo en el inicio\nCurva prolongada con intermitencia.\n\nCompatible con OIV",
     textoPorSexo: {
       masculino: "Pte parado\nRetardo en el inicio\nCurva prolongada con intermitencia.\n\nCompatible con OIV",
@@ -1004,12 +1004,12 @@ function loadInformesConfig() {
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
   if (!cfg || typeof cfg !== "object") cfg = {};
   if (!Array.isArray(cfg.medicos)) {
-    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png", modelos: ["caballito-consulta-570129", "caballito-electro", "caballito-holter"] }];
+    cfg.medicos = [{ id: "naiara", nombre: "Dra. Naiara A. Jacinto", firma: "firma-naiara.png", modelos: ["consulta-570129", "electro", "holter"], clientes: ["caballito-pediatrico"] }];
   }
   if (!Array.isArray(cfg.descripciones)) {
     cfg.descripciones = [
-      { id: "normal", nombre: "ECG normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
-      { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["caballito-consulta-570129", "caballito-electro", "cima-electro", "cima-consulta-570129"] },
+      { id: "normal", nombre: "ECG normal", texto: "Ecg sin complicaciones, trazado sin valor patológico.", modelos: ["consulta-570129", "electro", "electro", "consulta-570129"] },
+      { id: "ritmo-sinusal", nombre: "Ritmo sinusal", texto: "Ritmo sinusal. Sin signos de isquemia aguda.", modelos: ["consulta-570129", "electro", "electro", "consulta-570129"] },
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" })),
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
@@ -1632,6 +1632,14 @@ function normalizeClient(client, fallback) {
     // baja la bandeja para analizar pero NUNCA se transmite (no somos su facturador).
     enAnalisis: !!(client.enAnalisis !== undefined ? client.enAnalisis : base.enAnalisis),
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
+    // Membrete para los Informes (PDF): logo + dirección/teléfono al pie. Se
+    // van cargando de a poco por cliente; sin ellos, el informe sale igual,
+    // solo que sin esa parte del membrete. El logo en sí (el archivo) se sube
+    // aparte, por POST /api/clientes/:slug/logo — acá solo se guarda el nombre.
+    logo: String(client.logo || base.logo || "").trim(),
+    logoW: Number(client.logoW || base.logoW || 0) || 0,
+    direccion: String(client.direccion || base.direccion || "").trim(),
+    telefono: String(client.telefono || base.telefono || "").trim(),
   };
 }
 function loadClientsStore() {
@@ -4382,6 +4390,12 @@ const server = http.createServer(async (req, res) => {
       tipo: body.tipo !== undefined ? body.tipo : clients[idx].tipo,
       enAnalisis: body.enAnalisis !== undefined ? body.enAnalisis : clients[idx].enAnalisis,
       activeModules: clients[idx].activeModules,
+      // Dirección/teléfono para el membrete de Informes: se editan acá.
+      direccion: body.direccion !== undefined ? String(body.direccion || "").replace(/\s+/g, " ").trim() : clients[idx].direccion,
+      telefono: body.telefono !== undefined ? String(body.telefono || "").replace(/\s+/g, " ").trim() : clients[idx].telefono,
+      // El logo (archivo) se sube aparte; acá solo se preserva lo que ya tenía.
+      logo: clients[idx].logo,
+      logoW: body.logoW !== undefined ? Number(body.logoW) || 0 : clients[idx].logoW,
     });
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
@@ -4398,6 +4412,61 @@ const server = http.createServer(async (req, res) => {
     fs.mkdirSync(dataDir, { recursive: true });
     fs.writeFileSync(clientesFile, JSON.stringify(raw, null, 2));
     return json(res, 200, { ok: true, clients: loadClientsStore() });
+  }
+
+  // Logo del cliente para el membrete de los Informes (PDF). Se guarda junto
+  // a las firmas de los médicos (mismo directorio: <datos>/informes/), así
+  // informes.js lo lee con el mismo readAsset() sin cambios.
+  // Sirve el PNG del logo ya subido (para la miniatura en "Editar cliente").
+  // No es un dato sensible (es el membrete público del centro), alcanza con
+  // estar logueado.
+  const clientLogoFileMatch = p.match(/^\/api\/clientes\/([^/]+)\/logo-archivo$/);
+  if (clientLogoFileMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientLogoFileMatch[1]);
+    const client = loadClientsStore().find((c) => c.slug === slug);
+    if (!client || !client.logo) return json(res, 404, { error: "Sin logo." });
+    return sendFile(res, path.join(dataDir, "informes", client.logo));
+  }
+  const clientLogoMatch = p.match(/^\/api\/clientes\/([^/]+)\/logo$/);
+  if (clientLogoMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede cambiar el logo." });
+    const slug = decodeURIComponent(clientLogoMatch[1]);
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((c) => c.slug === slug);
+    if (idx < 0) return json(res, 404, { error: "Cliente no encontrado." });
+    try {
+      const raw = await readBuffer(req);
+      const mp = extractMultipart(raw, req.headers["content-type"]);
+      if (path.extname(mp.file.filename).toLowerCase() !== ".png") {
+        return json(res, 400, { error: "El logo tiene que ser un PNG." });
+      }
+      const nombreArchivo = "logo-" + slug + ".png";
+      const dir = path.join(dataDir, "informes");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, nombreArchivo), mp.file.data);
+      clients[idx] = { ...clients[idx], logo: nombreArchivo };
+      saveClientsStore(clients);
+      return json(res, 200, { ok: true, client: clients[idx] });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo subir el logo." });
+    }
+  }
+  if (clientLogoMatch && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede quitar el logo." });
+    const slug = decodeURIComponent(clientLogoMatch[1]);
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((c) => c.slug === slug);
+    if (idx < 0) return json(res, 404, { error: "Cliente no encontrado." });
+    if (clients[idx].logo) { try { fs.unlinkSync(path.join(dataDir, "informes", clients[idx].logo)); } catch {} }
+    clients[idx] = { ...clients[idx], logo: "" };
+    saveClientsStore(clients);
+    return json(res, 200, { ok: true, client: clients[idx] });
   }
 
   // Asignar valor a un código de práctica que vino "sin valor" (persistido).
@@ -6408,12 +6477,30 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- Informes: generar PDF de un paciente ----
+  // Arma el membrete de un informe (logo + pie + encabezados de los modelos
+  // con layout propio) a partir del Cliente elegido. Un solo lugar para esto,
+  // así generar/lote nunca quedan desincronizados.
+  function membreteDeCliente(cliente) {
+    const nombre = cliente.name || cliente.businessName || "";
+    const contacto = [cliente.direccion, cliente.telefono].filter(Boolean).join(" · ");
+    const pieLines = [nombre, cliente.direccion, cliente.telefono ? "Tel: " + cliente.telefono : ""].filter(Boolean);
+    return {
+      logoName: cliente.logo || "",
+      logoW: cliente.logoW || 0,
+      pieLines,
+      clienteNombre: nombre,
+      clienteDireccion: contacto,
+    };
+  }
+
   if (p === "/api/informes/generar" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     const body = await readBody(req);
-    const modelo = String(body.modelo || "caballito-consulta-570129");
+    const modelo = String(body.modelo || "consulta-570129");
     if (!informes.MODELOS[modelo]) return json(res, 400, { error: "No se encontró la plantilla del modelo seleccionado." });
+    const cliente = loadClientsStore().find((c) => c.slug === String(body.clienteSlug || ""));
+    if (!cliente) return json(res, 400, { error: "Elegí para qué cliente es el informe." });
     const pac = body.paciente || {};
     const faltan = [];
     if (!String(pac.nombre || "").trim()) faltan.push("el nombre");
@@ -6423,15 +6510,18 @@ const server = http.createServer(async (req, res) => {
     try {
       const cfg = loadInformesConfig();
       const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
+      const membrete = membreteDeCliente(cliente);
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: body.paciente || {},
         textoInforme: body.textoInforme,
-        solicitante: body.solicitante,
+        // Si no se escribió un solicitante propio, se completa con el médico elegido.
+        solicitante: body.solicitante || (medico ? medico.nombre : ""),
         estudio: body.estudio,
         valores: sanitizarValores(body.valores),
         firmaArchivo: medico ? medico.firma : "",
         medicoNombre: medico ? medico.nombre : "",
         medicoMatricula: medico ? (medico.matricula || "") : "",
+        ...membrete,
       });
       const filename = informes.informeFilename(modelo, body.paciente || {});
       const buf = Buffer.from(bytes);
@@ -6465,6 +6555,7 @@ const server = http.createServer(async (req, res) => {
     if (items.length > 200) return json(res, 400, { error: "Demasiados informes en un lote (máx 200)." });
     try {
       const cfg = loadInformesConfig();
+      const clientes = loadClientsStore();
       const archivos = [];
       const usados = {};
       for (const it of items) {
@@ -6472,16 +6563,19 @@ const server = http.createServer(async (req, res) => {
         if (!informes.MODELOS[modelo]) continue;
         const pac = it.paciente || {};
         if (!String(pac.nombre || "").trim() || !String(pac.fecha || "").trim()) continue;
+        const cliente = clientes.find((c) => c.slug === String(it.clienteSlug || ""));
+        if (!cliente) continue; // sin cliente no sabemos qué membrete ponerle: se salta
         const medico = (cfg.medicos || []).find((m) => m.id === it.medicoId);
         const bytes = await informes.buildInformePdf(modelo, {
           paciente: pac,
           textoInforme: it.textoInforme,
-          solicitante: it.solicitante,
+          solicitante: it.solicitante || (medico ? medico.nombre : ""),
           estudio: it.estudio,
           valores: sanitizarValores(it.valores),
           firmaArchivo: medico ? medico.firma : "",
           medicoNombre: medico ? medico.nombre : "",
           medicoMatricula: medico ? (medico.matricula || "") : "",
+          ...membreteDeCliente(cliente),
         });
         let nombre = informes.informeFilename(modelo, pac).replace(/[\\/:*?"<>|]+/g, " ");
         if (usados[nombre]) { const n = ++usados[nombre]; nombre = nombre.replace(/\.pdf$/i, "") + " (" + n + ").pdf"; }
@@ -6553,8 +6647,12 @@ const server = http.createServer(async (req, res) => {
     const cfg = loadInformesConfig();
     return json(res, 200, {
       modelos: informes.listarModelos(),
+      // Clientes activos, para elegir "para quién" es el informe (reemplaza
+      // al viejo "Centro" fijo por modelo). Solo lo mínimo para el selector.
+      clientes: loadClientsStore().map((c) => ({ slug: c.slug, name: c.name })),
       medicos: (cfg.medicos || []).map((m) => ({
-        id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "", modelos: m.modelos || [],
+        id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "",
+        modelos: m.modelos || [], clientes: m.clientes || [],
       })),
       descripciones: (cfg.descripciones || []).map((d) => ({
         id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
@@ -6607,6 +6705,23 @@ const server = http.createServer(async (req, res) => {
     const medico = cfg.medicos.find((m) => m.id === medScopeMatch[1]);
     if (!medico) return json(res, 404, { error: "Médico no encontrado." });
     medico.modelos = (Array.isArray(body.modelos) ? body.modelos : []).map(String).filter((k) => modelosOK.has(k));
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
+  }
+  // Asignar clientes (centros) a un médico — vacío = disponible para todos.
+  // Es el scope que decide qué médicos aparecen al elegir un cliente en
+  // Informes (además del de "modelos", que decide qué prácticas firma).
+  const medClientesMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)\/clientes$/);
+  if (medClientesMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const clientesOK = new Set(loadClientsStore().map((c) => c.slug));
+    const cfg = loadInformesConfig();
+    const medico = cfg.medicos.find((m) => m.id === medClientesMatch[1]);
+    if (!medico) return json(res, 404, { error: "Médico no encontrado." });
+    medico.clientes = (Array.isArray(body.clientes) ? body.clientes : []).map(String).filter((s) => clientesOK.has(s));
     saveInformesConfig(cfg);
     return json(res, 200, { ok: true });
   }
@@ -6728,6 +6843,84 @@ const server = http.createServer(async (req, res) => {
   sendFile(res, resolved);
 });
 
+// ---- Unificación de Informes: un modelo por estudio, ya no uno por cliente ----
+// Antes de este cambio, cada cliente (Caballito / CIMA) tenía su propio modelo
+// duplicado ("caballito-holter", "cima-holter", etc.) con el mismo contenido y
+// solo el logo/pie distintos. Ahora hay UN modelo por estudio (informes.MODELOS)
+// y el logo/dirección/teléfono salen del Cliente elegido al generar.
+//
+// Esta migración corre una sola vez por deploy (es idempotente) y hace dos cosas
+// sobre lo que ya esté guardado en el volumen:
+//  1) Reescribe las claves de modelo viejas a las nuevas en cfg.medicos[].modelos
+//     y cfg.descripciones[].modelos (si no se hace esto, un médico o un resultado
+//     ya asignado a "caballito-holter" deja de matchear con nada, porque esa
+//     clave ya no existe, y desaparece de los desplegables).
+//  2) La primera vez, infiere a qué cliente pertenece cada médico ya cargado a
+//     partir de las claves viejas que tenía asignadas (informes.MODELO_VIEJO_CLIENTE),
+//     y carga el logo/dirección/teléfono de Caballito y CIMA en su ficha de
+//     Cliente (los mismos valores que antes estaban fijos en informes.js).
+function ensureModelosUnificados() {
+  try {
+    const cfg = loadInformesConfig();
+    let cambio = false;
+    const renombrar = (arr) => {
+      if (!Array.isArray(arr)) return arr;
+      const out = [];
+      for (const k of arr) {
+        const nk = informes.MODELO_RENOMBRADOS[k] || k;
+        if (!out.includes(nk)) out.push(nk);
+        if (nk !== k) cambio = true;
+      }
+      return out;
+    };
+    if (Array.isArray(cfg.medicos)) {
+      for (const m of cfg.medicos) {
+        const modelosViejos = Array.isArray(m.modelos) ? m.modelos.slice() : [];
+        m.modelos = renombrar(m.modelos);
+        // Inferir el cliente una sola vez (si ya tiene `clientes`, no se toca:
+        // puede ser una decisión manual de un admin que lo dejó vacío a propósito).
+        if (!Array.isArray(m.clientes)) {
+          const clientesInferidos = [];
+          for (const k of modelosViejos) {
+            const cli = informes.MODELO_VIEJO_CLIENTE[k];
+            if (cli && !clientesInferidos.includes(cli)) clientesInferidos.push(cli);
+          }
+          m.clientes = clientesInferidos; // vacío = disponible para todos (igual que antes)
+          cambio = true;
+        }
+      }
+    }
+    if (Array.isArray(cfg.descripciones)) {
+      for (const d of cfg.descripciones) d.modelos = renombrar(d.modelos);
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[modelos-unificados] omitido:", e && e.message); }
+
+  // Logo + dirección/teléfono de los dos clientes que ya usaban Informes, con
+  // los mismos valores que antes estaban fijos en informes.js. Si el admin ya
+  // cargó algo distinto para alguno de estos campos, no lo pisa.
+  try {
+    const SEED_CLIENTES = {
+      "caballito-pediatrico": { logo: "cmc_logo.png", logoW: 84, direccion: "Av. directorio 1662", telefono: "6338713 / 46330078 / 46324002" },
+      "cima": { logo: "cima_logo.png", logoW: 150, direccion: "Islas Malvinas 2722 - Isidro Casanova", telefono: "" },
+    };
+    const clients = loadClientsStore();
+    let cambioClientes = false;
+    for (const [slug, datos] of Object.entries(SEED_CLIENTES)) {
+      const idx = clients.findIndex((c) => c.slug === slug);
+      if (idx < 0) continue;
+      const c = clients[idx];
+      const next = { ...c };
+      if (!c.logo && datos.logo) { next.logo = datos.logo; next.logoW = datos.logoW; cambioClientes = true; }
+      if (!c.direccion && datos.direccion) { next.direccion = datos.direccion; cambioClientes = true; }
+      if (!c.telefono && datos.telefono) { next.telefono = datos.telefono; cambioClientes = true; }
+      clients[idx] = next;
+    }
+    if (cambioClientes) saveClientsStore(clients);
+  } catch (e) { console.log("[modelos-unificados] seed de clientes omitido:", e && e.message); }
+}
+ensureModelosUnificados();
+
 // Migración suave: deja el Holter de Caballito listo para usar aunque la config
 // ya exista (producción). Idempotente: solo actúa si el Holter no tiene resultados.
 function ensureHolterSeed() {
@@ -6745,8 +6938,8 @@ function ensureHolterSeed() {
     // El/los médicos que ya firman electro de Caballito, que también firmen el Holter.
     // (CIMA queda sin firma a propósito, no se asigna médico.)
     for (const m of cfg.medicos) {
-      if (Array.isArray(m.modelos) && m.modelos.includes("caballito-electro") && !m.modelos.includes("caballito-holter")) {
-        m.modelos.push("caballito-holter");
+      if (Array.isArray(m.modelos) && m.modelos.includes("electro") && !m.modelos.includes("holter")) {
+        m.modelos.push("holter");
         cambio = true;
       }
     }
@@ -6771,27 +6964,31 @@ function ensureOrlSeed() {
     }
     // Las dos otorrinos de Caballito, ya con sus prácticas ORL asignadas.
     // Quedan "sin firma" hasta que el admin suba el PNG (no va en el repo público).
-    const orlCaballito = ["caballito-orl-cerumen", "caballito-orl-quimico", "caballito-orl-combinado", "caballito-orl-videorino"];
+    const orlCaballito = ["orl-cerumen", "orl-quimico", "orl-combinado", "orl-videorino"];
+    // Todos son médicos de Caballito (CIMA no tiene ORL/derma/eco-musculo).
+    const CAB = ["caballito-pediatrico"];
     const orlMedicos = [
-      { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana", modelos: orlCaballito },
-      { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito },
-      { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["cima-orl-videorino"] },
-      { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["caballito-derma-crio"] },
-      { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["caballito-derma-electro", "caballito-derma-biopsia"] },
-      { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["caballito-eco-musculo"] },
-      { id: "nirenberg-alberto", nombre: "Dr. Alberto Nirenberg", matricula: "MN 54398", modelos: ["caballito-eco-musculo"] },
+      { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana", modelos: orlCaballito, clientes: CAB },
+      { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito, clientes: CAB },
+      { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["orl-videorino"], clientes: CAB },
+      { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["derma-crio"], clientes: CAB },
+      { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["derma-electro", "derma-biopsia"], clientes: CAB },
+      { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["eco-musculo"], clientes: CAB },
+      { id: "nirenberg-alberto", nombre: "Dr. Alberto Nirenberg", matricula: "MN 54398", modelos: ["eco-musculo"], clientes: CAB },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
         const ex = cfg.medicos.find((x) => x.id === m.id);
         if (!ex) {
-          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula || "", modelos: m.modelos.slice() });
+          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula || "", modelos: m.modelos.slice(), clientes: m.clientes.slice() });
           cambio = true;
         } else {
           if (m.matricula && !ex.matricula) { ex.matricula = m.matricula; cambio = true; }
           // Sumar modelos nuevos a un médico ya sembrado (ej. Leydy: electro + biopsia).
           ex.modelos = Array.isArray(ex.modelos) ? ex.modelos : [];
           for (const k of m.modelos) { if (!ex.modelos.includes(k)) { ex.modelos.push(k); cambio = true; } }
+          // Si es de antes de que existiera el scope por cliente, se lo asignamos.
+          if (!Array.isArray(ex.clientes)) { ex.clientes = m.clientes.slice(); cambio = true; }
         }
       }
     }

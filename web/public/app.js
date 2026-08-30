@@ -387,6 +387,7 @@ async function pedirInformePdf(){
 function construirPayloadInforme(){
   return {
     modelo: document.getElementById('infPractica').value,
+    clienteSlug: document.getElementById('infCentro').value,
     paciente: {
       nombre: document.getElementById('infNombre').value.trim(),
       benef: document.getElementById('infBenef').value.trim(),
@@ -471,29 +472,32 @@ async function loadInformesConfig(){
   llenarCentros();
   renderInformesConfigLists();
 }
+// El primer desplegable es el CLIENTE (antes era un "Centro" fijo por
+// modelo). Los modelos ya no son por cliente — cualquier práctica sirve para
+// cualquier cliente — así que Especialidad/Práctica ya no se filtran por acá:
+// lo único que cambia con el cliente elegido es qué médicos aparecen
+// (filtrarPorModelo) y el membrete del PDF (logo/dirección/teléfono).
 function llenarCentros(){
   var sel = document.getElementById('infCentro'); if (!sel) return;
   var prev = sel.value;
-  var centros = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.centro; }));
-  sel.innerHTML = centros.map(function(c){ return opt(c, c); }).join('') || '<option value="">(sin centros)</option>';
-  if (prev && centros.indexOf(prev) >= 0) sel.value = prev;
+  var clientes = INFORMES_CFG.clientes || [];
+  sel.innerHTML = clientes.map(function(c){ return opt(c.slug, c.name); }).join('') || '<option value="">(sin clientes)</option>';
+  if (prev && clientes.some(function(c){ return c.slug === prev; })) sel.value = prev;
   onCentroChange(true);
 }
 function onCentroChange(keep){
-  var centro = (document.getElementById('infCentro') || {}).value || '';
   var sel = document.getElementById('infEspecialidad'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
-  var esps = uniq((INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro; }).map(function(m){ return m.especialidad; }));
+  var esps = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.especialidad; }));
   sel.innerHTML = esps.map(function(e){ return opt(e, e); }).join('') || '<option value="">(sin especialidades)</option>';
   if (prev && esps.indexOf(prev) >= 0) sel.value = prev;
   onEspecialidadChange(keep);
 }
 function onEspecialidadChange(keep){
-  var centro = (document.getElementById('infCentro') || {}).value || '';
   var esp = (document.getElementById('infEspecialidad') || {}).value || '';
   var sel = document.getElementById('infPractica'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
-  var ms = (INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro && m.especialidad === esp; });
+  var ms = (INFORMES_CFG.modelos || []).filter(function(m){ return m.especialidad === esp; });
   sel.innerHTML = ms.map(function(m){ return opt(m.key, m.practica); }).join('') || '<option value="">(sin prácticas)</option>';
   if (prev && ms.some(function(m){ return m.key === prev; })) sel.value = prev;
   filtrarPorModelo();
@@ -609,7 +613,10 @@ function filtrarPorModelo(){
   var med = document.getElementById('infMedico');
   if (med){
     var prevM = med.value;
-    var ms = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.modelos, key); });
+    var clienteSel = (document.getElementById('infCentro') || {}).value || '';
+    // Solo médicos que firman esta práctica Y que están cargados para este cliente
+    // (vacío en cualquiera de las dos listas = disponible para todos).
+    var ms = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.modelos, key) && scopeAplica(m.clientes, clienteSel); });
     med.innerHTML = ms.map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('')
       + opt('', 'Sin firma (deja el espacio)');
     if (prevM) med.value = prevM;
@@ -652,6 +659,7 @@ function renderInformesConfigLists(){
   if (tabBtn) tabBtn.style.display = isAdmin ? '' : 'none';
   if (!isAdmin){ setInformesTab('generar'); return; }
   var modelos = INFORMES_CFG.modelos || [];
+  var clientesList = INFORMES_CFG.clientes || [];
   var cm = document.getElementById('infMedicosCount'); if (cm) cm.textContent = '(' + (INFORMES_CFG.medicos || []).length + ')';
   var cd = document.getElementById('infDescripcionesCount'); if (cd) cd.textContent = '(' + (INFORMES_CFG.descripciones || []).length + ')';
   var ml = document.getElementById('infMedicosList');
@@ -661,8 +669,9 @@ function renderInformesConfigLists(){
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
         + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
-      var sub = modelos.length ? cfgSub('Informes que firma', cfgMetaInformes(m.modelos), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
-      return '<div class="cfg-item">' + fila + sub + '</div>';
+      var subInformes = modelos.length ? cfgSub('Informes que firma', cfgMetaInformes(m.modelos), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
+      var subClientes = clientesList.length ? cfgSub('Clientes', cfgMetaInformes(m.clientes), '<div class="cfg-scope">' + clienteChips('med-cliente', m.id, clientesList, m.clientes) + '</div>') : '';
+      return '<div class="cfg-item">' + fila + subInformes + subClientes + '</div>';
     }).join('') || '<div class="cfg-empty">Todavía no hay médicos.</div>';
   }
   var dl = document.getElementById('infDescripcionesList');
@@ -712,12 +721,22 @@ function scopeChips(kind, id, modelos, seleccionadas){
     return '<button type="button" class="scope-chip' + (on ? ' on' : '') + '" title="' + esc(m.label) + '" onclick="toggleScope(\'' + kind + '\',\'' + esc(id) + '\',\'' + esc(m.key) + '\')">' + esc(m.short) + '</button>';
   }).join('');
 }
+// Chips = clientes. seleccionados = array de slugs. Vacío = disponible para todos.
+function clienteChips(kind, id, clientes, seleccionados){
+  return (clientes || []).map(function(c){
+    var on = (seleccionados || []).indexOf(c.slug) >= 0;
+    return '<button type="button" class="scope-chip' + (on ? ' on' : '') + '" title="' + esc(c.name) + '" onclick="toggleScope(\'' + kind + '\',\'' + esc(id) + '\',\'' + esc(c.slug) + '\')">' + esc(c.name) + '</button>';
+  }).join('');
+}
 async function toggleScope(kind, id, key){
   function toggle(arr){ arr = (arr || []).slice(); var i = arr.indexOf(key); if (i >= 0) arr.splice(i, 1); else arr.push(key); return arr; }
   var r;
   if (kind === 'med'){
     var m = (INFORMES_CFG.medicos || []).find(function(x){ return x.id === id; }); if (!m) return;
     r = await req('POST', '/api/informes/medicos/' + encodeURIComponent(id) + '/scope', { modelos: toggle(m.modelos) });
+  } else if (kind === 'med-cliente'){
+    var mc = (INFORMES_CFG.medicos || []).find(function(x){ return x.id === id; }); if (!mc) return;
+    r = await req('POST', '/api/informes/medicos/' + encodeURIComponent(id) + '/clientes', { clientes: toggle(mc.clientes) });
   } else if (kind === 'desc'){
     var d = (INFORMES_CFG.descripciones || []).find(function(x){ return x.id === id; }); if (!d) return;
     r = await req('POST', '/api/informes/descripciones/' + encodeURIComponent(id) + '/scope', { modelos: toggle(d.modelos) });
@@ -1176,21 +1195,20 @@ var LOTE_ROWS = [];
 var LOTE_LADOS = [{ v: 'noesp', t: 'No especificado' }, { v: 'derecho', t: 'Derecho' }, { v: 'izquierdo', t: 'Izquierdo' }, { v: 'bilateral', t: 'Bilateral' }];
 function loteInit(){
   var c = document.getElementById('loteCentro');
-  if (c){ var pv = c.value; var centros = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.centro; }));
-    c.innerHTML = centros.map(function(x){ return opt(x, x); }).join(''); if (pv) c.value = pv; }
+  if (c){ var pv = c.value; var clientes = INFORMES_CFG.clientes || [];
+    c.innerHTML = clientes.map(function(x){ return opt(x.slug, x.name); }).join('');
+    if (pv && clientes.some(function(x){ return x.slug === pv; })) c.value = pv; }
   loteLlenarMedicos();
 }
-// Médicos autorizados para alguna práctica del centro elegido (los válidos del lote).
+// Médicos disponibles para el cliente elegido (y, si ya hay lote detectado,
+// que además firmen alguna de las prácticas realmente presentes).
 function loteMedicosValidos(){
-  var keys;
-  if (LOTE_ROWS.length){
-    // Con lote detectado: solo las prácticas realmente presentes.
-    keys = uniq(LOTE_ROWS.map(function(r){ return r.modelo; }).filter(Boolean));
-  } else {
-    var centro = (document.getElementById('loteCentro') || {}).value || '';
-    keys = (INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro; }).map(function(m){ return m.key; });
-  }
-  return (INFORMES_CFG.medicos || []).filter(function(m){ return keys.some(function(k){ return scopeAplica(m.modelos, k); }); });
+  var clienteSel = (document.getElementById('loteCentro') || {}).value || '';
+  var keys = LOTE_ROWS.length ? uniq(LOTE_ROWS.map(function(r){ return r.modelo; }).filter(Boolean)) : null;
+  return (INFORMES_CFG.medicos || []).filter(function(m){
+    if (!scopeAplica(m.clientes, clienteSel)) return false;
+    return keys ? keys.some(function(k){ return scopeAplica(m.modelos, k); }) : true;
+  });
 }
 function loteLlenarMedicos(){
   var med = document.getElementById('loteMedico'); if (!med) return;
@@ -1218,9 +1236,10 @@ function loteParseLinea(linea){
   }
   return out;
 }
-function loteModeloPorCodigo(codigo, centro){
+function loteModeloPorCodigo(codigo){
   if (!codigo) return '';
-  var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.centro === centro && String(x.codigoPractica) === String(codigo); });
+  // Un solo modelo por código de práctica ahora que no hay uno por cliente.
+  var m = (INFORMES_CFG.modelos || []).find(function(x){ return String(x.codigoPractica) === String(codigo); });
   return m ? m.key : '';
 }
 function loteMedicoParaModelo(modelo, medDef){
@@ -1228,9 +1247,9 @@ function loteMedicoParaModelo(modelo, medDef){
   if (medDef && meds.some(function(m){ return m.id === medDef; })) return medDef;
   return meds.length ? meds[0].id : '';
 }
-// Si un paciente tiene 717111 y 717125 el mismo día (Caballito) -> combinado.
-function loteCombinar(rows, centro){
-  if (centro !== 'Centro Médico Caballito') return rows;
+// Si un paciente tiene 717111 y 717125 el mismo día -> combinado (sin importar
+// el cliente: es el código el que dice si corresponde combinar, no el centro).
+function loteCombinar(rows){
   var grupos = {};
   rows.forEach(function(r){ var k = r.benef + '|' + r.fecha; (grupos[k] = grupos[k] || []).push(r); });
   var out = [], hechos = {};
@@ -1241,7 +1260,7 @@ function loteCombinar(rows, centro){
     if (tiene11 && tiene25 && (r.codigo === '717111' || r.codigo === '717125')){
       if (hechos[k]) return; hechos[k] = true;
       var base = g.find(function(x){ return x.codigo === '717111'; }) || r;
-      out.push({ nombre: base.nombre, benef: base.benef, fecha: base.fecha, codigo: '717111+717125', practica: 'Cerumen + tratamiento químico', modeloForzado: 'caballito-orl-combinado' });
+      out.push({ nombre: base.nombre, benef: base.benef, fecha: base.fecha, codigo: '717111+717125', practica: 'Cerumen + tratamiento químico', modeloForzado: 'orl-combinado' });
       return;
     }
     out.push(r);
@@ -1250,14 +1269,13 @@ function loteCombinar(rows, centro){
 }
 function loteDetectar(){
   var err = document.getElementById('loteError'); err.textContent = '';
-  var centro = document.getElementById('loteCentro').value;
   var lineas = document.getElementById('loteTexto').value.split(/\r?\n/).filter(function(l){ return l.trim(); });
   if (!lineas.length){ err.textContent = 'Pegá al menos una línea.'; return; }
   var parsed = lineas.map(loteParseLinea).filter(function(r){ return r.nombre || r.benef; });
-  parsed = loteCombinar(parsed, centro);
+  parsed = loteCombinar(parsed);
   var medDef = document.getElementById('loteMedico').value;
   LOTE_ROWS = parsed.map(function(r){
-    var modelo = r.modeloForzado || loteModeloPorCodigo(r.codigo, centro);
+    var modelo = r.modeloForzado || loteModeloPorCodigo(r.codigo);
     var presets = modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, modelo); }) : [];
     return { nombre: r.nombre, benef: r.benef, fecha: r.fecha, documento: '', codigo: r.codigo, practicaTxt: r.practica,
       modelo: modelo, presetId: presets.length ? presets[0].id : '', lado: 'noesp', sexo: '', medicoId: modelo ? loteMedicoParaModelo(modelo, medDef) : '' };
@@ -1354,6 +1372,7 @@ function loteItemPayload(row){
     Object.keys(over).forEach(function(k){ valores[k] = over[k]; });
   }
   return { modelo: row.modelo,
+    clienteSlug: (document.getElementById('loteCentro') || {}).value || '',
     paciente: { nombre: row.nombre, benef: row.benef, fecha: row.fecha, documento: row.documento || '' },
     textoInforme: loteTextoDe(row), medicoId: row.medicoId || '', valores: valores };
 }
@@ -3177,7 +3196,43 @@ function openClientEditModal(){
   set('clientEditSap', ACTIVE_CLIENT.sap);
   set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
   var enAn = document.getElementById('clientEditEnAnalisis'); if (enAn) enAn.checked = !!ACTIVE_CLIENT.enAnalisis;
+  set('clientEditDireccion', ACTIVE_CLIENT.direccion);
+  set('clientEditTelefono', ACTIVE_CLIENT.telefono);
+  set('clientEditLogoW', ACTIVE_CLIENT.logoW ? String(ACTIVE_CLIENT.logoW) : '');
+  renderClientEditLogo();
   showModal('clientEditModal', 'ceScrim');
+}
+// Miniatura del logo actual (o "sin logo cargado") en el modal de edición.
+function renderClientEditLogo(){
+  var img = document.getElementById('clientEditLogoPreview');
+  var empty = document.getElementById('clientEditLogoEmpty');
+  var del = document.getElementById('clientEditLogoDel');
+  var tieneLogo = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.logo);
+  if (img){ img.style.display = tieneLogo ? '' : 'none'; img.src = tieneLogo ? ('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/logo-archivo?v=' + Date.now()) : ''; }
+  if (empty) empty.style.display = tieneLogo ? 'none' : '';
+  if (del) del.style.display = tieneLogo ? '' : 'none';
+}
+async function uploadClientLogo(fileInput){
+  if (!ACTIVE_CLIENT) return;
+  var err = document.getElementById('clientEditError'); if (err) err.textContent = '';
+  var f = fileInput.files[0]; if (!f) return;
+  var form = new FormData(); form.append('file', f);
+  var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/logo', { method: 'POST', body: form });
+  var d = {}; try { d = await r.json(); } catch (e) {}
+  fileInput.value = '';
+  if (!r.ok){ if (err) err.textContent = (d && d.error) || 'No se pudo subir el logo.'; return; }
+  ACTIVE_CLIENT = d.client || ACTIVE_CLIENT;
+  CLIENTS = CLIENTS.map(function(c){ return c.slug === ACTIVE_CLIENT.slug ? ACTIVE_CLIENT : c; });
+  renderClientEditLogo();
+}
+async function quitarClientLogo(){
+  if (!ACTIVE_CLIENT || !ACTIVE_CLIENT.logo) return;
+  if (!confirm('¿Quitar el logo de este cliente?')) return;
+  var r = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/logo');
+  if (!r.ok) return;
+  ACTIVE_CLIENT = r.data.client || ACTIVE_CLIENT;
+  CLIENTS = CLIENTS.map(function(c){ return c.slug === ACTIVE_CLIENT.slug ? ACTIVE_CLIENT : c; });
+  renderClientEditLogo();
 }
 function closeClientEditModal(){ hideModal('clientEditModal', 'ceScrim'); }
 async function saveClientEdit(){
@@ -3190,7 +3245,10 @@ async function saveClientEdit(){
     ugl: (document.getElementById('clientEditUgl') || {}).value || '',
     sap: (document.getElementById('clientEditSap') || {}).value || '',
     tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio',
-    enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked)
+    enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked),
+    direccion: (document.getElementById('clientEditDireccion') || {}).value || '',
+    telefono: (document.getElementById('clientEditTelefono') || {}).value || '',
+    logoW: Number((document.getElementById('clientEditLogoW') || {}).value) || 0
   };
   var btn = document.getElementById('clientEditSave'); if (btn) btn.disabled = true;
   var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug), payload);

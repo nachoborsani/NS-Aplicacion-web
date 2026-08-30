@@ -865,7 +865,7 @@
           <div class="card" id="infFormCard" oninput="programarPreviewVivo()" onchange="programarPreviewVivo()">
             <div class="form-grid two">
               <div class="field">
-                <label>Centro</label>
+                <label>Cliente</label>
                 <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
               </div>
               <div class="field">
@@ -937,7 +937,7 @@
           <section id="inf-tab-lote" class="inf-section" style="display:none">
             <div class="card">
               <div class="form-grid two">
-                <div class="field"><label>Centro</label><select class="inp" id="loteCentro" onchange="loteRedetectar()"></select></div>
+                <div class="field"><label>Cliente</label><select class="inp" id="loteCentro" onchange="loteRedetectar()"></select></div>
                 <div class="field"><label>Médico que firma <span style="font-weight:400;color:var(--text-2)">(por defecto)</span></label><select class="inp" id="loteMedico" onchange="loteMedicoDefault()"></select></div>
               </div>
               <div class="field">
@@ -1283,7 +1283,18 @@
           <label class="span-2">Tipo de cliente<select class="inp" id="clientEditTipo"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
           <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientEditEnAnalisis" style="width:auto;flex:0 0 auto"> En análisis (potencial) — no se transmite</label>
         </div>
-        <p class="modal-note">Los módulos activos se editan aparte, desde la tarjeta "Módulos activos".</p>
+        <p class="modal-note">Para los Informes (PDF): logo, dirección y teléfono del cliente. Se pueden ir cargando de a poco — sin ellos, el informe sale igual, solo que sin esa parte del membrete.</p>
+        <div class="form-grid two">
+          <label class="span-2">Dirección<input class="inp" id="clientEditDireccion" placeholder="Ej: Av. Directorio 1662"></label>
+          <label>Teléfono<input class="inp" id="clientEditTelefono" placeholder="Ej: 4633-8713"></label>
+          <label>Ancho del logo en el PDF <span style="font-weight:400;color:var(--text-2)">(px, opcional)</span><input class="inp" id="clientEditLogoW" type="number" min="20" max="300" placeholder="100"></label>
+          <div class="span-2" style="display:flex;align-items:center;gap:12px">
+            <img id="clientEditLogoPreview" alt="" style="max-height:48px;max-width:140px;display:none;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px">
+            <span id="clientEditLogoEmpty" class="nom-muted">Sin logo cargado.</span>
+            <label class="cfg-upload">Subir logo (PNG)<input type="file" accept="image/png" id="clientEditLogoFile" onchange="uploadClientLogo(this)"></label>
+            <button type="button" class="rowbtn danger" id="clientEditLogoDel" style="display:none" title="Quitar logo" onclick="quitarClientLogo()">&times;</button>
+          </div>
+        </div>
         <div class="msg err" id="clientEditError"></div>
       </div>
       <div class="modal-foot">
