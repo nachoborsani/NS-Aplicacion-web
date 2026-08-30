@@ -70,8 +70,13 @@ Claude Code es la forma recomendada de trabajar acá. Un par de cosas para que r
 - **Que pruebe lo que hace.** Para lógica pura (matchers, cálculos) se puede correr un
   test rápido con Node sin levantar nada:
   `node -e "const m=require('./web/informes_match'); ..."`.
-- **El deploy es tuyo, no de Claude.** Que **no** commitee ni pushee sin que vos lo
-  revises. Un push a `main` sale a producción (ver abajo).
+- **Claude Code puede commitear y pushear solo.** El repo ya trae los permisos
+  (`.claude/settings.json`), así que no te va a frenar el `git push`. **La primera vez**
+  te va a aparecer un cartel de *"confiar en esta carpeta"* (workspace trust): aceptalo
+  una sola vez y de ahí en más pushea sin pedirte permiso. Recordá que un push a `main`
+  **sale a producción** (ver sección 5), así que probá local antes.
+  > Si tu primera sesión no toma los permisos, corré `git pull` (para tener el
+  > `.claude/settings.json`) o, por única vez, hacé el `git push origin main` a mano.
 
 ### Mapa rápido del código (para orientar a Claude)
 - `web/server.js` — el backend entero (rutas API, lógica, acceso a la base).
