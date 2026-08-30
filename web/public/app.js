@@ -2345,6 +2345,7 @@ var MESCURSO_POSIBLES_DEBITOS_FUTURO = []; // el mes futuro que se está viendo 
 var MESCURSO_AUSENTES = [];          // detalle de ausentes (con turno pero sin validar)
 var MESCURSO_AUSENTES_JULIO = [];    // ausentes del reporte "sin cerrar"
 var MESCURSO_AUSENTES_CERRADO = [];  // ausentes del mes cerrado
+var MESCURSO_FUERACORTE_JULIO = [];  // prácticas a facturar fuera de corte (reporte "sin cerrar")
 var MESCURSO_PANEL_ABIERTO = '';    // '' | 'informes' | 'debitos' | 'informes-julio' | 'debitos-julio' | 'debitos-adelante' | 'ausentes'
 function mesCursoSetCaret(id, abierto){ var c = document.getElementById(id); if (c) c.textContent = abierto ? '▾' : '▸'; }
 function toggleFaltanInformes(){ mesCursoTogglePanel('informes'); }
@@ -2355,6 +2356,7 @@ function toggleDebitosJulio(){ mesCursoTogglePanel('debitos-julio'); }
 function toggleDebitosCerrado(){ mesCursoTogglePanel('debitos-cerrado'); }
 function toggleAusentesJulio(){ mesCursoTogglePanel('ausentes-julio'); }
 function toggleAusentesCerrado(){ mesCursoTogglePanel('ausentes-cerrado'); }
+function toggleFueraCorteJulio(){ mesCursoTogglePanel('fueracorte-julio'); }
 function toggleModulos(){ mesCursoTogglePanel('modulos'); }
 function toggleModulosJulio(){ mesCursoTogglePanel('modulos-julio'); }
 function toggleModulosCerrado(){ mesCursoTogglePanel('modulos-cerrado'); }
@@ -2365,7 +2367,7 @@ function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
   if (!panel) return;
   var apagarCarets = function(){
-    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret']
+    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoFueraCorteJulioCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret']
       .forEach(function(id){ mesCursoSetCaret(id, false); });
     document.querySelectorAll('[id^="mescursoDebFut-"]').forEach(function(c){ c.textContent = '▸'; });
   };
@@ -2426,6 +2428,10 @@ function mesCursoTogglePanel(tipo){
     var auc = MESCURSO_AUSENTES_CERRADO || [];
     if (!auc.length) return;
     html = mesCursoTablaHtml('Ausentes sin activar (mes cerrado) · ' + auc.length, 'warn', 'copiarAusentesCerrado', cols, auc.map(mapInformes), 'ausentes-cerrado');
+  } else if (tipo === 'fueracorte-julio'){
+    var fcj = MESCURSO_FUERACORTE_JULIO || [];
+    if (!fcj.length) return;
+    html = mesCursoTablaHtml('A facturar fuera de corte (mes anterior) · ' + fcj.length, 'warn', 'copiarFueraCorteJulio', cols, fcj.map(mapInformes), 'fueracorte-julio');
   } else {
     var pd = MESCURSO_POSIBLES_DEBITOS || [];
     if (!pd.length) return;
@@ -2446,6 +2452,7 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoAusentesCaret', tipo === 'ausentes');
   mesCursoSetCaret('mescursoAusentesJulioCaret', tipo === 'ausentes-julio');
   mesCursoSetCaret('mescursoAusentesCerradoCaret', tipo === 'ausentes-cerrado');
+  mesCursoSetCaret('mescursoFueraCorteJulioCaret', tipo === 'fueracorte-julio');
   if (tipo.indexOf('debitos-futuro:') === 0) mesCursoSetCaret('mescursoDebFut-' + tipo.slice('debitos-futuro:'.length), true);
 }
 function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId){
@@ -2480,6 +2487,7 @@ function mesCursoDescargarDatos(panelId){
   if (panelId === 'ausentes') return { titulo: 'Ausentes - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'ausentes-julio') return { titulo: 'Ausentes sin activar (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'ausentes-cerrado') return { titulo: 'Ausentes sin activar (mes cerrado) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_CERRADO || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'fueracorte-julio') return { titulo: 'A facturar fuera de corte (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FUERACORTE_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'debitos-julio') return { titulo: 'Posibles débitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [7] };
@@ -2539,6 +2547,10 @@ function copiarAusentesJulio(btn){
 function copiarAusentesCerrado(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
     (MESCURSO_AUSENTES_CERRADO || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
+}
+function copiarFueraCorteJulio(btn){
+  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
+    (MESCURSO_FUERACORTE_JULIO || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
 }
 function copiarFaltanInformesJulio(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
@@ -2874,7 +2886,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + (ausentes > 0 ? ' mescurso-click" onclick="toggleAusentesJulio()' : '') + '"><span>Ausentes sin activar' + (ausentes > 0 ? ' <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span>' : '') + '</span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
-    + (fueraCorte > 0 ? '<div class="mescurso-line"><span>A facturar fuera de corte</span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
+    + (fueraCorte > 0 ? '<div class="mescurso-line mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
     + '</div>' + foot + '</div>';
 }
 function irAReporteSinCerrar(){
@@ -2950,6 +2962,7 @@ async function loadClientMesCurso(){
   MESCURSO_FALTAN_INFORMES_JULIO = (current && current.missingInformeRows) || [];
   MESCURSO_POSIBLES_DEBITOS_JULIO = (current && current.posiblesDebitosRows) || [];
   MESCURSO_AUSENTES_JULIO = (current && current.ausentesRows) || [];
+  MESCURSO_FUERACORTE_JULIO = (current && current.fueraCorteRows) || [];
   MESCURSO_MODULOS_JULIO = mescMods(current && current.modules);
   var reportes = (results[2].ok && results[2].data) ? (results[2].data.reports || []) : [];
   // ¿Hay reporte del mes anterior? (current viene vacío si no hay nada de ese mes).

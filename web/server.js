@@ -3195,16 +3195,16 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     item.posiblesDebitosRows = buildDebitoDetalle(periodRows);
     // Detalle de ausentes sin activar (con turno pero no validadas, fuera de corte no
     // cuenta): para desplegarlo abajo de la card igual que el del mes en curso.
-    item.ausentesRows = periodRows
-      .filter((r) => r.absent && !r.outsideCutoff)
-      .slice(0, 2000)
-      .map((r) => ({
-        benef: cleanIdentifier(r.benefit),
-        nombre: String(r.patientName || "").trim(),
-        practica: r.practiceText || [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
-        turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
-        valor: money(r.valueGross),
-      }));
+    const detalleFila = (r) => ({
+      benef: cleanIdentifier(r.benefit),
+      nombre: String(r.patientName || "").trim(),
+      practica: r.practiceText || [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
+      turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
+      valor: money(r.valueGross),
+    });
+    item.ausentesRows = periodRows.filter((r) => r.absent && !r.outsideCutoff).slice(0, 2000).map(detalleFila);
+    // Prácticas que se facturan en el CORTE SIGUIENTE (transmitidas después del corte).
+    item.fueraCorteRows = periodRows.filter((r) => r.outsideCutoff).slice(0, 2000).map(detalleFila);
     delete item._rowsByKey;
   }
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
