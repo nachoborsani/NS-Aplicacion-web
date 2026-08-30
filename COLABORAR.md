@@ -87,23 +87,34 @@ pero alcanza para probar la interfaz y que no haya errores.
 **Cada push a `main` DISPARA un deploy a producción.** Lo que subís sale **en vivo**
 en `nsgestion.up.railway.app` en ~2 minutos. No hay "staging".
 
-Por eso, trabajando de a dos, **el flujo seguro es con ramas y Pull Request**:
+**Para cambios visuales, el flujo es directo — se despliega solo.** No hay que
+configurar nada: Railway ya está conectado a este repo y despliega en cada push a
+`main`.
 
 ```bash
-git checkout -b mi-cambio        # rama nueva, no tocás main
-# ... editás y probás ...
+git pull                                  # traé lo último antes de empezar
+# ... editás y PROBÁS local (ver sección 4) ...
 git add -A
 git commit -m "Describí el cambio en una línea clara"
-git push -u origin mi-cambio     # sube la RAMA, NO despliega nada
+git push                                  # esto sube a main y DISPARA el deploy
 ```
 
-Después, en GitHub, abrís un **Pull Request** de tu rama hacia `main`. Nacho lo revisa
-y recién ahí se mergea. **El merge a `main` es el que despliega.**
+En ~2 minutos tu cambio está en `nsgestion.up.railway.app`. No necesitás que Nacho
+apruebe nada.
 
-Así nada llega a producción sin que uno de los dos lo mire.
+**Reglas para que no rompas producción:**
+- **Probá local antes de pushear** (sección 4). Un cambio visual que se ve bien en
+  `localhost:3000` es seguro.
+- **Un cambio por push**, con mensaje claro. Si algo sale mal, se revierte fácil.
+- **Tocá solo lo visual** (`web/public/` — HTML, CSS, textos, layout). El backend
+  (`web/server.js`) y la automatización PAMI, coordinalos con Nacho.
+- **Si te da miedo un cambio grande**, ahí sí conviene una rama + Pull Request para que
+  Nacho lo mire antes (`git checkout -b mi-cambio` → push → PR en GitHub). Pero para el
+  día a día visual, andá directo a `main`.
 
-> Podés trabajar directo sobre `main` (es más rápido), pero entonces cada `git push`
-> es un deploy inmediato: solo hacelo para cambios chicos y seguros, y avisando.
+> **Si tu primer push no dispara el deploy**: puede que Railway pida aprobar una vez a
+> los colaboradores nuevos (aparece un botón en el panel de Railway del proyecto). Que
+> Nacho lo apruebe esa primera vez y después ya sale solo.
 
 ### Verificar qué versión está en producción
 `GET https://nsgestion.up.railway.app/api/version` devuelve un identificador que
@@ -127,5 +138,5 @@ ahí: es lo que le habla a PAMI en producción.
 
 ## Resumen en 3 líneas
 1. Pedí acceso, cloná, abrí **Claude Code** en la carpeta.
-2. Trabajá la **web** en una **rama** → **Pull Request** (no pushees a `main` sin avisar).
-3. Los **secretos** y la **automatización PAMI** no se tocan sin coordinar con Nacho.
+2. Cambios visuales: probá en `localhost:3000`, `git push` a **main** y **se despliega solo** (~2 min).
+3. **Secretos** y **automatización PAMI** no se tocan sin coordinar con Nacho.
