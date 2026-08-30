@@ -5784,7 +5784,12 @@ const server = http.createServer(async (req, res) => {
     const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
     it.match = matchearInforme(slug, it.extract);
-    it.resuelto = null;
+    // Lo resuelto A MANO no se pisa: es trabajo del operador y vale más que lo que
+    // adivine el matcher. Antes se borraba siempre, así que re-analizar en masa se
+    // llevaba puestas las correcciones hechas de a una. Para descartarla hay que
+    // pedirlo expreso (?olvidar=1), que es lo que hace "volver a empezar".
+    const olvidar = String(url.searchParams.get("olvidar") || "") === "1";
+    if (olvidar) it.resuelto = null;
     saveInformes(store);
     return json(res, 200, { item: it });
   }
