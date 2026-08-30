@@ -5287,6 +5287,10 @@ async function deletePadronItem(slug, dni){
 // ===== Cabina de informes recibidos (admin) =====
 var CAB_ITEMS = [];      // items del cliente actual (para abrir el modal sin re-fetch)
 var CAB_ITEM = null;     // item abierto en el modal
+// Filtro rápido por estado (clic en los chips del resumen). Uno solo a la vez,
+// mismo criterio que el filtro rápido de "Reportes" (setClientReportQuickFilter):
+// clic de nuevo sobre el mismo chip lo saca.
+var CAB_ESTADO_FILTRO = '';
 async function loadCabinaView(){
   var sel = document.getElementById('cabCliente');
   if (sel && !sel.options.length){
@@ -5452,15 +5456,21 @@ async function refreshCabina(){
 }
 // Fecha del informe para filtrar/mostrar: la del mail si la tenemos, si no cuándo se bajó.
 function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').slice(0,10); }
+// Mismo criterio que usa el badge de la fila (cabBadge) para clasificar un
+// informe: una sola función, así el chip del resumen y el badge de la tabla
+// nunca pueden quedar desalineados.
+function cabEstadoDe(it){
+  return it.resuelto ? 'resuelto' : (it.match ? it.match.estado : 'sin_match');
+}
 function cabResumenDe(items){
   var r = {};
-  items.forEach(function(it){
-    var e = it.resuelto ? 'resuelto' : (it.match ? it.match.estado : 'sin_match');
-    r[e] = (r[e]||0)+1;
-  });
+  items.forEach(function(it){ var e = cabEstadoDe(it); r[e] = (r[e]||0)+1; });
   return r;
 }
-// Filtra los informes por el rango Desde/Hasta (inclusive, para mostrar) y renderiza.
+// Filtra los informes por el rango Desde/Hasta (inclusive, para mostrar), y
+// además por el chip de estado elegido (si hay uno). Los chips muestran el
+// total del rango de fechas SIN el filtro de estado (así no desaparecen al
+// elegir uno), pero la tabla de abajo sí queda acotada a ambos filtros.
 function aplicarFiltroCabina(){
   var slug = (document.getElementById('cabCliente')||{}).value || '';
   var de = (document.getElementById('cabDesde')||{}).value || '';
@@ -5472,11 +5482,28 @@ function aplicarFiltroCabina(){
     if (ha && f > ha) return false;      // "hasta" INCLUSIVE al mostrar
     return true;
   });
-  renderCabinaResumen(cabResumenDe(vis), vis.length);
-  renderCabinaRows(slug, vis);
+  var resumen = cabResumenDe(vis);
+  // Si el estado elegido ya no tiene informes en este rango (p.ej. se achicó
+  // el rango de fechas), soltamos el filtro en vez de dejar la tabla vacía
+  // sin ningún chip prendido que lo explique.
+  if (CAB_ESTADO_FILTRO && !resumen[CAB_ESTADO_FILTRO]) CAB_ESTADO_FILTRO = '';
+  renderCabinaResumen(resumen, vis.length);
+  var filtrados = CAB_ESTADO_FILTRO
+    ? vis.filter(function(it){ return cabEstadoDe(it) === CAB_ESTADO_FILTRO; })
+    : vis;
+  renderCabinaRows(slug, filtrados);
   var meta = document.getElementById('cabResultMeta');
-  if (meta) meta.textContent = vis.length + ' informe(s)' +
-    (vis.length !== CAB_ITEMS.length ? ' (de ' + CAB_ITEMS.length + ' — el resto queda fuera del rango de fechas)' : '');
+  if (meta) {
+    var motivos = [];
+    if (vis.length !== CAB_ITEMS.length) motivos.push('del rango de fechas');
+    if (filtrados.length !== vis.length) motivos.push('del filtro de estado');
+    meta.textContent = filtrados.length + ' informe(s)' +
+      (motivos.length ? ' (de ' + CAB_ITEMS.length + ' — el resto queda fuera ' + motivos.join(' o ') + ')' : '');
+  }
+}
+function toggleCabEstadoFiltro(k){
+  CAB_ESTADO_FILTRO = CAB_ESTADO_FILTRO === k ? '' : k;
+  aplicarFiltroCabina();
 }
 var CAB_ESTADOS = {
   ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
@@ -5488,14 +5515,17 @@ function renderCabinaResumen(resumen, total){
   var orden = ['ok','resuelto','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
-    return '<span class="cab-chip '+m.c+'">'+resumen[k]+' '+esc(m.t)+'</span>';
+    var on = CAB_ESTADO_FILTRO === k;
+    return '<button type="button" class="cab-chip '+m.c+(on?' on':'')+'" '
+      + 'aria-pressed="'+on+'" title="'+(on?'Clic para sacar el filtro':'Clic para filtrar por este estado')+'" '
+      + 'onclick="toggleCabEstadoFiltro(\''+k+'\')">'+resumen[k]+' '+esc(m.t)+'</button>';
   });
   res.innerHTML = total ? chips.join('') : '';
 }
 function cabBadge(it){
   if (it.resuelto) { var no=(it.resuelto.omes&&it.resuelto.omes.length)||1; return '<span class="cab-badge ok">Resuelto a mano'+(no>1?' · '+no+' OMEs':'')+'</span>'; }
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
-  var e = it.match ? it.match.estado : 'sin_match';
+  var e = cabEstadoDe(it);
   var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
   return '<span class="cab-badge '+m.c+'">'+esc(m.t)+'</span>';
 }
