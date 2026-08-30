@@ -5345,6 +5345,21 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, nomencladorSummary(store, payload));
   }
 
+  // Marcar un nomenclador como ACTIVO (el que se usa por defecto cuando no se pide un
+  // período puntual). Admin.
+  if (p === "/api/nomencladores/activo" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const raw = String(url.searchParams.get("period") || "").trim();
+    const period = normalizePeriod(raw) || raw;
+    const store = loadNomencladorStore();
+    if (!period || !store.items[period]) return json(res, 404, { error: "No está cargado ese nomenclador." });
+    store.activePeriod = period;
+    saveNomencladorStore(store);
+    return json(res, 200, nomencladorSummary(store, getNomencladorByPeriod(store, period)));
+  }
+
   // Datos para la Calculadora de proyecciones: módulos con sus prácticas (código,
   // descripción, valor, si es consulta) y qué prácticas se pisan entre sí, tomado de
   // las reglas de débito ya cargadas. Todo en una sola llamada.
