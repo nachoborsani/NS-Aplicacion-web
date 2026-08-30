@@ -416,6 +416,24 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
            storedAt: new Date().toISOString(), fecha: fecha || "", extract, match, resuelto: null, error };
 }
+// ¿El informe fue resuelto a mano y TODAS sus OMEs ya están transmitidas en PAMI?
+// (mismo criterio que el match automático de una práctica: transmitida => nada que
+// subir). Si alguna OME resuelta no figura entre los candidatos de la bandeja, no
+// se puede confirmar y NO se da por transmitida.
+function resueltoTodoTransmitido(it) {
+  if (!it || !it.resuelto) return false;
+  const omes = (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))
+    .map((o) => String(o).replace(/\D+/g, "")).filter(Boolean);
+  if (!omes.length) return false;
+  const trans = new Set(((it.match && it.match.candidatos) || [])
+    .filter((c) => c && c.transmitida && c.ome)
+    .map((c) => String(c.ome).replace(/\D+/g, "")));
+  return omes.every((o) => trans.has(o));
+}
+function estadoInforme(it) {
+  if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "resuelto";
+  return (it && it.match && it.match.estado) || "sin_match";
+}
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
 function informesExportRows(items) {
   return (items || []).map((it) => {
@@ -425,7 +443,9 @@ function informesExportRows(items) {
     const ome = (it.resuelto && it.resuelto.omes ? it.resuelto.omes.join(", ") : (it.resuelto && it.resuelto.ome)) || m.ome || pr.ome || "";
     const practica = pr.practica || ex.practica || "";
     const beneficio = ex.beneficio || (it.resuelto && it.resuelto.beneficio) || pr.beneficio || "";
-    const estado = it.resuelto ? "Resuelto a mano" : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
+    const estado = it.resuelto
+      ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Resuelto a mano")
+      : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
     return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
              beneficio, practica, estado, ome };
   });
@@ -6008,7 +6028,7 @@ const server = http.createServer(async (req, res) => {
     // Contadores por estado para el encabezado.
     const resumen = {};
     for (const it of items) {
-      const e = (it.resuelto ? "resuelto" : (it.match && it.match.estado) || "sin_match");
+      const e = estadoInforme(it);
       resumen[e] = (resumen[e] || 0) + 1;
     }
     return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", resumen, items });

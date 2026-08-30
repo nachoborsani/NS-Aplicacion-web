@@ -4894,6 +4894,9 @@ function switchNomTab(which){
   var bb=document.getElementById('nomTabBuscarBtn'), cb=document.getElementById('nomTabCalcBtn');
   if(bb) bb.classList.toggle('active', buscar);
   if(cb) cb.classList.toggle('active', !buscar);
+  // El header del nomenclador (nombre del archivo + "Adjuntar Excel") es para
+  // administrar el nomenclador; en la Calculadora no va, se esconde.
+  var ns=document.getElementById('nomStatus'); if(ns) ns.style.display = buscar?'':'none';
   if(!buscar) loadCalcData();   // recarga con el nomenclador elegido en ese momento
 }
 function calcWire(){
@@ -5438,7 +5441,7 @@ function cabIdsParaTarea(tipo){
   var de=(document.getElementById('cabDesde')||{}).value||'', ha=(document.getElementById('cabHasta')||{}).value||'';
   var vis=CAB_ITEMS.filter(function(it){ var f=cabFecha(it); if(!f)return true; if(de&&f<de)return false; if(ha&&f>ha)return false; return true; });
   if (tipo==='subir-informes'){
-    return vis.filter(function(it){ var e=it.resuelto?'resuelto':(it.match&&it.match.estado); return e==='ok'||e==='resuelto'; }).map(function(it){return it.id;});
+    return vis.filter(function(it){ var e=cabEstadoDe(it); return e==='ok'||e==='resuelto'; }).map(function(it){return it.id;});
   }
   return vis.map(function(it){return it.id;});
 }
@@ -5556,8 +5559,26 @@ function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').sl
 // Mismo criterio que usa el badge de la fila (cabBadge) para clasificar un
 // informe: una sola función, así el chip del resumen y el badge de la tabla
 // nunca pueden quedar desalineados.
+function cabResueltoOmes(it){
+  var a = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || [];
+  return a.map(function(o){ return String(o).replace(/\D+/g,''); }).filter(Boolean);
+}
+// ¿Todos los OMEs a los que se resolvió el informe ya están transmitidos en PAMI?
+// Mismo criterio que el match automático de una sola práctica: si la OME está
+// transmitida no hay nada que subir. Si alguna OME resuelta no aparece entre los
+// candidatos de la bandeja (no se puede confirmar), NO se da por transmitida.
+function cabResueltoTodoTransmitido(it){
+  var omes = cabResueltoOmes(it);
+  if (!omes.length) return false;
+  var trans = {};
+  ((it.match && it.match.candidatos) || []).forEach(function(c){
+    if (c && c.transmitida && c.ome) trans[String(c.ome).replace(/\D+/g,'')] = true;
+  });
+  return omes.every(function(o){ return trans[o]; });
+}
 function cabEstadoDe(it){
-  return it.resuelto ? 'resuelto' : (it.match ? it.match.estado : 'sin_match');
+  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'resuelto';
+  return it.match ? it.match.estado : 'sin_match';
 }
 function cabResumenDe(items){
   var r = {};
@@ -5620,9 +5641,13 @@ function renderCabinaResumen(resumen, total){
   res.innerHTML = total ? chips.join('') : '';
 }
 function cabBadge(it){
-  if (it.resuelto) { var no=(it.resuelto.omes&&it.resuelto.omes.length)||1; return '<span class="cab-badge ok">Resuelto a mano'+(no>1?' · '+no+' OMEs':'')+'</span>'; }
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
   var e = cabEstadoDe(it);
+  if (it.resuelto) {
+    var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
+    if (e === 'ya_transmitido') return '<span class="cab-badge muted" title="Resuelto a mano; '+(no>1?'sus '+no+' OMEs ya están':'su OME ya está')+' transmitido(s) en PAMI, no hay nada para subir">Ya transmitido</span>';
+    return '<span class="cab-badge ok">Resuelto a mano'+(no>1?' · '+no+' OMEs':'')+'</span>';
+  }
   var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
   return '<span class="cab-badge '+m.c+'">'+esc(m.t)+'</span>';
 }

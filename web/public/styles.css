@@ -258,6 +258,26 @@
   /* Fondo del menú lateral en celular: oscurece el contenido y se cierra al tocarlo.
      Fuera de mobile no existe (el menú es fijo). z-index entre contenido (30) y sidebar (40). */
   .nav-scrim{position:fixed;inset:0;background:rgba(11,31,58,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:38}
+  /* Laptops chicas / pantallas con escalado de Windows (ej. 1360x768 al 125-150%):
+     el viewport CSS queda en ~900-1180px y no dispara el modo mobile, pero con los
+     tamaños de escritorio el menú lateral y la barra quedan enormes. Se compacta el
+     costado (sigue siendo el menú fijo, no el cajón de la hamburguesa). */
+  @media(min-width:861px) and (max-width:1180px){
+    :root{ --sidebar-w:190px; }
+    .sidebar{padding:12px 9px}
+    .sidebar .brand{padding:5px 6px 12px;margin-bottom:9px}
+    .logo-side{width:118px}
+    .nav{gap:1px}
+    .nav .lbl{font-size:9.5px;padding:10px 10px 5px}
+    .nav a,.nav-parent{font-size:12.5px;padding:5px 10px;gap:9px;border-radius:8px}
+    .nav a svg,.nav-parent svg{width:16px;height:16px}
+    .nav a .chip{font-size:9px;padding:1px 6px}
+    .nav-sub{margin-left:24px}
+    .client-nav-item{font-size:11.5px;padding:3px 9px}
+    .side-config a{font-size:10.5px;padding:2px 9px}
+    .topbar{padding:0 16px}
+    .content{padding:20px 20px 30px}
+  }
   @media(max-width:860px){
     .tiles{grid-template-columns:repeat(2,1fr)}
     .sidebar{transform:translateX(-100%);box-shadow:10px 0 40px rgba(0,0,0,.3)}
@@ -413,11 +433,11 @@
   .client-top h2{margin:0;font-size:19px;line-height:1.2}
   .client-status{background:var(--success-bg);color:var(--success);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:750;white-space:nowrap}
   .client-status.muted{background:var(--hover);color:var(--text-2)}
-  .client-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .client-tabs{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .client-tabs::-webkit-scrollbar{display:none}
-  .client-tabs button{border:0;background:transparent;color:var(--text-2);font-size:13px;font-weight:700;padding:9px 12px;border-radius:9px 9px 0 0;flex-shrink:0;white-space:nowrap}
+  .client-tabs button{border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:13px;font-weight:700;padding:8px 16px;border-radius:999px;flex-shrink:0;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
   .client-tabs button:hover{background:var(--hover);color:var(--text)}
-  .client-tabs button.active{color:var(--turq);box-shadow:inset 0 -2px 0 var(--turq)}
+  .client-tabs button.active{background:var(--petrol);color:#fff;border-color:var(--petrol)}
   .client-section{display:block}
   .client-grid{display:grid;grid-template-columns:minmax(320px,.62fr) minmax(0,1.55fr);gap:14px}
   .client-card{padding:15px 16px}
