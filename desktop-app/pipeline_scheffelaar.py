@@ -47,6 +47,22 @@ def _correr_cliente(slug: str, web) -> None:
     except Exception as e:  # noqa: BLE001
         log(f"benef falló (sigo con credencial/OME): {e!r}")
 
+    # --- Paso 1.4: curar la planilla ANTES de bajar credenciales (si el cliente lo
+    #     pide). Reusa la credencial del paciente que ya la tiene DESCARGADA por benef,
+    #     DNI o N° de trámite, y corrige el benef/DNI mal tipeado desde la fila
+    #     validada. Así una fila con el DNI mal cargado no dispara una bajada nueva
+    #     (que además PAMI rechaza) cuando el paciente ya está descargado más arriba. ---
+    if C.get("curar_antes_de_credencial"):
+        log("=== [1.4/4] Curación previa (reusa credencial ya descargada) ===")
+        try:
+            import curar_planilla
+            r = curar_planilla.curar(slug=slug, apply=True, todo=False) or {}
+            log(f"→ curación: {r.get('reuso', 0)} credencial(es) reusadas, "
+                f"{r.get('benef', 0)+r.get('dni', 0)} identidad(es) corregidas, "
+                f"{r.get('limpia', 0)} para re-bajar.")
+        except Exception as e:  # noqa: BLE001
+            log(f"curación previa falló (sigo): {e!r}")
+
     # --- Paso 1.5: filas ya completas (benef+dni+trámite) SIN credencial → disparar
     #     la descarga. La cadena por sí sola no las agarra (solo dispara para las filas
     #     nuevas del barrido); estas ya venían con beneficio. Las que ya tienen la

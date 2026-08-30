@@ -109,6 +109,30 @@ def curar(slug: str, apply: bool, todo: bool):
             if e:
                 by_tram[t] = e
 
+    # Trámite VALIDADO (solo filas DESCARGADA) → benef/dni de esa persona. Sirve para
+    # rescatar filas cuyo benef/DNI se cargaron mal tipeados: el N° de trámite es único
+    # por credencial, así que el mismo trámite DESCARGADA es el mismo paciente y su
+    # PDF ya está en Drive (no hace falta re-bajar). Se descartan los trámites que
+    # caigan en MÁS DE UNA persona (no deberían existir; por las dudas no se usan).
+    ok_by_tram = {}
+    if has_tram:
+        _t_person = {}
+        for row in values:
+            if cell(row, ci_cred).strip().upper() != "DESCARGADA":
+                continue
+            t = tram_de(row)
+            if not t:
+                continue
+            b, d = dig(cell(row, ci_benef)), dig(cell(row, ci_dni))
+            _t_person.setdefault(t, []).append((b, d))
+        for t, gente in _t_person.items():
+            personas = {(b or d) for b, d in gente if (b or d)}
+            if len(personas) == 1:
+                ok_by_tram[t] = {
+                    "benef": next((b for b, d in gente if b), ""),
+                    "dni": next((d for b, d in gente if d), ""),
+                }
+
     def lookup(d, b, key, t="", prefer_ok=True):
         for mp_d, mp_b in ([(ok_by_dni, ok_by_benef)] if prefer_ok else []) + [(any_by_dni, any_by_benef)]:
             if d and d in mp_d and mp_d[d].get(key): return mp_d[d][key]
@@ -155,12 +179,24 @@ def curar(slug: str, apply: bool, todo: bool):
         gate = benef and dni and (tram if requiere_tram else True)
         if not ome and cred != "DESCARGADA" and gate:
             tiene_gemelo = (dni in ok_by_dni) or (benef in ok_by_benef)
+            # Si no hay gemelo por benef/DNI, buscar por N° de trámite: mismo trámite
+            # DESCARGADA = mismo paciente, aunque el benef/DNI estén mal tipeados.
+            gem_tram = ok_by_tram.get(tram) if (not tiene_gemelo and has_tram and tram) else None
             if tiene_gemelo:
                 if has_tram:
                     good_tram = ok_by_dni.get(dni, {}).get("tram") or ok_by_benef.get(benef, {}).get("tram")
                     if good_tram and norm_tram(good_tram) != norm_tram(tram):
                         add(ci_tram, norm_tram(good_tram), "TRAMITE corregido (gemelo)")
                 add(ci_cred, "DESCARGADA", "reusa credencial (gemelo en Drive)")
+                n_reuso += 1
+            elif gem_tram:
+                # Corrige la identidad desde la fila validada y reusa la credencial:
+                # el PDF de ese paciente ya está en Drive (mismo trámite).
+                if gem_tram.get("benef") and gem_tram["benef"] != benef:
+                    add(ci_benef, gem_tram["benef"], "BENEF corregido (mismo trámite DESCARGADA)")
+                if gem_tram.get("dni") and gem_tram["dni"] != dni:
+                    add(ci_dni, gem_tram["dni"], "DNI corregido (mismo trámite DESCARGADA)")
+                add(ci_cred, "DESCARGADA", "reusa credencial (mismo trámite en Drive)")
                 n_reuso += 1
             elif cred == "SIN CREDENCIAL":
                 add(ci_cred, "", "limpia SIN CREDENCIAL (se baja de nuevo)")
@@ -189,18 +225,22 @@ def curar(slug: str, apply: bool, todo: bool):
     print("\n".join(lines))
     print(f"\n>>> Reporte en: {reporte}")
 
+    resumen = {"benef": n_benef, "dni": n_dni, "tram": n_tram, "reuso": n_reuso,
+               "limpia": n_limpia, "celdas": len(updates), "aplicado": False}
+
     if not apply:
         print("\n[SIMULACRO] No se escribió nada. Corré con --apply para aplicar.")
-        return
+        return resumen
     if not updates:
         print("\nNada para aplicar.")
-        return
+        return resumen
     _execute_sheets_request(
         service.spreadsheets().values().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"valueInputOption": "RAW", "data": updates},
         )
     )
+    resumen["aplicado"] = True
     print(f"\n[APLICADO] {len(updates)} celdas escritas en la planilla.")
 
     # La credencial se escribió como texto "DESCARGADA" (RAW, para no romper los
@@ -210,6 +250,7 @@ def curar(slug: str, apply: bool, todo: bool):
         import credencial_pendientes
         r = credencial_pendientes.corregir_links_planos(cli)
         print(f"[LINKS] {r.get('corregidas', 0)} credenciales pasaron de texto a link.")
+    return resumen
 
 
 if __name__ == "__main__":
