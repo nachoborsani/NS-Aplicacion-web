@@ -3939,6 +3939,53 @@ const server = http.createServer(async (req, res) => {
       tasks,
     });
   }
+  // Diagnóstico de disco (admin, solo lectura): qué está ocupando el volumen.
+  // Para decidir qué limpiar cuando el volumen se acerca al tope.
+  if (p === "/api/admin/_storage" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const tamDir = (dir) => {
+      let total = 0, files = 0;
+      const stack = [dir];
+      while (stack.length) {
+        const d = stack.pop();
+        let entries = [];
+        try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+        for (const e of entries) {
+          const full = path.join(d, e.name);
+          if (e.isDirectory()) stack.push(full);
+          else { try { total += fs.statSync(full).size; files += 1; } catch {} }
+        }
+      }
+      return { bytes: total, files };
+    };
+    const entradas = [];
+    let raiz = [];
+    try { raiz = fs.readdirSync(dataDir, { withFileTypes: true }); } catch {}
+    for (const e of raiz) {
+      const full = path.join(dataDir, e.name);
+      if (e.isDirectory()) entradas.push({ nombre: e.name + "/", ...tamDir(full) });
+      else { try { entradas.push({ nombre: e.name, bytes: fs.statSync(full).size, files: 1 }); } catch {} }
+    }
+    // Detalle de la carpeta de informes por cliente (suele ser el grueso).
+    const informesPorCliente = [];
+    try {
+      for (const e of fs.readdirSync(informesDir, { withFileTypes: true })) {
+        if (e.isDirectory()) informesPorCliente.push({ cliente: e.name, ...tamDir(path.join(informesDir, e.name)) });
+      }
+    } catch {}
+    entradas.sort((a, b) => b.bytes - a.bytes);
+    informesPorCliente.sort((a, b) => b.bytes - a.bytes);
+    const totalBytes = entradas.reduce((s, x) => s + x.bytes, 0);
+    const mb = (b) => Math.round(b / 1048576 * 10) / 10;
+    return json(res, 200, {
+      totalMB: mb(totalBytes),
+      porEntrada: entradas.map((x) => ({ nombre: x.nombre, MB: mb(x.bytes), archivos: x.files })),
+      informesPorCliente: informesPorCliente.map((x) => ({ cliente: x.cliente, MB: mb(x.bytes), archivos: x.files })),
+    });
+  }
+
   if (p === "/api/admin/worker/tasks" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
