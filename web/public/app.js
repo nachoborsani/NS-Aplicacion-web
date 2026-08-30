@@ -1462,14 +1462,9 @@ function renderClientList(){
   var createBtn = document.getElementById('clientNewBtn');
   // Clase (no style inline) para que el modo colapsado pueda ocultarlo.
   if (createBtn) createBtn.classList.toggle('is-admin', !!(ME && ME.role === 'admin'));
-  // Abrir SOLO el grupo del cliente activo (consultorios / med. cabecera / potenciales),
-  // sin tocar los otros. Así entrar a un potencial no despliega Med. Cabecera.
-  if (ACTIVE_CLIENT){
-    var gid = ACTIVE_CLIENT.enAnalisis ? 'navGroupPotenciales'
-      : (ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'navGroupMedCab' : 'navGroupConsultorios');
-    var ga = document.getElementById(gid);
-    if (ga) ga.classList.add('open');
-  }
+  // Los grupos de clientes arrancan SIEMPRE cerrados: el usuario los despliega cuando
+  // quiere. Antes se abría el del cliente activo, pero como nunca se cerraba, el menú
+  // quedaba desplegado solo (típico: "Consultorios" abierto sin haberlo tocado).
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
