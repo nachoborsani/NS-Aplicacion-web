@@ -101,20 +101,25 @@ function elegirPractica(prestaciones, practicaHint) {
 // Es conservador a propósito: si alguna pista no encuentra exactamente una
 // prestación libre, devuelve vacío y se cae al camino de siempre (elegir una sola
 // o mandar a revisar). Preferimos no resolver antes que resolver mal.
+// Devuelve { elegidas, todas }: `todas` dice si CADA práctica del informe encontró
+// su OME. Si alguna no aparece o es ambigua, igual se devuelven las que sí
+// resolvieron (para dejarlas tildadas) pero `todas` queda en false y el informe se
+// manda a revisar: sirve de ayuda, sin afirmar que está completo.
 function elegirPracticas(prestaciones, hints) {
   const usados = new Set();
   const out = [];
+  let todas = true;
   for (const h of (Array.isArray(hints) ? hints : [])) {
     const hint = norm(h);
     if (!hint) continue;
     const idxs = prestaciones
       .map((_, i) => i)
       .filter((i) => !usados.has(i) && norm(prestaciones[i].practica).includes(hint));
-    if (idxs.length !== 1) return [];
+    if (idxs.length !== 1) { todas = false; continue; }
     usados.add(idxs[0]);
     out.push(prestaciones[idxs[0]]);
   }
-  return out;
+  return { elegidas: out, todas };
 }
 
 // informe: { dni, beneficio, nombre, practicaHint, practicaHints }
@@ -136,18 +141,21 @@ function matchInforme(informe, bandeja, padronCliente) {
       // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
       const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
       if (hints.length > 1) {
-        const varias = elegirPracticas(delPaciente, hints);
+        const { elegidas: varias, todas } = elegirPracticas(delPaciente, hints);
         if (varias.length > 1) {
           const pendientes = varias.filter((p) => !p.transmitida);
           const principal = pendientes[0] || varias[0];
+          // Si alguna de las prácticas del informe no encontró su OME, el informe
+          // NO queda resuelto: se deja a revisar, pero con las encontradas tildadas.
+          const completo = todas;
           return {
-            estado: pendientes.length ? "ok" : "ya_transmitido",
-            ome: principal.nOrden || "",
+            estado: completo ? (pendientes.length ? "ok" : "ya_transmitido") : "revisar_practica",
+            ome: completo ? (principal.nOrden || "") : "",
             omes: varias.map((p) => p.nOrden).filter(Boolean),
-            prestacion: principal,
+            prestacion: completo ? principal : null,
             prestaciones: varias,
             via: "beneficio_" + via,
-            confianza: "alta",
+            confianza: completo ? "alta" : "media",
             candidatos: delPaciente,
           };
         }
