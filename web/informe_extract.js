@@ -128,10 +128,14 @@ function extraerDatos(texto, filename) {
   // (ETT→ECODOPPLER CARDIACO, MAPA→PRESUROMETRIA, HOLTER); si no, el texto libre.
   // Un informe puede cubrir VARIAS prácticas (otorrino: otomicroscopía +
   // rinomanometría). Guardamos todas: el matcher busca una OME para cada una.
-  const practicas = practicasDe((fn + " " + t.slice(0, 400)).replace(/_/g, " "));
+  // Se busca en TODO el texto, no solo en el encabezado: el "Estudio realizado" a
+  // veces enumera cuatro prácticas y el cuerpo ("SE REALIZA TRATAMIENTO QUÍMICO
+  // DE LESIÓN...") nombra las que faltan. Con una ventana de 400 caracteres se
+  // perdían las últimas — el caso ARAOZ tenía el tratamiento en la posición 647.
+  const practicas = practicasDe((fn + " " + t).replace(/_/g, " "));
   let practica = practicas[0] || "";
   if (!practica) {
-    m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,80})/i);
+    m = t.match(/(?:Estudio|Pr[áa]ctica|Prestaci[óo]n|Informe de)\s*:?\s*([^\n\r]{4,200})/i);
     if (m) practica = m[1].replace(/\s+/g, " ").trim();
   }
 

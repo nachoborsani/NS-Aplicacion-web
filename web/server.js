@@ -5783,6 +5783,23 @@ const server = http.createServer(async (req, res) => {
     const store = loadInformes();
     const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    // Informes leídos ANTES de que existiera la lista de prácticas: se recalcula
+    // releyendo el texto del archivo. Hace falta porque el texto que quedó guardado
+    // viene recortado y se pierden las últimas prácticas del informe. Es barato para
+    // Word/PDF con texto; si es un escaneado se deja como está para no disparar OCR
+    // en cada re-análisis.
+    if (!Array.isArray(it.extract && it.extract.practicas) && informeExtract && informeExtract.practicasDe) {
+      try {
+        const file = path.join(informesDir, slug, it.stored);
+        if (fs.existsSync(file)) {
+          const r = await informeExtract.extraerTexto(file);
+          if (r && r.texto && !r.necesitaOcr) {
+            it.extract = it.extract || {};
+            it.extract.practicas = informeExtract.practicasDe((it.filename || "") + " " + r.texto);
+          }
+        }
+      } catch { /* si no se puede leer, seguimos con lo que había */ }
+    }
     it.match = matchearInforme(slug, it.extract);
     // Lo resuelto A MANO no se pisa: es trabajo del operador y vale más que lo que
     // adivine el matcher. Antes se borraba siempre, así que re-analizar en masa se
