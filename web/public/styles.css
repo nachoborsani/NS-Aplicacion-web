@@ -1136,11 +1136,16 @@
 
   /* ===== Cabina de informes recibidos ===== */
   .cab-resumen{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
-  .cab-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2)}
+  /* .cab-chip es un <button>: le sacamos el reset nativo (font/outline) para
+     que siga viéndose como el chip de siempre, y le sumamos cursor+transición
+     porque ahora es clickeable (filtro rápido por estado). */
+  .cab-chip{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease}
   .cab-chip.ok{background:color-mix(in srgb,#12b3a6 14%,var(--surface));border-color:color-mix(in srgb,#12b3a6 40%,var(--border));color:#0a7d73}
   .cab-chip.warn{background:color-mix(in srgb,#e8a13a 16%,var(--surface));border-color:color-mix(in srgb,#e8a13a 45%,var(--border));color:#a15c00}
   .cab-chip.bad{background:color-mix(in srgb,var(--error) 12%,var(--surface));border-color:color-mix(in srgb,var(--error) 40%,var(--border));color:var(--error)}
   .cab-chip.muted{opacity:.8}
+  .cab-chip:hover{border-color:var(--turq);opacity:1}
+  .cab-chip.on{border-color:var(--turq);box-shadow:0 0 0 3px var(--ring);opacity:1}
   .cab-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:750;padding:3px 9px;border-radius:999px;white-space:nowrap}
   .cab-badge.ok{background:color-mix(in srgb,#12b3a6 18%,var(--surface));color:#0a7d73}
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
