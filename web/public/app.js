@@ -5113,10 +5113,23 @@ async function loadCabinaView(){
   // Las fechas también filtran qué informes se muestran (no solo la bajada del mail).
   ['cabDesde','cabHasta'].forEach(function(id){
     var el = document.getElementById(id);
-    if (el && !el._cabHooked){ el._cabHooked = true; el.addEventListener('change', aplicarFiltroCabina); }
+    if (el && !el._cabHooked){ el._cabHooked = true; el.addEventListener('change', function(){ guardarRangoCabina(); aplicarFiltroCabina(); }); }
   });
   await cargarEstadoMail();
   await refreshCabina();
+}
+// El rango de fechas queda guardado EN ESTE NAVEGADOR: al volver a entrar sigue el
+// último que elegiste, en vez de saltar a hoy y perder el filtro cada vez.
+function guardarRangoCabina(){
+  try {
+    localStorage.setItem('ns-cabina-rango', JSON.stringify({
+      desde: (document.getElementById('cabDesde') || {}).value || '',
+      hasta: (document.getElementById('cabHasta') || {}).value || '',
+    }));
+  } catch (e) {}
+}
+function rangoCabinaGuardado(){
+  try { return JSON.parse(localStorage.getItem('ns-cabina-rango') || 'null'); } catch (e) { return null; }
 }
 // Descarga la cabina en Excel o PDF (para compartir con el socio). El endpoint
 // manda el archivo como adjunto; el navegador lo baja con la cookie de sesión.
@@ -5184,10 +5197,12 @@ async function cargarEstadoMail(){
     if (d && d.conectado){
       if (card) card.style.display = '';
       if (info) info.textContent = 'Casilla: ' + (d.email || 'conectada');
+      // Se mantiene el último rango que usaste; solo si nunca elegiste uno arranca en hoy.
       var hoy = new Date().toISOString().slice(0,10);
+      var guardado = rangoCabinaGuardado() || {};
       var de = document.getElementById('cabDesde'), ha = document.getElementById('cabHasta');
-      if (de && !de.value) de.value = hoy;
-      if (ha && !ha.value) ha.value = hoy;
+      if (de && !de.value) de.value = guardado.desde || hoy;
+      if (ha && !ha.value) ha.value = guardado.hasta || hoy;
     } else {
       if (card) card.style.display = 'none';
     }
