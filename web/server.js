@@ -3193,6 +3193,18 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     const periodRows = [...item._rowsByKey.values()];
     for (const row of periodRows) addRowToDashboardPeriod(item, row);
     item.posiblesDebitosRows = buildDebitoDetalle(periodRows);
+    // Detalle de ausentes sin activar (con turno pero no validadas, fuera de corte no
+    // cuenta): para desplegarlo abajo de la card igual que el del mes en curso.
+    item.ausentesRows = periodRows
+      .filter((r) => r.absent && !r.outsideCutoff)
+      .slice(0, 2000)
+      .map((r) => ({
+        benef: cleanIdentifier(r.benefit),
+        nombre: String(r.patientName || "").trim(),
+        practica: r.practiceText || [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
+        turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
+        valor: money(r.valueGross),
+      }));
     delete item._rowsByKey;
   }
   const periods = Array.from(byPeriod.values()).map(finalizeDashboardPeriod).sort((a, b) => b.period.localeCompare(a.period));
