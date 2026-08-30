@@ -679,6 +679,12 @@
                 <div class="card">
                   <div class="table-head"><div><b>Elegí las prácticas</b><span id="calcNomLabel">—</span></div></div>
                   <div class="card-pad">
+                    <div class="field calc-search-field">
+                      <label>Buscar práctica (por nombre o código)</label>
+                      <input class="inp" id="calcSearch" placeholder="Ej: electro, holter, 570129…" autocomplete="off">
+                      <div class="calc-search-results" id="calcSearchResults" style="display:none"></div>
+                    </div>
+                    <div class="calc-or">o elegí por módulo</div>
                     <div class="calc-pick">
                       <div class="field"><label>Módulo</label><select class="inp" id="calcMod"></select></div>
                       <div class="field"><label>Código / práctica</label><select class="inp" id="calcCod"></select></div>

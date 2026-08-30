@@ -4811,6 +4811,44 @@ function calcWire(){
   document.getElementById('calcSave').addEventListener('click', calcGuardar);
   document.getElementById('calcDownload').addEventListener('click', calcDescargar);
   document.getElementById('calcClear').addEventListener('click', function(){ CALC.saved=[]; calcPersistSaved(); calcRenderSaved(); });
+  var sr=document.getElementById('calcSearch');
+  sr.addEventListener('input', calcSearchDo);
+  sr.addEventListener('keydown', function(e){ if(e.key==='Escape') calcCloseSearch(); });
+  document.addEventListener('click', function(e){
+    var box=document.getElementById('calcSearchResults'), inp=document.getElementById('calcSearch');
+    if(box && box.style.display!=='none' && !box.contains(e.target) && e.target!==inp) calcCloseSearch();
+  });
+}
+function calcNorm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function calcBuildIndex(){
+  CALC.index=[];
+  (CALC.data.modulos||[]).forEach(function(m){ (m.practicas||[]).forEach(function(p){
+    CALC.index.push({mod:m.code,modDesc:m.desc,cod:p.cod,desc:p.desc,valor:p.valor,consulta:p.consulta,
+      excluye:p.excluye||[], _h:calcNorm(p.cod+' '+p.desc+' '+m.desc)});
+  }); });
+}
+function calcCloseSearch(){ var r=document.getElementById('calcSearchResults'); if(r){ r.style.display='none'; r.innerHTML=''; } }
+function calcSearchDo(){
+  var txt=document.getElementById('calcSearch').value.trim(), q=calcNorm(txt), box=document.getElementById('calcSearchResults');
+  if(q.length<2){ calcCloseSearch(); return; }
+  var terms=q.split(/\s+/);
+  var hits=(CALC.index||[]).filter(function(x){ return terms.every(function(t){ return x._h.indexOf(t)>=0; }); }).slice(0,15);
+  if(!hits.length){ box.innerHTML='<div class="calc-sr-empty">Sin resultados para "'+esc(txt)+'"</div>'; box.style.display=''; return; }
+  box.innerHTML=hits.map(function(x){
+    var tag=x.consulta?'<span class="calc-sr-tag">consulta</span>':'';
+    var warn=(x.excluye&&x.excluye.length)?'<span class="calc-sr-warn">⚠ excl.</span>':'';
+    return '<div class="calc-sr-item" data-cod="'+esc(x.cod)+'" data-mod="'+esc(x.mod)+'">'+
+      '<div class="calc-sr-main"><b>'+esc(x.cod)+'</b> '+tag+' '+warn+'<div class="d">'+esc(x.desc)+'</div><div class="m">'+esc(x.mod)+' · '+esc(x.modDesc)+'</div></div>'+
+      '<div class="calc-sr-val">'+calcMoney(x.valor)+'</div></div>';
+  }).join('');
+  box.style.display='';
+  box.querySelectorAll('.calc-sr-item').forEach(function(el){ el.addEventListener('click',function(){ calcAddFromSearch(this.dataset.mod, this.dataset.cod); }); });
+}
+function calcAddFromSearch(mcode, cod){
+  var m=(CALC.data.modulos||[]).filter(function(x){return x.code===mcode;})[0]; if(!m) return;
+  var p=m.practicas.filter(function(x){return x.cod===cod;})[0]; if(!p) return;
+  calcAgregar(m.code, m.desc, p); calcRender();
+  document.getElementById('calcSearch').value=''; calcCloseSearch();
 }
 async function loadCalcData(){
   calcWire();
@@ -4823,7 +4861,7 @@ async function loadCalcData(){
   if(!(res.data.modulos||[]).length){ if(noNom) noNom.style.display=''; if(grid) grid.style.display='none'; return; }
   if(noNom) noNom.style.display='none'; if(grid) grid.style.display='';
   try{ CALC.saved = JSON.parse(localStorage.getItem('ns-calc-saved')||'[]'); }catch(e){ CALC.saved=[]; }
-  calcFillMods(); calcRenderSaved();
+  calcBuildIndex(); calcFillMods(); calcRenderSaved();
 }
 function calcModObj(){ var c=document.getElementById('calcMod').value; return (CALC.data.modulos||[]).filter(function(m){return m.code===c;})[0]; }
 function calcVisibles(m){ var solo=document.getElementById('calcSoloPract').checked; return (m?m.practicas:[]).filter(function(p){ return !(solo && p.consulta); }); }
