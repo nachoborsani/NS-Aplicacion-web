@@ -57,6 +57,9 @@ const _PRACTICA_MAP = [
   [/OTOMICROSCOP[IÍ]A/i, "OTOMICROSCOPIA"],
   [/RINOMANOMETR[IÍ]A/i, "RINOMANOMETRIA"],
   [/VIDEO\s*RINOFIBROLARINGOSCOP[IÍ]A|RINOFIBROLARINGOSCOP[IÍ]A/i, "RINOFIBROLARINGOSCOPIA"],
+  // "TRATAMIENTO DE LESIONES ORL POR MEDIOS FÍSICOS O QUÍMICOS" (717125). En el
+  // informe aparece como "tratamiento químico de lesión" o "cauterización química".
+  [/TRATAMIENTOS?\s+(QU[IÍ]MICOS?|F[IÍ]SICOS?)\s+DE\s+LESI[OÓ]N|CAUTERIZACI[OÓ]N\s+QU[IÍ]MICA/i, "TRATAMIENTO DE LESIONES"],
 ];
 // Todas las prácticas nombradas en el informe (un informe puede cubrir varias).
 function practicasDe(fuente) {
