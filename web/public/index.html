@@ -800,8 +800,8 @@
           <div class="nom-filters card" id="cabMailCard" style="display:none;align-items:end">
             <div class="field"><label>Desde</label><input class="inp" id="cabDesde" type="date"></div>
             <div class="field"><label>Hasta</label><input class="inp" id="cabHasta" type="date"></div>
-            <button class="btn btn-primary" id="cabMailBtn" onclick="traerDelMail()">
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" style="margin-right:4px"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.7"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <button class="btn btn-primary btn-sm" id="cabMailBtn" onclick="traerDelMail()" style="justify-self:start">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="margin-right:4px"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.7"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Traer del mail
             </button>
             <span class="cab-sub" id="cabMailInfo" style="margin-left:auto"></span>
@@ -814,7 +814,7 @@
               <div><b id="cabResultTitle">Informes</b><span id="cabResultMeta">Elegí un cliente.</span></div>
               <div style="display:flex;gap:6px;align-items:center">
                 <span id="cabTareaEstado" style="font-size:12px;color:#51657a"></span>
-                <button class="btn btn-ghost btn-sm" onclick="tareaCabina('auditar-informes')" title="Verificar en PAMI qué está subido">🔍 Auditar</button>
+                <button class="btn btn-ghost btn-sm" onclick="tareaCabina('auditar-informes')" title="Revisa en PAMI, uno por uno, cuáles de estos informes ya tienen el documento cargado. No sube nada: solo te dice cuántos están y cuántos faltan.">🔍 Auditar</button>
                 <button class="btn btn-primary btn-sm" onclick="tareaCabina('subir-informes')" title="Subir los informes a PAMI">⬆️ Subir a PAMI</button>
                 <button class="btn btn-ghost btn-sm" onclick="descargarCabina('xlsx')" title="Descargar Excel">📊 Excel</button>
                 <button class="btn btn-ghost btn-sm" onclick="descargarCabina('pdf')" title="Descargar PDF">📄 PDF</button>
