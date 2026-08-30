@@ -1160,6 +1160,36 @@ function verifyPassword(pw, stored) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// ---------- Rate limit de login (por usuario) ----------
+// Por qué por usuario y no por IP: atrás del proxy de Railway todo el tráfico
+// externo puede llegar con la misma IP salvo que confiemos ciegamente en
+// X-Forwarded-For, y bloquear por IP arriesga tumbar a todos los usuarios de
+// una en vez de solo al que está siendo atacado. Por usuario, en cambio, frena
+// la fuerza bruta contra UNA cuenta puntual sin afectar al resto. Vive en
+// memoria (se reinicia con el proceso): alcanza para frenar un script de
+// prueba-y-error, no pretende ser un WAF.
+const LOGIN_INTENTOS_MAX = 5;
+const LOGIN_VENTANA_MS = 5 * 60 * 1000; // intentos fallidos se cuentan en esta ventana
+const LOGIN_BLOQUEO_MS = 10 * 60 * 1000; // al superar el máximo, se bloquea este tiempo
+const loginAttempts = new Map(); // username -> { count, firstAt, lockedUntil }
+function loginBloqueadoMs(username) {
+  const rec = loginAttempts.get(username);
+  if (!rec || !rec.lockedUntil) return 0;
+  const restante = rec.lockedUntil - Date.now();
+  return restante > 0 ? restante : 0;
+}
+function registrarLoginFallido(username) {
+  const now = Date.now();
+  let rec = loginAttempts.get(username);
+  if (!rec || now - rec.firstAt > LOGIN_VENTANA_MS) rec = { count: 0, firstAt: now, lockedUntil: 0 };
+  rec.count += 1;
+  if (rec.count >= LOGIN_INTENTOS_MAX) rec.lockedUntil = now + LOGIN_BLOQUEO_MS;
+  loginAttempts.set(username, rec);
+}
+function limpiarLoginFallido(username) {
+  loginAttempts.delete(username);
+}
+
 // ---------- Store de usuarios ----------
 function loadUsers() {
   try {
@@ -1172,15 +1202,27 @@ function saveUsers(users) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
 }
+// Clave temporal random por usuario semilla (nunca fija en el código). Se
+// imprime UNA sola vez en el log de arranque: quien tenga acceso a los logs
+// de Railway la puede copiar para el primer login; mustChange:true obliga a
+// cambiarla antes de poder usar el resto de la app (ver enforcement del gate
+// global más abajo).
+function randomTempPassword() {
+  return crypto.randomBytes(9).toString("base64").replace(/[/+=]/g, "").slice(0, 10);
+}
 function seedUsers() {
   let users = loadUsers();
   if (!Array.isArray(users) || users.length === 0) {
-    users = [
-      { username: "nacho", name: "Ignacio Borsani", role: "admin", password: hashPassword("123456"), mustChange: true, active: true },
-      { username: "seba", name: "Sebastian", role: "admin", password: hashPassword("123456"), mustChange: true, active: true },
+    const seeds = [
+      { username: "nacho", name: "Ignacio Borsani" },
+      { username: "seba", name: "Sebastian" },
     ];
+    users = seeds.map((s) => {
+      const temp = randomTempPassword();
+      console.log(`[seed] Usuario ${s.username} creado. Clave temporal: ${temp} (debe cambiarla en el primer login)`);
+      return { ...s, role: "admin", password: hashPassword(temp), mustChange: true, active: true };
+    });
     saveUsers(users);
-    console.log("Usuarios semilla creados: nacho, seba (clave 123456, deben cambiarla)");
   }
   return users;
 }
@@ -3879,6 +3921,17 @@ const server = http.createServer(async (req, res) => {
     // servicio impenetrable (si dejan de pagar, active=false y quedan bloqueados).
     const RUTAS_PUBLICAS = new Set(["/api/login", "/api/logout", "/api/me", "/api/version", "/api/forgot", "/api/reset"]);
     if (!RUTAS_PUBLICAS.has(p) && !meGate) return json(res, 401, { error: "no-auth" });
+
+    // --- Gate de "debe cambiar la clave": mientras mustChange esté prendido, la
+    // sesión solo sirve para ver quién es, cambiar la clave y salir. Antes esto
+    // era nomás una pantalla en el front (el usuario tenía sesión completa igual);
+    // ahora lo corta el backend, que es el que realmente decide.
+    if (meGate && meGate.mustChange) {
+      const permitidoMustChange = new Set(["/api/me", "/api/logout", "/api/change-password", "/api/version"]);
+      if (!permitidoMustChange.has(p)) {
+        return json(res, 403, { error: "must-change-password", message: "Tenés que cambiar tu clave antes de seguir." });
+      }
+    }
     if (meGate && meGate.role === "clinica") {
       const esGet = (req.method === "GET" || !req.method);
       const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
@@ -4192,11 +4245,19 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/login" && req.method === "POST") {
     const { username, password, remember } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
+    const bloqueadoMs = loginBloqueadoMs(uname);
+    if (bloqueadoMs > 0) {
+      return json(res, 429, {
+        error: `Demasiados intentos fallidos. Probá de nuevo en ${Math.ceil(bloqueadoMs / 60000)} minuto(s).`,
+      });
+    }
     const users = loadUsers() || [];
     const u = users.find((x) => x.username === uname && x.active);
     if (!u || !verifyPassword(password, u.password)) {
+      registrarLoginFallido(uname);
       return json(res, 401, { error: "Usuario o contraseña incorrectos" });
     }
+    limpiarLoginFallido(uname);
     setSessionCookie(res, u.username, !!remember);
     return json(res, 200, { user: publicUser(u) });
   }
