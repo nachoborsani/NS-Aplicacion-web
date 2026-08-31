@@ -851,6 +851,20 @@ const HOLTER_SEED_PRESETS = [
     texto: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
     valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
   },
+  // Extraídos de Holters reales de CIMA (jun/2025): mismo ritmo sinusal de base,
+  // pero con extrasístoles supraventriculares aisladas en duplas/tripletas.
+  {
+    id: "holter-esv-duplas", modelo: "holter", nombre: "Con extrasístoles supraventriculares (duplas/tripletas)",
+    texto: "SE REALIZÓ HOLTER DE TRES CANALES. SE OBSERVÓ RITMO SINUSAL DURANTE TODO EL ESTUDIO. CONDUCCIÓN AV Y CONDUCCIÓN IV DENTRO DE LOS LÍMITES NORMALES. SE HALLARON EXTRASÍSTOLES SUPRAVENTRICULARES (ESV) AISLADAS, EN DUPLAS Y TRIPLETAS, CON EPISODIOS DE TAQUICARDIA SUPRAVENTRICULAR (TSV) NO SOSTENIDA. NO SE HALLARON EXTRASÍSTOLES VENTRICULARES (EV). NO SE DETECTARON PAUSAS SIGNIFICATIVAS. NO SE OBSERVARON ALTERACIONES EN EL SEGMENTO ST-T. NO REFIRIÓ SÍNTOMAS DURANTE EL ESTUDIO.",
+    valores: { duracion: "24 hs", fcProm: "76 lpm", fcMin: "58 lpm", fcMax: "120 lpm", totalLatidos: "100.000 aprox.", latidosAnormales: "750 (0,8%)", esv: "presentes, aisladas en duplas y tripletas", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+  },
+  // Fibrilación auricular sostenida durante todo el registro (arrítmico) —
+  // reemplaza el ritmo sinusal de base por el hallazgo principal.
+  {
+    id: "holter-fibrilacion-auricular", modelo: "holter", nombre: "Con fibrilación auricular",
+    texto: "SE REALIZÓ HOLTER DE TRES CANALES. SE OBSERVÓ RITMO DE FIBRILACIÓN AURICULAR DE MODERADA RESPUESTA VENTRICULAR DURANTE TODO EL ESTUDIO. CONDUCCIÓN IV DENTRO DE LOS LÍMITES NORMALES. NO SE HALLARON EXTRASÍSTOLES VENTRICULARES (EV). NO SE REGISTRARON PAUSAS SIGNIFICATIVAS DURANTE EL ESTUDIO. NO SE OBSERVARON ALTERACIONES EN EL SEGMENTO ST-T. NO REFIERE SÍNTOMAS.",
+    valores: { duracion: "24 hs", fcProm: "95 lpm", fcMin: "75 lpm", fcMax: "110 lpm", totalLatidos: "115.000 aprox.", latidosAnormales: "fibrilación auricular sostenida", esv: "no aplica (FA de base)", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+  },
 ];
 // Presets ORL. Los que llevan `ladoTextos` cambian el texto según el lado
 // elegido (derecho/izquierdo/bilateral/noesp); `texto` es el default sin lado.
@@ -876,6 +890,20 @@ const ORL_SEED_PRESETS = [
   {
     id: "orl-quimico-vaso", modelo: "orl-quimico", nombre: "Cauterización de vaso septal",
     texto: "SE REALIZA EXAMEN OTORRINOLARINGOLÓGICO. SE OBSERVA VASO SEPTAL PROMINENTE, SE PROCEDE A CAUTERIZACIÓN QUÍMICA POR EPÍSTAXIS RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
+  },
+  // Extraídos de tratamientos químicos reales de CIMA (jun/2025) — mismo
+  // procedimiento, solo cambia la ubicación de la lesión.
+  {
+    id: "orl-quimico-fauces", modelo: "orl-quimico", nombre: "Lesión granulomatosa en fauces",
+    texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN TIPO GRANULOMATOSA EN FAUCES. PROCEDIMIENTO BIEN TOLERADO, EVOLUCIÓN FAVORABLE.",
+  },
+  {
+    id: "orl-quimico-auricular", modelo: "orl-quimico", nombre: "Lesión en pabellón auricular",
+    texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN EN PABELLÓN AURICULAR. PROCEDIMIENTO BIEN TOLERADO, EVOLUCIÓN FAVORABLE.",
+  },
+  {
+    id: "orl-quimico-nasal", modelo: "orl-quimico", nombre: "Lesión granulomatosa en fosa nasal",
+    texto: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN TIPO GRANULOMATOSA EN FOSA NASAL. PROCEDIMIENTO BIEN TOLERADO, EVOLUCIÓN FAVORABLE.",
   },
   {
     id: "orl-combinado-normal", modelo: "orl-combinado", nombre: "Cerumen + tratamiento químico",
@@ -993,6 +1021,20 @@ const ORL_SEED_PRESETS = [
     texto: "PRUEBA SUBMÁXIMA INSUFICIENTE.\nDETENIDA A LOS 300 KGM POR FATIGA MUSCULAR.\nNO SE OBSERVÓ INFRADESNIVEL DEL ST HASTA LA CARGA ALCANZADA.\nNO REFIRIÓ ANGOR.\nCOMPORTAMIENTO ADECUADO DE LA TENSIÓN ARTERIAL.\nNO PRESENTÓ ARRITMIAS SIGNIFICATIVAS.\nBAJA CAPACIDAD FUNCIONAL PARA LA EDAD.",
     valores: { protocolo: "Astrand", fcPrevMax: "135 lpm", fcPrevSub: "115 lpm", fcAlcanzada: "82 lpm", pctFcMax: "61%", pctFcSub: "71%", taSis: "140 mmHg", taDia: "80 mmHg", mets: "4.6", dobleProd: "11480", vo2: "16.1", carga: "300 KGM", motivoDeten: "Fatiga muscular / baja tolerancia al esfuerzo" },
   },
+  // Tratamiento esclerosante (flebología) — extraídos de plantillas reales de
+  // CIMA. Las 3 son variantes clínicas genuinamente distintas, no solo texto repetido.
+  {
+    id: "esclerosante-ulcera-ceap6", modelo: "esclerosante", nombre: "Úlcera CEAP VI — esclerosis periulcerosa",
+    texto: "PACIENTE CON ÚLCERA, CLASIFICADA CEAP VI. SE ESCLEROSA VASO SUPERFICIAL PERIULCEROSO. SE INDICÓ TRATAMIENTO ESCLEROSANTE SOBRE TRAYECTO AFECTADO.",
+  },
+  {
+    id: "esclerosante-golfo-sangrante", modelo: "esclerosante", nombre: "Golfo varicoso sangrante (varicorragia)",
+    texto: "PACIENTE PRESENTÓ SOBRE GOLFO VARICOSO, EPISODIOS DE VARICORRAGIA. SE INDICA TRATAMIENTO ESCLEROSANTE SOBRE GOLFO SANGRANTE.",
+  },
+  {
+    id: "esclerosante-ceap3-flebitis", modelo: "esclerosante", nombre: "CEAP III con flebitis reactiva",
+    texto: "PACIENTE QUE CONSULTA POR VARICES. CLASIFICACIÓN CEAP III CON TRAYECTORIA VARICOSA QUE PROVOCA PRURITO, LO QUE DETERMINÓ FLEBITIS REACTIVA. SE INDICÓ TRATAMIENTO ESCLEROSANTE SOBRE TRAYECTO AFECTADO.",
+  },
 ];
 // Presets de la Flujometría urinaria (ECUD / Urología Caballito). Cada uno pisa
 // los 12 valores de uroflujometría + posición (y el diag. clínico en el normal).
@@ -1035,6 +1077,61 @@ const FLUJO_SEED_PRESETS = [
     valoresPorSexo: {},
   },
 ];
+// Presets de Ecografía general / Ecodoppler / Ecocardiograma / Espirometría
+// (CIMA). Un preset "normal" por modelo (mismo texto que el textoDefault del
+// modelo, para que aparezca en el desplegable de Descripciones) más las
+// variantes clínicas reales encontradas (Doppler arterial MMII: normal real
+// del Dr. Peltz vs. arteriopatía crónica bilateral real del Dr. Novelli).
+const ECO_SEED_PRESETS = [
+  { id: "eco-abdominal-normal", modelo: "eco-abdominal", nombre: "Abdominal completa normal",
+    texto: "HÍGADO DE TAMAÑO, FORMA Y ECOESTRUCTURA CONSERVADOS, SIN IMÁGENES FOCALES. VESÍCULA BILIAR DE PAREDES FINAS, SIN IMÁGENES LITIÁSICAS EN SU INTERIOR. VÍA BILIAR NO DILATADA. PÁNCREAS DE ECOESTRUCTURA HOMOGÉNEA. BAZO DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS. AMBOS RIÑONES DE FORMA, TAMAÑO Y ECOESTRUCTURA CONSERVADOS, SIN SIGNOS DE UROPATÍA OBSTRUCTIVA NI LITIASIS. NO SE OBSERVA LÍQUIDO LIBRE EN CAVIDAD." },
+  { id: "eco-renal-normal", modelo: "eco-renal", nombre: "Renal normal",
+    texto: "RIÑÓN DERECHO: FORMA CONSERVADA. ECOESTRUCTURA HOMOGÉNEA. RELACIÓN CORTICOMEDULAR CONSERVADA. NO SE OBSERVAN SIGNOS DE URONEFROSIS NI MACROLITIASIS. TAMAÑO: DL 103 MM X AP 46 MM X DT 37 MM, EP 15 MM.\nRIÑÓN IZQUIERDO: FORMA CONSERVADA. ECOESTRUCTURA HOMOGÉNEA. RELACIÓN CORTICOMEDULAR CONSERVADA. NO SE OBSERVAN SIGNOS DE URONEFROSIS NI MACROLITIASIS. TAMAÑO: DL 102 MM X AP 55 MM X DT 49 MM, EP 24 MM." },
+  { id: "eco-vesical-normal", modelo: "eco-vesical", nombre: "Vesical normal",
+    texto: "VEJIGA EN REPLECIÓN, DE PAREDES FINAS Y REGULARES, CON CONTENIDO ANECOICO, SIN IMÁGENES COMPATIBLES CON LITIASIS NI FORMACIONES SÓLIDAS EN SU INTERIOR." },
+  { id: "eco-vesical-residuo-normal", modelo: "eco-vesical-residuo", nombre: "Vesical con residuo posmiccional normal",
+    texto: "VEJIGA EN REPLECIÓN, DE PAREDES FINAS Y REGULARES, SIN IMÁGENES COMPATIBLES CON LITIASIS NI FORMACIONES SÓLIDAS EN SU INTERIOR. LUEGO DE LA MICCIÓN ESPONTÁNEA SE CONSTATA RESIDUO POSMICCIONAL ESTIMADO EN — ML." },
+  { id: "eco-prostatica-normal", modelo: "eco-prostatica", nombre: "Prostática normal",
+    texto: "PRÓSTATA DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS PARA LA EDAD, DE CONTORNOS REGULARES, SIN IMÁGENES NODULARES EN SU INTERIOR." },
+  { id: "eco-partes-blandas-general-hernia", modelo: "eco-partes-blandas-general", nombre: "Hernia inguinal (región a completar)",
+    texto: "SE EXPLORA CON TRANSDUCTOR DE ALTA FRECUENCIA EN CONCORDANCIA CON ÁREA REFERIDA POR EL/LA PACIENTE, EVIDENCIÁNDOSE AL MOMENTO DEL ESTUDIO:\nREGIÓN INGUINAL: ANILLO HERNIARIO DE — MM CON SACO HERNIARIO DE — MM X — MM, SIENDO SU CONTENIDO ASAS INTESTINALES Y TEJIDO ADIPOSO PROTRUYENDO EL MISMO ANTE MANIOBRA DE VALSALVA Y CON REDUCCIÓN TOTAL/PARCIAL ANTE LA RELAJACIÓN." },
+  { id: "eco-tiroides-normal", modelo: "eco-tiroides", nombre: "Tiroides normal",
+    texto: "LÓBULO DERECHO: FORMA CONSERVADA, ECOESTRUCTURA HOMOGÉNEA, SIN IMÁGENES NODULARES.\nLÓBULO IZQUIERDO: FORMA CONSERVADA, ECOESTRUCTURA HOMOGÉNEA, SIN IMÁGENES NODULARES.\nISTMO DE ESPESOR CONSERVADO, HOMOGÉNEO." },
+  { id: "eco-mamaria-normal", modelo: "eco-mamaria", nombre: "Mamaria normal (BIRADS 1)",
+    texto: "PARÉNQUIMA HETEROGÉNEO FIBROGLANDULAR.\nMAMA DERECHA: NO SE OBSERVAN IMÁGENES SÓLIDAS NI QUÍSTICAS AGREGADAS.\nMAMA IZQUIERDA: NO SE OBSERVAN IMÁGENES SÓLIDAS NI QUÍSTICAS AGREGADAS.\nBIRADS ECOGRÁFICO: 1." },
+  { id: "eco-ginecologica-tv-normal", modelo: "eco-ginecologica-tv", nombre: "Ginecológica TV normal",
+    texto: "ÚTERO Y ANEXOS DE CARACTERÍSTICAS ECOGRÁFICAS CONSERVADAS PARA LA EDAD. NO SE OBSERVAN IMÁGENES PATOLÓGICAS AL MOMENTO DEL ESTUDIO." },
+  { id: "eco-doppler-cuello-normal", modelo: "eco-doppler-cuello", nombre: "Vasos de cuello normal",
+    texto: "SE ESTUDIAN CON TRANSDUCTOR LINEAL ARTERIAS CARÓTIDAS COMUNES, BULBOS CAROTÍDEOS, CARÓTIDAS INTERNAS Y EXTERNAS, Y ARTERIAS VERTEBRALES DE AMBOS LADOS.\nDOPPLER: FLUJO CONSERVADO CON ONDAS DE MORFOLOGÍA NORMAL. NO SE OBSERVAN PLACAS ATEROMATOSAS NI ESTENOSIS SIGNIFICATIVAS.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS." },
+  { id: "eco-doppler-arterial-mmss-normal", modelo: "eco-doppler-arterial-mmss", nombre: "Arterial MMSS normal",
+    texto: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS SUPERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS." },
+  { id: "eco-doppler-venoso-mmss-normal", modelo: "eco-doppler-venoso-mmss", nombre: "Venoso MMSS normal",
+    texto: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS SUPERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES." },
+  // Extraídos de informes reales de CIMA (Dr. Guillermo Peltz, jun/2025).
+  { id: "eco-doppler-arterial-mmii-normal", modelo: "eco-doppler-arterial-mmii", nombre: "Arterial MMII normal", medicoId: "peltz-guillermo",
+    texto: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS." },
+  // Extraído de informe real de CIMA (Dr. Dario S. Novelli) — misma práctica,
+  // hallazgo distinto: arteriopatía crónica bilateral (placas fibrocálcicas
+  // aisladas sin repercusión hemodinámica).
+  { id: "eco-doppler-arterial-mmii-arteriopatia", modelo: "eco-doppler-arterial-mmii", nombre: "Arterial MMII — arteriopatía crónica bilateral", medicoId: "novelli-dario",
+    texto: "SE ESTUDIAN CON TRANSDUCTOR LINEAL DE 12 MHZ ARTERIAS FEMORALES COMUNES, ARTERIAS FEMORALES SUPERFICIALES Y PROFUNDAS, ARTERIAS POPLÍTEAS, TRONCOS TIBIO-PERONEOS, ARTERIAS TIBIALES Y ARTERIAS PEDIAS.\nAL MOMENTO DEL EXAMEN AMBOS MIEMBROS INFERIORES PRESENTAN FLUJO ANTERÓGRADO CON ONDAS TRIFÁSICAS DE VELOCIDADES GLOBALMENTE CONSERVADAS.\nPEQUEÑAS PLACAS FIBROCÁLCICAS AISLADAS BILATERALES QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA.\nCONCLUSIÓN: ARTERIOPATÍA CRÓNICA BILATERAL." },
+  { id: "eco-doppler-venoso-mmii-normal", modelo: "eco-doppler-venoso-mmii", nombre: "Venoso MMII normal", medicoId: "peltz-guillermo",
+    texto: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES." },
+  { id: "eco-doppler-aorta-abdominal-normal", modelo: "eco-doppler-aorta-abdominal", nombre: "Aorta abdominal — placas sin repercusión hemodinámica",
+    texto: "SE REALIZA ESTUDIO DOPPLER COLOR ARTERIAL DE ARTERIA AORTA ABDOMINAL CON EQUIPO DE ALTA RESOLUCIÓN COLOR Y CON TRANSDUCTORES DE 3,5 MHZ.\nARTERIA AORTA ABDOMINAL: EN SU TRAYECTO EVALUADO SE OBSERVA DIÁMETRO ANTEROPOSTERIOR DE 13 MM A NIVEL SUPRAUMBILICAL Y DE CALIBRE CONSERVADO, MÁXIMO INFRAUMBILICAL DE 16 MM. ONDAS DE TIPO TRIFÁSICA CON VELOCIDADES CONSERVADAS.\nSE MENCIONAN AISLADAS PLACAS ATEROMATOSAS FIBROCALCÍCICAS QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA." },
+  { id: "eco-doppler-tiroides-normal", modelo: "eco-doppler-tiroides", nombre: "Doppler tiroides normal",
+    texto: "SE ESTUDIA GLÁNDULA TIROIDES CON DOPPLER COLOR Y ESPECTRAL. VASCULARIZACIÓN INTRAPARENQUIMATOSA DE DISTRIBUCIÓN Y PATRÓN NORMAL, SIN SIGNOS DE HIPERVASCULARIZACIÓN FOCAL NI DIFUSA.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS." },
+  { id: "ecocardiograma-normal", modelo: "ecocardiograma", nombre: "Ecocardiograma normal",
+    texto: "ECOCARDIOGRAMA DOPPLER COLOR: CAVIDADES DE DIMENSIONES CONSERVADAS. FUNCIÓN SISTÓLICA DEL VENTRÍCULO IZQUIERDO CONSERVADA. NO SE OBSERVARON IMÁGENES COMPATIBLES CON VEGETACIONES. PERICARDIO LIBRE. MORFOLOGÍA VALVULAR NORMAL. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
+    valores: { apertura: "Conservada", raizAorta: "30", auriculaIzq: "34", diamSistolicoVI: "28", diamDiastolicoVI: "46", fraccionAcortamiento: "36", fraccionEyeccion: "62", septumIV: "9", paredPosterior: "9", pericardio: "Libre", funcionSistolicaVI: "Conservada", motilidadParietal: "Conservada", espesorParietal: "Conservado", diametroAI: "34", diametroAD: "32", diametroVD: "24", morfologiaValvular: "Normal", diagnostico: "" } },
+  // Extraídos de espirometrías reales de CIMA (equipo Minispir II, jun/2025).
+  { id: "espirometria-normal", modelo: "espirometria", nombre: "Espirometría normal",
+    texto: "ESPIROMETRÍA COMPUTARIZADA, CURVA FLUJO-VOLUMEN, PRE Y POST BRONCODILATADORES, DENTRO DE LÍMITES NORMALES. EL B2 AGONISTA NO PRODUCE CAMBIOS SIGNIFICATIVOS.",
+    valores: { fvcPre: "3,36", fvcPost: "3,36", pctTeorFvc: "80", fev1Pre: "2,45", fev1Post: "2,45", pctTeorFev1: "86", fev1fvcPre: "70,9", fev1fvcPost: "70,9", pef: "5,86", fef2575: "2,07", fet: "6,00", broncodilatador: "Salbutamol", equipo: "Minispir II" } },
+  { id: "espirometria-deficit-obstructivo-moderado", modelo: "espirometria", nombre: "Déficit ventilatorio obstructivo moderado",
+    texto: "ESPIROMETRÍA COMPUTARIZADA, CURVA FLUJO-VOLUMEN, PRE Y POST BRONCODILATADORES. DÉFICIT VENTILATORIO OBSTRUCTIVO MODERADO CON PROBABLE COMPONENTE RESTRICTIVO. EL B2 AGONISTA NO PRODUCE CAMBIOS SIGNIFICATIVOS.",
+    valores: { fvcPre: "2,51", fvcPost: "2,51", pctTeorFvc: "71", fev1Pre: "1,79", fev1Post: "1,79", pctTeorFev1: "65", fev1fvcPre: "76,9", fev1fvcPost: "76,9", pef: "5,20", fef2575: "1,45", fet: "6,00", broncodilatador: "Salbutamol", equipo: "Minispir II" } },
+];
 function loadInformesConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
@@ -1049,6 +1146,7 @@ function loadInformesConfig() {
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" })),
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
+      ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" })),
     ];
   }
   return cfg;
@@ -7097,7 +7195,9 @@ function ensureOrlSeed() {
     const orlMedicos = [
       { id: "lopez-meza-yuliana", nombre: "Dra. Lopez Meza Yuliana", modelos: orlCaballito, clientes: CAB },
       { id: "carchiolo-glenda", nombre: "Dra. Glenda Carchiolo", modelos: orlCaballito, clientes: CAB },
-      { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["orl-videorino"], clientes: CAB },
+      // También atiende en CIMA haciendo tratamiento químico ORL (confirmado
+      // en informes reales de CIMA, jun/2025) — no solo videorino en Caballito.
+      { id: "lagrava-luis-fernando", nombre: "Dr. Luis Fernando Lagrava", modelos: ["orl-videorino", "orl-quimico"], clientes: [...CAB, "cima"] },
       { id: "ossipoff-florencia", nombre: "Dra. Florencia Ossipoff", modelos: ["derma-crio"], clientes: CAB },
       { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["derma-electro", "derma-biopsia"], clientes: CAB },
       { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["eco-musculo"], clientes: CAB },
@@ -7111,11 +7211,15 @@ function ensureOrlSeed() {
           cambio = true;
         } else {
           if (m.matricula && !ex.matricula) { ex.matricula = m.matricula; cambio = true; }
-          // Sumar modelos nuevos a un médico ya sembrado (ej. Leydy: electro + biopsia).
+          // Sumar modelos nuevos a un médico ya sembrado (ej. Leydy: electro + biopsia;
+          // Lagrava: sumó tratamiento químico además de videorino).
           ex.modelos = Array.isArray(ex.modelos) ? ex.modelos : [];
           for (const k of m.modelos) { if (!ex.modelos.includes(k)) { ex.modelos.push(k); cambio = true; } }
-          // Si es de antes de que existiera el scope por cliente, se lo asignamos.
+          // Si es de antes de que existiera el scope por cliente, se lo asignamos;
+          // si ya lo tenía, sumamos clientes nuevos sin pisar los que ya tenía
+          // (ej. Lagrava: sumó CIMA además de Caballito).
           if (!Array.isArray(ex.clientes)) { ex.clientes = m.clientes.slice(); cambio = true; }
+          else { for (const c of m.clientes) { if (!ex.clientes.includes(c)) { ex.clientes.push(c); cambio = true; } } }
         }
       }
     }
@@ -7173,6 +7277,57 @@ function ensureFlujoSeed() {
   } catch (e) { console.log("[flujo-seed] omitido:", e && e.message); }
 }
 ensureFlujoSeed();
+
+// Precarga los presets de Ecografía general / Ecodoppler / Ecocardiograma /
+// Espirometría (CIMA) en configs ya existentes. Idempotente: solo agrega el
+// preset que todavía no exista por id, y suma médicos/modelos/clientes sin
+// pisar lo que el admin ya haya cargado (mismo criterio que ensureOrlSeed).
+function ensureEcoSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of ECO_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" });
+        cambio = true;
+      }
+    }
+    // Médicos reales de CIMA relevados en los informes de ecografía/ecodoppler
+    // (jun-oct/2025). Dieguez (fonoaudióloga, impedanciometría) no se agrega
+    // todavía: las únicas fuentes disponibles son notas manuscritas ilegibles,
+    // sin contenido de plantilla aprovechable.
+    const ecoMedicos = [
+      // Doppler vascular (arterial/venoso MMII y MMSS, vasos de cuello, aorta
+      // abdominal): confirmado por informes reales firmados (MMII).
+      { id: "peltz-guillermo", nombre: "Dr. Guillermo Peltz", matricula: "MN 63.812 / MP 62.696",
+        modelos: ["eco-doppler-arterial-mmii", "eco-doppler-venoso-mmii", "eco-doppler-arterial-mmss", "eco-doppler-venoso-mmss", "eco-doppler-cuello", "eco-doppler-aorta-abdominal"],
+        clientes: ["cima"] },
+      // Ecografía general (renal, partes blandas, tiroides, mamaria, etc.):
+      // confirmado por planillas e informes reales firmados.
+      { id: "novelli-dario", nombre: "Dario S. Novelli", matricula: "MN 162.422 / MP 551.442",
+        modelos: ["eco-abdominal", "eco-renal", "eco-vesical", "eco-vesical-residuo", "eco-prostatica", "eco-partes-blandas-general", "eco-tiroides", "eco-mamaria", "eco-doppler-tiroides", "eco-doppler-arterial-mmii"],
+        clientes: ["cima"] },
+    ];
+    if (Array.isArray(cfg.medicos)) {
+      for (const m of ecoMedicos) {
+        const ex = cfg.medicos.find((x) => x.id === m.id);
+        if (!ex) {
+          cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula || "", modelos: m.modelos.slice(), clientes: m.clientes.slice() });
+          cambio = true;
+        } else {
+          if (m.matricula && !ex.matricula) { ex.matricula = m.matricula; cambio = true; }
+          ex.modelos = Array.isArray(ex.modelos) ? ex.modelos : [];
+          for (const k of m.modelos) { if (!ex.modelos.includes(k)) { ex.modelos.push(k); cambio = true; } }
+          if (!Array.isArray(ex.clientes)) { ex.clientes = m.clientes.slice(); cambio = true; }
+          else { for (const c of m.clientes) { if (!ex.clientes.includes(c)) { ex.clientes.push(c); cambio = true; } } }
+        }
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[eco-seed] omitido:", e && e.message); }
+}
+ensureEcoSeed();
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);
