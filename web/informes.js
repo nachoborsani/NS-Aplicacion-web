@@ -417,6 +417,17 @@ function readAsset(name) {
   try { return fs.readFileSync(path.join(DATA_DIR, "informes", name)); } catch {}
   try { return fs.readFileSync(path.join(ASSETS, name)); } catch { return null; }
 }
+// Encaja una imagen (logo o firma) dentro de un ancho x alto máximo, sin
+// deformarla. Antes se fijaba solo el ancho y el alto quedaba libre según la
+// proporción real del PNG — si el archivo subido no tenía la proporción
+// esperada (más cuadrado o vertical de lo previsto, típico en un sello
+// escaneado), el alto se disparaba y terminaba tapando texto de arriba o de
+// abajo. Ahora gana la dimensión que más achica, así nunca se pasa de la caja.
+function encajarImagen(img, maxW, maxH) {
+  let w = maxW, h = (img.height / img.width) * w;
+  if (h > maxH) { h = maxH; w = (img.width / img.height) * h; }
+  return { w, h };
+}
 
 function wrapText(text, font, size, maxW) {
   const words = String(text || "").split(/\s+/).filter(Boolean);
@@ -511,7 +522,7 @@ async function buildInformePdf(modeloKey, input) {
   const logoBuf = readAsset(modelo.logo || (input && input.logoName));
   if (logoBuf) {
     const logo = await doc.embedPng(logoBuf);
-    const lw = modelo.logoW || (input && input.logoW) || 100, lh = (logo.height / logo.width) * lw;
+    const { w: lw, h: lh } = encajarImagen(logo, modelo.logoW || (input && input.logoW) || 100, 90);
     page.drawImage(logo, { x: (width - lw) / 2, y: y - lh, width: lw, height: lh });
     y -= lh + 6;
   }
@@ -626,7 +637,7 @@ async function buildInformePdf(modeloKey, input) {
   const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
   if (firmaBuf) {
     const firma = await doc.embedPng(firmaBuf);
-    const fw = 150, fh = (firma.height / firma.width) * fw;
+    const { w: fw, h: fh } = encajarImagen(firma, 150, 55);
     page.drawImage(firma, { x: firmaAreaX + (firmaAreaW - fw) / 2, y: fy - 22, width: fw, height: fh });
   } else {
     centerIn("Firma Médico", firmaAreaX, width - Mx, fy, { bold: true, size: 11 });
@@ -701,7 +712,7 @@ async function buildSiboPdf(modelo, input, lib) {
   let y = H - M;
   // Logo centrado (del cliente elegido al generar)
   const logoBuf = readAsset(modelo.logo || input.logoName);
-  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const lw = modelo.logoW || input.logoW || 100, lh = (img.height / img.width) * lw; page.drawImage(img, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 16; } catch {} }
+  if (logoBuf) { try { const img = await doc.embedPng(logoBuf); const { w: lw, h: lh } = encajarImagen(img, modelo.logoW || input.logoW || 100, 90); page.drawImage(img, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 16; } catch {} }
 
   const colGap = 20, colW = (W - 2 * M - colGap) / 2;
   const c1 = M, c2 = M + colW + colGap;
@@ -1013,7 +1024,7 @@ async function buildMapaPdf(modelo, input) {
   }
   // Firma (solo si hay firma autorizada)
   const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
-  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const fw = 140, fh = (img.height / img.width) * fw; page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
+  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const { w: fw, h: fh } = encajarImagen(img, 140, 50); page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
   else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); center("Firma y sello", W - M - 170, W - M - 20, concBottom + 6, { size: 8, color: soft }); }
 
   return await doc.save();
@@ -1108,7 +1119,7 @@ async function buildErgoPdf(modelo, input) {
   }
   // Firma (solo si hay firma autorizada)
   const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
-  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const fw = 140, fh = (img.height / img.width) * fw; page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
+  if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const { w: fw, h: fh } = encajarImagen(img, 140, 50); page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
   else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); T("Firma y sello", W - M - 130, concBottom + 6, { size: 8, color: soft }); }
 
   return await doc.save();
