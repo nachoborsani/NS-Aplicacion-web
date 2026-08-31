@@ -6357,11 +6357,16 @@ const server = http.createServer(async (req, res) => {
         if (texto && informeExtract.extraerDatos) {
           const d = informeExtract.extraerDatos(texto, it.filename || "");
           it.extract.practicas = d.practicas || [];
+          // La PRÁCTICA (hint de una sola práctica) tiene que quedar en sync con
+          // practicas[0]: si no, el match de una práctica usa el texto viejo ("realizado:
+          // Electrocardiograma") y no pega con el mapa/equivalencias (ECG→consulta cardio).
+          if (d.practica) it.extract.practica = d.practica;
           it.extract.esFactura = !!d.esFactura;
           if (!it.extract.nombre && d.nombre) it.extract.nombre = d.nombre;
         } else {
           const fuente = (it.filename || "") + " " + (it.extract.practica || "") + " " + (it.extract.practicas || []).join(" ");
           it.extract.practicas = informeExtract.practicasDe(fuente);
+          if ((it.extract.practicas || [])[0]) it.extract.practica = it.extract.practicas[0];
           if (informeExtract.esFactura) it.extract.esFactura = !!informeExtract.esFactura(it.extract.practica || "", it.filename || "");
         }
       } catch { /* si no se puede leer, seguimos con lo que había */ }
