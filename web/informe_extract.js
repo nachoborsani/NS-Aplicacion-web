@@ -125,6 +125,29 @@ function practicasDe(fuenteRaw) {
   return out;
 }
 
+// Fecha del estudio (para desempatar por fecha cuando hay varios turnos/homónimos).
+// Devuelve 'YYYY-MM-DD' o "". Formato argentino: DD/MM/AAAA.
+const _MESES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7,
+  agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
+function _ymd(a, m, d) {
+  a = String(a); if (a.length === 2) a = "20" + a;
+  return a + "-" + String(+m).padStart(2, "0") + "-" + String(+d).padStart(2, "0");
+}
+function fechaDe(texto) {
+  const t = String(texto || "");
+  // "3 de agosto de 2026"
+  let m = t.match(/\b(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s+de\s+(\d{4})/);
+  if (m) {
+    const mes = _MESES[m[2].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()];
+    if (mes) return _ymd(m[3], mes, m[1]);
+  }
+  // "Fecha: 11/08/2026" / "13/8/26" / "4 / 8 / 2026" — primero cerca de "fecha".
+  m = t.match(/fecha[^0-9]{0,12}(\d{1,2})\s*[/\-]\s*(\d{1,2})\s*[/\-]\s*(\d{2,4})/i)
+    || t.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2,4})\b/);
+  if (m) return _ymd(m[3], m[2], m[1]);
+  return "";
+}
+
 // ¿El archivo es una FACTURA (no un informe médico)? Por el nombre ("FACA0012…") o por
 // señales fiscales en el texto. Las facturas no se matchean contra la bandeja.
 function esFactura(texto, filename) {
@@ -208,7 +231,7 @@ function extraerDatos(texto, filename) {
     if (m) practica = m[1].replace(/\s+/g, " ").trim();
   }
 
-  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas, esFactura: esFactura(t, fn) };
+  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas, fecha: fechaDe(t), esFactura: esFactura(t, fn) };
 }
 
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está

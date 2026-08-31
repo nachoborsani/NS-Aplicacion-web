@@ -401,7 +401,7 @@ function matchearInforme(slug, extract) {
     if (releidas.length > hints.length) hints = releidas;
   }
   const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre,
-                    practicaHint: extract.practica, practicaHints: hints };
+                    practicaHint: extract.practica, practicaHints: hints, fecha: extract.fecha };
   const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);
   // Cuando no matcheó confiado, sugerir afiliados del padrón con nombre parecido
   // (para confirmar en 1 clic los typos / abreviados / nombres con ruido).
@@ -428,7 +428,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
     const r = await informeExtract.procesar(storedPath, filename);
     extract = { dni: r.dni || "", beneficio: r.beneficio || "", nombre: r.nombre || "",
                 practica: r.practica || "", practicas: r.practicas || [],
-                esFactura: !!r.esFactura,
+                fecha: r.fecha || "", esFactura: !!r.esFactura,
                 ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
     error = r.error || null;
   } else {
@@ -6362,6 +6362,7 @@ const server = http.createServer(async (req, res) => {
           // Electrocardiograma") y no pega con el mapa/equivalencias (ECG→consulta cardio).
           if (d.practica) it.extract.practica = d.practica;
           it.extract.esFactura = !!d.esFactura;
+          if (d.fecha) it.extract.fecha = d.fecha;   // fecha del estudio (desempate por fecha)
           if (!it.extract.nombre && d.nombre) it.extract.nombre = d.nombre;
         } else {
           const fuente = (it.filename || "") + " " + (it.extract.practica || "") + " " + (it.extract.practicas || []).join(" ");

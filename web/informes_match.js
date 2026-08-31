@@ -122,9 +122,23 @@ function resolverPorNombre(nombre, padronCliente, dniInforme) {
   return null;
 }
 
-// Elige, entre las prestaciones de un mismo paciente, la que corresponde al
-// informe. practicaHint = código/keywords detectados del informe (opcional).
-function elegirPractica(prestaciones, practicaHint) {
+// Fecha del turno de la bandeja -> 'YYYY-MM-DD' (el turno viene como "11/08/2026 - 11:40").
+function fechaDeTurno(turno) {
+  const m = String(turno || "").match(/(\d{1,2})\s*[/\-]\s*(\d{1,2})\s*[/\-]\s*(\d{2,4})/);
+  if (!m) return "";
+  let a = m[3]; if (a.length === 2) a = "20" + a;
+  return a + "-" + String(+m[2]).padStart(2, "0") + "-" + String(+m[1]).padStart(2, "0");
+}
+// Desempate por fecha: si EXACTAMENTE UNO del grupo cae en la fecha del informe, ese.
+function porFecha(cands, fecha) {
+  if (!fecha) return null;
+  const hit = cands.filter((p) => fechaDeTurno(p.turno) === fecha);
+  return hit.length === 1 ? hit[0] : null;
+}
+
+// Elige, entre las prestaciones de un mismo paciente, la que corresponde al informe.
+// practicaHint = código/keywords del informe. fecha = fecha del estudio (desempate).
+function elegirPractica(prestaciones, practicaHint, fecha) {
   if (prestaciones.length === 1) return { elegida: prestaciones[0], ambiguo: false };
   const hint = norm(practicaHint);
   if (hint) {
@@ -145,19 +159,22 @@ function elegirPractica(prestaciones, practicaHint) {
       porEquiv = prestaciones.filter((p) => equivs.some((re) => re.test(norm(p.practica))));
       if (porEquiv.length === 1) return { elegida: porEquiv[0], ambiguo: false };
     }
-    // Ambiguo pero da igual cuál: si los candidatos que matchean son la MISMA práctica
-    // y están TODOS transmitidos (ej. dos consultas 570129 que incluyen el ECG, en
-    // fechas distintas, las dos transmitidas), no hay nada para subir → se resuelve al
-    // primero y queda "ya transmitido". No aplica si alguno no está transmitido: ahí sí
-    // importa a cuál se sube.
     const grupo = estudiosTexto.length > 1 ? estudiosTexto : (porTexto.length > 1 ? porTexto : porEquiv);
     if (grupo.length > 1) {
+      // 1) Desempate por FECHA: el turno del grupo que cae en la fecha del informe.
+      const porF = porFecha(grupo, fecha);
+      if (porF) return { elegida: porF, ambiguo: false };
+      // 2) Si son la MISMA práctica y están TODOS transmitidos, da igual cuál: no hay
+      // nada para subir → se resuelve al primero (queda "ya transmitido").
       const mismas = new Set(grupo.map((p) => norm(p.practica)));
       if (mismas.size === 1 && grupo.every((p) => p.transmitida)) return { elegida: grupo[0], ambiguo: false };
     }
   }
   const noConsulta = prestaciones.filter((p) => !esConsulta(p.practica));
   if (noConsulta.length === 1) return { elegida: noConsulta[0], ambiguo: false };
+  // Último desempate por fecha entre los estudios (aunque el texto no haya matcheado).
+  const porFEst = porFecha(noConsulta, fecha);
+  if (porFEst) return { elegida: porFEst, ambiguo: false };
   return { elegida: null, ambiguo: true };
 }
 
@@ -244,7 +261,7 @@ function matchInforme(informe, bandeja, padronCliente) {
           };
         }
       }
-      const { elegida, ambiguo } = elegirPractica(delPaciente, informe.practicaHint);
+      const { elegida, ambiguo } = elegirPractica(delPaciente, informe.practicaHint, informe.fecha);
       if (elegida) {
         return {
           estado: elegida.transmitida ? "ya_transmitido" : "ok",
@@ -274,7 +291,7 @@ function matchInforme(informe, bandeja, padronCliente) {
   }
   const top = conScore[0].s;
   const mejores = conScore.filter((x) => x.s >= Math.max(0.6, top - 0.01)).map((x) => x.p);
-  const { elegida, ambiguo } = elegirPractica(mejores, informe.practicaHint);
+  const { elegida, ambiguo } = elegirPractica(mejores, informe.practicaHint, informe.fecha);
   if (elegida && top >= 0.8) {
     return { estado: elegida.transmitida ? "ya_transmitido" : "ok", ome: elegida.nOrden || "",
       prestacion: elegida, via: "nombre", confianza: top >= 0.99 ? "media" : "baja", candidatos: mejores };
