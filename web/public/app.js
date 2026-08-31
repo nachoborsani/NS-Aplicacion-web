@@ -5676,8 +5676,14 @@ function renderPadronRows(slug, data){
   }
   if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
   body.innerHTML = items.map(function(it){
+    // "Ver capita" pide beneficio+DNI a PAMI (Mi Cartilla): sin beneficio cargado
+    // no se puede consultar, así que el botón queda deshabilitado en ese caso.
+    var tieneBenef = !!it.beneficio;
+    var btnCapita = '<button class="icon-btn" title="' + (tieneBenef ? 'Ver capita (médico de cabecera, internación, etc.)' : 'Falta el beneficio para poder consultar') + '"'
+      + (tieneBenef ? ' onclick="verCapitaAfiliado(\'' + esc(it.nombre||'') + '\',\'' + esc(it.dni) + '\',\'' + esc(it.beneficio) + '\')"' : ' disabled')
+      + '><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
     return '<tr><td>' + esc(it.nombre||'') + '</td><td>' + esc(it.dni||'') + '</td><td>' + esc(it.beneficio||'—') + '</td><td>' + esc(it.tramite||'—') + '</td>' +
-      '<td style="text-align:right"><button class="icon-danger-btn" title="Quitar" onclick="deletePadronItem(\'' + slug + '\',\'' + esc(it.dni) + '\')"><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td></tr>';
+      '<td style="text-align:right;white-space:nowrap">' + btnCapita + ' <button class="icon-danger-btn" title="Quitar" onclick="deletePadronItem(\'' + slug + '\',\'' + esc(it.dni) + '\')"><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td></tr>';
   }).join('');
 }
 function queuePadronSearch(){ clearTimeout(PADRON_SEARCH_TIMER); PADRON_SEARCH_TIMER = setTimeout(refreshPadron, 250); }
@@ -5702,6 +5708,56 @@ async function deletePadronItem(slug, dni){
   if (!confirm('¿Quitar este afiliado del padrón?')) return;
   var r = await fetch('/api/clientes/' + slug + '/padron/' + dni, { method:'DELETE' });
   if (r.ok) await refreshPadron();
+}
+
+// ===== Capita del afiliado (Mi Cartilla PAMI): médico de cabecera, internación
+// y demás módulos con prestador fijo asignado. Beneficio+DNI siempre vienen de
+// una fila ya cargada (padrón); no se le pide nada más al operador. =====
+function closeCapitaModal(){ hideModal('capitaModal', 'capitaScrim'); }
+function capitaModuloCardHtml(m, destacado){
+  var cls = 'capita-card' + (destacado ? ' capita-card--destacado' : '');
+  if (m.error) {
+    return '<div class="' + cls + '"><div class="capita-card-modulo">' + esc(m.moduloNombre) + '</div><div class="capita-card-vacio">No se pudo consultar (' + esc(m.error) + ').</div></div>';
+  }
+  if (!m.asignado) {
+    return '<div class="' + cls + '"><div class="capita-card-modulo">' + esc(m.moduloNombre) + '</div><div class="capita-card-vacio">Sin prestador asignado.</div></div>';
+  }
+  var a = m.asignado;
+  var red = m.total > 1 ? ' <span class="capita-card-red">+ ' + (m.total - 1) + ' más en la red</span>' : '';
+  return '<div class="' + cls + '">'
+    + '<div class="capita-card-modulo">' + esc(a.moduloPami || a.modulo || m.moduloNombre) + '</div>'
+    + '<div class="capita-card-prestador">' + esc(a.prestador) + '</div>'
+    + (a.direccion ? '<div class="capita-card-dato">📍 ' + esc(a.direccion) + '</div>' : '')
+    + (a.telefono ? '<div class="capita-card-dato">📞 ' + esc(a.telefono) + '</div>' : '')
+    + red
+    + '</div>';
+}
+async function verCapitaAfiliado(nombre, dni, beneficio){
+  var meta = document.getElementById('capitaModalMeta');
+  var content = document.getElementById('capitaModalContent');
+  if (meta) meta.textContent = (nombre || 'Afiliado') + ' — DNI ' + dni + ' · Beneficio ' + beneficio;
+  if (content) content.innerHTML = '<div class="capita-loading">Consultando PAMI…</div>';
+  showModal('capitaModal', 'capitaScrim');
+  var r = await req('POST', '/api/pami/capita', { dni: dni, beneficio: beneficio });
+  if (!content) return;
+  if (!r.ok) {
+    content.innerHTML = '<div class="msg err">' + esc((r.data && r.data.error) || 'No se pudo consultar PAMI.') + '</div>';
+    return;
+  }
+  var modulos = r.data.modulos || [];
+  var destacados = modulos.filter(function(m){ return m.prioridad; });
+  var resto = modulos.filter(function(m){ return !m.prioridad; });
+  // Nombre visible del módulo cuando no hay asignado (asignado==null no trae
+  // nombre propio): lo completamos acá mismo antes de renderizar, a partir del
+  // orden fijo con el que el server ya arma la lista.
+  var nombresFallback = ['Médico o médica de cabecera', 'Internación', 'Kinesiología', 'Radiocirugía', 'Laboratorio', 'Laboratorio de alta complejidad', 'Estudios diagnósticos', 'Estudios neurológicos de alta complejidad', 'PET', 'Spect cerebral', 'Centellograma', 'Odontóloga u odontólogo de cabecera', 'Centro Integral de Salud Mental', 'Guardia de Salud Mental', 'Urgencia Domiciliaria en Salud Mental', 'Solicitar traslado', 'Urgencias médicas', 'Radioterapia'];
+  modulos.forEach(function(m, i){ m.moduloNombre = (m.asignado && (m.asignado.moduloPami || m.asignado.modulo)) || nombresFallback[i] || ('Módulo ' + (i + 1)); });
+  var html = '<div class="capita-destacados">' + destacados.map(function(m){ return capitaModuloCardHtml(m, true); }).join('') + '</div>';
+  if (resto.length) {
+    html += '<div class="capita-resto-head">Resto de los módulos capitados</div>'
+      + '<div class="capita-resto">' + resto.map(function(m){ return capitaModuloCardHtml(m, false); }).join('') + '</div>';
+  }
+  content.innerHTML = html;
 }
 
 // ===== Cabina de informes recibidos (admin) =====

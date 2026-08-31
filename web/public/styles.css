@@ -191,6 +191,7 @@
   .icon-btn:hover{border-color:var(--turq)}
   .icon-btn svg{width:18px;height:18px}
   .icon-btn .dot{position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--error);border:2px solid var(--surface)}
+  .icon-btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
   .content{padding:22px 20px 40px;flex:1}
   body.client-view .content{padding-top:12px}
   .page-head{margin-bottom:18px}
@@ -636,6 +637,20 @@
   .dmf-pop-actions{display:flex;justify-content:space-between;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
   .dmf-summary-row td{background:var(--celeste);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
   .dmf-summary-row .mod-share{color:#0f7f7c}
+  /* Capita del afiliado (Mi Cartilla PAMI) */
+  .capita-loading{padding:20px 0;text-align:center;color:var(--text-2);font-size:13px}
+  .capita-destacados{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
+  .capita-resto-head{font-size:11px;color:var(--text-2);text-transform:uppercase;font-weight:750;letter-spacing:.04em;margin:4px 0 8px}
+  .capita-resto{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:320px;overflow:auto}
+  .capita-card{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface-2)}
+  .capita-card--destacado{border-color:var(--turq);background:var(--celeste)}
+  .capita-card-modulo{font-size:10.5px;color:var(--text-2);text-transform:uppercase;font-weight:750;letter-spacing:.03em;margin-bottom:3px}
+  .capita-card-prestador{font-weight:700;font-size:14px;color:var(--text);margin-bottom:2px}
+  .capita-card--destacado .capita-card-prestador{font-size:15.5px}
+  .capita-card-dato{font-size:12px;color:var(--text-2)}
+  .capita-card-red{display:block;margin-top:4px;font-size:11px;color:var(--turq-d);font-weight:650}
+  .capita-card-vacio{font-size:12.5px;color:var(--text-2);font-style:italic}
+  @media (max-width:640px){ .capita-destacados{grid-template-columns:1fr} }
   /* Cotejo por módulo vs PAMI */
   .cotejo-tablewrap{margin-top:12px;overflow-x:auto}
   .cotejo-table{width:100%;border-collapse:collapse;font-size:13px}
