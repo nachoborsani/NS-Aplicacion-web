@@ -1357,6 +1357,12 @@
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}
   .cab-badge.muted{background:var(--surface-2);color:var(--text-2)}
   .cab-badge.fac{background:color-mix(in srgb,var(--info) 16%,var(--surface));color:var(--info)}
+  /* Rango de fechas del mail (Informes recibidos): reusaba el grid de 6 columnas y
+     "Hasta" caía en la de 72px (se cortaba "25/"). Layout propio: las dos fechas del
+     mismo ancho y enteras. */
+  #cabMailCard{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+  #cabMailCard .field{margin:0;min-width:0}
+  #cabMailCard input[type="date"]{width:160px;min-width:0}
   .cab-chip.fac{background:color-mix(in srgb,var(--info) 14%,var(--surface));border-color:color-mix(in srgb,var(--info) 40%,var(--border));color:var(--info)}
   .cab-row{cursor:pointer}
   .cab-row:hover{background:var(--hover)}
