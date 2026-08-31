@@ -6340,20 +6340,29 @@ const server = http.createServer(async (req, res) => {
     const store = loadInformes();
     const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
-    // Informes leídos ANTES de que existiera la lista de prácticas: se recalcula
-    // releyendo el texto del archivo. Hace falta porque el texto que quedó guardado
-    // viene recortado y se pierden las últimas prácticas del informe. Es barato para
-    // Word/PDF con texto; si es un escaneado se deja como está para no disparar OCR
-    // en cada re-análisis.
-    if (!Array.isArray(it.extract && it.extract.practicas) && informeExtract && informeExtract.practicasDe) {
+    // Re-extraer para tomar las mejoras del lector (prácticas nuevas como tiroides o
+    // ecodoppler MMSS/MMII, y la detección de facturas). Para Word/PDF con texto se
+    // relee el archivo (barato) y se re-extrae todo. Para ESCANEADOS no se re-corre
+    // OCR: se re-corre solo el mapa de prácticas sobre lo que ya teníamos (nombre de
+    // archivo + práctica/prácticas guardadas) y la factura por nombre de archivo.
+    if (informeExtract && informeExtract.practicasDe) {
       try {
+        it.extract = it.extract || {};
+        let texto = "";
         const file = path.join(informesDir, slug, it.stored);
         if (fs.existsSync(file)) {
           const r = await informeExtract.extraerTexto(file);
-          if (r && r.texto && !r.necesitaOcr) {
-            it.extract = it.extract || {};
-            it.extract.practicas = informeExtract.practicasDe((it.filename || "") + " " + r.texto);
-          }
+          if (r && r.texto && !r.necesitaOcr) texto = r.texto;
+        }
+        if (texto && informeExtract.extraerDatos) {
+          const d = informeExtract.extraerDatos(texto, it.filename || "");
+          it.extract.practicas = d.practicas || [];
+          it.extract.esFactura = !!d.esFactura;
+          if (!it.extract.nombre && d.nombre) it.extract.nombre = d.nombre;
+        } else {
+          const fuente = (it.filename || "") + " " + (it.extract.practica || "") + " " + (it.extract.practicas || []).join(" ");
+          it.extract.practicas = informeExtract.practicasDe(fuente);
+          if (informeExtract.esFactura) it.extract.esFactura = !!informeExtract.esFactura(it.extract.practica || "", it.filename || "");
         }
       } catch { /* si no se puede leer, seguimos con lo que había */ }
     }

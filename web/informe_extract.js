@@ -215,4 +215,4 @@ async function procesar(filePath, nombreArchivo) {
   return { ...datos, necesitaOcr, ocrUsado, error: error || null, texto: texto || "" };
 }
 
-module.exports = { extraerTexto, extraerDatos, procesar, practicasDe };
+module.exports = { extraerTexto, extraerDatos, procesar, practicasDe, esFactura };
