@@ -3910,17 +3910,19 @@ function renderClientDashboard(data){
   var body = document.getElementById('clientDashboardModules');
   if (body) {
     var modules = (current.modules || []).slice();
-    // % part. y la barra siguen siendo sobre el TOTAL del mes (no cambian de
-    // significado si hay un filtro activo); el filtro solo decide qué filas
-    // de la tabla se muestran. Se guarda la lista completa sin filtrar para
-    // el picker (DASH_ALL_MODULES) antes de recortarla.
-    var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
-    var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
+    // Se guarda la lista completa sin filtrar para el picker (DASH_ALL_MODULES)
+    // antes de recortarla.
     DASH_ALL_MODULES = modules.slice();
     if (DASH_MODULE_FILTER.length) {
       modules = modules.filter(function(m){ return DASH_MODULE_FILTER.indexOf(String(m.moduleCode)) !== -1; });
     }
     renderDashModuleFilterBar();
+    // % part. y la barra son sobre lo que se está viendo: el total del mes sin
+    // filtro, o el total del subconjunto filtrado si hay uno activo (con
+    // filtro, las % de las filas visibles suman 100%).
+    var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
+    var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
+    var shareTitle = DASH_MODULE_FILTER.length ? 'Participación sobre el total de los módulos filtrados' : 'Participación sobre la facturación total del mes';
     // Para la variación por módulo vs el mes que se compara.
     var hayCompare = !!compare.period;
     var curLbl = shortMonth(current.label || current.period || 'Este mes');
@@ -4009,7 +4011,7 @@ function renderClientDashboard(data){
         + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + consPrev + '</div></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + pracPrev + '</div></td>'
         + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
-        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="Participación sobre la facturación total del mes">' + share + '%</span></div>' + netoPrev + '</td>'
+        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="' + esc(shareTitle) + '">' + share + '%</span></div>' + netoPrev + '</td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
         + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);
@@ -4025,12 +4027,14 @@ function renderClientDashboard(data){
         fPrac += Number(m.practices || (m.rows || []).filter(function(r){ return r.kind === 'Practica'; }).length || 0);
         fNet += Number(m.net || 0);
       });
-      var fShare = totalNet ? Math.round(Math.abs(fNet) / totalNet * 100) : 0;
+      // Sin badge de %: acá siempre daría 100% (el total ya se calcula sobre
+      // este mismo subconjunto filtrado), no aporta nada — el dato útil de
+      // esta fila es la suma en sí.
       body.innerHTML = '<tr class="dashboard-module-row dmf-summary-row">'
         + '<td><b>Total de ' + esc(numberFmt(modules.length)) + ' módulos filtrados</b></td>'
         + '<td class="tnum"><b>' + esc(numberFmt(fCons)) + '</b></td>'
         + '<td class="tnum"><b>' + esc(numberFmt(fPrac)) + '</b></td>'
-        + '<td class="nom-money"><b>' + esc(moneyFmt(fNet)) + '</b> <span class="mod-share" title="Participación sobre la facturación total del mes">' + fShare + '%</span></td>'
+        + '<td class="nom-money"><b>' + esc(moneyFmt(fNet)) + '</b></td>'
         + '</tr>' + body.innerHTML;
     }
   }
