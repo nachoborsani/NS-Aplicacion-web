@@ -146,7 +146,7 @@ function elegirPractica(prestaciones, practicaHint) {
 function elegirPracticas(prestaciones, hints) {
   const usados = new Set();
   const out = [];
-  let todas = true;
+  let todas = true, ambiguo = false;
   for (const h of (Array.isArray(hints) ? hints : [])) {
     const hint = norm(h);
     if (!hint) continue;
@@ -158,11 +158,13 @@ function elegirPracticas(prestaciones, hints) {
       .map((_, i) => i)
       .filter((i) => !usados.has(i) && !esConsulta(prestaciones[i].practica)
         && norm(prestaciones[i].practica).includes(hint));
-    if (idxs.length !== 1) { todas = false; continue; }
-    usados.add(idxs[0]);
-    out.push(prestaciones[idxs[0]]);
+    // 1 candidato = práctica resuelta. 0 = esa práctica NO tiene OME en la bandeja
+    // (no es facturable acá, ej. "video rinofibrolaringoscopía" que va incluida): no
+    // es algo para revisar, se ignora. ≥2 = ambigua de verdad → hay que mirar cuál.
+    if (idxs.length === 1) { usados.add(idxs[0]); out.push(prestaciones[idxs[0]]); }
+    else { todas = false; if (idxs.length > 1) ambiguo = true; }
   }
-  return { elegidas: out, todas };
+  return { elegidas: out, todas, ambiguo };
 }
 
 // informe: { dni, beneficio, nombre, practicaHint, practicaHints }
@@ -184,13 +186,15 @@ function matchInforme(informe, bandeja, padronCliente) {
       // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
       const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
       if (hints.length > 1) {
-        const { elegidas: varias, todas } = elegirPracticas(delPaciente, hints);
+        const { elegidas: varias, todas, ambiguo } = elegirPracticas(delPaciente, hints);
         if (varias.length > 1) {
           const pendientes = varias.filter((p) => !p.transmitida);
           const principal = pendientes[0] || varias[0];
-          // Si alguna de las prácticas del informe no encontró su OME, el informe
-          // NO queda resuelto: se deja a revisar, pero con las encontradas tildadas.
-          const completo = todas;
+          // Se da por completo salvo que alguna práctica quede AMBIGUA (2+ OMEs
+          // posibles). Que una práctica del informe no tenga OME en la bandeja NO
+          // bloquea: no es facturable acá, no hay nada para revisar. `todas` (todas con
+          // OME) baja la confianza a media, pero igual resuelve.
+          const completo = !ambiguo;
           return {
             estado: completo ? (pendientes.length ? "ok" : "ya_transmitido") : "revisar_practica",
             ome: completo ? (principal.nOrden || "") : "",
@@ -198,7 +202,7 @@ function matchInforme(informe, bandeja, padronCliente) {
             prestacion: completo ? principal : null,
             prestaciones: varias,
             via: "beneficio_" + via,
-            confianza: completo ? "alta" : "media",
+            confianza: (completo && todas) ? "alta" : "media",
             candidatos: delPaciente,
           };
         }
