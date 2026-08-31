@@ -443,6 +443,26 @@
                 <div class="dashboard-ranking" id="clientDashboardRanking" style="display:none"></div>
                 <div class="dashboard-trend" id="clientDashboardTrend" style="display:none"></div>
                 <div class="dashboard-module-wrap">
+                  <div class="dashboard-module-filter" id="clientDashboardModuleFilter">
+                    <div class="dmf-bar">
+                      <button type="button" class="dmf-btn" onclick="toggleDashModuleFilterPop()">
+                        🔎 Filtrar módulos<span class="dmf-count" id="dmfCount" style="display:none"></span>
+                      </button>
+                      <div class="dmf-chips" id="dmfChips"></div>
+                      <button type="button" class="dmf-clear" id="dmfClearBtn" onclick="clearDashModuleFilter()" style="display:none">Ver todos</button>
+                    </div>
+                    <div class="dmf-pop" id="dmfPop" style="display:none">
+                      <div class="dmf-pop-head">
+                        <input type="text" class="inp" id="dmfSearch" placeholder="Buscar módulo..." oninput="renderDashModuleFilterOptions()">
+                        <button type="button" class="dmf-pop-close" onclick="toggleDashModuleFilterPop(false)" aria-label="Cerrar">&times;</button>
+                      </div>
+                      <div class="dmf-pop-list" id="dmfPopList"></div>
+                      <div class="dmf-pop-actions">
+                        <button type="button" class="btn btn-ghost btn-sm" onclick="clearDashModuleFilter()">Limpiar</button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="toggleDashModuleFilterPop(false)">Listo</button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="dashboard-module-sort" id="clientDashboardModuleSort" style="display:none">
                     <span>Ordenar por</span>
                     <button type="button" data-sort="neto" onclick="setDashModuleSort('neto')">Facturación</button>
