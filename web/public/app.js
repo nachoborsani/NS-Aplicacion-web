@@ -5846,12 +5846,13 @@ function toggleCabEstadoFiltro(k){
 }
 var CAB_ESTADOS = {
   ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
+  factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
   revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'}
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','resuelto','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','sin_match'];
+  var orden = ['ok','resuelto','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = CAB_ESTADO_FILTRO === k;

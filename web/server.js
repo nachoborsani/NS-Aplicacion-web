@@ -372,6 +372,11 @@ function mesAnteriorYM(ym) {
 
 // Corre el match de un informe ya extraído contra la bandeja + padrón del cliente.
 function matchearInforme(slug, extract) {
+  // Las facturas no se matchean contra la bandeja: quedan marcadas como "Factura".
+  if (extract && extract.esFactura) {
+    return { estado: "factura", ome: "", via: "factura", confianza: "alta", etiqueta: "Factura",
+      prestacion: null, omes: [], prestaciones: [], candidatos: [], sugerencias: [] };
+  }
   const bandeja = loadClientBandejas()[slug];
   let bandejaRows = cabinaLib.bandejaParaMatcher(bandeja);
   // + el reporte del MES ANTERIOR (bandeja cerrada que subió el user): los informes
@@ -423,6 +428,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
     const r = await informeExtract.procesar(storedPath, filename);
     extract = { dni: r.dni || "", beneficio: r.beneficio || "", nombre: r.nombre || "",
                 practica: r.practica || "", practicas: r.practicas || [],
+                esFactura: !!r.esFactura,
                 ocrUsado: !!r.ocrUsado, necesitaOcr: !!r.necesitaOcr };
     error = r.error || null;
   } else {

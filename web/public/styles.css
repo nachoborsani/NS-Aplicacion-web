@@ -1356,6 +1356,8 @@
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}
   .cab-badge.muted{background:var(--surface-2);color:var(--text-2)}
+  .cab-badge.fac{background:color-mix(in srgb,var(--info) 16%,var(--surface));color:var(--info)}
+  .cab-chip.fac{background:color-mix(in srgb,var(--info) 14%,var(--surface));border-color:color-mix(in srgb,var(--info) 40%,var(--border));color:var(--info)}
   .cab-row{cursor:pointer}
   .cab-row:hover{background:var(--hover)}
   .cab-file{font-weight:650;word-break:break-word}

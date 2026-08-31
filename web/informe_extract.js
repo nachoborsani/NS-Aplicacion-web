@@ -72,22 +72,50 @@ function practicasDe(fuente) {
   // detectan por separado: la región por MMSS/MMII (o "miembros superiores/inferiores")
   // y cada lado por su palabra. Así un informe de MMSS que cubre los dos deja tildadas
   // las dos OMEs correctas.
-  const f = String(fuente || "");
-  const region = /\bMMSS\b|MIEMBROS?\s+SUPERIORES/i.test(f) ? "SUPERIORES"
-              : (/\bMMII\b|MIEMBROS?\s+INFERIORES/i.test(f) ? "INFERIORES" : "");
-  if (region && /DOPPLER/i.test(f)) {
-    const add = (k) => { if (!out.includes(k)) out.push(k); };
-    if (/\bARTERIAL\b/i.test(f)) add("ARTERIAL DE MIEMBROS " + region);
-    if (/\bVENOSO\b/i.test(f)) add("VENOSO DE MIEMBROS " + region);
-    // Si la región es SUPERIORES, sacar los hints de INFERIORES que puso el mapa por
-    // defecto (ECODOPPLER ARTERIAL/VENOSO → inferiores), para no errar la región.
-    if (region === "SUPERIORES") {
-      for (let i = out.length - 1; i >= 0; i--) {
-        if (out[i] === "ARTERIAL DE MIEMBROS INFERIORES" || out[i] === "VENOSO DE MIEMBROS INFERIORES") out.splice(i, 1);
+  const f = String(fuente || "").toUpperCase();
+  const hayRegion = /\bMMSS\b|\bMMII\b|MIEMBROS?\s+(SUPERIORES|INFERIORES)/.test(f);
+  if (/DOPPLER/.test(f) && hayRegion) {
+    // Cada lado (arterial/venoso) se queda con SU región por cercanía: en
+    // "arterial de MMSS y venoso de MMII" son distintas. Marcamos las posiciones de
+    // cada región y a cada lado le damos la más cercana (preferentemente la que
+    // aparece después).
+    const regs = [];
+    let re = /\bMMSS\b|MIEMBROS?\s+SUPERIORES/g, mm;
+    while ((mm = re.exec(f))) regs.push({ pos: mm.index, r: "SUPERIORES" });
+    re = /\bMMII\b|MIEMBROS?\s+INFERIORES/g;
+    while ((mm = re.exec(f))) regs.push({ pos: mm.index, r: "INFERIORES" });
+    const regionCerca = (pos) => {
+      let after = null, any = null;
+      for (const g of regs) {
+        if (!any || Math.abs(g.pos - pos) < Math.abs(any.pos - pos)) any = g;
+        if (g.pos >= pos && (!after || g.pos < after.pos)) after = g;
       }
+      return (after || any || {}).r || "INFERIORES";
+    };
+    const add = (k) => { if (!out.includes(k)) out.push(k); };
+    // Sacar los genéricos que puso el mapa (por defecto inferiores) y re-poner con la
+    // región correcta por lado. "ARTER…" cubre el typo "arterail"; "VENOS…" el plural.
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (/^(ARTERIAL|VENOSO) DE MIEMBROS (SUPERIORES|INFERIORES)$/.test(out[i])) out.splice(i, 1);
     }
+    const pa = /ARTER\w*/.exec(f), pv = /VENOS\w*/.exec(f);
+    if (pa) add("ARTERIAL DE MIEMBROS " + regionCerca(pa.index));
+    if (pv) add("VENOSO DE MIEMBROS " + regionCerca(pv.index));
   }
   return out;
+}
+
+// ¿El archivo es una FACTURA (no un informe médico)? Por el nombre ("FACA0012…") o por
+// señales fiscales en el texto. Las facturas no se matchean contra la bandeja.
+function esFactura(texto, filename) {
+  const fn = String(filename || "").toUpperCase();
+  // "01_FACA0012-…", "FCE_…", "FACTURA…". (Ojo: \b no sirve tras "_", que es \w.)
+  if (/FAC[A-Z]{0,3}\d{3,}/.test(fn) || /FACTURA|\bFCE\b/.test(fn)) return true;
+  const t = String(texto || "").toUpperCase();
+  const senales = [/\bFACTURA\b/, /\bC\.?A\.?E\.?\b|AUTORIZACI[OÓ]N\s+ELECTR/, /\bCUIT\b/,
+                   /RAZ[OÓ]N\s+SOCIAL/, /COMPROBANTE\s+AUTORIZADO/, /IVA\s+RESP/, /PUNTO\s+DE\s+VENTA/];
+  let n = 0; for (const re of senales) if (re.test(t)) n++;
+  return n >= 3;
 }
 function practicaDe(fuente) {
   return practicasDe(fuente)[0] || "";
@@ -160,7 +188,7 @@ function extraerDatos(texto, filename) {
     if (m) practica = m[1].replace(/\s+/g, " ").trim();
   }
 
-  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas };
+  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas, esFactura: esFactura(t, fn) };
 }
 
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está
