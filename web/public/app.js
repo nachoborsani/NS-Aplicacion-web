@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Padrón de afiliados', cabina:'Informes recibidos', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 // ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
@@ -80,13 +80,16 @@ function togglePagosGroup(el){
   if (group) group.classList.toggle('open');
 }
 function go(v, el){
+  // Credencial provisoria se fusionó dentro de Afiliados (Padrón). Cualquier link viejo
+  // a 'credencial' abre Afiliados.
+  if (v === 'credencial') v = 'padron';
   // El rol clínica solo entra a su centro: cualquier vista interna de NS lo redirige.
   if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
   if ((v === 'padron' || v === 'cabina') && !(ME && ME.role === 'admin')){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','credencial','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');

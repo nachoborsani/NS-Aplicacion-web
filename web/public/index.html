@@ -90,8 +90,7 @@
         <a class="active ns-only" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
         <a class="ns-only" onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V4a1 1 0 011-1zM7.5 14H10l1.5-3 2 5 1.5-2h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
         <a class="ns-only" onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2zM9 7h7M9 11h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
-        <a class="ns-only" onclick="go('credencial',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1zM7 15h4M7 11h2m5-2h4m-4 4h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Credencial provisoria</a>
-        <a id="navPadron" class="ns-only" style="display:none" onclick="go('padron',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Padrón de afiliados</a>
+        <a id="navPadron" class="ns-only" style="display:none" onclick="go('padron',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Afiliados</a>
         <a id="navCabina" class="ns-only" style="display:none" onclick="go('cabina',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h11l5 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 4v5h5M8 13l2.5 2.5L16 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes recibidos</a>
         <div class="nav-group" id="navGroupPagos">
           <button class="nav-parent" type="button" onclick="togglePagosGroup(this)">
@@ -849,6 +848,25 @@
             </div>
           </div>
 
+          <div class="card cred-card">
+            <div class="cred-head">
+              <h3>🪪 Credencial provisoria</h3>
+              <span class="nom-muted">Traé la credencial provisoria de PAMI al instante. Cargá los datos del afiliado y se descarga el PDF.</span>
+            </div>
+            <div class="cred-form">
+              <label>BENEF<input class="inp" id="credBenef" inputmode="numeric" placeholder="14091965740000"></label>
+              <label>DNI<input class="inp" id="credDni" inputmode="numeric" placeholder="13943423"></label>
+              <label>N° trámite<input class="inp" id="credTramite" inputmode="numeric" placeholder="00745585752"></label>
+              <label>Sexo<select class="inp" id="credGenero"><option value="">Auto (probar todos)</option><option value="MASC">Masculino</option><option value="FEM">Femenino</option><option value="OTRO">Otro</option></select></label>
+            </div>
+            <div class="cred-actions">
+              <button class="btn btn-primary" id="credBtn" type="button" onclick="descargarCredencial()">Descargar credencial</button>
+              <span class="cred-hint nom-muted">El N° de trámite es el que figura en el DNI.</span>
+            </div>
+            <div class="msg err" id="credError" style="display:none"></div>
+            <div class="cred-result" id="credResult" style="display:none"></div>
+          </div>
+
           <div class="nom-filters card">
             <div class="field nom-search">
               <label>Buscar por nombre, DNI o beneficio</label>
@@ -1075,27 +1093,6 @@
             <div class="msg err" id="infConfigMsg"></div>
           </div>
           </section>
-        </section>
-
-        <section id="view-credencial" style="display:none">
-          <div class="card cred-card">
-            <div class="cred-head">
-              <h3>🪪 Credencial provisoria</h3>
-              <span class="nom-muted">Traé la credencial provisoria de PAMI al instante. Cargá los datos del afiliado y se descarga el PDF.</span>
-            </div>
-            <div class="cred-form">
-              <label>BENEF<input class="inp" id="credBenef" inputmode="numeric" placeholder="14091965740000"></label>
-              <label>DNI<input class="inp" id="credDni" inputmode="numeric" placeholder="13943423"></label>
-              <label>N° trámite<input class="inp" id="credTramite" inputmode="numeric" placeholder="00745585752"></label>
-              <label>Sexo<select class="inp" id="credGenero"><option value="">Auto (probar todos)</option><option value="MASC">Masculino</option><option value="FEM">Femenino</option><option value="OTRO">Otro</option></select></label>
-            </div>
-            <div class="cred-actions">
-              <button class="btn btn-primary" id="credBtn" type="button" onclick="descargarCredencial()">Descargar credencial</button>
-              <span class="cred-hint nom-muted">El N° de trámite es el que figura en el DNI.</span>
-            </div>
-            <div class="msg err" id="credError" style="display:none"></div>
-            <div class="cred-result" id="credResult" style="display:none"></div>
-          </div>
         </section>
 
         <!-- PAGOS / FACTURAS -->
