@@ -1507,6 +1507,19 @@
       </div>
     </div>
 
+    <!-- ===== Modal: capita del afiliado (Mi Cartilla PAMI) ===== -->
+    <div class="scrim" id="capitaScrim" onclick="closeCapitaModal()"></div>
+    <div class="modal wide" id="capitaModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Capita del afiliado</h3><button class="x" onclick="closeCapitaModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <p class="modal-note" id="capitaModalMeta"></p>
+        <div id="capitaModalContent"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeCapitaModal()">Cerrar</button>
+      </div>
+    </div>
+
     <!-- ===== Modal: eliminar reporte guardado ===== -->
     <div class="scrim" id="reportDeleteScrim" onclick="closeReportDeleteModal()"></div>
     <div class="modal" id="reportDeleteModal" role="dialog" aria-modal="true">

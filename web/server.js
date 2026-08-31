@@ -655,6 +655,112 @@ function credNombreArchivo(nombre, dni) {
     .replace(/[<>:"/\\|?*]+/g, " ").replace(/\s+/g, " ").trim();
   return (clean ? clean + "_" + dni : "credencial_" + dni) + ".pdf";
 }
+
+// ---- PAMI "Mi cartilla": capita del afiliado (médico de cabecera, internación,
+// laboratorio, etc.) — página pública de pami.org.ar, sin usuario/clave de CUP. ----
+// Reversado a mano navegando el sitio real: login por beneficio+DNI (setea una
+// cookie de sesión de 2 hs), después una consulta por módulo devuelve el/los
+// prestador/es asignado/s. Beneficio y DNI SIEMPRE los tiene que pasar el
+// operador (no se intenta derivar uno del otro).
+const CARTILLA_LOGIN_URL = "https://www.pami.org.ar/mi-cartilla/validar-datos-afiliado";
+const CARTILLA_PRESTADORES_URL = "https://www.pami.org.ar/api/mi-cartilla/prestadores";
+const CARTILLA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+// Módulos "capitados" de PAMI (prestador fijo asignado por afiliado), relevados a
+// mano del sitio (categoría + id de módulo, vía /api/mi-cartilla/modulos/{categoria}).
+// Los 2 primeros ("prioridad") son los que se muestran arriba, destacados; el resto
+// va debajo. Las especialidades médicas de libre elección (cardiología, dermatología,
+// etc.) NO están acá: no tienen un prestador único asignado, son de elección libre.
+const CARTILLA_MODULOS = [
+  { categoria: 3, modulo: 1, prioridad: true },   // Médico o médica de cabecera
+  { categoria: 4, modulo: 22, prioridad: true },  // Internación
+  { categoria: 1, modulo: 4 },    // Kinesiología
+  { categoria: 1, modulo: 24 },   // Radiocirugía
+  { categoria: 2, modulo: 5 },    // Laboratorio
+  { categoria: 2, modulo: 14 },   // Laboratorio de alta complejidad
+  { categoria: 2, modulo: 11 },   // Estudios diagnósticos
+  { categoria: 2, modulo: 6 },    // Estudios neurológicos de alta complejidad
+  { categoria: 2, modulo: 59 },   // PET
+  { categoria: 2, modulo: 58 },   // Spect cerebral
+  { categoria: 2, modulo: 60 },   // Centellograma
+  { categoria: 5, modulo: 118 },  // Odontóloga u odontólogo de cabecera
+  { categoria: 6, modulo: 180 },  // Centro Integral de Salud Mental
+  { categoria: 6, modulo: 181 },  // Guardia de Salud Mental
+  { categoria: 6, modulo: 182 },  // Urgencia Domiciliaria en Salud Mental
+  { categoria: 7, modulo: 16 },   // Solicitar traslado
+  { categoria: 7, modulo: 17 },   // Urgencias médicas
+  { categoria: 8, modulo: 13 },   // Radioterapia
+];
+// Login: valida beneficio+DNI contra PAMI. Devuelve el texto de respuesta ("OK",
+// "AFILIADO_NO_ENCONTRADO", "AFILIADO_DOCUMENTO_INCORRECTO") + las cookies de
+// sesión para reusar en las consultas de módulos siguientes.
+async function cartillaLogin(beneficio, dni) {
+  const resp = await fetch(CARTILLA_LOGIN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent": CARTILLA_UA,
+    },
+    body: new URLSearchParams({ n_beneficio: beneficio, n_documento: dni }).toString(),
+    signal: AbortSignal.timeout(20000),
+  });
+  const text = await resp.text();
+  let val = "";
+  try { val = JSON.parse(text); } catch { val = text; }
+  const setCookie = typeof resp.headers.getSetCookie === "function"
+    ? resp.headers.getSetCookie()
+    : [resp.headers.get("set-cookie")].filter(Boolean);
+  const cookieHeader = setCookie.map((c) => String(c).split(";")[0]).join("; ");
+  return { val, cookieHeader };
+}
+// Trae el/los prestador/es asignado/s para un módulo puntual (capitado=false:
+// PAMI devuelve solo el/los ya asignado/s a ESTE afiliado, no todo el listado
+// disponible para elegir).
+async function cartillaPrestadores(cookieHeader, categoria, modulo) {
+  const params = new URLSearchParams({
+    categoria: String(categoria), modulo: String(modulo),
+    provincia: "", departamento: "", capitado: "false", pagina: "1", cantidad: "20",
+  });
+  const resp = await fetch(`${CARTILLA_PRESTADORES_URL}?${params.toString()}`, {
+    headers: { Cookie: cookieHeader, "X-Requested-With": "XMLHttpRequest", "User-Agent": CARTILLA_UA },
+    signal: AbortSignal.timeout(20000),
+  });
+  const data = await resp.json();
+  const rows = Array.isArray(data && data.prestadores) ? data.prestadores : [];
+  if (!rows.length || rows[0].ERROR) return { asignado: null, total: 0 };
+  const p = rows[0];
+  return {
+    asignado: {
+      categoria: p.D_CATEGORIA_CARTILLA || "",
+      modulo: p.DESC_MODULO_CARTILLA || "",
+      moduloPami: p.D_MODULO_PAMI || "",
+      prestador: p.D_PRESTADOR || "",
+      direccion: [p.DIRECCION, p.LOCALIDAD_BATE, p.PROV_BATE].filter(Boolean).join(", "),
+      telefono: p.TELEFONO || "",
+    },
+    // Algunos módulos capitados (ej. Laboratorio) resuelven a una RED de varios
+    // profesionales bajo un mismo prestador "padre", no a un único asignado fijo.
+    total: Number((data && data.total) || 0),
+  };
+}
+// Consulta la capita completa: login + un pedido por cada módulo capitado
+// (en paralelo). Tira si el login falla (afiliado/DNI incorrectos).
+async function cartillaConsultarCapita(beneficio, dni) {
+  const login = await cartillaLogin(beneficio, dni);
+  if (login.val === "AFILIADO_DOCUMENTO_INCORRECTO") throw new Error("El número de documento no coincide con el de afiliación.");
+  if (login.val !== "OK") throw new Error("No se encontró un afiliado con ese número de afiliación.");
+  const modulos = await Promise.all(
+    CARTILLA_MODULOS.map(async (m) => {
+      try {
+        const r = await cartillaPrestadores(login.cookieHeader, m.categoria, m.modulo);
+        return { prioridad: !!m.prioridad, asignado: r.asignado, total: r.total };
+      } catch (e) {
+        return { prioridad: !!m.prioridad, asignado: null, total: 0, error: String((e && e.message) || e) };
+      }
+    })
+  );
+  return modulos;
+}
 // Token de Google (Sheets+Drive) de gestion.nssalud, guardado ENCRIPTADO en el
 // volumen: { client_id, client_secret, refresh_token }.
 const googleOauthFile = path.join(dataDir, "google_oauth.json");
@@ -6139,6 +6245,30 @@ const server = http.createServer(async (req, res) => {
     const r = padronLib.mergeRows(store[slug], rows, "pami-sweep", new Date().toISOString());
     savePadron(store);
     return json(res, 200, { creados: r.creados, actualizados: r.actualizados, sinCambio: r.sinCambio, recibidos: rows.length });
+  }
+
+  // Capita de un afiliado puntual (Mi Cartilla de PAMI): médico de cabecera,
+  // internación y demás módulos capitados. Beneficio y DNI los pasa siempre el
+  // operador (ej. desde una fila del padrón, que ya tiene los dos guardados).
+  if (p === "/api/pami/capita" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    let beneficio, dni;
+    try {
+      beneficio = credNormBenef(body.beneficio);
+      dni = credNormDni(body.dni);
+    } catch (e) {
+      return json(res, 400, { error: e.message });
+    }
+    try {
+      const modulos = await cartillaConsultarCapita(beneficio, dni);
+      return json(res, 200, { ok: true, modulos });
+    } catch (e) {
+      return json(res, 400, { error: String((e && e.message) || e) || "No se pudo consultar PAMI." });
+    }
   }
 
   // ---- Cabina de informes por cliente (solo admin) ----
