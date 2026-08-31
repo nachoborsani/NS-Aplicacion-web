@@ -358,6 +358,9 @@
   }
   @media(max-width:860px){
     .tiles{grid-template-columns:repeat(2,1fr)}
+    /* En celular el logo ocupaba media pantalla del cajón: se achica. */
+    .logo-side{width:96px}
+    .sidebar .brand{padding:4px 6px 10px;margin-bottom:8px}
     .sidebar{transform:translateX(-100%);box-shadow:10px 0 40px rgba(0,0,0,.3)}
     body.nav-open .sidebar{transform:none}
     body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
