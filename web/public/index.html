@@ -833,6 +833,22 @@
             </div>
           </div>
 
+          <div class="nom-status card">
+            <div id="capitaManualText"><b>Consultar capita de un afiliado</b><span>Trae de PAMI (Mi Cartilla) el médico de cabecera, internación y demás módulos asignados. No hace falta que esté cargado en el padrón.</span></div>
+            <div class="nom-upload">
+              <label class="field" style="min-width:160px">
+                <span>DNI</span>
+                <input class="inp" id="capitaDni" placeholder="Ej: 11552699" inputmode="numeric" onkeydown="if(event.key==='Enter')consultarCapitaManual()">
+              </label>
+              <label class="field" style="min-width:220px">
+                <span>N° de afiliación (beneficio)</span>
+                <input class="inp" id="capitaBenef" placeholder="Ej: 14004029620600" inputmode="numeric" onkeydown="if(event.key==='Enter')consultarCapitaManual()">
+              </label>
+              <button class="btn btn-primary" onclick="consultarCapitaManual()">Ver capita</button>
+              <span class="msg err" id="capitaManualError"></span>
+            </div>
+          </div>
+
           <div class="nom-filters card">
             <div class="field nom-search">
               <label>Buscar por nombre, DNI o beneficio</label>

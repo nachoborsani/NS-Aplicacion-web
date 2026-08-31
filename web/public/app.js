@@ -5732,6 +5732,16 @@ function capitaModuloCardHtml(m, destacado){
     + red
     + '</div>';
 }
+// Consulta manual desde los dos campos de arriba de la tabla: no depende de que
+// el afiliado ya esté cargado en el padrón (a veces no lo está, o el cliente
+// elegido no tiene su turnera subida todavía).
+function consultarCapitaManual(){
+  var err = document.getElementById('capitaManualError'); if (err) err.textContent = '';
+  var dni = (document.getElementById('capitaDni').value || '').replace(/\D+/g, '');
+  var benef = (document.getElementById('capitaBenef').value || '').replace(/\D+/g, '');
+  if (!dni || !benef) { if (err) err.textContent = 'Completá DNI y N° de afiliación.'; return; }
+  verCapitaAfiliado('', dni, benef);
+}
 async function verCapitaAfiliado(nombre, dni, beneficio){
   var meta = document.getElementById('capitaModalMeta');
   var content = document.getElementById('capitaModalContent');
