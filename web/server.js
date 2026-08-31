@@ -7029,7 +7029,9 @@ function ensureModelosUnificados() {
   try {
     const SEED_CLIENTES = {
       "caballito-pediatrico": { logo: "cmc_logo.png", logoW: 84, direccion: "Av. directorio 1662", telefono: "6338713 / 46330078 / 46324002" },
-      "cima": { logo: "cima_logo.png", logoW: 150, direccion: "Islas Malvinas 2722 - Isidro Casanova", telefono: "" },
+      // Teléfono real visto en el membrete de estudios de CIMA (Espirometría,
+      // jun/2025) — el campo estaba vacío en el sistema hasta ahora.
+      "cima": { logo: "cima_logo.png", logoW: 150, direccion: "Islas Malvinas 2722 - Isidro Casanova", telefono: "4625-1430 / 2061-0714" },
     };
     const clients = loadClientsStore();
     let cambioClientes = false;

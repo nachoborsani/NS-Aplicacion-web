@@ -3195,6 +3195,8 @@ async function renderActiveClient(){
   document.getElementById('clientCuit').textContent = client.cuit;
   document.getElementById('clientUgl').textContent = client.ugl || '-';
   document.getElementById('clientSap').textContent = client.sap || '-';
+  document.getElementById('clientDireccion').textContent = client.direccion || '-';
+  document.getElementById('clientTelefono').textContent = client.telefono || '-';
   document.getElementById('clientModules').innerHTML = client.activeModules.map(function(module){
     return '<span class="module-chip"><b>' + esc(module.code) + '</b> ' + esc(module.name) + '</span>';
   }).join('');

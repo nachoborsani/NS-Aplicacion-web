@@ -779,6 +779,7 @@
   .info-list{display:grid;gap:10px;margin:0}
   .info-list div{display:grid;gap:2px}
   .info-list .client-info-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .info-list .client-info-row-2{grid-template-columns:2fr 1fr;gap:14px}
   .info-list dt{font-size:10.5px;color:var(--text-2);text-transform:uppercase;font-weight:750;letter-spacing:.04em}
   .info-list dd{margin:0;font-weight:650;font-size:13px}
   .module-chip-list{display:flex;gap:7px;flex-wrap:wrap}
