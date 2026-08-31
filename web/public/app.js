@@ -3225,6 +3225,11 @@ async function loadClientMesCurso(){
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
   if (!client) return;
+  // El filtro de módulos del dashboard es por cliente: si se cambió de
+  // cliente, se limpia (los códigos de módulo de uno no tienen por qué
+  // aplicar al otro). Si es el mismo cliente (ej. se guardó una edición),
+  // se deja como estaba.
+  if (DASH_MODULE_FILTER_CLIENT !== client.slug) { DASH_MODULE_FILTER = []; DASH_MODULE_FILTER_CLIENT = client.slug; }
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
   aplicarPestanasCliente();
@@ -3786,6 +3791,72 @@ function setDashModuleSort(mode){
   if (CLIENT_DASHBOARD_DATA) renderClientDashboard(CLIENT_DASHBOARD_DATA);
 }
 var CLIENT_DASHBOARD_DATA = null;
+// Filtro de módulos de la tabla del dashboard: array de códigos (string)
+// tildados. Vacío = se ven todos (comportamiento normal, sin filtro).
+var DASH_MODULE_FILTER = [];
+var DASH_MODULE_FILTER_CLIENT = ''; // slug del cliente al que pertenece el filtro actual
+var DASH_ALL_MODULES = []; // todos los módulos del período actual (para el picker, sin filtrar)
+function toggleDashModuleFilterPop(force){
+  var pop = document.getElementById('dmfPop');
+  if (!pop) return;
+  var show = typeof force === 'boolean' ? force : (pop.style.display === 'none');
+  pop.style.display = show ? '' : 'none';
+  if (show){
+    renderDashModuleFilterOptions();
+    var s = document.getElementById('dmfSearch');
+    if (s){ s.value = ''; s.focus(); }
+  }
+}
+function renderDashModuleFilterOptions(){
+  var list = document.getElementById('dmfPopList');
+  if (!list) return;
+  var q = ((document.getElementById('dmfSearch') || {}).value || '').trim().toLowerCase();
+  var items = DASH_ALL_MODULES.filter(function(m){
+    if (!q) return true;
+    var hay = (String(m.moduleCode || '') + ' ' + String(m.moduleDescription || '')).toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }).slice().sort(function(a, b){ return String(a.moduleDescription || '').localeCompare(String(b.moduleDescription || '')); });
+  list.innerHTML = items.length ? items.map(function(m){
+    var code = String(m.moduleCode || '');
+    var checked = DASH_MODULE_FILTER.indexOf(code) !== -1 ? ' checked' : '';
+    return '<label><input type="checkbox" value="' + esc(code) + '"' + checked + ' onchange="onDashModuleFilterCheck(this)"><span><b>' + esc(code) + '</b> ' + esc(m.moduleDescription || '') + '</span></label>';
+  }).join('') : '<div class="muted-cell">Sin módulos que coincidan.</div>';
+}
+function onDashModuleFilterCheck(input){
+  var code = String(input.value);
+  var idx = DASH_MODULE_FILTER.indexOf(code);
+  if (input.checked) { if (idx === -1) DASH_MODULE_FILTER.push(code); }
+  else if (idx !== -1) DASH_MODULE_FILTER.splice(idx, 1);
+  if (CLIENT_DASHBOARD_DATA) renderClientDashboard(CLIENT_DASHBOARD_DATA);
+}
+function removeDashModuleFilter(code){
+  var idx = DASH_MODULE_FILTER.indexOf(String(code));
+  if (idx !== -1) DASH_MODULE_FILTER.splice(idx, 1);
+  if (CLIENT_DASHBOARD_DATA) renderClientDashboard(CLIENT_DASHBOARD_DATA);
+}
+function clearDashModuleFilter(){
+  DASH_MODULE_FILTER = [];
+  toggleDashModuleFilterPop(false);
+  if (CLIENT_DASHBOARD_DATA) renderClientDashboard(CLIENT_DASHBOARD_DATA);
+}
+// Chips + contador de la barra (se llama en cada render, esté abierto o
+// cerrado el popover; el popover en sí no se toca acá para no perder el
+// scroll/búsqueda si el usuario lo tiene abierto mientras tilda opciones).
+function renderDashModuleFilterBar(){
+  var chipsBox = document.getElementById('dmfChips');
+  var countEl = document.getElementById('dmfCount');
+  var clearBtn = document.getElementById('dmfClearBtn');
+  if (!chipsBox) return;
+  var byCode = {};
+  DASH_ALL_MODULES.forEach(function(m){ byCode[String(m.moduleCode)] = m; });
+  chipsBox.innerHTML = DASH_MODULE_FILTER.map(function(code){
+    var m = byCode[code];
+    var label = m ? (code + ' ' + (m.moduleDescription || '')) : code;
+    return '<span class="dmf-chip">' + esc(label) + '<button type="button" onclick="removeDashModuleFilter(&quot;' + esc(code) + '&quot;)" aria-label="Quitar filtro">&times;</button></span>';
+  }).join('');
+  if (countEl) { countEl.style.display = DASH_MODULE_FILTER.length ? '' : 'none'; countEl.textContent = String(DASH_MODULE_FILTER.length); }
+  if (clearBtn) clearBtn.style.display = DASH_MODULE_FILTER.length ? '' : 'none';
+}
 function renderClientDashboard(data){
   data = data || {};
   CLIENT_DASHBOARD_DATA = data;
@@ -3839,8 +3910,19 @@ function renderClientDashboard(data){
   var body = document.getElementById('clientDashboardModules');
   if (body) {
     var modules = (current.modules || []).slice();
+    // Se guarda la lista completa sin filtrar para el picker (DASH_ALL_MODULES)
+    // antes de recortarla.
+    DASH_ALL_MODULES = modules.slice();
+    if (DASH_MODULE_FILTER.length) {
+      modules = modules.filter(function(m){ return DASH_MODULE_FILTER.indexOf(String(m.moduleCode)) !== -1; });
+    }
+    renderDashModuleFilterBar();
+    // % part. y la barra son sobre lo que se está viendo: el total del mes sin
+    // filtro, o el total del subconjunto filtrado si hay uno activo (con
+    // filtro, las % de las filas visibles suman 100%).
     var totalNet = modules.reduce(function(s, m){ return s + Math.abs(Number(m.net || 0)); }, 0);
     var maxNet = modules.reduce(function(mx, m){ return Math.max(mx, Math.abs(Number(m.net || 0))); }, 0) || 1;
+    var shareTitle = DASH_MODULE_FILTER.length ? 'Participación sobre el total de los módulos filtrados' : 'Participación sobre la facturación total del mes';
     // Para la variación por módulo vs el mes que se compara.
     var hayCompare = !!compare.period;
     var curLbl = shortMonth(current.label || current.period || 'Este mes');
@@ -3929,11 +4011,32 @@ function renderClientDashboard(data){
         + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + consPrev + '</div></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + pracPrev + '</div></td>'
         + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
-        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="Participación sobre la facturación total del mes">' + share + '%</span></div>' + netoPrev + '</td>'
+        + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="' + esc(shareTitle) + '">' + share + '%</span></div>' + netoPrev + '</td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
         + detailRow('Practica', 'Practicas', practiceRows, prevPracRows);
-    }).join('') : '<tr><td colspan="4" class="muted-cell">Sin datos para este mes.</td></tr>';
+    }).join('') : ('<tr><td colspan="4" class="muted-cell">'
+      + (DASH_MODULE_FILTER.length ? 'Ningún módulo filtrado tiene datos en este período.' : 'Sin datos para este mes.')
+      + '</td></tr>');
+    // Fila con el total combinado de los módulos filtrados (ej. sumar los 3
+    // módulos de Oftalmología). Solo aparece si hay filtro activo y trajo filas.
+    if (DASH_MODULE_FILTER.length && modules.length > 1) {
+      var fCons = 0, fPrac = 0, fNet = 0;
+      modules.forEach(function(m){
+        fCons += Number(m.consultations || (m.rows || []).filter(function(r){ return r.kind === 'Consulta'; }).length || 0);
+        fPrac += Number(m.practices || (m.rows || []).filter(function(r){ return r.kind === 'Practica'; }).length || 0);
+        fNet += Number(m.net || 0);
+      });
+      // Sin badge de %: acá siempre daría 100% (el total ya se calcula sobre
+      // este mismo subconjunto filtrado), no aporta nada — el dato útil de
+      // esta fila es la suma en sí.
+      body.innerHTML = '<tr class="dashboard-module-row dmf-summary-row">'
+        + '<td><b>Total de ' + esc(numberFmt(modules.length)) + ' módulos filtrados</b></td>'
+        + '<td class="tnum"><b>' + esc(numberFmt(fCons)) + '</b></td>'
+        + '<td class="tnum"><b>' + esc(numberFmt(fPrac)) + '</b></td>'
+        + '<td class="nom-money"><b>' + esc(moneyFmt(fNet)) + '</b></td>'
+        + '</tr>' + body.innerHTML;
+    }
   }
 }
 function toggleDashboardModuleDetail(index, kind){
