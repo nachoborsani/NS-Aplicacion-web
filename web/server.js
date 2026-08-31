@@ -56,6 +56,22 @@ const gastosFile = path.join(dataDir, "gastos.json");
 const honorariosFile = path.join(dataDir, "honorarios.json");
 function loadHonorarios() { try { const j = JSON.parse(fs.readFileSync(honorariosFile, "utf8")); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
 function saveHonorarios(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(honorariosFile, JSON.stringify(store, null, 2)); }
+// Inicio: canal interno de mensajes entre admins + tareas compartidas. `leido`
+// guarda, por usuario, hasta qué momento vio los mensajes (para el "no leídos").
+const inicioFile = path.join(dataDir, "inicio.json");
+function loadInicio() {
+  try {
+    const j = JSON.parse(fs.readFileSync(inicioFile, "utf8"));
+    if (!j || typeof j !== "object") throw 0;
+    return { mensajes: Array.isArray(j.mensajes) ? j.mensajes : [], tareas: Array.isArray(j.tareas) ? j.tareas : [], leido: (j.leido && typeof j.leido === "object") ? j.leido : {} };
+  } catch { return { mensajes: [], tareas: [], leido: {} }; }
+}
+function saveInicio(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(inicioFile, JSON.stringify(store, null, 2)); }
+// No leídos = mensajes de OTRO autor posteriores al último "visto" del usuario.
+function inicioNoLeidos(store, username) {
+  const desde = store.leido[username] || "";
+  return (store.mensajes || []).filter((m) => m.autor !== username && String(m.at) > desde).length;
+}
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -4155,6 +4171,97 @@ const server = http.createServer(async (req, res) => {
     state.tasks = state.tasks.slice(0, 500);
     saveWorkerState(state);
     return json(res, 201, { ok: true, task: publicWorkerTask(task) });
+  }
+
+  // ==================== INICIO: mensajes + tareas (solo admin) ====================
+  if (p === "/api/inicio" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const store = loadInicio();
+    const admins = (loadUsers() || [])
+      .filter((u) => u.role === "admin" && u.active !== false)
+      .map((u) => ({ username: u.username, nombre: u.name || u.username }));
+    return json(res, 200, {
+      yo: me.username,
+      admins,
+      mensajes: (store.mensajes || []).slice(-200),
+      tareas: store.tareas || [],
+      unread: inicioNoLeidos(store, me.username),
+    });
+  }
+  // Solo el contador de no leídos (para la campana; más liviano que traer todo).
+  if (p === "/api/inicio/no-leidos" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 200, { unread: 0 });
+    return json(res, 200, { unread: inicioNoLeidos(loadInicio(), me.username) });
+  }
+  if (p === "/api/inicio/mensajes" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const texto = String((body && body.texto) || "").trim().slice(0, 4000);
+    if (!texto) return json(res, 400, { error: "El mensaje está vacío." });
+    const store = loadInicio();
+    const msg = { id: crypto.randomUUID(), autor: me.username, autorNombre: me.name || me.username, texto, at: new Date().toISOString() };
+    store.mensajes.push(msg);
+    store.mensajes = store.mensajes.slice(-500);
+    store.leido[me.username] = msg.at; // el que escribe ya vio todo hasta acá
+    saveInicio(store);
+    return json(res, 201, { ok: true, mensaje: msg });
+  }
+  // Marcar como leídos (al abrir el Inicio): mueve el "visto" del usuario a ahora.
+  if (p === "/api/inicio/mensajes/leidos" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const store = loadInicio();
+    store.leido[me.username] = new Date().toISOString();
+    saveInicio(store);
+    return json(res, 200, { ok: true, unread: 0 });
+  }
+  if (p === "/api/inicio/tareas" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const titulo = String((body && body.titulo) || "").trim().slice(0, 300);
+    const para = String((body && body.para) || "").trim().slice(0, 40);
+    if (!titulo) return json(res, 400, { error: "La tarea está vacía." });
+    const store = loadInicio();
+    const tarea = { id: crypto.randomUUID(), titulo, para, creadaPor: me.username, creadaPorNombre: me.name || me.username, hecha: false, at: new Date().toISOString(), hechaAt: "" };
+    store.tareas.unshift(tarea);
+    store.tareas = store.tareas.slice(0, 500);
+    saveInicio(store);
+    return json(res, 201, { ok: true, tarea });
+  }
+  // Tildar/destildar una tarea. (POST /api/inicio/tareas/<id>/toggle)
+  if (p.startsWith("/api/inicio/tareas/") && p.endsWith("/toggle") && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const id = p.slice("/api/inicio/tareas/".length, -"/toggle".length);
+    const store = loadInicio();
+    const t = (store.tareas || []).find((x) => x.id === id);
+    if (!t) return json(res, 404, { error: "Tarea no encontrada." });
+    t.hecha = !t.hecha;
+    t.hechaAt = t.hecha ? new Date().toISOString() : "";
+    saveInicio(store);
+    return json(res, 200, { ok: true, tarea: t });
+  }
+  // Borrar una tarea. (DELETE /api/inicio/tareas/<id>)
+  if (p.startsWith("/api/inicio/tareas/") && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const id = p.slice("/api/inicio/tareas/".length);
+    const store = loadInicio();
+    const antes = (store.tareas || []).length;
+    store.tareas = (store.tareas || []).filter((x) => x.id !== id);
+    saveInicio(store);
+    return json(res, 200, { ok: true, borrada: antes !== store.tareas.length });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {

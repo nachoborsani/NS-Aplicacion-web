@@ -82,7 +82,7 @@ function go(v, el){
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
-  if (v === 'dash') updateDashClientsTile();
+  if (v === 'dash'){ updateDashClientsTile(); cargarInicio(true); }
   if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
@@ -353,7 +353,7 @@ window.addEventListener('hashchange', function(){
   if (document.body.classList.contains('authed')) applyRoute();  // back/forward
 });
 
-function openDrawer(){ document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); }
+function openDrawer(){ document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); iniRenderDrawer(); if (typeof iniRefrescarBell==='function') iniRefrescarBell().then(function(){ iniRenderDrawer(); }); }
 function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
 
 // ---------- Informes: generar PDF de un paciente y descargarlo ----------
@@ -873,6 +873,153 @@ async function updateDashClientsTile(){
   var el = document.getElementById('dashClientsCount'); if (!el) return;
   if (!CLIENTS || !CLIENTS.length){ var res = await api('/api/clientes'); if (res.ok) CLIENTS = res.data.clients || []; }
   el.textContent = (CLIENTS || []).length;
+}
+
+// ============ INICIO: mensajes internos + tareas compartidas (solo admin) ============
+var INICIO = { yo:'', admins:[], mensajes:[], tareas:[], unread:0, assign:'', wired:false, pollTimer:null };
+function iniEsAdmin(){ return !!(ME && ME.role === 'admin'); }
+function iniFmtHora(iso){
+  try{
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    var hoy = new Date();
+    var hm = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+    if (d.toDateString() === hoy.toDateString()) return hm;
+    var ayer = new Date(hoy); ayer.setDate(hoy.getDate()-1);
+    if (d.toDateString() === ayer.toDateString()) return 'ayer '+hm;
+    return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '+hm;
+  }catch(e){ return ''; }
+}
+function iniIniciales(nombre){
+  var p = String(nombre||'').trim().split(/\s+/);
+  return (((p[0]||'')[0]||'') + ((p[1]||'')[0]||'')).toUpperCase() || '?';
+}
+function iniNombreDe(username){
+  var a = (INICIO.admins||[]).find(function(x){return x.username===username;});
+  return a ? a.nombre : username;
+}
+async function cargarInicio(marcarLeido){
+  var pl = document.getElementById('inicioPaneles');
+  if (!iniEsAdmin()){ if(pl) pl.style.display='none'; return; }
+  var res = await api('/api/inicio');
+  if (!res.ok){ return; }
+  INICIO.yo = res.data.yo || ''; INICIO.admins = res.data.admins || [];
+  INICIO.mensajes = res.data.mensajes || []; INICIO.tareas = res.data.tareas || [];
+  INICIO.unread = res.data.unread || 0;
+  if (marcarLeido && INICIO.unread > 0){ await api('/api/inicio/mensajes/leidos', {}); INICIO.unread = 0; }
+  if (pl) pl.style.display = '';
+  if (!INICIO.wired){
+    INICIO.wired = true;
+    var mi = document.getElementById('iniMsg');
+    if (mi){
+      mi.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); iniEnviarMsg(); } });
+      mi.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
+    }
+  }
+  iniRenderAssign(); iniRenderMensajes(); iniRenderTareas(); iniActualizarBell();
+}
+function iniRenderAssign(){
+  var box = document.getElementById('iniAssign'); if(!box) return;
+  var opts = [{v:'',t:'Sin asignar'}].concat((INICIO.admins||[]).map(function(a){
+    var corto = String(a.nombre||a.username).split(' ')[0];
+    return { v:a.username, t: a.username===INICIO.yo ? (corto+' (yo)') : corto };
+  }));
+  box.innerHTML = opts.map(function(o){
+    return '<button type="button" class="'+(INICIO.assign===o.v?'on':'')+'" onclick="iniSetAssign(\''+esc(o.v)+'\')">'+esc(o.t)+'</button>';
+  }).join('');
+}
+function iniSetAssign(v){ INICIO.assign = v; iniRenderAssign(); }
+function iniRenderMensajes(){
+  var feed = document.getElementById('iniFeed'); if(!feed) return;
+  var ms = INICIO.mensajes || [];
+  if (!ms.length){ feed.innerHTML = '<div class="ini-empty">Todavía no hay mensajes. Dejá el primero 👇</div>'; return; }
+  feed.innerHTML = ms.map(function(m){
+    var mine = m.autor === INICIO.yo;
+    return '<div class="ini-msg'+(mine?' me':'')+'">'
+      + '<span class="ini-av'+(mine?' me':'')+'">'+esc(iniIniciales(m.autorNombre))+'</span>'
+      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+'</div>'
+      + '<div class="ini-txt">'+esc(m.texto)+'</div><div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
+  }).join('');
+  feed.scrollTop = feed.scrollHeight;
+}
+async function iniEnviarMsg(){
+  var inp = document.getElementById('iniMsg'); if(!inp) return;
+  var t = inp.value.trim(); if(!t) return;
+  var res = await api('/api/inicio/mensajes', { texto:t });
+  if (!res.ok){ alert(res.data.error || 'No se pudo enviar el mensaje.'); return; }
+  inp.value=''; inp.style.height='';
+  INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
+  iniRenderMensajes(); iniActualizarBell();
+}
+function iniRenderTareas(){
+  var open = document.getElementById('iniOpen'), done = document.getElementById('iniDone');
+  if(!open||!done) return;
+  var abiertas = (INICIO.tareas||[]).filter(function(t){return !t.hecha;});
+  var hechas = (INICIO.tareas||[]).filter(function(t){return t.hecha;});
+  open.innerHTML = abiertas.length ? abiertas.map(iniTareaHTML).join('') : '<div class="ini-empty">No hay tareas pendientes 🎉</div>';
+  done.innerHTML = hechas.map(iniTareaHTML).join('');
+  var oc=document.getElementById('iniOpenCnt'); if(oc) oc.textContent = abiertas.length;
+  var dc=document.getElementById('iniDoneCnt'); if(dc) dc.textContent = hechas.length;
+}
+function iniTareaHTML(t){
+  var chip = t.para ? '<span class="ini-chip">para '+esc(String(iniNombreDe(t.para)||'').split(' ')[0])+'</span>' : '';
+  var meta = t.hecha ? 'hecha' : ('creada por '+esc(String(t.creadaPorNombre||'').split(' ')[0]));
+  return '<li class="ini-task'+(t.hecha?' done':'')+'">'
+    + '<button class="ini-ck" onclick="iniToggleTarea(\''+esc(t.id)+'\')" title="'+(t.hecha?'Reabrir':'Marcar hecha')+'"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+    + '<div class="ini-tbody"><div class="ini-ttitle">'+esc(t.titulo)+'</div>'
+    + '<div class="ini-tmeta">'+chip+'<span>'+meta+'</span>'
+    + (t.hecha?'<button class="ini-link" onclick="iniToggleTarea(\''+esc(t.id)+'\')">reabrir</button>':'')
+    + '</div></div>'
+    + '<button class="ini-del" onclick="iniBorrarTarea(\''+esc(t.id)+'\')" title="Borrar">🗑</button></li>';
+}
+async function iniAgregarTarea(){
+  var inp = document.getElementById('iniTask'); if(!inp) return;
+  var v = inp.value.trim(); if(!v) return;
+  var res = await api('/api/inicio/tareas', { titulo:v, para: INICIO.assign||'' });
+  if (!res.ok){ alert(res.data.error || 'No se pudo agregar la tarea.'); return; }
+  inp.value=''; INICIO.tareas.unshift(res.data.tarea); iniRenderTareas();
+}
+async function iniToggleTarea(id){
+  var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/toggle', {});
+  if (!res.ok){ alert(res.data.error || 'No se pudo actualizar la tarea.'); return; }
+  var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
+  if(t){ t.hecha=res.data.tarea.hecha; t.hechaAt=res.data.tarea.hechaAt; }
+  iniRenderTareas();
+}
+async function iniBorrarTarea(id){
+  if (!confirm('¿Borrar esta tarea?')) return;
+  var res = await req('DELETE', '/api/inicio/tareas/'+encodeURIComponent(id));
+  if (!res.ok){ alert(res.data.error || 'No se pudo borrar la tarea.'); return; }
+  INICIO.tareas = (INICIO.tareas||[]).filter(function(x){return x.id!==id;}); iniRenderTareas();
+}
+function iniActualizarBell(){
+  var dot = document.getElementById('bellDot');
+  var badge = document.getElementById('iniUnread');
+  var n = INICIO.unread || 0;
+  if (dot) dot.style.display = n>0 ? '' : 'none';
+  if (badge){ if(n>0){ badge.style.display=''; badge.textContent = n>9?'9+':String(n); } else badge.style.display='none'; }
+}
+async function iniRefrescarBell(){
+  if (!iniEsAdmin()){ var d=document.getElementById('bellDot'); if(d) d.style.display='none'; return; }
+  var res = await api('/api/inicio/no-leidos');
+  if (res.ok){ INICIO.unread = res.data.unread||0; iniActualizarBell(); }
+}
+function iniRenderDrawer(){
+  var body = document.getElementById('drawerBody'); if(!body) return;
+  var n = INICIO.unread || 0;
+  if (iniEsAdmin() && n>0){
+    body.innerHTML = '<div class="drawer-item" onclick="closeDrawer();go(\'dash\',navElFor(\'dash\'))">'
+      + '<div class="di-ic">💬</div><div class="di-tx"><b>'+n+' mensaje'+(n>1?'s':'')+' nuevo'+(n>1?'s':'')+' en el Inicio</b>'
+      + '<span>Tocá para leerlos.</span></div></div>';
+  } else {
+    body.innerHTML = '<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>No hay notificaciones</b><span>Cuando Seba o Nacho dejen un mensaje en el Inicio, te va a aparecer acá.</span></div>';
+  }
+}
+function iniArrancar(){
+  if (!iniEsAdmin()){ iniActualizarBell(); return; }
+  iniRefrescarBell();
+  if (!INICIO.pollTimer){
+    INICIO.pollTimer = setInterval(function(){ if(document.visibilityState!=='hidden') iniRefrescarBell(); }, 60000);
+  }
 }
 // ---------- nomencladores ----------
 var NOM_READY = false;
@@ -5871,6 +6018,7 @@ function aplicarUsuario(u){
   // Rol clínica: solo su centro (oculta lo interno de NS por CSS) y sin "Adjuntar reporte".
   document.body.classList.toggle('role-clinica', u.role === 'clinica');
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
+  iniArrancar();   // campana de mensajes del Inicio (solo admin)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
 var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina'];

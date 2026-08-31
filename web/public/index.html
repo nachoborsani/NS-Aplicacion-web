@@ -166,7 +166,7 @@
         </button>
         <button class="icon-btn" onclick="openDrawer()" title="Notificaciones">
           <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="dot"></span>
+          <span class="dot" id="bellDot" style="display:none"></span>
         </button>
         <div class="avatar" id="topAvatar" style="width:38px;height:38px">NS</div>
       </header>
@@ -175,6 +175,47 @@
         <!-- DASHBOARD -->
         <section id="view-dash">
           <div class="page-head"><h1 id="dashHello">Buen día 👋</h1><p>Resumen del sistema — uso interno de NS.</p></div>
+
+          <div class="ini-grid" id="inicioPaneles" style="display:none">
+            <!-- Mensajes -->
+            <section class="card ini-card">
+              <div class="ini-head">
+                <span class="ini-ic">💬</span>
+                <div><h2>Mensajes</h2><div class="ini-meta">Canal interno · solo admins</div></div>
+                <span class="ini-unread" id="iniUnread" style="display:none">0</span>
+              </div>
+              <div class="ini-feed" id="iniFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-composer">
+                <textarea id="iniMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
+                <button class="btn btn-primary btn-sm" id="iniSend" onclick="iniEnviarMsg()">Enviar</button>
+              </div>
+            </section>
+            <!-- Tareas -->
+            <section class="card ini-card">
+              <div class="ini-head">
+                <span class="ini-ic">✅</span>
+                <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes</div></div>
+              </div>
+              <div class="ini-addbar">
+                <input id="iniTask" placeholder="Nueva tarea…  (ej. revisar bandeja de UOM)" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
+                <div class="ini-addrow">
+                  <span class="ini-lbl">para</span>
+                  <div class="ini-assign" id="iniAssign"></div>
+                  <button class="btn btn-primary btn-sm" id="iniAddTask" style="margin-left:auto" onclick="iniAgregarTarea()">+ Agregar</button>
+                </div>
+              </div>
+              <div class="ini-tasks">
+                <ul class="ini-list" id="iniOpen"></ul>
+                <div class="ini-donewrap closed" id="iniDoneWrap">
+                  <div class="ini-donehead" id="iniDoneHead" onclick="document.getElementById('iniDoneWrap').classList.toggle('closed')">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Hechas <span class="ini-donecnt">(<span id="iniDoneCnt">0</span>)</span>
+                  </div>
+                  <ul class="ini-list" id="iniDone"></ul>
+                </div>
+              </div>
+            </section>
+          </div>
         </section>
 
         <!-- ADMINISTRACIÓN / RESUMEN DE CUENTA -->
@@ -1453,10 +1494,12 @@
     <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
     <aside class="drawer" id="drawer">
       <div class="dh"><svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke="currentColor" stroke-width="1.8"/></svg><h3>Notificaciones</h3><button class="x" onclick="closeDrawer()">×</button></div>
-      <div class="empty">
-        <div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <b>No hay notificaciones</b>
-        <span>Todavía no hay nada configurado. Cuando se activen los avisos del sistema, van a aparecer acá.</span>
+      <div id="drawerBody">
+        <div class="empty">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <b>No hay notificaciones</b>
+          <span>Cuando Seba o Nacho dejen un mensaje en el Inicio, te va a aparecer acá.</span>
+        </div>
       </div>
     </aside>
   </div>
