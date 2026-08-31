@@ -104,7 +104,8 @@
             <a class="client-nav-item" onclick="go('facturas', this)">Facturas</a>
           </div>
         </div>
-        <div class="nav-section ns-only" id="navSectionClientes">clientes</div>
+        <div class="nav-section nav-section-collapsible ns-only" id="navSectionClientes" data-section="clientes" title="Mostrar / ocultar clientes">clientes<span class="nav-section-chevron">▾</span></div>
+        <div class="nav-section-items ns-only" data-section-items="clientes">
         <div class="nav-group" id="navGroupConsultorios">
           <button class="nav-parent" type="button" onclick="toggleClientGroup('consultorios', this)">
             <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V9a2 2 0 012-2zM9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M2 13h20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -130,6 +131,7 @@
           <div class="nav-sub" id="clientNavListPotenciales"></div>
         </div>
         <button class="client-new-btn" id="clientNewBtn" type="button" onclick="openClientCreateModal()">+ Nuevo cliente</button>
+        </div><!-- /.nav-section-items clientes -->
       </nav>
       <div class="side-foot">
         <div class="side-user">

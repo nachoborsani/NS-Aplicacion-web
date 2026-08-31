@@ -118,8 +118,27 @@ function ponerHrefsNav(){
     if (m) a.setAttribute('href', '#' + m[1]);
   });
 }
-if (document.readyState !== 'loading') ponerHrefsNav();
-else document.addEventListener('DOMContentLoaded', ponerHrefsNav);
+// Secciones colapsables del menú (como B2B/Ecom en Gauss): el header abre/cierra
+// su bloque; el estado se recuerda por sección. En modo icon-only no colapsa.
+function wireNavSecciones(){
+  document.querySelectorAll('.nav-section-collapsible[data-section]').forEach(function(header){
+    if (header._wired) return; header._wired = true;
+    var key = header.getAttribute('data-section');
+    var items = document.querySelector('.nav-section-items[data-section-items="'+key+'"]');
+    var guardado = null;
+    try{ guardado = localStorage.getItem('ns-nav-sec-'+key); }catch(e){}
+    if (guardado === '0'){ header.classList.add('collapsed'); if(items) items.classList.add('collapsed'); }
+    header.addEventListener('click', function(){
+      if (document.body.classList.contains('sidebar-collapsed')) return;  // icon-only: no colapsa
+      var col = header.classList.toggle('collapsed');
+      if (items) items.classList.toggle('collapsed', col);
+      try{ localStorage.setItem('ns-nav-sec-'+key, col ? '0' : '1'); }catch(e){}
+    });
+  });
+}
+function initNav(){ ponerHrefsNav(); wireNavSecciones(); }
+if (document.readyState !== 'loading') initNav();
+else document.addEventListener('DOMContentLoaded', initNav);
 
 // ---------- Credencial provisoria: consulta en vivo a PAMI ----------
 async function descargarCredencial(){

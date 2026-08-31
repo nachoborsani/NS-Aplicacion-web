@@ -117,6 +117,16 @@
   .client-new-btn.is-admin{display:flex}
   .client-new-btn:hover{background:rgba(24,183,178,.15);border-color:#18B7B2;color:#fff}
   .nav-section{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5c7189;padding:6px 12px 2px}
+  /* Sección colapsable del menú (como B2B/Ecom en Gauss): el encabezado abre/cierra
+     todo su bloque. En modo icon-only (sidebar-collapsed) no colapsa. */
+  .nav-section-collapsible{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;user-select:none;transition:color .15s}
+  .nav-section-collapsible:hover{color:#8299b3}
+  .nav-section-chevron{font-size:9px;color:#5c7189;transition:transform .18s ease;line-height:1}
+  .nav-section-collapsible.collapsed .nav-section-chevron{transform:rotate(-90deg)}
+  .nav-section-items{overflow:hidden;max-height:3000px;transition:max-height .22s ease}
+  .nav-section-items.collapsed{max-height:0}
+  body.sidebar-collapsed .nav-section-chevron{display:none}
+  body.sidebar-collapsed .nav-section-items{max-height:none !important}
   .client-nav-item{display:block;text-decoration:none;border:0;background:transparent;color:#9db2c8;border-radius:8px;padding:4px 10px;text-align:left;font-size:12.5px;font-weight:600;cursor:pointer}
   .client-nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
   .client-nav-item.active{background:rgba(24,183,178,.14);color:#dff8f7}
