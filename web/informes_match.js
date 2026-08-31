@@ -134,9 +134,20 @@ function elegirPractica(prestaciones, practicaHint) {
     if (porTexto.length === 1) return { elegida: porTexto[0], ambiguo: false };
     // Equivalencias (ej. ECG → consulta cardio): solo si no hubo match directo.
     const equivs = _EQUIV_PRACTICA[hint];
+    let porEquiv = [];
     if (equivs && porTexto.length === 0) {
-      const porEquiv = prestaciones.filter((p) => equivs.some((re) => re.test(norm(p.practica))));
+      porEquiv = prestaciones.filter((p) => equivs.some((re) => re.test(norm(p.practica))));
       if (porEquiv.length === 1) return { elegida: porEquiv[0], ambiguo: false };
+    }
+    // Ambiguo pero da igual cuál: si los candidatos que matchean son la MISMA práctica
+    // y están TODOS transmitidos (ej. dos consultas 570129 que incluyen el ECG, en
+    // fechas distintas, las dos transmitidas), no hay nada para subir → se resuelve al
+    // primero y queda "ya transmitido". No aplica si alguno no está transmitido: ahí sí
+    // importa a cuál se sube.
+    const grupo = porTexto.length > 1 ? porTexto : porEquiv;
+    if (grupo.length > 1) {
+      const mismas = new Set(grupo.map((p) => norm(p.practica)));
+      if (mismas.size === 1 && grupo.every((p) => p.transmitida)) return { elegida: grupo[0], ambiguo: false };
     }
   }
   const noConsulta = prestaciones.filter((p) => !esConsulta(p.practica));
