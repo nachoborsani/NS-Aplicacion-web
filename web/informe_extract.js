@@ -53,6 +53,20 @@ const _PRACTICA_MAP = [
   // "Ecografía de TIROIDES" (informe) → "ECOGRAFIA TIROIDEA" (bandeja). El hint parcial
   // "TIROID" cae adentro de las dos formas (tiroides/tiroidea).
   [/TIROIDE[AS]?\b/i, "TIROID"],
+  // Urología/abdomen. Cada órgano es su OME y suelen venir varios en un mismo informe
+  // ("ecografía renal, vesical y prostática"); el matcher multi-práctica los separa.
+  [/URODINAMIC/i, "URODINAMICO"],
+  [/FLUJOMETR[IÍ]A/i, "FLUJOMETRIA"],
+  [/PARTES\s+BLANDAS/i, "PARTES BLANDAS"],
+  [/ECOGRAF\w*\s+ABDOMINAL|ABDOMEN\s+COMPLET/i, "ECOGRAFIA ABDOMINAL"],
+  [/ECOGRAF\w*\s+RENAL|RENAL\s+(?:BILATERAL|Y\s+VESIC)/i, "ECOGRAFIA RENAL"],
+  [/VESICOPROSTAT|PROST[AÁ]TIC/i, "VESICOPROSTAT"],
+  [/ECOGRAF\w*\s+VESICAL|\bVESICAL\b/i, "ECOGRAFIA VESICAL"],
+  // Ginecológica transvaginal = "ECOGRAFIA ENDOCAVIATRIA GINECOLOGICA"; y mamaria.
+  [/TRANSVAGINAL|GINECOL[OÓ]GIC|ENDOCAVI/i, "GINECOL"],
+  [/ECOGRAF\w*\s+MAMARIA|\bMAMARIA\b/i, "MAMARIA"],
+  // Hombros / musculoesquelético.
+  [/HOMBRO|MUSCULOESQUEL[EÉ]TIC/i, "MUSCULOESQUEL"],
   [/VENOSO\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+VENOSO/i, "VENOSO DE MIEMBROS INFERIORES"],
   [/ARTERIAL\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+ARTERIAL/i, "ARTERIAL DE MIEMBROS INFERIORES"],
   // Otorrino: un mismo informe suele traer las dos juntas ("OTOMICROSCOPIA +
@@ -66,7 +80,10 @@ const _PRACTICA_MAP = [
   [/TRATAMIENTOS?\s+(QU[IÍ]MICOS?|F[IÍ]SICOS?)\s+DE\s+LESI[OÓ]N|CAUTERIZACI[OÓ]N\s+QU[IÍ]MICA/i, "TRATAMIENTO DE LESIONES"],
 ];
 // Todas las prácticas nombradas en el informe (un informe puede cubrir varias).
-function practicasDe(fuente) {
+function practicasDe(fuenteRaw) {
+  // Sin acentos: los informes escriben "Ecografía"/"Urodinámico" con tilde, y \w no
+  // matchea vocales acentuadas. Quitándolas, los patrones andan igual con o sin tilde.
+  const fuente = String(fuenteRaw || "").normalize("NFD").replace(/[̀-ͯ]/g, "");
   const out = [];
   for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente) && !out.includes(kw)) out.push(kw);
   // Ecodoppler arterial/venoso de miembros: la región (superiores/inferiores) y los
