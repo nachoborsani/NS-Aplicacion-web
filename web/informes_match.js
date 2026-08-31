@@ -181,7 +181,17 @@ function matchInforme(informe, bandeja, padronCliente) {
 
   // 1) Camino exacto por beneficio
   if (beneficio) {
-    const delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio);
+    // La bandeja a veces trae la MISMA OME repetida (mismo nOrden, mismo turno). Se
+    // deduplica: si no, una práctica que matchea esa OME repetida se cuenta como
+    // "ambigua" (2 candidatos) y encima aparece dos veces en la lista.
+    const _vistos = new Set();
+    const delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio).filter((p) => {
+      const k = soloDigitos(p.nOrden);
+      if (!k) return true;
+      if (_vistos.has(k)) return false;
+      _vistos.add(k);
+      return true;
+    });
     if (delPaciente.length) {
       // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
       const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
