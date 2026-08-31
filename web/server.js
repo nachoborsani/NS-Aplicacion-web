@@ -4327,9 +4327,10 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     const titulo = String((body && body.titulo) || "").trim().slice(0, 300);
     const para = String((body && body.para) || "").trim().slice(0, 40);
+    const vence = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.vence) || "")) ? String(body.vence) : "";
     if (!titulo) return json(res, 400, { error: "La tarea está vacía." });
     const store = loadInicio();
-    const tarea = { id: crypto.randomUUID(), titulo, para, creadaPor: me.username, creadaPorNombre: me.name || me.username, hecha: false, at: new Date().toISOString(), hechaAt: "" };
+    const tarea = { id: crypto.randomUUID(), titulo, para, creadaPor: me.username, creadaPorNombre: me.name || me.username, hecha: false, at: new Date().toISOString(), hechaAt: "", vence };
     store.tareas.unshift(tarea);
     store.tareas = store.tareas.slice(0, 500);
     saveInicio(store);
@@ -4346,6 +4347,21 @@ const server = http.createServer(async (req, res) => {
     if (!t) return json(res, 404, { error: "Tarea no encontrada." });
     t.hecha = !t.hecha;
     t.hechaAt = t.hecha ? new Date().toISOString() : "";
+    saveInicio(store);
+    return json(res, 200, { ok: true, tarea: t });
+  }
+  // Poner / cambiar / quitar la fecha de vencimiento. (POST .../tareas/<id>/vence)
+  if (p.startsWith("/api/inicio/tareas/") && p.endsWith("/vence") && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const id = p.slice("/api/inicio/tareas/".length, -"/vence".length);
+    const body = await readBody(req);
+    const vence = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.vence) || "")) ? String(body.vence) : "";
+    const store = loadInicio();
+    const t = (store.tareas || []).find((x) => x.id === id);
+    if (!t) return json(res, 404, { error: "Tarea no encontrada." });
+    t.vence = vence;
     saveInicio(store);
     return json(res, 200, { ok: true, tarea: t });
   }

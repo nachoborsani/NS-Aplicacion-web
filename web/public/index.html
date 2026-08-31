@@ -196,13 +196,15 @@
             <section class="card ini-card">
               <div class="ini-head">
                 <span class="ini-ic">✅</span>
-                <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes</div></div>
+                <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
               </div>
               <div class="ini-addbar">
                 <input id="iniTask" placeholder="Nueva tarea…  (ej. revisar bandeja de UOM)" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
                 <div class="ini-addrow">
                   <span class="ini-lbl">para</span>
                   <div class="ini-assign" id="iniAssign"></div>
+                  <span class="ini-lbl" style="margin-left:4px">vence</span>
+                  <input type="date" id="iniTaskVence" class="ini-vence-in" title="Fecha de vencimiento (opcional)">
                   <button class="btn btn-primary btn-sm" id="iniAddTask" style="margin-left:auto" onclick="iniAgregarTarea()">+ Agregar</button>
                 </div>
               </div>

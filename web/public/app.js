@@ -978,23 +978,55 @@ async function iniEnviarMsg(){
   INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
   iniRenderMensajes(); iniActualizarBell();
 }
+function iniHoyISO(){
+  var d = new Date();
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+// Estado de vencimiento de una tarea NO hecha: '' | 'futuro' | 'hoy' | 'vencida'.
+function iniVenceEstado(t){
+  if (!t || t.hecha || !t.vence) return '';
+  var hoy = iniHoyISO();
+  if (t.vence < hoy) return 'vencida';
+  if (t.vence === hoy) return 'hoy';
+  return 'futuro';
+}
+function iniVenceLabel(v){ var p=String(v||'').split('-'); return p.length===3 ? p[2]+'/'+p[1] : ''; }
 function iniRenderTareas(){
   var open = document.getElementById('iniOpen'), done = document.getElementById('iniDone');
   if(!open||!done) return;
   var abiertas = (INICIO.tareas||[]).filter(function(t){return !t.hecha;});
   var hechas = (INICIO.tareas||[]).filter(function(t){return t.hecha;});
+  // Las vencidas primero, después por fecha de vencimiento (las sin fecha al final).
+  abiertas.sort(function(a,b){
+    var av=a.vence||'9999', bv=b.vence||'9999';
+    return av<bv?-1:(av>bv?1:0);
+  });
   open.innerHTML = abiertas.length ? abiertas.map(iniTareaHTML).join('') : '<div class="ini-empty">No hay tareas pendientes 🎉</div>';
   done.innerHTML = hechas.map(iniTareaHTML).join('');
   var oc=document.getElementById('iniOpenCnt'); if(oc) oc.textContent = abiertas.length;
   var dc=document.getElementById('iniDoneCnt'); if(dc) dc.textContent = hechas.length;
+  var vencidas = abiertas.filter(function(t){ return iniVenceEstado(t)==='vencida'; }).length;
+  var vc=document.getElementById('iniVencCnt');
+  if (vc) vc.innerHTML = vencidas ? ' · <b class="ini-venc-cnt">'+vencidas+' vencida'+(vencidas>1?'s':'')+'</b>' : '';
 }
 function iniTareaHTML(t){
   var chip = t.para ? '<span class="ini-chip">para '+esc(String(iniNombreDe(t.para)||'').split(' ')[0])+'</span>' : '';
   var meta = t.hecha ? 'hecha' : ('creada por '+esc(String(t.creadaPorNombre||'').split(' ')[0]));
-  return '<li class="ini-task'+(t.hecha?' done':'')+'">'
+  var est = iniVenceEstado(t);
+  var txt = t.vence
+    ? (est==='vencida' ? 'venció '+iniVenceLabel(t.vence) : (est==='hoy' ? 'vence hoy' : 'vence '+iniVenceLabel(t.vence)))
+    : 'fecha';
+  var cal = '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  // Chip de vencimiento: un <input type="date"> transparente encima abre el calendario
+  // nativo al tocarlo y guarda al cambiar. En las hechas se muestra fijo, sin editar.
+  var due = t.hecha
+    ? (t.vence ? '<span class="ini-due set done">'+cal+'<span>'+esc(iniVenceLabel(t.vence))+'</span></span>' : '')
+    : '<label class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span>'
+      + '<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>';
+  return '<li class="ini-task'+(t.hecha?' done':'')+(est==='vencida'?' venc':'')+'">'
     + '<button class="ini-ck" onclick="iniToggleTarea(\''+esc(t.id)+'\')" title="'+(t.hecha?'Reabrir':'Marcar hecha')+'"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
     + '<div class="ini-tbody"><div class="ini-ttitle">'+esc(t.titulo)+'</div>'
-    + '<div class="ini-tmeta">'+chip+'<span>'+meta+'</span>'
+    + '<div class="ini-tmeta">'+chip+due+'<span>'+meta+'</span>'
     + (t.hecha?'<button class="ini-link" onclick="iniToggleTarea(\''+esc(t.id)+'\')">reabrir</button>':'')
     + '</div></div>'
     + '<button class="ini-del" onclick="iniBorrarTarea(\''+esc(t.id)+'\')" title="Borrar">🗑</button></li>';
@@ -1002,9 +1034,17 @@ function iniTareaHTML(t){
 async function iniAgregarTarea(){
   var inp = document.getElementById('iniTask'); if(!inp) return;
   var v = inp.value.trim(); if(!v) return;
-  var res = await api('/api/inicio/tareas', { titulo:v, para: INICIO.assign||'' });
+  var vi = document.getElementById('iniTaskVence');
+  var res = await api('/api/inicio/tareas', { titulo:v, para: INICIO.assign||'', vence: (vi&&vi.value)||'' });
   if (!res.ok){ alert(res.data.error || 'No se pudo agregar la tarea.'); return; }
-  inp.value=''; INICIO.tareas.unshift(res.data.tarea); iniRenderTareas();
+  inp.value=''; if(vi) vi.value=''; INICIO.tareas.unshift(res.data.tarea); iniRenderTareas();
+}
+async function iniSetVence(id, val){
+  var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/vence', { vence: val||'' });
+  if (!res.ok){ alert(res.data.error || 'No se pudo guardar la fecha.'); return; }
+  var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
+  if(t) t.vence = res.data.tarea.vence;
+  iniRenderTareas();
 }
 async function iniToggleTarea(id){
   var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/toggle', {});

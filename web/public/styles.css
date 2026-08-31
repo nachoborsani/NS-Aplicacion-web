@@ -317,6 +317,22 @@
   .ini-task.done .ini-ttitle{text-decoration:line-through;color:var(--text-2);font-weight:500}
   .ini-tmeta{font-size:11px;color:var(--text-2);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .ini-chip{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:999px;background:var(--celeste);color:var(--turq-d)}
+  /* Fecha de vencimiento: input en la barra de alta + chip por tarea (con calendario
+     nativo por encima) + alerta cuando está vencida. */
+  .ini-vence-in{border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;padding:5px 8px;outline:none;color-scheme:light dark}
+  .ini-vence-in:focus{border-color:var(--turq)}
+  .ini-due{position:relative;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;padding:2px 8px 2px 7px;border-radius:999px;cursor:pointer;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);color-scheme:light dark}
+  .ini-due svg{width:11px;height:11px;flex:0 0 auto}
+  .ini-due input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;cursor:pointer}
+  .ini-due.none{opacity:.75}
+  .ini-due.futuro{background:var(--celeste);color:var(--turq-d);border-color:transparent}
+  .ini-due.hoy{background:var(--warning-bg);color:var(--warning);border-color:transparent}
+  .ini-due.vencida{background:var(--error-bg);color:var(--error);border-color:transparent}
+  .ini-due.done{cursor:default;opacity:.75}
+  .ini-task.venc{background:var(--error-bg)}
+  .ini-task.venc:hover{background:var(--error-bg)}
+  .ini-task.venc .ini-ttitle{color:var(--error)}
+  .ini-venc-cnt{color:var(--error)}
   .ini-link{border:0;background:transparent;color:var(--turq-d);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:0}
   .ini-link:hover{text-decoration:underline}
   .ini-del{border:0;background:transparent;color:var(--text-2);cursor:pointer;font-size:14px;opacity:0;transition:opacity .12s;flex:0 0 auto;padding:2px;line-height:1}
