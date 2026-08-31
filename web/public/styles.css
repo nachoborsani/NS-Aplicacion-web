@@ -358,12 +358,16 @@
   }
   @media(max-width:860px){
     .tiles{grid-template-columns:repeat(2,1fr)}
-    /* En celular el logo ocupaba media pantalla del cajón: se achica. */
-    .logo-side{width:96px}
-    .sidebar .brand{padding:4px 6px 10px;margin-bottom:8px}
-    .sidebar{transform:translateX(-100%);box-shadow:10px 0 40px rgba(0,0,0,.3)}
+    /* Cajón en celular: más angosto, con el logo chico y a la izquierda, para que
+       no quede tan desproporcionado. */
+    .sidebar{width:200px;transform:translateX(-100%);box-shadow:10px 0 40px rgba(0,0,0,.3);overscroll-behavior:contain}
+    .sidebar .brand{padding:6px 8px 10px;margin-bottom:8px;text-align:left}
+    .logo-side{width:74px;margin:2px auto 6px 2px}
     body.nav-open .sidebar{transform:none}
     body.nav-open .nav-scrim{opacity:1;pointer-events:auto}
+    /* Con el cajón abierto el fondo NO scrollea: evita que la barra "salte" al tirar
+       para abajo (el toolbar del navegador cambiaba el alto y la barra fija saltaba). */
+    body.nav-open{overflow:hidden}
     .main{margin-left:0}
     .hamb{display:grid;place-items:center}
     .em-hide{display:none}
@@ -375,7 +379,7 @@
     .top-client-meta h2{font-size:15.5px}
     /* En mobile manda el drawer (hamburguesa), no el modo colapsado */
     .side-collapse{display:none}
-    body.sidebar-collapsed .sidebar{width:var(--sidebar-w)}
+    body.sidebar-collapsed .sidebar{width:200px}
     body.sidebar-collapsed .main{margin-left:0}
   }
   /* En celular: más ancho útil (menos padding) y botones de fila más cómodos al toque. */
