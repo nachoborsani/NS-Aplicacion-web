@@ -70,6 +70,12 @@ function esConsulta(practica) { return CODIGO_CONSULTA.test(String(practica || "
 // mayúsculas sin acentos, así que las patterns van en mayúscula.
 const _EQUIV_PRACTICA = {
   ELECTROCARDIOGRAMA: [/ELECTROCARDIOGRAMA/, /CARDIOLOG/, /\b570129\b/, /\b820113\b/],
+  // El ecodoppler arterial/venoso de miembros PAMI lo factura como "ecodoppler
+  // vascular periférico" (180202). Solo se usa si no hubo match directo por texto.
+  "ARTERIAL DE MIEMBROS INFERIORES": [/VASCULAR\s+PERIFERIC/],
+  "ARTERIAL DE MIEMBROS SUPERIORES": [/VASCULAR\s+PERIFERIC/],
+  "VENOSO DE MIEMBROS INFERIORES": [/VASCULAR\s+PERIFERIC/],
+  "VENOSO DE MIEMBROS SUPERIORES": [/VASCULAR\s+PERIFERIC/],
 };
 
 // Resuelve el beneficio de un informe: el que trae, o el del padrón por DNI.
