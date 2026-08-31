@@ -66,6 +66,27 @@ const _PRACTICA_MAP = [
 function practicasDe(fuente) {
   const out = [];
   for (const [re, kw] of _PRACTICA_MAP) if (re.test(fuente) && !out.includes(kw)) out.push(kw);
+  // Ecodoppler arterial/venoso de miembros: la región (superiores/inferiores) y los
+  // dos lados pueden venir en la MISMA frase ("ecodoppler arterial y venoso de MMSS"),
+  // así que el regex fijo del mapa no los agarra a los dos ni distingue la región. Se
+  // detectan por separado: la región por MMSS/MMII (o "miembros superiores/inferiores")
+  // y cada lado por su palabra. Así un informe de MMSS que cubre los dos deja tildadas
+  // las dos OMEs correctas.
+  const f = String(fuente || "");
+  const region = /\bMMSS\b|MIEMBROS?\s+SUPERIORES/i.test(f) ? "SUPERIORES"
+              : (/\bMMII\b|MIEMBROS?\s+INFERIORES/i.test(f) ? "INFERIORES" : "");
+  if (region && /DOPPLER/i.test(f)) {
+    const add = (k) => { if (!out.includes(k)) out.push(k); };
+    if (/\bARTERIAL\b/i.test(f)) add("ARTERIAL DE MIEMBROS " + region);
+    if (/\bVENOSO\b/i.test(f)) add("VENOSO DE MIEMBROS " + region);
+    // Si la región es SUPERIORES, sacar los hints de INFERIORES que puso el mapa por
+    // defecto (ECODOPPLER ARTERIAL/VENOSO → inferiores), para no errar la región.
+    if (region === "SUPERIORES") {
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i] === "ARTERIAL DE MIEMBROS INFERIORES" || out[i] === "VENOSO DE MIEMBROS INFERIORES") out.splice(i, 1);
+      }
+    }
+  }
   return out;
 }
 function practicaDe(fuente) {

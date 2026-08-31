@@ -15,13 +15,38 @@ function norm(v) {
 }
 function tokens(v) { return norm(v).split(" ").filter((t) => t.length >= 2); }
 
+// ¿Dos tokens están a lo sumo a UN error de tipeo (una sustitución, inserción o
+// borrado)? Sirve para typos de una letra en apellidos: CECHINI ≈ CECCHINI,
+// GONZALES ≈ GONZALEZ. Solo se usa en tokens de 5+ letras (los cortos, como nombres
+// de pila, se exigen exactos para no confundir ANA/ANO).
+function _unError(a, b) {
+  if (a === b) return true;
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  if (la === lb) { let d = 0; for (let i = 0; i < la; i++) if (a[i] !== b[i] && ++d > 1) return false; return true; }
+  const s = la < lb ? a : b, l = la < lb ? b : a;   // s = el más corto
+  let i = 0, j = 0, saltos = 0;
+  while (i < s.length && j < l.length) {
+    if (s[i] === l[j]) { i++; j++; }
+    else if (++saltos > 1) return false;
+    else j++;
+  }
+  return true;
+}
+function _tokenPega(t, tb) {
+  if (tb.has(t)) return true;
+  if (t.length < 5) return false;
+  for (const x of tb) if (x.length >= 5 && _unError(t, x)) return true;
+  return false;
+}
 // Similitud de nombres por tokens: cuántos tokens del informe están en el de la
-// bandeja (el informe suele ser prefijo del nombre completo). 0..1.
+// bandeja (el informe suele ser prefijo del nombre completo). 0..1. Un token pega
+// si coincide exacto o a un error de tipeo (apellidos con una letra de más/menos).
 function scoreNombre(a, b) {
   const ta = tokens(a), tb = new Set(tokens(b));
   if (!ta.length || !tb.size) return 0;
   let hit = 0;
-  for (const t of ta) if (tb.has(t)) hit += 1;
+  for (const t of ta) if (_tokenPega(t, tb)) hit += 1;
   return hit / ta.length;
 }
 
