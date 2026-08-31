@@ -237,6 +237,10 @@ function matchInforme(informe, bandeja, padronCliente) {
       return true;
     });
     if (delPaciente.length) {
+      // Si TODAS las prácticas del paciente en el período ya están transmitidas,
+      // no hay nada para subir sea cual sea la que corresponde: aunque no se pueda
+      // elegir cuál (o sean prácticas distintas), el resultado es "ya transmitido".
+      const todosTransmitidos = delPaciente.every((p) => p.transmitida);
       // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
       const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
       if (hints.length > 1) {
@@ -250,7 +254,7 @@ function matchInforme(informe, bandeja, padronCliente) {
           // OME) baja la confianza a media, pero igual resuelve.
           const completo = !ambiguo;
           return {
-            estado: completo ? (pendientes.length ? "ok" : "ya_transmitido") : "revisar_practica",
+            estado: completo ? (pendientes.length ? "ok" : "ya_transmitido") : (todosTransmitidos ? "ya_transmitido" : "revisar_practica"),
             ome: completo ? (principal.nOrden || "") : "",
             omes: varias.map((p) => p.nOrden).filter(Boolean),
             prestacion: completo ? principal : null,
@@ -272,7 +276,14 @@ function matchInforme(informe, bandeja, padronCliente) {
           candidatos: delPaciente,
         };
       }
-      // paciente clavado pero con varias prácticas posibles -> revisar cuál
+      // paciente clavado pero con varias prácticas posibles -> revisar cuál,
+      // salvo que TODAS ya estén transmitidas (no hay nada para subir).
+      if (todosTransmitidos) {
+        return { estado: "ya_transmitido", ome: "", prestacion: null,
+          via: "beneficio_" + via, confianza: "media",
+          omes: delPaciente.map((p) => p.nOrden).filter(Boolean),
+          candidatos: delPaciente };
+      }
       return { estado: "revisar_practica", ome: "", prestacion: null,
         via: "beneficio_" + via,
         confianza: "media", candidatos: delPaciente };
