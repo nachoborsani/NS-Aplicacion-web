@@ -63,8 +63,17 @@ function expandSidebar(){
 var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Padrón de afiliados', cabina:'Informes recibidos', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
+// ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
+// muestra la hamburguesa, así no depende del ancho exacto ni del viewport.
+function esMenuMovil(){
+  var h = document.querySelector('.hamb');
+  return !!(h && getComputedStyle(h).display !== 'none');
+}
 function togglePagosGroup(el){
   var group = document.getElementById('navGroupPagos');
+  // En celular el padre SOLO despliega (como los grupos de clientes); el usuario
+  // elige después Resumen o Facturas. En escritorio mantiene el atajo a Facturas.
+  if (esMenuMovil()){ if (group) group.classList.toggle('open'); return; }
   var enFacturas = document.getElementById('view-facturas').style.display !== 'none';
   var colapsado = document.body.classList.contains('sidebar-collapsed');
   if (!enFacturas || colapsado){ go('facturas', el); return; }
