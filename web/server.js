@@ -473,6 +473,7 @@ function resueltoTodoTransmitido(it) {
   return omes.every((o) => trans.has(o));
 }
 function estadoInforme(it) {
+  if (it && it.desestimado) return "desestimado";   // el operador lo dio por cerrado sin subir
   if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "resuelto";
   return (it && it.match && it.match.estado) || "sin_match";
 }
@@ -485,9 +486,11 @@ function informesExportRows(items) {
     const ome = (it.resuelto && it.resuelto.omes ? it.resuelto.omes.join(", ") : (it.resuelto && it.resuelto.ome)) || m.ome || pr.ome || "";
     const practica = pr.practica || ex.practica || "";
     const beneficio = ex.beneficio || (it.resuelto && it.resuelto.beneficio) || pr.beneficio || "";
-    const estado = it.resuelto
-      ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Resuelto a mano")
-      : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
+    const estado = it.desestimado
+      ? "Desestimado"
+      : it.resuelto
+        ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Resuelto a mano")
+        : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
     return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
              beneficio, practica, estado, ome };
   });
@@ -6585,6 +6588,31 @@ const server = http.createServer(async (req, res) => {
     it.match = matchearInforme(slug, it.extract);
     saveInformes(store);
     return json(res, 200, { item: it, padronActualizado, dni });
+  }
+
+  // Desestimar / reactivar un informe: el operador lo revisó y lo da por cerrado SIN
+  // subir (el estudio no se hizo, no corresponde, etc.). Sale de los estados accionables
+  // y de "Subir a PAMI". Reversible (desestimar:false lo reactiva).
+  const informeDesest = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/desestimar$/);
+  if (informeDesest && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeDesest;
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const store = loadInformes();
+    const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const activar = body.desestimar === false;
+    if (activar) {
+      delete it.desestimado;
+    } else {
+      it.desestimado = { por: me.username || me.name || "", at: new Date().toISOString(),
+        motivo: String(body.motivo || "").slice(0, 200) };
+    }
+    saveInformes(store);
+    return json(res, 200, { item: it });
   }
 
   // Borrar un informe (y su archivo).

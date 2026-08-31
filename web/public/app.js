@@ -5970,6 +5970,7 @@ function cabResueltoTodoTransmitido(it){
   return omes.every(function(o){ return trans[o]; });
 }
 function cabEstadoDe(it){
+  if (it.desestimado) return 'desestimado';
   if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'resuelto';
   return it.match ? it.match.estado : 'sin_match';
 }
@@ -6020,11 +6021,12 @@ var CAB_ESTADOS = {
   ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
   factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
-  revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'}
+  revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'},
+  desestimado:{t:'Desestimado',c:'muted'}
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','resuelto','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','sin_match'];
+  var orden = ['ok','resuelto','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','desestimado','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = CAB_ESTADO_FILTRO === k;
@@ -6037,6 +6039,7 @@ function renderCabinaResumen(resumen, total){
 function cabBadge(it){
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
   var e = cabEstadoDe(it);
+  if (e === 'desestimado') return '<span class="cab-badge muted" title="Desestimado por el operador: no se sube">Desestimado</span>';
   if (it.resuelto) {
     var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
     if (e === 'ya_transmitido') return '<span class="cab-badge muted" title="Resuelto a mano; '+(no>1?'sus '+no+' OMEs ya están':'su OME ya está')+' transmitido(s) en PAMI, no hay nada para subir">Ya transmitido</span>';
@@ -6062,6 +6065,7 @@ function renderCabinaRows(slug, items){
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
         + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
+        + '<button class="rowbtn" title="'+(it.desestimado?'Reactivar':'Desestimar (no subir)')+'" onclick="toggleDesestimar(\''+esc(it.id)+'\','+(it.desestimado?'true':'false')+')">'+(it.desestimado?'↩️':'🚫')+'</button>'
         + '<button class="rowbtn danger" title="Borrar" onclick="borrarInforme(\''+esc(it.id)+'\')">'+ (typeof SVG_TRASH!=='undefined'?SVG_TRASH:'🗑') +'</button>'
       + '</td></tr>';
   }).join('');
@@ -6232,6 +6236,16 @@ async function borrarInforme(id){
   var slug = document.getElementById('cabCliente').value;
   var r = await fetch('/api/clientes/'+slug+'/informes/'+id, { method:'DELETE' });
   if (r.ok) await refreshCabina();
+}
+// Desestimar (dar por cerrado sin subir) / reactivar. `esta`=true si ya está desestimado.
+async function toggleDesestimar(id, esta){
+  if (!esta && !confirm('¿Desestimar este informe?\n\nEl operador lo da por cerrado y NO se sube (el estudio no se hizo, no corresponde, etc.). Sale de la lista de revisar. Se puede reactivar después.')) return;
+  var slug = document.getElementById('cabCliente').value;
+  var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/desestimar', { desestimar: !esta });
+  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
+  var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
+  if (it){ if (res.data.item && res.data.item.desestimado) it.desestimado = res.data.item.desestimado; else delete it.desestimado; }
+  aplicarFiltroCabina();
 }
 
 var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
