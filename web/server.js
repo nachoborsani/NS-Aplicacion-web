@@ -432,12 +432,32 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
            storedAt: new Date().toISOString(), fecha: fecha || "", extract, match, resuelto: null, error };
 }
+// Conjunto de N° de OME TRANSMITIDAS de un cliente (bandeja del mes + reporte del mes
+// anterior, igual que el matcher). Sirve para saber, con la bandeja COMPLETA, si las
+// OMEs a las que se resolvió un informe ya están transmitidas.
+function omesTransmitidasDeCliente(slug) {
+  const bandeja = loadClientBandejas()[slug];
+  let rows = cabinaLib.bandejaParaMatcher(bandeja);
+  const prevPeriodo = mesAnteriorYM(bandeja && bandeja.month);
+  if (prevPeriodo) {
+    const rep = (loadClientReportsStore().items || []).find(
+      (r) => r.clientSlug === slug && String(r.nomencladorPeriod) === prevPeriodo);
+    if (rep && Array.isArray(rep.rows)) rows = rows.concat(cabinaLib.reporteParaMatcher(rep.rows));
+  }
+  const set = new Set();
+  for (const r of rows) {
+    if (r && r.transmitida) { const o = cabinaLib.digs(r.nOrden); if (o) set.add(o); }
+  }
+  return set;
+}
 // ¿El informe fue resuelto a mano y TODAS sus OMEs ya están transmitidas en PAMI?
 // (mismo criterio que el match automático de una práctica: transmitida => nada que
-// subir). Si alguna OME resuelta no figura entre los candidatos de la bandeja, no
-// se puede confirmar y NO se da por transmitida.
+// subir). Se prioriza el flag que guarda el endpoint de resolver (calculado con la
+// bandeja completa); el fallback mira los candidatos del match — que vienen recortados
+// a 8, así que puede quedarse corto en informes con muchos turnos.
 function resueltoTodoTransmitido(it) {
   if (!it || !it.resuelto) return false;
+  if (typeof it.resuelto.todoTransmitido === "boolean") return it.resuelto.todoTransmitido;
   const omes = (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))
     .map((o) => String(o).replace(/\D+/g, "")).filter(Boolean);
   if (!omes.length) return false;
@@ -6363,7 +6383,12 @@ const server = http.createServer(async (req, res) => {
     omes = [...new Set(omes)]; // sin repetidos, respetando el orden en que se tildaron
     if (!omes.length) return json(res, 400, { error: "Indicá el número de OME." });
     const benef = cabinaLib.digs(body.beneficio) || "";
-    it.resuelto = { ome: omes[0], omes, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString() };
+    // ¿Todas las OMEs elegidas ya están transmitidas? Se calcula acá con la bandeja
+    // COMPLETA (no los 8 candidatos que ve la pantalla) y se guarda, así el estado
+    // "ya transmitido" es confiable aunque el paciente tenga muchos turnos.
+    const transSet = omesTransmitidasDeCliente(slug);
+    const todoTransmitido = omes.length > 0 && omes.every((o) => transSet.has(o));
+    it.resuelto = { ome: omes[0], omes, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido };
     // Al resolver con "Usar", aprendemos el DNI↔beneficio en el padrón: la próxima
     // vez ese paciente matchea solo (sin volver a resolver a mano).
     const dniR = cabinaLib.digs(it.extract && it.extract.dni);

@@ -5785,6 +5785,10 @@ function cabResueltoOmes(it){
 // transmitida no hay nada que subir. Si alguna OME resuelta no aparece entre los
 // candidatos de la bandeja (no se puede confirmar), NO se da por transmitida.
 function cabResueltoTodoTransmitido(it){
+  // El server guarda el flag calculado con la bandeja COMPLETA al resolver: es el
+  // confiable. El fallback (candidatos del match) viene recortado a 8, así que puede
+  // quedarse corto en informes con muchos turnos.
+  if (it.resuelto && typeof it.resuelto.todoTransmitido === 'boolean') return it.resuelto.todoTransmitido;
   var omes = cabResueltoOmes(it);
   if (!omes.length) return false;
   var trans = {};
