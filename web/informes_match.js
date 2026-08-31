@@ -47,7 +47,17 @@ function scoreNombre(a, b) {
   if (!ta.length || !tb.size) return 0;
   let hit = 0;
   for (const t of ta) if (_tokenPega(t, tb)) hit += 1;
-  return hit / ta.length;
+  let sc = hit / ta.length;
+  // Nombre PEGADO sin espacios ("FERNANDEZCLEIA" por OCR) contra el padrón con
+  // espacios: si la concatenación de uno es prefijo de la del otro, es la misma
+  // persona (el informe suele ser prefijo del nombre completo). Se exige 8+ letras
+  // para no pegar apellidos sueltos por casualidad; la unicidad la garantiza quien
+  // llama (resolverPorNombre exige un único afiliado, sin empate).
+  if (sc < 1) {
+    const ca = ta.join(""), cb = tokens(b).join("");
+    if (ca.length >= 8 && cb.length >= 8 && (cb.startsWith(ca) || ca.startsWith(cb))) sc = 1;
+  }
+  return sc;
 }
 
 const CODIGO_CONSULTA = /(^|\D)(8201\d\d|4201\d\d|consulta)/i;
@@ -77,7 +87,10 @@ function resolverBeneficio(informe, padronCliente) {
 // por nombre para recuperar el beneficio. Exige que TODOS los tokens del informe
 // estén en un ÚNICO afiliado (sin empate) — si hay dos candidatos, no adivina.
 function resolverPorNombre(nombre, padronCliente) {
-  if (tokens(nombre).length < 2) return null;   // muy poco para desambiguar
+  // Muy poco para desambiguar: menos de 2 tokens. Excepción: un nombre PEGADO por OCR
+  // ("FERNANDEZCLEIA") es un solo token pero trae apellido+nombre; si es largo (10+
+  // letras) se deja pasar y lo resuelve el match sin espacios (con la unicidad de abajo).
+  if (tokens(nombre).length < 2 && norm(nombre).replace(/ /g, "").length < 10) return null;
   let mejor = null, mejorScore = 0, empate = false;
   for (const it of Object.values(padronCliente || {})) {
     const tp = tokens(it.nombre);

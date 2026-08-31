@@ -50,6 +50,9 @@ const _PRACTICA_MAP = [
   [/ECO\s*VC\b|VASOS\s+DEL?\s+CUELLO/i, "VASOS DEL CUELLO"],
   [/\bESPIRO\w*|SPIROMETR/i, "ESPIROMETRIA"],
   [/\bECG\b|ELECTROCARDIOGRAMA|ELECTRO\s*CARDIO/i, "ELECTROCARDIOGRAMA"],
+  // "Ecografía de TIROIDES" (informe) → "ECOGRAFIA TIROIDEA" (bandeja). El hint parcial
+  // "TIROID" cae adentro de las dos formas (tiroides/tiroidea).
+  [/TIROIDE[AS]?\b/i, "TIROID"],
   [/VENOSO\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+VENOSO/i, "VENOSO DE MIEMBROS INFERIORES"],
   [/ARTERIAL\s+DE\s+(MIEMBROS|MMII)|ECODOPPLER\s+ARTERIAL/i, "ARTERIAL DE MIEMBROS INFERIORES"],
   // Otorrino: un mismo informe suele traer las dos juntas ("OTOMICROSCOPIA +
