@@ -86,15 +86,19 @@ function resolverBeneficio(informe, padronCliente) {
 // Cuando el informe SOLO trae nombre (MAPA, escaneados): lo cruza contra el padrón
 // por nombre para recuperar el beneficio. Exige que TODOS los tokens del informe
 // estén en un ÚNICO afiliado (sin empate) — si hay dos candidatos, no adivina.
-function resolverPorNombre(nombre, padronCliente) {
+function resolverPorNombre(nombre, padronCliente, dniInforme) {
   // Muy poco para desambiguar: menos de 2 tokens. Excepción: un nombre PEGADO por OCR
   // ("FERNANDEZCLEIA") es un solo token pero trae apellido+nombre; si es largo (10+
   // letras) se deja pasar y lo resuelve el match sin espacios (con la unicidad de abajo).
   if (tokens(nombre).length < 2 && norm(nombre).replace(/ /g, "").length < 10) return null;
+  // Si el informe trae DNI, NO cruzar por nombre a un afiliado con OTRO DNI: sería un
+  // homónimo (persona distinta), y pegar el informe a su OME es un error grave.
+  const dniInf = soloDigitos(dniInforme);
   let mejor = null, mejorScore = 0, empate = false;
   for (const it of Object.values(padronCliente || {})) {
     const tp = tokens(it.nombre);
     if (!it || !it.beneficio || tp.length < 2) continue;
+    if (dniInf && it.dni && soloDigitos(it.dni) !== dniInf) continue;   // homónimo con otro DNI
     // Dirección segura: todos los tokens del INFORME están en el padrón (el informe
     // suele ser prefijo del nombre completo — "GOTTIG ERMINIA" ⊆ "GOTTIG ERMINIA
     // CELESTINA"). Dirección con ruido: todos los del PADRÓN en el informe (el
@@ -175,7 +179,7 @@ function matchInforme(informe, bandeja, padronCliente) {
   let { beneficio, via } = resolverBeneficio(informe, padronCliente || {});
   // Si no hay beneficio por informe ni por DNI, probar por NOMBRE contra el padrón.
   if (!beneficio && informe.nombre) {
-    const porNom = resolverPorNombre(informe.nombre, padronCliente || {});
+    const porNom = resolverPorNombre(informe.nombre, padronCliente || {}, informe.dni);
     if (porNom) { beneficio = porNom.beneficio; via = porNom.via; }
   }
 
