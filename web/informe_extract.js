@@ -48,7 +48,7 @@ const _PRACTICA_MAP = [
   [/\bMAPA\b|PRESUROMETR|MONITOREO\s+AMBULATORIO\s+DE\s+PRESION|PRESION\s+ARTERIAL\s+24/i, "PRESUROMETRIA"],
   [/\bHOLTER\b/i, "HOLTER"],
   [/ECO\s*VC\b|VASOS\s+DEL?\s+CUELLO/i, "VASOS DEL CUELLO"],
-  [/\bESPIRO\w*|SPIROMETR/i, "ESPIROMETRIA"],
+  [/\bESPIRO\w*|SPIROMETR|FUNCION\s+PULMONAR/i, "ESPIROMETRIA"],
   [/\bECG\b|ELECTROCARDIOGRAMA|ELECTRO\s*CARDIO/i, "ELECTROCARDIOGRAMA"],
   // "Ecografía de TIROIDES" (informe) → "ECOGRAFIA TIROIDEA" (bandeja). El hint parcial
   // "TIROID" cae adentro de las dos formas (tiroides/tiroidea).

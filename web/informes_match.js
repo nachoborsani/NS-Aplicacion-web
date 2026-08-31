@@ -131,6 +131,12 @@ function elegirPractica(prestaciones, practicaHint) {
     const porCodigo = prestaciones.filter((p) => soloDigitos(practicaHint) && String(p.practica || "").includes(soloDigitos(practicaHint)));
     if (porCodigo.length === 1) return { elegida: porCodigo[0], ambiguo: false };
     const porTexto = prestaciones.filter((p) => hint && norm(p.practica).includes(hint));
+    // Preferir el ESTUDIO por sobre la consulta cuando el texto matchea a los dos
+    // (ej. "ecografía ginecológica" matchea el estudio 180128 y también la consulta de
+    // ginecología 820145 → va el estudio). Los ECG a la consulta cardio van por
+    // EQUIVALENCIA (abajo), no por este camino.
+    const estudiosTexto = porTexto.filter((p) => !esConsulta(p.practica));
+    if (estudiosTexto.length === 1) return { elegida: estudiosTexto[0], ambiguo: false };
     if (porTexto.length === 1) return { elegida: porTexto[0], ambiguo: false };
     // Equivalencias (ej. ECG → consulta cardio): solo si no hubo match directo.
     const equivs = _EQUIV_PRACTICA[hint];
@@ -144,7 +150,7 @@ function elegirPractica(prestaciones, practicaHint) {
     // fechas distintas, las dos transmitidas), no hay nada para subir → se resuelve al
     // primero y queda "ya transmitido". No aplica si alguno no está transmitido: ahí sí
     // importa a cuál se sube.
-    const grupo = porTexto.length > 1 ? porTexto : porEquiv;
+    const grupo = estudiosTexto.length > 1 ? estudiosTexto : (porTexto.length > 1 ? porTexto : porEquiv);
     if (grupo.length > 1) {
       const mismas = new Set(grupo.map((p) => norm(p.practica)));
       if (mismas.size === 1 && grupo.every((p) => p.transmitida)) return { elegida: grupo[0], ambiguo: false };
