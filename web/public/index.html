@@ -236,9 +236,12 @@
                   <span class="mescurso-title">Resumen de cuenta — NS</span>
                   <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
                 </div>
-                <div class="mescurso-val-lbl">En bolsillo</div>
+                <div class="mescurso-val-lbl">Falta cobrar</div>
                 <div class="mescurso-val" id="resBolsillo">—</div>
-                <div class="mescurso-val-note">Ingresos <b id="resIngreso">—</b> − Gastos <b id="resGastos">—</b></div>
+                <div class="res-ganancia" id="resGananciaBox">
+                  <div class="rg-top"><span class="rg-lbl">Ganancia real del mes</span><b class="rg-val" id="resGanancia">—</b></div>
+                  <div class="rg-sub">cobrado <b id="resCobrado">—</b> · gastos <b id="resGastos">—</b> · facturado <b id="resIngreso">—</b></div>
+                </div>
                 <div class="res-socios-row">
                   <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
                   <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
@@ -258,7 +261,7 @@
                   <button class="btn btn-primary btn-sm" type="button" onclick="openIngresoModal()">+ Ingreso</button>
                 </div>
               </div>
-              <div class="nom-muted" style="margin:2px 0 8px">Plata que entra por fuera de las comisiones PAMI. Suma a “En bolsillo”. Elegís en cuántas partes se divide: NS se queda con 2 (Nacho + Seba); si va en 3, el otro tercio no cuenta.</div>
+              <div class="nom-muted" style="margin:2px 0 8px">Plata que entra por fuera de las comisiones PAMI. Suma a la ganancia real del mes. Elegís en cuántas partes se divide: NS se queda con 2 (Nacho + Seba); si va en 3, el otro tercio no cuenta.</div>
               <div class="nom-muted" id="ingresosDolar" style="margin:2px 0 8px"></div>
               <div class="msg err" id="ingresosError" style="display:none"></div>
               <div class="table-scroll">

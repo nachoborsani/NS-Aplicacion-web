@@ -2466,13 +2466,23 @@ async function loadResultado(){
   var res = await api('/api/resultado' + (mes ? '?mes=' + encodeURIComponent(mes) : ''));
   if (!res.ok || !res.data) return;
   var d = res.data;
+  // Falta cobrar (arriba, grande) = comisiones de facturas todavía sin cobrar.
+  // Ganancia real del mes (abajo) = lo efectivamente cobrado + ingresos extra − gastos.
+  var faltaCobrar = 0, cobrado = 0;
+  (d.detalle || []).forEach(function(x){ if (x.cobrado) cobrado += (x.monto || 0); else faltaCobrar += (x.monto || 0); });
+  cobrado += (d.ingresoExtra || 0);
+  var ganancia = cobrado - (d.gastos || 0);
   var bols = document.getElementById('resBolsillo');
-  bols.textContent = moneyFmt(d.bolsilloNS);
-  bols.classList.toggle('neg', d.bolsilloNS < 0);
-  document.getElementById('resIngreso').textContent = moneyFmt(d.ingresoNS);
+  bols.textContent = moneyFmt(faltaCobrar);
+  bols.classList.toggle('neg', faltaCobrar < 0);
+  var gan = document.getElementById('resGanancia');
+  gan.textContent = moneyFmt(ganancia);
+  gan.classList.toggle('neg', ganancia < 0);
+  document.getElementById('resCobrado').textContent = moneyFmt(cobrado);
   document.getElementById('resGastos').textContent = moneyFmt(d.gastos);
-  document.getElementById('resNacho').textContent = moneyFmt(d.bolsilloNacho);
-  document.getElementById('resSeba').textContent = moneyFmt(d.bolsilloSeba);
+  document.getElementById('resIngreso').textContent = moneyFmt(d.ingresoNS);
+  document.getElementById('resNacho').textContent = moneyFmt(ganancia / 2);
+  document.getElementById('resSeba').textContent = moneyFmt(ganancia / 2);
   // Desglose: cada factura con su comisión NS + check de cobrado (vencido si la
   // fecha de cobro ya pasó y no está marcada).
   var box = document.getElementById('resDesglose');
