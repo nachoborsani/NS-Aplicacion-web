@@ -78,6 +78,32 @@ const _EQUIV_PRACTICA = {
   "VENOSO DE MIEMBROS SUPERIORES": [/VASCULAR\s+PERIFERIC/],
 };
 
+// ¿La práctica de un turno candidato es compatible con la del informe? Se usa para
+// no ofrecer en la cabina turnos que no tienen nada que ver: si el informe es un
+// electro, es al pedo mostrar una consulta de ginecología. Sin pista de práctica en
+// el informe, todo es compatible (no hay con qué filtrar).
+function practicaCompatible(hint, practicaCand) {
+  const h = norm(hint);
+  if (!h) return true;
+  const c = norm(practicaCand);
+  if (!c) return true;
+  if (c.includes(h) || h.includes(c)) return true;
+  const cod = soloDigitos(hint);
+  if (cod && String(practicaCand || "").includes(cod)) return true;
+  const equivs = _EQUIV_PRACTICA[h];
+  if (equivs && equivs.some((re) => re.test(c))) return true;
+  return false;
+}
+// Ordena los candidatos poniendo primero los de práctica compatible con el informe;
+// si hay AL MENOS uno compatible, descarta los claramente incompatibles. Si ninguno
+// es compatible (o no hay pista), deja la lista como estaba: ante duda del paciente,
+// mejor mostrar de más que esconder al bueno.
+function filtrarCandidatosPorPractica(cands, hint) {
+  if (!norm(hint) || !Array.isArray(cands) || cands.length <= 1) return cands;
+  const compat = cands.filter((p) => practicaCompatible(hint, p.practica));
+  return compat.length ? compat : cands;
+}
+
 // Resuelve el beneficio de un informe: el que trae, o el del padrón por DNI.
 function resolverBeneficio(informe, padronCliente) {
   const b = soloDigitos(informe.beneficio);
@@ -286,7 +312,7 @@ function matchInforme(informe, bandeja, padronCliente) {
       }
       return { estado: "revisar_practica", ome: "", prestacion: null,
         via: "beneficio_" + via,
-        confianza: "media", candidatos: delPaciente };
+        confianza: "media", candidatos: filtrarCandidatosPorPractica(delPaciente, informe.practicaHint) };
     }
     // tiene beneficio pero no está en la bandeja de este período
     return { estado: "sin_ome", ome: "", prestacion: null, via: "beneficio", confianza: "media", candidatos: [] };
@@ -308,7 +334,7 @@ function matchInforme(informe, bandeja, padronCliente) {
       prestacion: elegida, via: "nombre", confianza: top >= 0.99 ? "media" : "baja", candidatos: mejores };
   }
   return { estado: "revisar_nombre", ome: "", prestacion: null, via: "nombre", confianza: "baja",
-    candidatos: mejores.slice(0, 8) };
+    candidatos: filtrarCandidatosPorPractica(mejores, informe.practicaHint).slice(0, 8) };
 }
 
 // Para los que NO matchean confiado: sugiere los afiliados del padrón con el
