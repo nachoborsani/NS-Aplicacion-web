@@ -97,7 +97,22 @@
   .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--navy);
     display:flex;flex-direction:column;padding:16px 12px;z-index:40;transition:transform .22s ease}
   .sidebar .brand{padding:6px 8px 16px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:12px}
-  .nav{display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto;overflow-x:hidden}
+  /* min-height:0 es necesario para que el nav realmente scrollee dentro de su
+     espacio flex en vez de crecer más allá de la pantalla (el default de un
+     flex item es min-height:auto = "al menos lo que ocupa el contenido", lo
+     que ignora el overflow-y de acá abajo). Sin esto, con todas las secciones
+     desplegadas (Consultorios + Med. Cabecera + Potenciales) el menú entero
+     terminaba más alto que el viewport y "Potenciales clientes" quedaba
+     inalcanzable debajo del pie de usuario, sobre todo en pantallas bajas
+     (1366x768). */
+  .nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+  /* Los hijos directos del nav (links, el grupo Administración, el label
+     "clientes" y el bloque con Consultorios/Med. Cabecera/Potenciales) no se
+     tienen que achicar: si no entran todos, que scrollee el .nav de arriba
+     (ya tiene overflow-y:auto), no que el navegador los comprima a la fuerza
+     hasta que "quepan" — eso era lo que dejaba "Potenciales clientes" y
+     "+ Nuevo cliente" recortados e inalcanzables al desplegar todo. */
+  .nav>*{flex-shrink:0}
   .nav .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f7893;padding:14px 12px 6px;font-weight:700}
   .nav a,.nav-parent{display:flex;align-items:center;gap:11px;width:100%;padding:6px 12px;border:0;border-radius:9px;background:transparent;color:#c4d2e2;font-size:13.5px;font-weight:500;text-align:left}
   .nav a svg,.nav-parent svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
