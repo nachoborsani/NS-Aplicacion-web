@@ -474,7 +474,9 @@ function resueltoTodoTransmitido(it) {
 }
 function estadoInforme(it) {
   if (it && it.desestimado) return "desestimado";   // el operador lo dio por cerrado sin subir
-  if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "resuelto";
+  // Resuelto a mano pero con OME sin transmitir = listo para subir (mismo grupo que
+  // el match automático). Solo se separa "ya transmitido", que no tiene nada que hacer.
+  if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "ok";
   return (it && it.match && it.match.estado) || "sin_match";
 }
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
@@ -489,7 +491,7 @@ function informesExportRows(items) {
     const estado = it.desestimado
       ? "Desestimado"
       : it.resuelto
-        ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Resuelto a mano")
+        ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Listo para subir")
         : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
     return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
              beneficio, practica, estado, ome };

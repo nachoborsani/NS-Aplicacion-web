@@ -5981,7 +5981,10 @@ function cabResueltoTodoTransmitido(it){
 }
 function cabEstadoDe(it){
   if (it.desestimado) return 'desestimado';
-  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'resuelto';
+  // Un resuelto a mano cuya OME todavía no está transmitida es, a los efectos de
+  // subir, lo mismo que un "listo para subir": va en el mismo grupo. Solo se separa
+  // cuando ya está todo transmitido (ahí no hay nada que hacer).
+  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'ok';
   return it.match ? it.match.estado : 'sin_match';
 }
 function cabResumenDe(items){
@@ -6028,7 +6031,7 @@ function toggleCabEstadoFiltro(k){
   aplicarFiltroCabina();
 }
 var CAB_ESTADOS = {
-  ok:{t:'Listo para subir',c:'ok'}, resuelto:{t:'Resuelto a mano',c:'ok'},
+  ok:{t:'Listo para subir',c:'ok'},
   factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
   revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'},
@@ -6036,7 +6039,7 @@ var CAB_ESTADOS = {
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','resuelto','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','desestimado','sin_match'];
+  var orden = ['ok','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','desestimado','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = CAB_ESTADO_FILTRO === k;
@@ -6053,7 +6056,7 @@ function cabBadge(it){
   if (it.resuelto) {
     var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
     if (e === 'ya_transmitido') return '<span class="cab-badge muted" title="Resuelto a mano; '+(no>1?'sus '+no+' OMEs ya están':'su OME ya está')+' transmitido(s) en PAMI, no hay nada para subir">Ya transmitido</span>';
-    return '<span class="cab-badge ok">Resuelto a mano'+(no>1?' · '+no+' OMEs':'')+'</span>';
+    return '<span class="cab-badge ok" title="Resuelto a mano, listo para subir">Listo para subir'+(no>1?' · '+no+' OMEs':'')+'</span>';
   }
   var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
   return '<span class="cab-badge '+m.c+'">'+esc(m.t)+'</span>';
