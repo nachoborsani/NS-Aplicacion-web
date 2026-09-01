@@ -113,6 +113,13 @@
      hasta que "quepan" — eso era lo que dejaba "Potenciales clientes" y
      "+ Nuevo cliente" recortados e inalcanzables al desplegar todo. */
   .nav>*{flex-shrink:0}
+  /* Barra de scroll del menú con los colores de la marca (navy + celeste/turquesa)
+     en vez de la gris del navegador, que quedaba pegada de otra web. */
+  .nav{scrollbar-width:thin;scrollbar-color:var(--turq) var(--navy)}
+  .nav::-webkit-scrollbar{width:8px}
+  .nav::-webkit-scrollbar-track{background:var(--navy)}
+  .nav::-webkit-scrollbar-thumb{background:var(--turq);border-radius:999px}
+  .nav::-webkit-scrollbar-thumb:hover{background:var(--turq-d)}
   .nav .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f7893;padding:14px 12px 6px;font-weight:700}
   .nav a,.nav-parent{display:flex;align-items:center;gap:11px;width:100%;padding:6px 12px;border:0;border-radius:9px;background:transparent;color:#c4d2e2;font-size:13.5px;font-weight:500;text-align:left}
   .nav a svg,.nav-parent svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
