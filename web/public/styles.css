@@ -463,12 +463,16 @@
   .month-field{display:grid;gap:5px;min-width:150px}
   .month-field span{font-size:11.5px;font-weight:700;color:var(--text-2)}
   .month-field .inp{height:42px}
-  .nom-status{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+  /* Cabecera de las pantallas de lista (Informes recibidos, Padrón, Nomencladores,
+     Reportes del cliente): tarjeta de estado + filtros. Achicado a propósito para
+     que quede más aire para la tabla en pantallas de 768px de alto — el padding
+     genérico de .card (16px) sobraba acá, así que se pisa puntual, sin tocar .card. */
+  .nom-status{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px;padding:12px 16px}
   .nom-status b,.nom-status span,#nomStatusText{display:block}
   #nomStatusText{min-width:0}
   .nom-status span,.nom-muted{color:var(--text-2);font-size:11.5px;line-height:1.3}
   .nom-cols{font-size:12px;color:var(--text-2);white-space:nowrap}
-  .nom-filters{display:grid;grid-template-columns:minmax(170px,1fr) 72px minmax(240px,2fr) minmax(160px,1fr) minmax(140px,.8fr) minmax(170px,1fr);gap:12px;margin-bottom:14px}
+  .nom-filters{display:grid;grid-template-columns:minmax(170px,1fr) 72px minmax(240px,2fr) minmax(160px,1fr) minmax(140px,.8fr) minmax(170px,1fr);gap:12px;margin-bottom:10px;padding:12px 16px}
   .nom-filters .field{margin:0}
   .nom-delete-field{max-width:72px}
   .icon-danger-btn{width:42px;height:42px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text-2);display:grid;place-items:center}
@@ -489,7 +493,7 @@
   .multi-option input{width:15px;height:15px;margin:0;accent-color:var(--turq);flex:0 0 auto}
   .multi-empty{padding:12px;color:var(--text-2);font-size:12.5px}
   .nom-table{border-radius:12px}
-  .nom-table .table-head{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+  .nom-table .table-head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
   .nom-table .table-head b,.nom-table .table-head span{display:block}
   .nom-table .table-head span{color:var(--text-2);font-size:11.5px;margin-top:1px}
   .nom-results-table{min-width:1040px;table-layout:fixed}
@@ -499,8 +503,8 @@
   .nom-results-table .col-scope{width:130px}
   .nom-results-table .col-total{width:150px}
   .nom-results-table .col-auth{width:130px}
-  .nom-results-table th{padding:8px 12px;font-size:9.5px;background:#f7f9fc}
-  .nom-results-table td{padding:7px 12px;font-size:12px;line-height:1.2}
+  .nom-results-table th{padding:6px 12px;font-size:9.5px;background:#f7f9fc}
+  .nom-results-table td{padding:5px 12px;font-size:12px;line-height:1.2}
   .nom-results-table tbody tr:hover{background:#fbfdff}
   .nom-code{font-weight:750;color:var(--text);line-height:1.15}
   .nom-practice-line{display:flex;align-items:baseline;gap:8px;max-width:100%}
@@ -1391,11 +1395,11 @@
   .hon-table .hon-gan{font-weight:700;color:#0a8a4f}
 
   /* ===== Cabina de informes recibidos ===== */
-  .cab-resumen{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .cab-resumen{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
   /* .cab-chip es un <button>: le sacamos el reset nativo (font/outline) para
      que siga viéndose como el chip de siempre, y le sumamos cursor+transición
      porque ahora es clickeable (filtro rápido por estado). */
-  .cab-chip{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease}
+  .cab-chip{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-2);cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease}
   .cab-chip.ok{background:color-mix(in srgb,#12b3a6 14%,var(--surface));border-color:color-mix(in srgb,#12b3a6 40%,var(--border));color:#0a7d73}
   .cab-chip.warn{background:color-mix(in srgb,#e8a13a 16%,var(--surface));border-color:color-mix(in srgb,#e8a13a 45%,var(--border));color:#a15c00}
   .cab-chip.bad{background:color-mix(in srgb,var(--error) 12%,var(--surface));border-color:color-mix(in srgb,var(--error) 40%,var(--border));color:var(--error)}
