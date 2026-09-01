@@ -474,6 +474,7 @@ function resueltoTodoTransmitido(it) {
 }
 function estadoInforme(it) {
   if (it && it.desestimado) return "desestimado";   // el operador lo dio por cerrado sin subir
+  if (it && it.reclamado) return "reclamado";        // reclamado al centro, esperando datos
   // Resuelto a mano pero con OME sin transmitir = listo para subir (mismo grupo que
   // el match automático). Solo se separa "ya transmitido", que no tiene nada que hacer.
   if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "ok";
@@ -490,9 +491,11 @@ function informesExportRows(items) {
     const beneficio = ex.beneficio || (it.resuelto && it.resuelto.beneficio) || pr.beneficio || "";
     const estado = it.desestimado
       ? "Desestimado"
-      : it.resuelto
-        ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Listo para subir")
-        : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
+      : it.reclamado
+        ? "Reclamado"
+        : it.resuelto
+          ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Listo para subir")
+          : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
     return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
              beneficio, practica, estado, ome };
   });
@@ -6612,6 +6615,32 @@ const server = http.createServer(async (req, res) => {
     } else {
       it.desestimado = { por: me.username || me.name || "", at: new Date().toISOString(),
         motivo: String(body.motivo || "").slice(0, 200) };
+    }
+    saveInformes(store);
+    return json(res, 200, { item: it });
+  }
+
+  // Reclamar / soltar un informe: el operador no sabe de qué paciente es (nombre
+  // dudoso, sin datos) y lo reclamó al centro para que confirmen. Queda "en gestión",
+  // fuera de los estados accionables, hasta que llegue la respuesta. Reversible
+  // (reclamar:false lo suelta). Guarda una nota (a quién / cuándo se reclamó).
+  const informeReclamar = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/reclamar$/);
+  if (informeReclamar && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informeReclamar;
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const store = loadInformes();
+    const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const soltar = body.reclamar === false;
+    if (soltar) {
+      delete it.reclamado;
+    } else {
+      it.reclamado = { por: me.username || me.name || "", at: new Date().toISOString(),
+        nota: String(body.nota || "").slice(0, 200) };
     }
     saveInformes(store);
     return json(res, 200, { item: it });

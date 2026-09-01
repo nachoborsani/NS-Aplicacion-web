@@ -5981,6 +5981,7 @@ function cabResueltoTodoTransmitido(it){
 }
 function cabEstadoDe(it){
   if (it.desestimado) return 'desestimado';
+  if (it.reclamado) return 'reclamado';   // reclamado al centro, esperando datos
   // Un resuelto a mano cuya OME todavía no está transmitida es, a los efectos de
   // subir, lo mismo que un "listo para subir": va en el mismo grupo. Solo se separa
   // cuando ya está todo transmitido (ahí no hay nada que hacer).
@@ -6035,11 +6036,11 @@ var CAB_ESTADOS = {
   factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
   revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'},
-  desestimado:{t:'Desestimado',c:'muted'}
+  reclamado:{t:'Reclamado',c:'warn'}, desestimado:{t:'Desestimado',c:'muted'}
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','factura','revisar_practica','revisar_nombre','sin_ome','ya_transmitido','desestimado','sin_match'];
+  var orden = ['ok','factura','revisar_practica','revisar_nombre','sin_ome','reclamado','ya_transmitido','desestimado','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = CAB_ESTADO_FILTRO === k;
@@ -6053,6 +6054,7 @@ function cabBadge(it){
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
   var e = cabEstadoDe(it);
   if (e === 'desestimado') return '<span class="cab-badge muted" title="Desestimado por el operador: no se sube">Desestimado</span>';
+  if (e === 'reclamado') { var nr=(it.reclamado&&it.reclamado.nota)?(' — '+it.reclamado.nota):''; return '<span class="cab-badge warn" title="Reclamado al centro, esperando datos'+esc(nr)+'">Reclamado</span>'; }
   if (it.resuelto) {
     var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
     if (e === 'ya_transmitido') return '<span class="cab-badge muted" title="Resuelto a mano; '+(no>1?'sus '+no+' OMEs ya están':'su OME ya está')+' transmitido(s) en PAMI, no hay nada para subir">Ya transmitido</span>';
@@ -6078,6 +6080,7 @@ function renderCabinaRows(slug, items){
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
         + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
+        + '<button class="rowbtn" title="'+(it.reclamado?'Soltar (volvió del centro)':'Reclamar al centro')+'" onclick="toggleReclamar(\''+esc(it.id)+'\','+(it.reclamado?'true':'false')+')">'+(it.reclamado?'↩️':'📮')+'</button>'
         + '<button class="rowbtn" title="'+(it.desestimado?'Reactivar':'Desestimar (no subir)')+'" onclick="toggleDesestimar(\''+esc(it.id)+'\','+(it.desestimado?'true':'false')+')">'+(it.desestimado?'↩️':'🚫')+'</button>'
         + '<button class="rowbtn danger" title="Borrar" onclick="borrarInforme(\''+esc(it.id)+'\')">'+ (typeof SVG_TRASH!=='undefined'?SVG_TRASH:'🗑') +'</button>'
       + '</td></tr>';
@@ -6258,6 +6261,24 @@ async function toggleDesestimar(id, esta){
   if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
   var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   if (it){ if (res.data.item && res.data.item.desestimado) it.desestimado = res.data.item.desestimado; else delete it.desestimado; }
+  aplicarFiltroCabina();
+}
+// Reclamar al centro: el operador no sabe de qué paciente es y lo reclamó para que
+// confirmen. Queda "en gestión" (fuera de revisar), con una nota. Reversible: soltar
+// lo devuelve a su estado anterior.
+async function toggleReclamar(id, esta){
+  var nota = '';
+  if (!esta){
+    nota = prompt('Reclamar al centro — ¿qué reclamaste? (queda anotado)\n\nEj: reclamado a Caballito para que confirmen el paciente', '');
+    if (nota === null) return;   // canceló
+  } else {
+    if (!confirm('¿Soltar este informe? Vuelve a la lista de revisar.')) return;
+  }
+  var slug = document.getElementById('cabCliente').value;
+  var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/reclamar', esta ? { reclamar: false } : { nota: nota });
+  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo reclamar.'); return; }
+  var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
+  if (it){ if (res.data.item && res.data.item.reclamado) it.reclamado = res.data.item.reclamado; else delete it.reclamado; }
   aplicarFiltroCabina();
 }
 
