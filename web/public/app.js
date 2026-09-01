@@ -5834,11 +5834,13 @@ function descargarCabina(fmt){
   a.href = '/api/clientes/' + slug + '/informes/export.' + fmt;
   document.body.appendChild(a); a.click(); a.remove();
 }
-// Informes a mandar a PAMI: los VISIBLES (filtrados por fecha). Para subir, solo
-// los "listo para subir" / resueltos; para auditar, todos los del rango.
+// Informes a mandar a PAMI: los que se están VIENDO (filtrados por fecha y, si hay
+// un chip de estado prendido, por ese estado — auditar/subir lo que tenés en
+// pantalla, no todo el rango). Para subir, además solo los "listo para subir".
 function cabIdsParaTarea(tipo){
   var de=(document.getElementById('cabDesde')||{}).value||'', ha=(document.getElementById('cabHasta')||{}).value||'';
   var vis=CAB_ITEMS.filter(function(it){ var f=cabFecha(it); if(!f)return true; if(de&&f<de)return false; if(ha&&f>ha)return false; return true; });
+  if (CAB_ESTADO_FILTRO) vis=vis.filter(function(it){ return cabEstadoDe(it)===CAB_ESTADO_FILTRO; });
   if (tipo==='subir-informes'){
     return vis.filter(function(it){ var e=cabEstadoDe(it); return e==='ok'||e==='resuelto'; }).map(function(it){return it.id;});
   }
