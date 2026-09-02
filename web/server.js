@@ -260,6 +260,22 @@ function loadGastosOSemilla() {
   saveGastos(store);
   return store;
 }
+// Gastos REALMENTE pagados en un mes (YYYY-MM). Es lo que resta la "ganancia real":
+// solo lo que efectivamente salió, igual que la pestaña Gastos. Un USD se cuenta al
+// dólar congelado el día que se marcó pagado (pago.rate); si por lo que sea no quedó
+// guardado, cae al dólar de hoy. Un gasto sin pagar NO suma (todavía no salió).
+function gastosPagadosDelMes(gstore, mes, dolarHoy) {
+  const pagosMes = (gstore.pagos && gstore.pagos[mes]) || {};
+  let total = 0;
+  for (const g of gstore.gastos || []) {
+    const pago = pagosMes[g.id];
+    if (!pago || !pago.pagado) continue;
+    const monto = Number(g.monto) || 0;
+    if (g.moneda === "USD") total += monto * (Number(pago.rate) || Number(dolarHoy) || 0);
+    else total += monto;
+  }
+  return total;
+}
 // Ingresos EXTRA (fuera de las comisiones PAMI): entradas por-mes que suman a
 // "En bolsillo". Se reparten 50/50 entre los socios, igual que las comisiones.
 const ingresosFile = path.join(dataDir, "ingresos_extra.json");
@@ -5326,8 +5342,8 @@ const server = http.createServer(async (req, res) => {
     loadClientsStore().forEach((c) => { nombreCliente[c.slug] = c.name; });
     const gstore = loadGastosOSemilla();
     const dolar = await getDolarOficial();
-    let gastos = 0;
-    for (const g of gstore.gastos) gastos += g.moneda === "USD" ? (Number(g.monto) || 0) * (dolar.valor || 0) : (Number(g.monto) || 0);
+    // Solo lo pagado ESE mes (plata que de verdad salió), al dólar congelado.
+    const gastos = gastosPagadosDelMes(gstore, mes, dolar.valor);
     const del = ingresoNSDelMes(fstore, mes, nombreCliente);
     // Ingresos extra (otros, fuera de comisiones): suman a NS y se reparten 50/50.
     const extra = ingresosExtraDelMes(mes, dolar.valor);
@@ -5347,7 +5363,8 @@ const server = http.createServer(async (req, res) => {
       if (mStr < INICIO_SISTEMA || mStr > mes) continue;
       const d = ingresoNSDelMes(fstore, mStr, nombreCliente);
       const ing = d.ingresoNacho + d.ingresoSeba + ingresosExtraDelMes(mStr, dolar.valor);
-      serie.push({ mes: mStr, ingresoNS: ing, gastos, bolsilloNS: ing - gastos });
+      const gastosM = gastosPagadosDelMes(gstore, mStr, dolar.valor);  // lo pagado ESE mes
+      serie.push({ mes: mStr, ingresoNS: ing, gastos: gastosM, bolsilloNS: ing - gastosM });
     }
     return json(res, 200, {
       mes,
