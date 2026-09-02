@@ -943,3 +943,36 @@ def write_ome_sheet_results(
         )
     )
     return len(consolidated_rows)
+
+
+def write_ome_capita(*, spreadsheet_url_or_id: str, sheet_name: str,
+                     capita_col: int | None, marcas: list[dict]) -> int:
+    """Escribe la columna Cápita ('CAPITA' / 'EXTRA') de las filas indicadas.
+
+    Aislado a propósito de write_ome_sheet_results (no toca su agrupado): la cápita
+    se decide aparte y se marca en su columna. `marcas` = [{sheet_row, capita}].
+    """
+    if capita_col is None or not marcas:
+        return 0
+    spreadsheet_id = extract_spreadsheet_id(spreadsheet_url_or_id)
+    service = build_sheets_service(interactive=False)
+    quoted = _quote_sheet_name(sheet_name)
+    letter = _column_letter(int(capita_col))
+    data = []
+    for m in marcas:
+        sr = m.get("sheet_row")
+        val = str(m.get("capita", "") or "").strip()
+        if not str(sr or "").strip().isdigit() or not val:
+            continue
+        data.append({"range": f"{quoted}!{letter}{int(sr)}", "values": [[val]]})
+    if not data:
+        return 0
+    _execute_sheets_request(
+        service.spreadsheets()
+        .values()
+        .batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"valueInputOption": "USER_ENTERED", "data": data},
+        )
+    )
+    return len(data)

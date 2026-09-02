@@ -18,6 +18,11 @@ CLIENTES = {
     "scheffelaar-mc": {
         "nombre": "Scheffelaar",
         "cred_key": "scheffelaar",
+        # Médico de cabecera del cliente, como lo muestra la cartilla de PAMI. Sirve
+        # para decidir cápita (427109) vs extra-cápita (427122): si el médico de
+        # cabecera asignado al paciente es este, es cápita. La comparación es tolerante
+        # (mayúsculas/acentos/orden/1 error de tipeo), no hace falta que sea exacto.
+        "medico": "SCHEFFELAAR KLOTZ, SABRINA ALEJANDRA",
         "spreadsheet": "https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit",
         "sheet_name": "Schefelar",
         "start_row": 4718,
@@ -25,7 +30,7 @@ CLIENTES = {
         "practicas": ["427122", "427121", "427120", "427109"],
         # A Fecha·B Nombre·C Sexo·D Benef·E Capita·F DNI·G Tramite·H OME·
         # I Credencial·J Motivo·K Datos·L GENERADA·M Validacion·N transmisión
-        "cols": {"nombre": 1, "benef": 3, "dni": 5, "tramite": 6, "ome": 7, "credencial": 8,
+        "cols": {"nombre": 1, "benef": 3, "capita": 4, "dni": 5, "tramite": 6, "ome": 7, "credencial": 8,
                  "generada": 11, "activacion": 12},
         "activacion_marca": "ACTIVADA",
         # La curación NO exige trámite para reusar credencial: Scheffelaar
@@ -39,6 +44,10 @@ CLIENTES = {
     "dubesarky-ezequiel": {
         "nombre": "Dube",
         "cred_key": "dubesarky-ezequiel",
+        # Médico de cabecera del cliente (ver nota en Scheffelaar). Ojo: PAMI lo
+        # escribe "Dubesarsky Ezequiel Adolfo" (con S y segundo nombre); la comparación
+        # tolerante se banca la diferencia de tipeo y el nombre de más.
+        "medico": "DUBESARKY, EZEQUIEL",
         "spreadsheet": "https://docs.google.com/spreadsheets/d/1CJHJz2iR32aknMKwtMsivpjhdIQ3n1T-iUaMt7iENGo/edit",
         "sheet_name": "Mc Dube",
         "start_row": 12686,
@@ -46,7 +55,7 @@ CLIENTES = {
         "practicas": ["427122", "427121", "427120", "427109"],
         # A Benef·B DNI·C Tramite·D Nombre·E capita·F Peso·G Motivo·H DX·I OME·
         # J fecha atenciones·K ·L FECHA GENERACION·M FECHA ACTIVACION·N CREDENCIAL·O VALIDADA
-        "cols": {"benef": 0, "dni": 1, "tramite": 2, "nombre": 3, "dx": 7, "ome": 8,
+        "cols": {"benef": 0, "dni": 1, "tramite": 2, "nombre": 3, "capita": 4, "dx": 7, "ome": 8,
                  "generada": 11, "activacion": 12, "credencial": 13, "validada": 14},
         "activacion_marca": "FECHA",
         # Antes de bajar credenciales, curar la planilla: reusa la credencial del

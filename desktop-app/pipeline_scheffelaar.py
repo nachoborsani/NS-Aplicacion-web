@@ -15,8 +15,11 @@ Uso manual: python pipeline_scheffelaar.py
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
+from datetime import date
+from pathlib import Path
 
 import activacion_sweep
 import benef_sweep
@@ -34,11 +37,44 @@ def log(m: str) -> None:
     print(m, flush=True)
 
 
+# Aviso por Telegram cuando el bot NO puede entrar a PAMI (clave vencida/cambiada o
+# cuenta bloqueada): la cadena de ese cliente no genera OMEs ni activa turnos hasta
+# que se corrija. Se avisa UNA vez por cliente por día — las corridas 10/17/19:30 no
+# tienen que mandar el mismo aviso tres veces.
+def _es_fallo_login_pami(e) -> bool:
+    return "revisar credenciales" in str(e).lower()
+
+
+def _alert_state_path() -> Path:
+    return Path(__file__).with_name("pipeline_alert_state.json")
+
+
+def _ya_avise_hoy(slug: str) -> bool:
+    try:
+        return json.loads(_alert_state_path().read_text("utf-8")).get(slug) == date.today().isoformat()
+    except Exception:
+        return False
+
+
+def _marcar_avise_hoy(slug: str) -> None:
+    try:
+        p = _alert_state_path()
+        try:
+            st = json.loads(p.read_text("utf-8"))
+        except Exception:
+            st = {}
+        st[slug] = date.today().isoformat()
+        p.write_text(json.dumps(st, ensure_ascii=False, indent=2), "utf-8")
+    except Exception:
+        pass
+
+
 def _correr_cliente(slug: str, web) -> None:
     C = get_cliente(slug)
     nombre = C.get("nombre", slug)
     cred_key = C["cred_key"]
     log(f"========== Cliente: {nombre} ==========")
+    fallo_login = False   # PAMI rechazó el login en algún paso → se avisa por Telegram
 
     # --- Paso 1: benef (dispara la credencial de las filas nuevas, quirúrgico). ---
     log("=== [1/4] Barrido de benef ===")
@@ -46,6 +82,8 @@ def _correr_cliente(slug: str, web) -> None:
         benef_sweep.run(cliente_slug=slug, progress=lambda m: None, disparar_credencial=True)
     except Exception as e:  # noqa: BLE001
         log(f"benef falló (sigo con credencial/OME): {e!r}")
+        if _es_fallo_login_pami(e):
+            fallo_login = True
 
     # --- Paso 1.4: curar la planilla ANTES de bajar credenciales (si el cliente lo
     #     pide). Reusa la credencial del paciente que ya la tiene DESCARGADA por benef,
@@ -113,6 +151,8 @@ def _correr_cliente(slug: str, web) -> None:
                 break  # no quedó nada por generar (o lo que queda falla)
     except Exception as e:  # noqa: BLE001
         log(f"OME falló: {e!r}")
+        if _es_fallo_login_pami(e):
+            fallo_login = True
 
     # --- Paso 4: activar TODO lo que tenga OME sin activar (no solo la tanda). ---
     # Antes se pasaba solo_filas=filas_generadas, así que una fila que se generaba en
@@ -128,6 +168,21 @@ def _correr_cliente(slug: str, web) -> None:
             f"· de {res_act.get('candidatos', 0)} candidata(s).")
     except Exception as e:  # noqa: BLE001
         log(f"activación falló: {e!r}")
+        if _es_fallo_login_pami(e):
+            fallo_login = True
+
+    # --- Aviso: si PAMI rechazó el login en algún paso, avisar por Telegram (1x/día). ---
+    if fallo_login and not _ya_avise_hoy(slug):
+        try:
+            web.avisar(
+                f"⚠️ Cadena automática — {nombre}: el bot no pudo entrar a PAMI "
+                f"(revisar las credenciales de PAMI de este cliente). Mientras no se "
+                f"corrija, no se generan OMEs de cabecera ni se activan turnos."
+            )
+            _marcar_avise_hoy(slug)
+            log("→ aviso Telegram enviado (fallo de login PAMI).")
+        except Exception as e:  # noqa: BLE001 - el aviso no debe cortar la cadena
+            log(f"no pude enviar el aviso Telegram: {e!r}")
 
 
 def run() -> None:

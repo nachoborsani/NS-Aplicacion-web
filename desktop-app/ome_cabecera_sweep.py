@@ -24,10 +24,11 @@ from __future__ import annotations
 import asyncio
 import sys
 
+import capita_cabecera
 from cadena_clientes import get_cliente, layout_ome
 from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
 from pami_ome_generator import PamiOmeGenerator, PatientInput
-from google_sheets_ome import read_ome_sheet_rows, write_ome_sheet_results
+from google_sheets_ome import read_ome_sheet_rows, write_ome_sheet_results, write_ome_capita
 
 CLIENTE_SLUG_DEFAULT = "scheffelaar-mc"
 
@@ -42,9 +43,11 @@ def log(m: str) -> None:
 
 
 async def _procesar(user: str, clave: str, candidatos: list[dict], diagnostico: str,
-                    practicas: list[str], progress=None) -> tuple[list[dict], dict]:
+                    practicas: list[str], progress=None, web=None,
+                    medico: str = "") -> tuple[list[dict], dict, list[dict]]:
     resumen = {"candidatos": len(candidatos), "generadas": 0, "ya_tenian": 0, "limite": 0, "errores": 0}
     result_rows: list[dict] = []
+    capita_marcas: list[dict] = []   # {sheet_row, capita} para escribir la columna E
     total = len(candidatos)
     async with PamiOmeGenerator(user=user, password=clave, headless=True) as gen:
         for i, fila in enumerate(candidatos, 1):
@@ -56,8 +59,29 @@ async def _procesar(user: str, clave: str, candidatos: list[dict], diagnostico: 
                 progress(f"{i}/{total} · {nombre or benef or dni}")
             log(f"[{i}/{total}] fila {sheet_row} · {nombre} · benef {benef or '-'} / dni {dni or '-'} …")
 
+            # Decidir CÁPITA antes de generar y así elegir el código sin prueba y error:
+            # cápita del médico del cliente → 427109; extra → los códigos extra. Sin
+            # médico configurado, sin benef/dni, o si la consulta a PAMI falla, se usa la
+            # cadena completa de siempre (fallback: no bloquea la generación).
+            practicas_pac = practicas
+            capita_val = ""
+            if medico and web is not None and (benef or dni):
+                ev = capita_cabecera.evaluar(web, medico, benef, dni)
+                if ev["es_capita"] is True:
+                    practicas_pac = ["427109"]
+                    capita_val = "CAPITA"
+                    log(f"    cápita (PAMI: {ev['medico_pami']}) → 427109")
+                elif ev["es_capita"] is False:
+                    practicas_pac = [p for p in practicas if p != "427109"] or list(practicas)
+                    capita_val = "EXTRA"
+                    log(f"    extra cápita (PAMI: {ev['medico_pami'] or 'sin médico asignado'}) → {'/'.join(practicas_pac)}")
+                else:
+                    log(f"    no pude consultar cápita ({ev['error']}); uso la cadena completa")
+            if capita_val and sheet_row:
+                capita_marcas.append({"sheet_row": sheet_row, "capita": capita_val})
+
             ultimo = None
-            for practica in practicas:
+            for practica in practicas_pac:
                 try:
                     res = await gen.process_patient(PatientInput(
                         modo=fila.get("modo", "BENEF"),
@@ -109,7 +133,7 @@ async def _procesar(user: str, clave: str, candidatos: list[dict], diagnostico: 
                     d.setdefault("beneficio", benef)
                     d.setdefault("dni", dni)
                     result_rows.append(d)
-    return result_rows, resumen
+    return result_rows, resumen, capita_marcas
 
 
 def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, progress=None, limite: int | None = None) -> dict:
@@ -149,7 +173,19 @@ def run(cliente_slug: str = CLIENTE_SLUG_DEFAULT, progress=None, limite: int | N
         log("Nada para generar.")
         return {"candidatos": 0, "generadas": 0, "ya_tenian": 0, "limite": 0, "errores": 0}
 
-    result_rows, resumen = asyncio.run(_procesar(user, clave, candidatos, diagnostico, practicas, progress=progress))
+    result_rows, resumen, capita_marcas = asyncio.run(_procesar(
+        user, clave, candidatos, diagnostico, practicas, progress=progress,
+        web=web, medico=C.get("medico", "")))
+
+    # Marcar la columna Cápita (CAPITA/EXTRA) de lo que se decidió por cartilla.
+    if capita_marcas:
+        try:
+            n_cap = write_ome_capita(spreadsheet_url_or_id=C["spreadsheet"], sheet_name=C["sheet_name"],
+                                     capita_col=C["cols"].get("capita"), marcas=capita_marcas)
+            if n_cap:
+                log(f"Cápita marcada en {n_cap} fila(s).")
+        except Exception as e:  # noqa: BLE001 - marcar la cápita no debe cortar la generación
+            log(f"no pude escribir la columna Cápita (sigo): {e!r}")
 
     # Escribir los OMEs generados de vuelta en la planilla.
     escritas = 0
