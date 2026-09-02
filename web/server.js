@@ -6148,11 +6148,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Listar / buscar el padrón de un cliente.
+  // Lo lee el admin y el usuario de demostración (solo lo VE). Para el demo, el gate
+  // de arriba ya limitó el acceso a los clientes de su lista, así que acá alcanza con
+  // dejarlo pasar: no puede llegar al padrón de un cliente que no le corresponde.
   const padronList = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/padron$/);
   if (padronList && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "demo") return json(res, 403, { error: "Solo un administrador." });
     const slug = padronList[1];
     const store = loadPadron();
     const cli = store[slug] || {};

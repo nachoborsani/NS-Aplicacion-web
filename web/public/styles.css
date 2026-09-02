@@ -1401,6 +1401,12 @@
   /* Clínica: navega por el menú izquierdo, se oculta la barra de pestañas del cliente */
   body.role-clinica .client-tabs{display:none}
 
+  /* Rol demo en Afiliados: SOLO VE la lista y la búsqueda. Se ocultan las acciones
+     (consultar cápita, credencial, subir turnera) — el backend igual las bloquea. */
+  body.role-demo #view-padron .afil-tools,
+  body.role-demo #view-padron .file-btn,
+  body.role-demo #view-padron #padStatusText{display:none !important}
+
   /* ===== Honorarios y ganancia real ===== */
   .hon-totales{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0 14px}
   .hon-tot{flex:1 1 180px;border:1px solid var(--border);border-radius:11px;padding:11px 15px;display:flex;justify-content:space-between;align-items:center;background:var(--surface-2)}

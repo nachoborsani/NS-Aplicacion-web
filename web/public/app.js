@@ -88,7 +88,10 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  if ((v === 'padron' || v === 'cabina') && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  if (v === 'cabina' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  // Afiliados: además del admin, el usuario de demostración lo VE (solo lectura; las
+  // acciones las bloquea el backend y se ocultan por CSS). El resto, afuera.
+  if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'demo'))){ go('dash'); return; }
   ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -5688,15 +5691,20 @@ function renderPadronRows(slug, data){
     meta.textContent = txt;
   }
   if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
+  var esAdmin = ME && ME.role === 'admin';
   body.innerHTML = items.map(function(it){
-    // "Ver capita" pide beneficio+DNI a PAMI (Mi Cartilla): sin beneficio cargado
-    // no se puede consultar, así que el botón queda deshabilitado en ese caso.
-    var tieneBenef = !!it.beneficio;
-    var btnCapita = '<button class="icon-btn" title="' + (tieneBenef ? 'Ver capita (médico de cabecera, internación, etc.)' : 'Falta el beneficio para poder consultar') + '"'
-      + (tieneBenef ? ' onclick="verCapitaAfiliado(\'' + esc(it.nombre||'') + '\',\'' + esc(it.dni) + '\',\'' + esc(it.beneficio) + '\')"' : ' disabled')
-      + '><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    var acciones = '';
+    if (esAdmin) {
+      // "Ver capita" pide beneficio+DNI a PAMI (Mi Cartilla): sin beneficio cargado
+      // no se puede consultar, así que el botón queda deshabilitado en ese caso.
+      var tieneBenef = !!it.beneficio;
+      var btnCapita = '<button class="icon-btn" title="' + (tieneBenef ? 'Ver capita (médico de cabecera, internación, etc.)' : 'Falta el beneficio para poder consultar') + '"'
+        + (tieneBenef ? ' onclick="verCapitaAfiliado(\'' + esc(it.nombre||'') + '\',\'' + esc(it.dni) + '\',\'' + esc(it.beneficio) + '\')"' : ' disabled')
+        + '><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+      acciones = btnCapita + ' <button class="icon-danger-btn" title="Quitar" onclick="deletePadronItem(\'' + slug + '\',\'' + esc(it.dni) + '\')"><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    }
     return '<tr><td>' + esc(it.nombre||'') + '</td><td>' + esc(it.dni||'') + '</td><td>' + esc(it.beneficio||'—') + '</td><td>' + esc(it.tramite||'—') + '</td>' +
-      '<td style="text-align:right;white-space:nowrap">' + btnCapita + ' <button class="icon-danger-btn" title="Quitar" onclick="deletePadronItem(\'' + slug + '\',\'' + esc(it.dni) + '\')"><svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td></tr>';
+      '<td style="text-align:right;white-space:nowrap">' + acciones + '</td></tr>';
   }).join('');
 }
 function queuePadronSearch(){ clearTimeout(PADRON_SEARCH_TIMER); PADRON_SEARCH_TIMER = setTimeout(refreshPadron, 250); }
@@ -6314,6 +6322,7 @@ function aplicarUsuario(u){
   var vc = document.getElementById('verComoLink'); if (vc) vc.style.display = (ME_REAL && ME_REAL.role === 'admin') ? '' : 'none';
   // Rol clínica: solo su centro (oculta lo interno de NS por CSS) y sin "Adjuntar reporte".
   document.body.classList.toggle('role-clinica', u.role === 'clinica');
+  document.body.classList.toggle('role-demo', u.role === 'demo');
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
   iniArrancar();   // campana de mensajes del Inicio (solo admin)
 }
