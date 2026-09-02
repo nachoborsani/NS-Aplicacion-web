@@ -1805,6 +1805,19 @@ async function loadClientPami(){
     user.value = res.data.pamiUser || '';
     pass.placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
     if (revealBtn) revealBtn.style.display = res.data.hasPassword ? '' : 'none';
+    setClientHeaderUp(res.data.pamiUser || '');
+  }
+}
+// UP (usuario PAMI) al lado del nombre del cliente en la cabecera: se ve en TODAS las
+// solapas mientras se trabaja con el cliente. Con botón para copiarlo de un clic.
+function setClientHeaderUp(up){
+  var el = document.getElementById('clientHeaderUp'); if (!el) return;
+  if (up){
+    el.innerHTML = 'UP <b>' + esc(up) + '</b>' +
+      '<button class="icon-btn mini" type="button" title="Copiar UP" onclick="copiarTexto(\'' + esc(up) + '\',this)"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg></button>';
+    el.hidden = false;
+  } else {
+    el.innerHTML = ''; el.hidden = true;
   }
 }
 // Ver la clave guardada (admin): la trae desencriptada y la muestra en el campo.
@@ -3255,6 +3268,7 @@ async function renderActiveClient(){
   if (DASH_MODULE_FILTER_CLIENT !== client.slug) { DASH_MODULE_FILTER = []; DASH_MODULE_FILTER_CLIENT = client.slug; }
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
+  setClientHeaderUp('');   // se limpia al cambiar de cliente; loadClientPami lo recarga
   aplicarPestanasCliente();
   setClientSection(CLIENT_SECTION);
   renderClientNomencladorPanel();
