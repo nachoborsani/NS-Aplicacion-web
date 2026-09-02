@@ -2036,8 +2036,11 @@ var FAC_PER_OPEN = {};   // qué períodos están abiertos (por nombre)
 var FAC_CLI_OPEN = {};   // qué clientes están abiertos (clave: pIdx + '_' + slug)
 var FAC_RENDER = [];     // nombres de período en el orden en que se renderizan
 function facturaParseMonto(v){
-  // Acepta "2.678.400,00" o "2678400.00" o "2678400".
-  var s = String(v == null ? '' : v).trim();
+  // Acepta "2.678.400,00" o "2678400.00" o "2678400" — y también lo que se PEGA con
+  // símbolo de moneda o espacios ("$ 129.761,13", "AR$ 1.000,50"): primero se saca
+  // todo lo que no sea dígito, coma, punto o signo (el $, los espacios y el espacio
+  // duro que copia el navegador). Sin esto, "$ 129.761,13" se leía como 0.
+  var s = String(v == null ? '' : v).replace(/[^\d.,-]/g, '').trim();
   if (!s) return 0;
   if (s.indexOf(',') >= 0){ s = s.replace(/\./g, '').replace(',', '.'); }
   var n = Number(s);
@@ -2262,7 +2265,11 @@ async function saveFacturaRow(k){
   var cont = document.getElementById('facItems_' + k);
   var items = [];
   if (cont) cont.querySelectorAll('.fac-item-row').forEach(function(row){
-    items.push({ label: row.querySelector('.fac-desc').value.trim(), monto: facturaParseMonto(row.querySelector('.fac-monto').value) });
+    var mi = row.querySelector('.fac-monto');
+    var m = facturaParseMonto(mi.value);
+    // Si se pegó con símbolo/formato ("$ 129.761,13"), dejar el número limpio en pantalla.
+    if (mi.value.trim() && String(m) !== mi.value.trim()) mi.value = m ? m : '';
+    items.push({ label: row.querySelector('.fac-desc').value.trim(), monto: m });
   });
   var res = await req('POST', '/api/facturas', {
     slug: p.slug, periodo: p.periodo, items: items,
