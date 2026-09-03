@@ -948,25 +948,51 @@ function iniNombreDe(username){
   var a = (INICIO.admins||[]).find(function(x){return x.username===username;});
   return a ? a.nombre : username;
 }
+function iniPuedeVerInicio(){ return !!(ME && (ME.role === 'admin' || ME.role === 'operador')); }
 async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
-  if (!iniEsAdmin()){ if(pl) pl.style.display='none'; return; }
+  var op = document.getElementById('operadorPaneles');
+  if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; return; }
   var res = await api('/api/inicio');
   if (!res.ok){ return; }
   INICIO.yo = res.data.yo || ''; INICIO.admins = res.data.admins || [];
   INICIO.mensajes = res.data.mensajes || []; INICIO.tareas = res.data.tareas || [];
   INICIO.unread = res.data.unread || 0;
+  INICIO.compartidoOperadores = !!res.data.compartidoOperadores;
   if (marcarLeido && INICIO.unread > 0){ await api('/api/inicio/mensajes/leidos', {}); INICIO.unread = 0; }
-  if (pl) pl.style.display = '';
-  if (!INICIO.wired){
-    INICIO.wired = true;
-    var mi = document.getElementById('iniMsg');
-    if (mi){
-      mi.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); iniEnviarMsg(); } });
-      mi.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
+
+  if (iniEsAdmin()){
+    if (op) op.style.display = 'none';
+    if (pl) pl.style.display = '';
+    if (!INICIO.wired){
+      INICIO.wired = true;
+      var mi = document.getElementById('iniMsg');
+      if (mi){
+        mi.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); iniEnviarMsg(); } });
+        mi.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
+      }
+      var sw = document.getElementById('iniCompartirOperadores');
+      if (sw) sw.checked = INICIO.compartidoOperadores;
+    } else {
+      var sw2 = document.getElementById('iniCompartirOperadores');
+      if (sw2) sw2.checked = INICIO.compartidoOperadores;
     }
+    iniRenderAssign(); iniRenderMensajesEn('iniFeed'); iniRenderTareas();
+  } else {
+    // Operador: ve el panel de operador (Inicio admin queda oculto para él).
+    if (pl) pl.style.display = 'none';
+    if (op) op.style.display = '';
+    if (!INICIO.wiredOperador){
+      INICIO.wiredOperador = true;
+      var om = document.getElementById('opMsg');
+      if (om){
+        om.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); opEnviarMsg(); } });
+        om.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
+      }
+    }
+    iniRenderMensajesEn('opFeed');
   }
-  iniRenderAssign(); iniRenderMensajes(); iniRenderTareas(); iniActualizarBell();
+  iniActualizarBell();
 }
 function iniRenderAssign(){
   var box = document.getElementById('iniAssign'); if(!box) return;
@@ -979,19 +1005,30 @@ function iniRenderAssign(){
   }).join('');
 }
 function iniSetAssign(v){ INICIO.assign = v; iniRenderAssign(); }
-function iniRenderMensajes(){
-  var feed = document.getElementById('iniFeed'); if(!feed) return;
+// feedId: 'iniFeed' (panel admin) u 'opFeed' (panel operador) - mismo feed de
+// mensajes (INICIO.mensajes ya viene filtrado por el servidor según quién
+// pregunta), solo cambia dónde se pinta. Un admin ve, junto a cada mensaje,
+// si los operadores lo pueden ver o no (👁/🔒) - un operador no ve ese badge.
+function iniRenderMensajesEn(feedId){
+  var feed = document.getElementById(feedId); if(!feed) return;
   var ms = INICIO.mensajes || [];
   if (!ms.length){ feed.innerHTML = '<div class="ini-empty">Todavía no hay mensajes. Dejá el primero 👇</div>'; return; }
   feed.innerHTML = ms.map(function(m){
     var mine = m.autor === INICIO.yo;
+    var badge = '';
+    if (iniEsAdmin()){
+      badge = m.visibleOperadores
+        ? '<span class="ini-vis-badge" title="Los operadores lo ven">👁</span>'
+        : '<span class="ini-vis-badge" title="Solo lo ven los admins">🔒</span>';
+    }
     return '<div class="ini-msg'+(mine?' me':'')+'">'
       + '<span class="ini-av'+(mine?' me':'')+'">'+esc(iniIniciales(m.autorNombre))+'</span>'
-      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+'</div>'
+      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+badge+'</div>'
       + '<div class="ini-txt">'+esc(m.texto)+'</div><div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
   }).join('');
   feed.scrollTop = feed.scrollHeight;
 }
+function iniRenderMensajes(){ iniRenderMensajesEn('iniFeed'); }
 async function iniEnviarMsg(){
   var inp = document.getElementById('iniMsg'); if(!inp) return;
   var t = inp.value.trim(); if(!t) return;
@@ -999,7 +1036,23 @@ async function iniEnviarMsg(){
   if (!res.ok){ alert(res.data.error || 'No se pudo enviar el mensaje.'); return; }
   inp.value=''; inp.style.height='';
   INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
-  iniRenderMensajes(); iniActualizarBell();
+  iniRenderMensajesEn('iniFeed'); iniActualizarBell();
+}
+async function opEnviarMsg(){
+  var inp = document.getElementById('opMsg'); if(!inp) return;
+  var t = inp.value.trim(); if(!t) return;
+  var res = await api('/api/inicio/mensajes', { texto:t });
+  if (!res.ok){ alert(res.data.error || 'No se pudo enviar el mensaje.'); return; }
+  inp.value=''; inp.style.height='';
+  INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
+  iniRenderMensajesEn('opFeed'); iniActualizarBell();
+}
+// Interruptor admin: prende/apaga si, de acá en más, los operadores van a ver
+// los mensajes que escriban los admins (no reescribe lo ya mandado).
+async function iniToggleCompartir(on){
+  var res = await req('POST', '/api/inicio/compartir', { on: !!on });
+  if (!res.ok){ alert(res.data.error || 'No se pudo cambiar.'); var sw = document.getElementById('iniCompartirOperadores'); if (sw) sw.checked = !on; return; }
+  INICIO.compartidoOperadores = !!res.data.compartidoOperadores;
 }
 function iniHoyISO(){
   var d = new Date();
@@ -1084,20 +1137,23 @@ async function iniBorrarTarea(id){
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
-  var badge = document.getElementById('iniUnread');
   var n = INICIO.unread || 0;
   if (dot) dot.style.display = n>0 ? '' : 'none';
-  if (badge){ if(n>0){ badge.style.display=''; badge.textContent = n>9?'9+':String(n); } else badge.style.display='none'; }
+  ['iniUnread','opUnread'].forEach(function(id){
+    var badge = document.getElementById(id);
+    if (!badge) return;
+    if (n>0){ badge.style.display=''; badge.textContent = n>9?'9+':String(n); } else badge.style.display='none';
+  });
 }
 async function iniRefrescarBell(){
-  if (!iniEsAdmin()){ var d=document.getElementById('bellDot'); if(d) d.style.display='none'; return; }
+  if (!iniPuedeVerInicio()){ var d=document.getElementById('bellDot'); if(d) d.style.display='none'; return; }
   var res = await api('/api/inicio/no-leidos');
   if (res.ok){ INICIO.unread = res.data.unread||0; iniActualizarBell(); }
 }
 function iniRenderDrawer(){
   var body = document.getElementById('drawerBody'); if(!body) return;
   var n = INICIO.unread || 0;
-  if (iniEsAdmin() && n>0){
+  if (iniPuedeVerInicio() && n>0){
     body.innerHTML = '<div class="drawer-item" onclick="closeDrawer();go(\'dash\',navElFor(\'dash\'))">'
       + '<div class="di-ic">💬</div><div class="di-tx"><b>'+n+' mensaje'+(n>1?'s':'')+' nuevo'+(n>1?'s':'')+' en el Inicio</b>'
       + '<span>Tocá para leerlos.</span></div></div>';
@@ -1106,7 +1162,7 @@ function iniRenderDrawer(){
   }
 }
 function iniArrancar(){
-  if (!iniEsAdmin()){ iniActualizarBell(); return; }
+  if (!iniPuedeVerInicio()){ iniActualizarBell(); return; }
   iniRefrescarBell();
   if (!INICIO.pollTimer){
     INICIO.pollTimer = setInterval(function(){ if(document.visibilityState!=='hidden') iniRefrescarBell(); }, 60000);

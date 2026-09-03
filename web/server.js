@@ -70,14 +70,36 @@ function loadInicio() {
   try {
     const j = JSON.parse(fs.readFileSync(inicioFile, "utf8"));
     if (!j || typeof j !== "object") throw 0;
-    return { mensajes: Array.isArray(j.mensajes) ? j.mensajes : [], tareas: Array.isArray(j.tareas) ? j.tareas : [], leido: (j.leido && typeof j.leido === "object") ? j.leido : {} };
-  } catch { return { mensajes: [], tareas: [], leido: {} }; }
+    return {
+      mensajes: Array.isArray(j.mensajes) ? j.mensajes : [],
+      tareas: Array.isArray(j.tareas) ? j.tareas : [],
+      leido: (j.leido && typeof j.leido === "object") ? j.leido : {},
+      // Interruptor admin: "los operadores pueden ver desde acá". Cada mensaje
+      // de un admin guarda el estado de este interruptor AL MOMENTO de
+      // escribirlo (ver visibleOperadores abajo) - cambiarlo no reescribe lo
+      // ya enviado, solo define lo que se manda de ahora en más.
+      compartidoOperadores: !!j.compartidoOperadores,
+    };
+  } catch { return { mensajes: [], tareas: [], leido: {}, compartidoOperadores: false }; }
 }
 function saveInicio(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(inicioFile, JSON.stringify(store, null, 2)); }
 // No leídos = mensajes de OTRO autor posteriores al último "visto" del usuario.
-function inicioNoLeidos(store, username) {
+// Para un operador, solo cuentan los mensajes que puede ver (soloVisibles=true).
+function inicioNoLeidos(store, username, soloVisibles) {
   const desde = store.leido[username] || "";
-  return (store.mensajes || []).filter((m) => m.autor !== username && String(m.at) > desde).length;
+  return (store.mensajes || []).filter((m) => {
+    if (m.autor === username) return false;
+    if (String(m.at) <= desde) return false;
+    if (soloVisibles && !m.visibleOperadores) return false;
+    return true;
+  }).length;
+}
+// Mensajes que un usuario puede ver: admin los ve todos; un operador solo los
+// marcados visibleOperadores (compartidos a propósito) + los suyos propios.
+function inicioMensajesPara(store, me) {
+  const todos = store.mensajes || [];
+  if (me.role === "admin") return todos;
+  return todos.filter((m) => m.visibleOperadores || m.autor === me.username);
 }
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
@@ -4603,39 +4625,47 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
-  // ==================== INICIO: mensajes + tareas (solo admin) ====================
+  // ==================== INICIO: mensajes (admin + operador) y tareas (solo admin) ====================
   if (p === "/api/inicio" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const store = loadInicio();
     const admins = (loadUsers() || [])
       .filter((u) => u.role === "admin" && u.active !== false)
       .map((u) => ({ username: u.username, nombre: u.name || u.username }));
+    const esAdmin = me.role === "admin";
     return json(res, 200, {
       yo: me.username,
+      esAdmin,
       admins,
-      mensajes: (store.mensajes || []).slice(-200),
-      tareas: store.tareas || [],
-      unread: inicioNoLeidos(store, me.username),
+      mensajes: inicioMensajesPara(store, me).slice(-200),
+      // Tareas siguen siendo un panel solo-admin (no se le manda nada a un operador).
+      tareas: esAdmin ? (store.tareas || []) : [],
+      unread: inicioNoLeidos(store, me.username, !esAdmin),
+      compartidoOperadores: !!store.compartidoOperadores,
     });
   }
   // Solo el contador de no leídos (para la campana; más liviano que traer todo).
   if (p === "/api/inicio/no-leidos" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 200, { unread: 0 });
-    return json(res, 200, { unread: inicioNoLeidos(loadInicio(), me.username) });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 200, { unread: 0 });
+    return json(res, 200, { unread: inicioNoLeidos(loadInicio(), me.username, me.role !== "admin") });
   }
   if (p === "/api/inicio/mensajes" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const body = await readBody(req);
     const texto = String((body && body.texto) || "").trim().slice(0, 4000);
     if (!texto) return json(res, 400, { error: "El mensaje está vacío." });
     const store = loadInicio();
-    const msg = { id: crypto.randomUUID(), autor: me.username, autorNombre: me.name || me.username, texto, at: new Date().toISOString() };
+    // Un mensaje de operador siempre es visible para operadores (es suyo). Uno
+    // de admin queda visible solo si el interruptor "compartir" está prendido
+    // en este momento - cambiar el interruptor después no lo modifica.
+    const visibleOperadores = me.role === "operador" ? true : !!store.compartidoOperadores;
+    const msg = { id: crypto.randomUUID(), autor: me.username, autorNombre: me.name || me.username, texto, at: new Date().toISOString(), visibleOperadores };
     store.mensajes.push(msg);
     store.mensajes = store.mensajes.slice(-500);
     store.leido[me.username] = msg.at; // el que escribe ya vio todo hasta acá
@@ -4646,11 +4676,23 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/inicio/mensajes/leidos" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const store = loadInicio();
     store.leido[me.username] = new Date().toISOString();
     saveInicio(store);
     return json(res, 200, { ok: true, unread: 0 });
+  }
+  // Prender/apagar si los operadores ven, DE ACÁ EN MÁS, los mensajes que
+  // escriban los admins (solo admin puede tocar este interruptor).
+  if (p === "/api/inicio/compartir" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const store = loadInicio();
+    store.compartidoOperadores = !!(body && body.on);
+    saveInicio(store);
+    return json(res, 200, { ok: true, compartidoOperadores: store.compartidoOperadores });
   }
   if (p === "/api/inicio/tareas" && req.method === "POST") {
     const me = getSessionUser(req);

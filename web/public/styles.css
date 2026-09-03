@@ -311,6 +311,25 @@
   .ini-msg.me{align-self:flex-end;flex-direction:row-reverse}
   .ini-msg.me .ini-bub{background:var(--celeste);border-color:transparent;border-radius:13px 4px 13px 13px}
   [data-theme="dark"] .ini-msg.me .ini-bub{background:#123b3a}
+  /* Interruptor "compartir con operadores" (cabecera del chat, solo admin) */
+  .ini-switch{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2);cursor:pointer;user-select:none;margin-left:auto;white-space:nowrap}
+  .ini-switch input{appearance:none;-webkit-appearance:none;width:30px;height:17px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);position:relative;cursor:pointer;flex:0 0 auto;transition:background .15s ease}
+  .ini-switch input::before{content:"";position:absolute;top:1px;left:1px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s ease}
+  .ini-switch input:checked{background:var(--turq)}
+  .ini-switch input:checked::before{transform:translateX(13px)}
+  /* Badge de visibilidad por mensaje (solo lo ve un admin, junto al nombre) */
+  .ini-vis-badge{margin-left:6px;font-size:10px;opacity:.8}
+  /* Panel de operador (Inicio): rojo=chat, azul=accesos (ocupa las 2 filas de
+     la derecha), verde=pendientes - mismo espíritu del boceto que nos pasó
+     el usuario. */
+  .op-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;margin-top:18px}
+  .op-panel-chat{grid-column:1;grid-row:1}
+  .op-panel-accesos{grid-column:2;grid-row:1/3}
+  .op-panel-pendientes{grid-column:1;grid-row:2}
+  @media(max-width:860px){
+    .op-grid{grid-template-columns:1fr}
+    .op-panel-chat,.op-panel-accesos,.op-panel-pendientes{grid-column:1;grid-row:auto}
+  }
   [data-theme="dark"] .ini-msg.me .ini-txt{color:#dff8f7}
   .ini-empty{color:var(--text-2);font-size:13px;text-align:center;padding:26px 10px}
   .ini-composer{border-top:1px solid var(--border);padding:11px 13px;display:flex;gap:9px;align-items:flex-end;background:var(--surface-2)}
