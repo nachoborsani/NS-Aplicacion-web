@@ -1796,13 +1796,14 @@ function renderClientGeneral(){
 async function loadClientPami(){
   var card = document.getElementById('clientPamiCard');
   if (!card) return;
-  if (!ME || ME.role !== 'admin' || !ACTIVE_CLIENT){ card.style.display = 'none'; return; }
+  if (!ME || ME.role !== 'admin' || !ACTIVE_CLIENT){ card.style.display = 'none'; setClientHeaderUp(''); return; }
   card.style.display = '';
   var user = document.getElementById('clientPamiUser');
   var pass = document.getElementById('clientPamiPass');
   var msg = document.getElementById('clientPamiMsg');
   var revealBtn = document.getElementById('clientPamiRevealBtn');
   user.value = ''; pass.value = ''; pass.type = 'password'; msg.textContent = '';
+  setClientHeaderUp('');   // se oculta al instante al cambiar de cliente; reaparece al traer el UP
   document.getElementById('clientPamiPassIco').innerHTML = EYE_ON;
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami');
   if (res.ok && res.data){
