@@ -3758,24 +3758,21 @@ function buildClientReportWorkbook(report) {
 function buildAusentesWorkbook(cruce, slug) {
   const XS = XLSXStyle;
   const MONEY = '"$"#,##0.00';
-  const bd = { style: "thin", color: { rgb: "D9DEE1" } };
+  // Borde más oscuro que el del reporte de cliente a propósito: ese sale por
+  // pantalla, este lo imprimen - un gris casi blanco (D9DEE1) queda invisible
+  // en papel y la grilla se ve "floja". 595959 imprime nítido sin ser negro puro.
+  const bd = { style: "thin", color: { rgb: "595959" } };
   const BORDER = { top: bd, bottom: bd, left: bd, right: bd };
-  const HEAD = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center" }, border: BORDER };
+  const HEAD = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center", horizontal: "center" }, border: BORDER };
   const clientName = String(clientDisplayName(slug) || slug || "").toUpperCase();
   const ausentes = cruce.ausentes || [];
   const conValor = ausentes.filter((a) => (a.valor || 0) > 0);
   const totalValor = ausentes.reduce((s, a) => s + (a.valor || 0), 0);
 
-  const HEADER_ROW = 4; // fila 5 visual: 0=cliente,1=subtitulo,2=nota,3=blanco,4=encabezados
-  const nomInfo = cruce.nomencladorLabel
-    ? `Valorizado con nomenclador ${cruce.nomencladorLabel} (${cruce.nomencladorCodigosConValor || 0} de ${cruce.nomencladorCodigosEnAusentes || 0} códigos con precio).`
-    : conValor.length
-      ? "" // cruce viejo (de antes de guardar con qué nomenclador se corrió) pero sí tiene valores
-      : "Ningún código de esta lista tiene precio cargado en el nomenclador.";
+  const HEADER_ROW = 3; // 0=cliente,1=subtitulo,2=blanco,3=encabezados
   const rows = [
     [clientName],
     [["Ausentes (no vino el paciente)", cruce.label].filter(Boolean).join("  ·  ")],
-    [[nomInfo, "\"—\" en Valor = ese código puntual no tiene precio en ese nomenclador (no es que valga $0)."].filter(Boolean).join(" ")],
     [],
     ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
   ];
@@ -3787,11 +3784,10 @@ function buildAusentesWorkbook(cruce, slug) {
   const wb = XS.utils.book_new();
   const ws = XS.utils.aoa_to_sheet(rows);
   ws["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 60 }, { wch: 24 }, { wch: 16 }];
-  ws["!merges"] = [XS.utils.decode_range("A1:E1"), XS.utils.decode_range("A2:E2"), XS.utils.decode_range("A3:E3")];
+  ws["!merges"] = [XS.utils.decode_range("A1:E1"), XS.utils.decode_range("A2:E2")];
   const setS = (ref, s) => { if (ws[ref]) ws[ref].s = Object.assign({}, ws[ref].s, s); };
   setS("A1", { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } });
   setS("A2", { font: { italic: true, color: { rgb: "667079" } } });
-  setS("A3", { font: { italic: true, sz: 10, color: { rgb: "9AA3AB" } } });
   for (let c = 0; c < 5; c += 1) setS(XS.utils.encode_cell({ r: HEADER_ROW, c }), HEAD);
   ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: HEADER_ROW, c: 0 }, e: { r: HEADER_ROW, c: 4 } }) };
   ws["!freeze"] = { xSplit: 0, ySplit: HEADER_ROW + 1 };
@@ -3799,18 +3795,24 @@ function buildAusentesWorkbook(cruce, slug) {
   const dataStart = HEADER_ROW + 1;
   ausentes.forEach((a, i) => {
     const r = dataStart + i;
-    for (let c = 0; c < 5; c += 1) setS(XS.utils.encode_cell({ r, c }), { border: BORDER });
+    // Beneficio y Turno centrados (son códigos/fechas cortas, se ven prolijos
+    // centrados); Nombre y Práctica quedan a la izquierda (son texto largo,
+    // centrarlos se ve mal); Valor a la derecha (convención de moneda).
+    setS(XS.utils.encode_cell({ r, c: 0 }), { border: BORDER, alignment: { horizontal: "center" } });
+    setS(XS.utils.encode_cell({ r, c: 1 }), { border: BORDER });
+    setS(XS.utils.encode_cell({ r, c: 2 }), { border: BORDER });
+    setS(XS.utils.encode_cell({ r, c: 3 }), { border: BORDER, alignment: { horizontal: "center" } });
     const benRef = XS.utils.encode_cell({ r, c: 0 });
     if (ws[benRef]) ws[benRef].t = "s"; // texto explícito: nunca lo reinterprete como número
     const turnoRef = XS.utils.encode_cell({ r, c: 3 });
     if (ws[turnoRef]) ws[turnoRef].t = "s";
     const valRef = XS.utils.encode_cell({ r, c: 4 });
     if (ws[valRef]) {
-      if ((a.valor || 0) > 0) setS(valRef, { numFmt: MONEY, alignment: { horizontal: "right" } }), (ws[valRef].z = MONEY);
-      else { ws[valRef].v = "—"; ws[valRef].t = "s"; setS(valRef, { alignment: { horizontal: "center" }, font: { color: { rgb: "9AA3AB" } } }); }
+      if ((a.valor || 0) > 0) setS(valRef, { border: BORDER, numFmt: MONEY, alignment: { horizontal: "right" } }), (ws[valRef].z = MONEY);
+      else { ws[valRef].v = "—"; ws[valRef].t = "s"; setS(valRef, { border: BORDER, alignment: { horizontal: "center" }, font: { color: { rgb: "9AA3AB" } } }); }
     }
   });
-  setS(XS.utils.encode_cell({ r: totalRow, c: 3 }), { font: { bold: true }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
+  setS(XS.utils.encode_cell({ r: totalRow, c: 3 }), { font: { bold: true }, alignment: { horizontal: "center" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
   const totalValRef = XS.utils.encode_cell({ r: totalRow, c: 4 });
   if (ws[totalValRef]) { ws[totalValRef].z = MONEY; setS(totalValRef, { font: { bold: true }, numFmt: MONEY, alignment: { horizontal: "right" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } }); }
 
