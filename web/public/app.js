@@ -6004,7 +6004,7 @@ async function cargarHistorialCruzas(){
     var fecha = new Date(c.createdAt).toLocaleString('es-AR');
     var estado = c.status === 'confirmado' ? '<span class="cz-tag ok">Confirmado</span>' : '<span class="cz-tag">Borrador</span>';
     var res = c.resumen || {};
-    var chips = CZ_COLORES.map(function(k){ var n = res[k.toLowerCase()] || 0; return n ? ('<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k.charAt(0) + ':' + n + '</span>') : ''; }).join(' ');
+    var chips = CZ_COLORES.map(function(k){ var n = res[k.toLowerCase()] || 0; return n ? ('<span class="cz-chip cz-chip-mini cz-chip-' + k.toLowerCase() + '">' + n + '</span>') : ''; }).join(' ');
     return '<div class="cz-historial-item" onclick="abrirCruce(\'' + esc(c.id) + '\')" style="cursor:pointer;padding:10px 0;border-bottom:1px solid var(--line)">' +
       '<b>' + esc(c.label) + '</b> ' + estado + ' <span class="nom-muted">' + fecha + ' · ' + c.ausentesCount + ' ausentes · ' + c.faltaOmeCount + ' falta ome</span><br>' + chips +
       '</div>';
@@ -6064,9 +6064,16 @@ function renderCruceActivo(){
 
   var nomInfo = document.getElementById('czNomencladorInfo');
   if (nomInfo){
-    nomInfo.textContent = c.nomencladorLabel
-      ? ('Valorizado con nomenclador ' + c.nomencladorLabel + ' (' + (c.nomencladorCodigosConValor||0) + ' de ' + (c.nomencladorCodigosEnAusentes||0) + ' códigos con precio cargado).')
-      : 'No había ningún nomenclador cargado al armar este cruce - por eso no hay valores.';
+    var hayValores = (c.ausentes || []).some(function(a){ return (a.valor||0) > 0; });
+    if (c.nomencladorLabel){
+      nomInfo.textContent = 'Valorizado con nomenclador ' + c.nomencladorLabel + ' (' + (c.nomencladorCodigosConValor||0) + ' de ' + (c.nomencladorCodigosEnAusentes||0) + ' códigos con precio).';
+    } else if (hayValores) {
+      // Cruce viejo (de antes de que guardáramos qué nomenclador se usó): hay
+      // valores igual, así que no corresponde decir "no había nomenclador".
+      nomInfo.textContent = '';
+    } else {
+      nomInfo.textContent = 'Ningún código de esta lista tiene precio cargado en el nomenclador.';
+    }
   }
   var ausBody = document.getElementById('czAusentesBody');
   ausBody.innerHTML = (c.ausentes || []).map(function(a){
@@ -6083,7 +6090,7 @@ function czRenderPacientesTabla(){
   chips.innerHTML = CZ_COLORES.map(function(k){
     var n = (c.resumen && c.resumen[k.toLowerCase()]) || 0;
     var on = CZ.filtroColor === k ? ' on' : '';
-    return '<button type="button" class="cz-chip cz-chip-' + k.toLowerCase() + on + '" onclick="czFiltrarPorColor(\'' + k + '\')">' + k + ': ' + n + '</button>';
+    return '<button type="button" class="cz-chip cz-chip-' + k.toLowerCase() + on + '" title="' + k + '" onclick="czFiltrarPorColor(\'' + k + '\')">' + n + '</button>';
   }).join('');
 
   var q = calcNorm((document.getElementById('czBuscar') || {}).value || '').trim();
