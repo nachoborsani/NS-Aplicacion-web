@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 // ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
@@ -93,7 +93,9 @@ function go(v, el){
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
   // el backend le bloquea las acciones). El resto, afuera.
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
+  if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -106,6 +108,7 @@ function go(v, el){
   if (v === 'cabina') loadCabinaView();
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
+  if (v === 'cruzas') loadCruzasClientes();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
   ['navGroupConsultorios', 'navGroupMedCab', 'navGroupPotenciales'].forEach(function(id){
     var g = document.getElementById(id);
@@ -363,7 +366,7 @@ function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
   if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -5920,6 +5923,238 @@ async function deletePadronItem(slug, dni){
   if (r.ok) await refreshPadron();
 }
 
+// ===== Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI =====
+// Todo el estado del cruce que se está viendo/editando vive acá en memoria;
+// "Guardar cambios" es lo único que lo persiste en el servidor.
+var CZ = { clientesCargados: false, cruceActivo: null };
+var CZ_COLORES = ['VERDE', 'AMARILLO', 'NARANJA', 'ROJO', 'GRIS'];
+var CZ_COLOR_HEX = { VERDE: '#c6efce', AMARILLO: '#ffeb9c', NARANJA: '#fcd5b4', ROJO: '#ffc7ce', GRIS: '#d9d9d9' };
+async function loadCruzasClientes(){
+  var sel = document.getElementById('czCliente');
+  if (sel && !CZ.clientesCargados){
+    CZ.clientesCargados = true;
+    try {
+      var r = await fetch('/api/clientes');
+      var raw = await r.json();
+      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+    } catch(e){}
+  }
+  onCambiaClienteCruzas();
+}
+function onCambiaClienteCruzas(){
+  CZ.cruceActivo = null;
+  document.getElementById('czResultado').style.display = 'none';
+  cargarHistorialCruzas();
+}
+function marcarArchivoElegido(inputId, spanId){
+  var inp = document.getElementById(inputId), span = document.getElementById(spanId);
+  var f = inp && inp.files && inp.files[0];
+  if (span) span.textContent = f ? f.name : '';
+}
+async function cargarHistorialCruzas(){
+  var slug = document.getElementById('czCliente').value;
+  var box = document.getElementById('czHistorial');
+  if (!slug){ box.textContent = 'Elegí un cliente arriba.'; return; }
+  box.textContent = 'Cargando…';
+  var r = await fetch('/api/cruzas/' + slug);
+  var data = {}; try { data = await r.json(); } catch(e){}
+  if (!r.ok){ box.textContent = data.error || 'No se pudo cargar.'; return; }
+  var cruces = data.cruces || [];
+  if (!cruces.length){ box.textContent = 'Todavía no hay ningún cruce para este cliente.'; return; }
+  box.innerHTML = cruces.map(function(c){
+    var fecha = new Date(c.createdAt).toLocaleString('es-AR');
+    var estado = c.status === 'confirmado' ? '<span class="cz-tag ok">Confirmado</span>' : '<span class="cz-tag">Borrador</span>';
+    var res = c.resumen || {};
+    var chips = CZ_COLORES.map(function(k){ var n = res[k.toLowerCase()] || 0; return n ? ('<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k.charAt(0) + ':' + n + '</span>') : ''; }).join(' ');
+    return '<div class="cz-historial-item" onclick="abrirCruce(\'' + esc(c.id) + '\')" style="cursor:pointer;padding:10px 0;border-bottom:1px solid var(--line)">' +
+      '<b>' + esc(c.label) + '</b> ' + estado + ' <span class="nom-muted">' + fecha + ' · ' + c.ausentesCount + ' ausentes · ' + c.faltaOmeCount + ' falta ome</span><br>' + chips +
+      '</div>';
+  }).join('');
+}
+async function cruzarAhora(){
+  var slug = document.getElementById('czCliente').value;
+  var err = document.getElementById('czError');
+  err.style.display = 'none';
+  if (!slug){ err.textContent = 'Elegí un cliente.'; err.style.display = 'block'; return; }
+  var agenda = document.getElementById('czFileAgenda').files[0];
+  var bandeja = document.getElementById('czFileBandeja').files[0];
+  if (!agenda || !bandeja){ err.textContent = 'Subí los dos archivos: Listado de consultas y bandeja de transmisión.'; err.style.display = 'block'; return; }
+  var btn = document.getElementById('czCruzarBtn'); btn.disabled = true; var textoOrig = btn.textContent; btn.textContent = 'Cruzando…';
+  try {
+    var fd = new FormData();
+    fd.append('agenda', agenda); fd.append('bandeja', bandeja);
+    fd.append('label', document.getElementById('czLabel').value || '');
+    var r = await fetch('/api/cruzas/' + slug + '/cruzar', { method:'POST', body: fd });
+    var data = {}; try { data = await r.json(); } catch(e){}
+    if (!r.ok){ err.textContent = data.error || 'No se pudo procesar el cruce.'; err.style.display = 'block'; return; }
+    CZ.cruceActivo = data;
+    document.getElementById('czFileAgenda').value = ''; document.getElementById('czFileBandeja').value = ''; document.getElementById('czLabel').value = '';
+    document.getElementById('czNombreAgenda').textContent = ''; document.getElementById('czNombreBandeja').textContent = '';
+    renderCruceActivo();
+    await cargarHistorialCruzas();
+  } finally {
+    btn.disabled = false; btn.textContent = textoOrig;
+  }
+}
+async function abrirCruce(id){
+  var slug = document.getElementById('czCliente').value;
+  var r = await fetch('/api/cruzas/' + slug + '/' + id);
+  var data = {}; try { data = await r.json(); } catch(e){}
+  if (!r.ok) { alert(data.error || 'No se pudo abrir el cruce.'); return; }
+  CZ.cruceActivo = data;
+  renderCruceActivo();
+  document.getElementById('czResultado').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function renderCruceActivo(){
+  var c = CZ.cruceActivo;
+  document.getElementById('czResultado').style.display = c ? '' : 'none';
+  if (!c) return;
+  document.getElementById('czResTitulo').textContent = 'Cruce: ' + c.label;
+  document.getElementById('czEstadoBadge').innerHTML = c.status === 'confirmado'
+    ? ('Confirmado el ' + new Date(c.confirmedAt).toLocaleString('es-AR'))
+    : 'Borrador - todavía sin confirmar';
+  document.getElementById('czConfirmarBtn').style.display = c.status === 'confirmado' ? 'none' : '';
+  document.getElementById('czPdfBtn').disabled = c.status !== 'confirmado';
+  document.getElementById('czPdfBtn').title = c.status === 'confirmado' ? '' : 'Confirmá el cruce primero';
+
+  var chips = document.getElementById('czResumenChips');
+  chips.innerHTML = CZ_COLORES.map(function(k){
+    var n = (c.resumen && c.resumen[k.toLowerCase()]) || 0;
+    return '<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k + ': ' + n + '</span>';
+  }).join(' ');
+
+  var body = document.getElementById('czPacientesBody');
+  body.innerHTML = c.pacientes.map(function(p, i){
+    var opts = CZ_COLORES.map(function(k){ return '<option value="' + k + '"' + (k === p.color ? ' selected' : '') + '>' + k + '</option>'; }).join('');
+    return '<tr>' +
+      '<td>' + esc(p.beneficio) + '</td><td>' + esc(p.dni) + '</td><td>' + esc(p.nombre) + '</td><td>' + esc(p.especialidades) + '</td>' +
+      '<td><select class="inp cz-color-select" data-color="' + p.color + '" style="background:' + CZ_COLOR_HEX[p.color] + '" onchange="cambiarColorPaciente(' + i + ',this.value)">' + opts + '</select></td>' +
+      '<td><input class="inp" value="' + esc(p.detalle) + '" oninput="cambiarDetallePaciente(' + i + ',this.value)"></td>' +
+    '</tr>';
+  }).join('');
+
+  renderFaltaOmeTable();
+
+  var ausBody = document.getElementById('czAusentesBody');
+  ausBody.innerHTML = (c.ausentes || []).map(function(a){
+    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td class="num">' + moneyFmt(a.valor) + '</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="nom-muted">Ningún no-show detectado en este cruce.</td></tr>';
+}
+function cambiarColorPaciente(i, valor){
+  CZ.cruceActivo.pacientes[i].color = valor;
+  var sel = document.querySelectorAll('#czPacientesBody select')[i];
+  if (sel){ sel.dataset.color = valor; sel.style.background = CZ_COLOR_HEX[valor]; }
+  var c = CZ.cruceActivo;
+  c.resumen = { verde:0, amarillo:0, naranja:0, rojo:0, gris:0 };
+  c.pacientes.forEach(function(p){ c.resumen[p.color.toLowerCase()] = (c.resumen[p.color.toLowerCase()]||0) + 1; });
+  var chips = document.getElementById('czResumenChips');
+  chips.innerHTML = CZ_COLORES.map(function(k){ return '<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k + ': ' + (c.resumen[k.toLowerCase()]||0) + '</span>'; }).join(' ');
+}
+function cambiarDetallePaciente(i, valor){ CZ.cruceActivo.pacientes[i].detalle = valor; }
+function renderFaltaOmeTable(){
+  var c = CZ.cruceActivo;
+  var body = document.getElementById('czFaltaOmeBody');
+  var auto = (c.faltaOmeAuto || []).map(function(f){
+    return '<tr class="nom-muted"><td>' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td><td></td></tr>';
+  }).join('');
+  var manual = (c.faltaOmeManual || []).map(function(f, i){
+    return '<tr>' +
+      '<td><input class="inp" value="' + esc(f.turno) + '" oninput="cambiarFaltaOmeManual(' + i + ',\'turno\',this.value)"></td>' +
+      '<td><input class="inp" value="' + esc(f.especialidad) + '" oninput="cambiarFaltaOmeManual(' + i + ',\'especialidad\',this.value)"></td>' +
+      '<td><input class="inp" value="' + esc(f.nombre) + '" oninput="cambiarFaltaOmeManual(' + i + ',\'nombre\',this.value)"></td>' +
+      '<td><input class="inp" value="' + esc(f.beneficio) + '" oninput="cambiarFaltaOmeManual(' + i + ',\'beneficio\',this.value)"></td>' +
+      '<td><input class="inp" value="' + esc(f.obs) + '" oninput="cambiarFaltaOmeManual(' + i + ',\'obs\',this.value)"></td>' +
+      '<td><button class="icon-danger-btn mini" title="Quitar" onclick="quitarFilaFaltaOme(' + i + ')">×</button></td>' +
+    '</tr>';
+  }).join('');
+  body.innerHTML = (auto + manual) || '<tr><td colspan="6" class="nom-muted">Nada por ahora - buena señal.</td></tr>';
+}
+function agregarFilaFaltaOme(){
+  var c = CZ.cruceActivo; if (!c) return;
+  if (!c.faltaOmeManual) c.faltaOmeManual = [];
+  c.faltaOmeManual.push({ turno:'', especialidad:'', nombre:'', beneficio:'', obs:'' });
+  renderFaltaOmeTable();
+}
+function quitarFilaFaltaOme(i){ CZ.cruceActivo.faltaOmeManual.splice(i, 1); renderFaltaOmeTable(); }
+function cambiarFaltaOmeManual(i, campo, valor){ CZ.cruceActivo.faltaOmeManual[i][campo] = valor; }
+async function guardarEdicionesCruce(){
+  var c = CZ.cruceActivo; if (!c) return;
+  var slug = document.getElementById('czCliente').value;
+  var btn = document.getElementById('czGuardarBtn'); var textoOrig = btn.textContent; btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    var body = {
+      pacientes: c.pacientes.map(function(p){ return { beneficio: p.beneficio, color: p.color, detalle: p.detalle }; }),
+      faltaOmeManual: c.faltaOmeManual || [],
+    };
+    var r = await fetch('/api/cruzas/' + slug + '/' + c.id, { method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
+    var data = {}; try { data = await r.json(); } catch(e){}
+    if (!r.ok){ alert(data.error || 'No se pudo guardar.'); return; }
+    CZ.cruceActivo = data; renderCruceActivo();
+    await cargarHistorialCruzas();
+  } finally { btn.disabled = false; btn.textContent = textoOrig; }
+}
+async function confirmarCruce(){
+  var c = CZ.cruceActivo; if (!c) return;
+  if (!confirm('¿Confirmar este cruce? Guardá los cambios pendientes antes si hiciste alguna corrección.')) return;
+  var slug = document.getElementById('czCliente').value;
+  var r = await fetch('/api/cruzas/' + slug + '/' + c.id + '/confirmar', { method:'POST' });
+  var data = {}; try { data = await r.json(); } catch(e){}
+  if (!r.ok){ alert(data.error || 'No se pudo confirmar.'); return; }
+  CZ.cruceActivo = data; renderCruceActivo();
+  await cargarHistorialCruzas();
+}
+async function eliminarCruceActual(){
+  var c = CZ.cruceActivo; if (!c) return;
+  if (!confirm('¿Eliminar este cruce (' + c.label + ')? No se puede deshacer.')) return;
+  var slug = document.getElementById('czCliente').value;
+  await fetch('/api/cruzas/' + slug + '/' + c.id, { method:'DELETE' });
+  CZ.cruceActivo = null;
+  document.getElementById('czResultado').style.display = 'none';
+  await cargarHistorialCruzas();
+}
+function descargarCruceExcel(){
+  var c = CZ.cruceActivo; if (!c) return;
+  var slug = document.getElementById('czCliente').value;
+  window.open('/api/cruzas/' + slug + '/' + c.id + '/export.xlsx', '_blank');
+}
+// PDF final (mismo mecanismo que OSDOP: armar el bloque solo-impresión y
+// window.print()). Se arma acá, no en el servidor, para reusar el mismo CSS
+// de impresión que ya tiene la web.
+function czMesDe(turno){
+  var meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(turno||''));
+  return m ? meses[parseInt(m[2], 10) - 1] || '' : '';
+}
+function exportarCrucePDF(){
+  var c = CZ.cruceActivo; if (!c || c.status !== 'confirmado') return;
+  var porMes = {};
+  (c.faltaInforme || []).forEach(function(f){ var mes = czMesDe(f.turno) || 'SIN FECHA'; (porMes[mes] = porMes[mes] || []).push(f); });
+  var infHtml = Object.keys(porMes).map(function(mes){
+    var filas = porMes[mes].map(function(f){ return '<tr><td>' + esc(f.beneficio) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.practica) + '</td><td>' + esc(f.turno) + '</td></tr>'; }).join('');
+    return '<h4>' + esc(mes) + '</h4><table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th></tr></thead><tbody>' + filas + '</tbody></table>';
+  }).join('') || '<p>Nada pendiente de transmitir.</p>';
+
+  var ausFilas = (c.ausentes || []).map(function(a){
+    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td>' + moneyFmt(a.valor) + '</td></tr>';
+  }).join('');
+  var ausHtml = ausFilas ? ('<table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th><th>Valor</th></tr></thead><tbody>' + ausFilas + '</tbody></table>') : '<p>Ningún no-show detectado.</p>';
+
+  var ome = [].concat(c.faltaOmeAuto || [], c.faltaOmeManual || []);
+  var omeFilas = ome.map(function(f){
+    return '<tr><td>' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td></tr>';
+  }).join('');
+  var omeHtml = omeFilas ? ('<table><thead><tr><th>Turno</th><th>Especialidad</th><th>Nombre</th><th>Beneficio</th><th>Obs</th></tr></thead><tbody>' + omeFilas + '</tbody></table>') : '<p>Nada pendiente.</p>';
+
+  var clienteNombre = document.getElementById('czCliente').selectedOptions[0].textContent;
+  document.getElementById('czPrintArea').innerHTML =
+    '<div class="cz-print-head"><div class="op-title">' + esc(clienteNombre) + ' — Cruce ' + esc(c.label) + '</div><div class="op-sub">Generado el ' + new Date().toLocaleDateString('es-AR') + '</div></div>' +
+    '<h3>Falta informe</h3>' + infHtml +
+    '<h3>Ausentes</h3>' + ausHtml +
+    '<h3>Falta ome</h3>' + omeHtml;
+  window.print();
+}
+
 // ===== Capita del afiliado (Mi Cartilla PAMI): médico de cabecera, internación
 // y demás módulos con prestador fijo asignado. Beneficio+DNI siempre vienen de
 // una fila ya cargada (padrón); no se le pide nada más al operador. =====
@@ -6495,6 +6730,8 @@ function aplicarUsuario(u){
   var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');
   var np = document.getElementById('navPadron'); if (np) np.style.display = verHerramientas ? '' : 'none';
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
+  // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
+  var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
@@ -6516,7 +6753,7 @@ function aplicarUsuario(u){
   iniArrancar();   // campana de mensajes del Inicio (solo admin)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina','cruzas'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

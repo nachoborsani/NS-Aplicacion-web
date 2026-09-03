@@ -771,7 +771,12 @@
   /* Exportar a PDF = imprimir solo la tarjeta de OSDOP (nada de sidebar, topbar
      ni pestañas), con un encabezado con el nombre del cliente y la fecha. El
      resto de la app no tiene reglas @media print propias, así que esta es la
-     primera — no pisa nada existente. */
+     primera — no pisa nada existente. Cruzas (#czPrintArea) reusa el mismo
+     bloque en vez de agregar un segundo @media print. */
+  .cz-print-area{display:none}
+  .cz-historial-item:hover{background:var(--surface-2)}
+  .cz-tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border)}
+  .cz-tag.ok{background:color-mix(in srgb,#12b3a6 14%,var(--surface));border-color:color-mix(in srgb,#12b3a6 40%,var(--border));color:#0a7d73}
   @media print {
     body *{visibility:hidden}
     #osdopCard,#osdopCard *{visibility:visible}
@@ -786,6 +791,17 @@
     .osdop-table th,.osdop-table td{color:#000;border-color:#ccc}
     .osdop-table tfoot th.num{color:#000}
     .osdop-table .osdop-col-acciones,.osdop-add-btn{display:none}
+
+    #czPrintArea,#czPrintArea *{visibility:visible}
+    #czPrintArea{display:block;position:absolute;top:0;left:0;width:100%}
+    .cz-print-head{margin-bottom:16px}
+    .cz-print-head .op-title{font-size:18px;font-weight:800;color:#000}
+    .cz-print-head .op-sub{font-size:12px;color:#555;margin-top:2px}
+    #czPrintArea h3{font-size:15px;font-weight:800;color:#000;margin:20px 0 6px;page-break-after:avoid}
+    #czPrintArea h4{font-size:12px;font-weight:700;color:#333;margin:12px 0 4px;text-transform:uppercase}
+    #czPrintArea table{width:100%;border-collapse:collapse;margin-bottom:8px;font-size:11px}
+    #czPrintArea th,#czPrintArea td{border:1px solid #ccc;padding:4px 6px;text-align:left;color:#000}
+    #czPrintArea tr{page-break-inside:avoid}
   }
   .cfg-block{margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
   .cfg-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2)}

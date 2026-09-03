@@ -17,6 +17,7 @@ catch (e) { console.warn("[informes] motor de extracción no disponible:", e && 
 let gmailInformes = null;
 try { gmailInformes = require("./gmail_informes"); }
 catch (e) { console.warn("[informes] descarga de Gmail no disponible:", e && e.message); }
+const cruceGjs = require("./cruce_gjs");
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -56,6 +57,12 @@ const gastosFile = path.join(dataDir, "gastos.json");
 const honorariosFile = path.join(dataDir, "honorarios.json");
 function loadHonorarios() { try { const j = JSON.parse(fs.readFileSync(honorariosFile, "utf8")); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
 function saveHonorarios(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(honorariosFile, JSON.stringify(store, null, 2)); }
+// Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI para detectar
+// atendidos sin OME. { [slug]: [ {id, label, status, pacientes, ausentes, ...} ] },
+// más reciente primero.
+const cruzasFile = path.join(dataDir, "cruzas.json");
+function loadCruzas() { try { const j = JSON.parse(fs.readFileSync(cruzasFile, "utf8")); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
+function saveCruzas(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(cruzasFile, JSON.stringify(store, null, 2)); }
 // Inicio: canal interno de mensajes entre admins + tareas compartidas. `leido`
 // guarda, por usuario, hasta qué momento vio los mensajes (para el "no leídos").
 const inicioFile = path.join(dataDir, "inicio.json");
@@ -2408,6 +2415,22 @@ function getNomencladorByPeriod(store, period) {
   const first = Object.keys(store.items).sort().reverse()[0];
   return first ? store.items[first] : null;
 }
+// Mapa código -> valor $ (para "Cruzas"), del nomenclador de un período dado
+// (o el activo si no se especifica). Si el código se repite, se queda con el
+// de mayor valor (mismo criterio que /api/nomencladores/calc-data).
+function nomencladorValorPorCodigo(period) {
+  const store = loadNomencladorStore();
+  const payload = getNomencladorByPeriod(store, period);
+  const mapa = new Map();
+  if (!payload) return mapa;
+  for (const row of payload.rows || []) {
+    const cod = String(row.practiceCode || "").trim();
+    if (!cod) continue;
+    const valor = money(row.total || 0);
+    if (!mapa.has(cod) || valor > mapa.get(cod)) mapa.set(cod, valor);
+  }
+  return mapa;
+}
 function listNomencladores(store) {
   return Object.values(store.items || {})
     .map((item) => ({
@@ -4124,6 +4147,33 @@ function extractMultipartFiles(buffer, contentType) {
     if (dataEnd >= 0 && fieldNameMatch) {
       const data = buffer.slice(dataStart, dataEnd);
       if (fileNameMatch) { if (fileNameMatch[1]) result.files.push({ filename: path.basename(fileNameMatch[1]), data }); }
+      else result.fields[fieldNameMatch[1]] = data.toString("utf8").trim();
+    }
+    cursor = buffer.indexOf(boundary, headerEnd + 4);
+  }
+  return result;
+}
+// Igual que extractMultipart pero soporta VARIOS archivos identificados por su
+// name (ej. "agenda" y "bandeja") en vez de uno solo o una lista sin nombre.
+function extractMultipartNamed(buffer, contentType) {
+  const match = String(contentType || "").match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  if (!match) throw new Error("No se recibió información válida.");
+  const bnd = match[1] || match[2];
+  const boundary = Buffer.from(`--${bnd}`);
+  const result = { fields: {}, files: {} };
+  let cursor = buffer.indexOf(boundary);
+  while (cursor >= 0) {
+    const headerStart = cursor + boundary.length + 2;
+    const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), headerStart);
+    if (headerEnd < 0) break;
+    const headers = buffer.slice(headerStart, headerEnd).toString("latin1");
+    const fieldNameMatch = headers.match(/name="([^"]+)"/i);
+    const fileNameMatch = headers.match(/filename="([^"]+)"/i);
+    const dataStart = headerEnd + 4;
+    const dataEnd = buffer.indexOf(Buffer.from(`\r\n--${bnd}`), dataStart);
+    if (dataEnd >= 0 && fieldNameMatch) {
+      const data = buffer.slice(dataStart, dataEnd);
+      if (fileNameMatch && fileNameMatch[1]) result.files[fieldNameMatch[1]] = { filename: path.basename(fileNameMatch[1]), data };
       else result.fields[fieldNameMatch[1]] = data.toString("utf8").trim();
     }
     cursor = buffer.indexOf(boundary, headerEnd + 4);
@@ -6190,6 +6240,188 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el nomenclador." });
     }
+  }
+
+  // ---- Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI ----
+  // Todo admin-only por ahora: es una herramienta interna nueva y sensible
+  // (maneja montos y datos de pacientes) - se abre a otros roles si hace falta.
+  const cruzasCruzar = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/cruzar$/);
+  if (cruzasCruzar && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede correr un cruce." });
+    const slug = cruzasCruzar[1];
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    try {
+      const raw = await readBuffer(req);
+      const mp = extractMultipartNamed(raw, req.headers["content-type"]);
+      const agenda = mp.files.agenda, bandeja = mp.files.bandeja;
+      if (!agenda || !bandeja) return json(res, 400, { error: "Subí los dos archivos: Listado de consultas y bandeja de transmisión." });
+      const extOk = (f) => [".xls", ".xlsx", ".xlsm"].includes(path.extname(f.filename).toLowerCase());
+      if (!extOk(agenda) || !extOk(bandeja)) return json(res, 400, { error: "Los archivos deben ser Excel (.xls/.xlsx/.xlsm)." });
+      const valorPorCodigo = nomencladorValorPorCodigo(mp.fields.nomencladorPeriod);
+      const resultado = cruceGjs.calcularCruce({ agendaBuffer: agenda.data, bandejaBuffer: bandeja.data, valorPorCodigo });
+      const cruce = {
+        id: crypto.randomUUID(),
+        label: String(mp.fields.label || "").trim() || new Date().toLocaleDateString("es-AR"),
+        status: "borrador",
+        createdAt: new Date().toISOString(),
+        createdBy: me.username,
+        confirmedAt: null,
+        archivoAgenda: agenda.filename,
+        archivoBandeja: bandeja.filename,
+        excluidosCabecera: resultado.excluidosCabecera,
+        excluidosParticular: resultado.excluidosParticular,
+        resumen: resultado.resumen,
+        pacientes: resultado.pacientes,
+        ausentes: resultado.ausentes,
+        faltaOmeAuto: resultado.faltaOmeAuto,
+        faltaOmeManual: [],
+        faltaInforme: resultado.faltaInforme,
+      };
+      const store = loadCruzas();
+      if (!store[slug]) store[slug] = [];
+      store[slug].unshift(cruce);
+      saveCruzas(store);
+      return json(res, 200, cruce);
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar el cruce." });
+    }
+  }
+  const cruzasList = p.match(/^\/api\/cruzas\/([a-z0-9-]+)$/);
+  if (cruzasList && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = cruzasList[1];
+    const store = loadCruzas();
+    const lista = (store[slug] || []).map((c) => ({
+      id: c.id, label: c.label, status: c.status, createdAt: c.createdAt, confirmedAt: c.confirmedAt, resumen: c.resumen,
+      ausentesCount: (c.ausentes || []).length, faltaOmeCount: (c.faltaOmeAuto || []).length + (c.faltaOmeManual || []).length,
+    }));
+    return json(res, 200, { cruces: lista });
+  }
+  const cruzasUno = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/([^/]+)$/);
+  if (cruzasUno && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasUno;
+    const store = loadCruzas();
+    const cruce = (store[slug] || []).find((c) => c.id === id);
+    if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
+    return json(res, 200, cruce);
+  }
+  if (cruzasUno && req.method === "PUT") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasUno;
+    const body = await readBody(req);
+    const store = loadCruzas();
+    const cruce = (store[slug] || []).find((c) => c.id === id);
+    if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
+    if (Array.isArray(body && body.pacientes)) {
+      for (const edit of body.pacientes) {
+        const pac = cruce.pacientes.find((p2) => p2.beneficio === edit.beneficio);
+        if (!pac) continue;
+        if (typeof edit.color === "string" && ["VERDE", "AMARILLO", "NARANJA", "ROJO", "GRIS"].includes(edit.color)) pac.color = edit.color;
+        if (typeof edit.detalle === "string") pac.detalle = edit.detalle.slice(0, 2000);
+      }
+      cruce.resumen = { verde: 0, amarillo: 0, naranja: 0, rojo: 0, gris: 0 };
+      for (const pc of cruce.pacientes) cruce.resumen[pc.color.toLowerCase()] = (cruce.resumen[pc.color.toLowerCase()] || 0) + 1;
+    }
+    if (Array.isArray(body && body.faltaOmeManual)) {
+      cruce.faltaOmeManual = body.faltaOmeManual.slice(0, 500).map((f) => ({
+        turno: String((f && f.turno) || "").slice(0, 60),
+        especialidad: String((f && f.especialidad) || "").slice(0, 120),
+        nombre: String((f && f.nombre) || "").slice(0, 160),
+        beneficio: String((f && f.beneficio) || "").slice(0, 40),
+        obs: String((f && f.obs) || "").slice(0, 300),
+      }));
+    }
+    saveCruzas(store);
+    return json(res, 200, cruce);
+  }
+  if (cruzasUno && req.method === "DELETE") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasUno;
+    const store = loadCruzas();
+    const antes = (store[slug] || []).length;
+    store[slug] = (store[slug] || []).filter((c) => c.id !== id);
+    saveCruzas(store);
+    return json(res, 200, { ok: true, eliminado: antes !== store[slug].length });
+  }
+  const cruzasConfirmar = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/([^/]+)\/confirmar$/);
+  if (cruzasConfirmar && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasConfirmar;
+    const store = loadCruzas();
+    const cruce = (store[slug] || []).find((c) => c.id === id);
+    if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
+    cruce.status = "confirmado";
+    cruce.confirmedAt = new Date().toISOString();
+    saveCruzas(store);
+    return json(res, 200, cruce);
+  }
+  const cruzasExport = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/([^/]+)\/export\.xlsx$/);
+  if (cruzasExport && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasExport;
+    const store = loadCruzas();
+    const cruce = (store[slug] || []).find((c) => c.id === id);
+    if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
+    const XS = XLSXStyle;
+    const COLORS = { VERDE: "C6EFCE", AMARILLO: "FFEB9C", NARANJA: "FCD5B4", ROJO: "FFC7CE", GRIS: "D9D9D9" };
+    const ORDEN = { GRIS: 0, ROJO: 1, NARANJA: 2, AMARILLO: 3, VERDE: 4 };
+    const pacientesOrdenados = cruce.pacientes.slice().sort((a, b) => ORDEN[a.color] - ORDEN[b.color]);
+    const wb = XS.utils.book_new();
+    const aoa = [["Beneficio", "DNI", "Nombre", "Especialidad(es)", "Estado", "Detalle"]];
+    for (const pcte of pacientesOrdenados) aoa.push([pcte.beneficio, pcte.dni, pcte.nombre, pcte.especialidades, pcte.color, pcte.detalle]);
+    const ws = XS.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 18 }, { wch: 12 }, { wch: 30 }, { wch: 26 }, { wch: 12 }, { wch: 100 }];
+    ws["!autofilter"] = { ref: "A1:F1" };
+    for (let c = 0; c < 6; c += 1) {
+      const ref = XS.utils.encode_cell({ r: 0, c });
+      if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "DDEBF7" } } };
+    }
+    pacientesOrdenados.forEach((pcte, i) => {
+      const ref = XS.utils.encode_cell({ r: i + 1, c: 4 });
+      if (ws[ref]) ws[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: COLORS[pcte.color] || COLORS.AMARILLO } } };
+    });
+    XS.utils.book_append_sheet(wb, ws, "Cruce por paciente");
+
+    const aoaAus = [["Beneficio", "Nombre", "Práctica", "Turno", "Valor"]];
+    for (const a of cruce.ausentes || []) aoaAus.push([a.beneficio, a.nombre, a.practica, a.turno, a.valor || 0]);
+    const wsAus = XS.utils.aoa_to_sheet(aoaAus);
+    wsAus["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 55 }, { wch: 22 }, { wch: 14 }];
+    for (let c = 0; c < 5; c += 1) { const ref = XS.utils.encode_cell({ r: 0, c }); if (wsAus[ref]) wsAus[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "DDEBF7" } } }; }
+    for (let r = 1; r <= (cruce.ausentes || []).length; r += 1) {
+      const ref = XS.utils.encode_cell({ r, c: 4 });
+      if (wsAus[ref] && typeof wsAus[ref].v === "number") wsAus[ref].z = '"$"#,##0.00';
+    }
+    XS.utils.book_append_sheet(wb, wsAus, "Ausentes");
+
+    const faltaOme = [...(cruce.faltaOmeAuto || []), ...(cruce.faltaOmeManual || [])];
+    const aoaOme = [["Turno", "Especialidad", "Nombre", "Beneficio", "Obs"]];
+    for (const f of faltaOme) aoaOme.push([f.turno, f.especialidad, f.nombre, f.beneficio, f.obs]);
+    const wsOme = XS.utils.aoa_to_sheet(aoaOme);
+    wsOme["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 18 }, { wch: 40 }];
+    for (let c = 0; c < 5; c += 1) { const ref = XS.utils.encode_cell({ r: 0, c }); if (wsOme[ref]) wsOme[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "DDEBF7" } } }; }
+    XS.utils.book_append_sheet(wb, wsOme, "Falta ome");
+
+    const buf = XS.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.writeHead(200, {
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="Cruce_${slug}_${cruce.label.replace(/[^a-z0-9]+/gi, "_")}.xlsx"`,
+    });
+    return res.end(buf);
   }
 
   // ---- Padrón de afiliados por cliente (solo admin) ----
