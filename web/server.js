@@ -3737,6 +3737,71 @@ function buildClientReportWorkbook(report) {
 
   return XS.write(wb, { bookType: "xlsx", type: "buffer" });
 }
+// Excel de "Ausentes" (Cruzas), con el mismo lenguaje visual que el reporte de
+// cliente de arriba (encabezado navy, bordes, moneda formateada) - antes esto
+// se armaba como un CSV plano del lado del navegador: sin estilo, columnas sin
+// acomodar, y Excel reinterpretaba el N° de beneficio (14 dígitos) como un
+// número y lo mostraba en notación científica. Acá el beneficio queda
+// explícitamente como texto, y un valor en $0 (código sin nomenclador
+// cargado) se muestra como "—" en vez de "$0,00" para no confundir "no tengo
+// el dato" con "vale cero".
+function buildAusentesWorkbook(cruce, slug) {
+  const XS = XLSXStyle;
+  const MONEY = '"$"#,##0.00';
+  const bd = { style: "thin", color: { rgb: "D9DEE1" } };
+  const BORDER = { top: bd, bottom: bd, left: bd, right: bd };
+  const HEAD = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center" }, border: BORDER };
+  const clientName = String(clientDisplayName(slug) || slug || "").toUpperCase();
+  const ausentes = cruce.ausentes || [];
+  const conValor = ausentes.filter((a) => (a.valor || 0) > 0);
+  const totalValor = ausentes.reduce((s, a) => s + (a.valor || 0), 0);
+
+  const HEADER_ROW = 4; // fila 5 visual: 0=cliente,1=subtitulo,2=nota,3=blanco,4=encabezados
+  const rows = [
+    [clientName],
+    [["Ausentes (no vino el paciente)", cruce.label].filter(Boolean).join("  ·  ")],
+    ["Turno reservado con OME pinchada pero nunca validada. \"—\" en Valor = ese código no tiene precio cargado en el nomenclador vigente (no es que valga $0)."],
+    [],
+    ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
+  ];
+  for (const a of ausentes) rows.push([a.beneficio, a.nombre, a.practica, a.turno, a.valor || 0]);
+  const totalRow = HEADER_ROW + 1 + ausentes.length + 1;
+  rows.push([]);
+  rows.push(["", "", "", "TOTAL (" + ausentes.length + " turnos · " + conValor.length + " valorizados)", totalValor]);
+
+  const wb = XS.utils.book_new();
+  const ws = XS.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 60 }, { wch: 24 }, { wch: 16 }];
+  ws["!merges"] = [XS.utils.decode_range("A1:E1"), XS.utils.decode_range("A2:E2"), XS.utils.decode_range("A3:E3")];
+  const setS = (ref, s) => { if (ws[ref]) ws[ref].s = Object.assign({}, ws[ref].s, s); };
+  setS("A1", { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } });
+  setS("A2", { font: { italic: true, color: { rgb: "667079" } } });
+  setS("A3", { font: { italic: true, sz: 10, color: { rgb: "9AA3AB" } } });
+  for (let c = 0; c < 5; c += 1) setS(XS.utils.encode_cell({ r: HEADER_ROW, c }), HEAD);
+  ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: HEADER_ROW, c: 0 }, e: { r: HEADER_ROW, c: 4 } }) };
+  ws["!freeze"] = { xSplit: 0, ySplit: HEADER_ROW + 1 };
+
+  const dataStart = HEADER_ROW + 1;
+  ausentes.forEach((a, i) => {
+    const r = dataStart + i;
+    for (let c = 0; c < 5; c += 1) setS(XS.utils.encode_cell({ r, c }), { border: BORDER });
+    const benRef = XS.utils.encode_cell({ r, c: 0 });
+    if (ws[benRef]) ws[benRef].t = "s"; // texto explícito: nunca lo reinterprete como número
+    const turnoRef = XS.utils.encode_cell({ r, c: 3 });
+    if (ws[turnoRef]) ws[turnoRef].t = "s";
+    const valRef = XS.utils.encode_cell({ r, c: 4 });
+    if (ws[valRef]) {
+      if ((a.valor || 0) > 0) setS(valRef, { numFmt: MONEY, alignment: { horizontal: "right" } }), (ws[valRef].z = MONEY);
+      else { ws[valRef].v = "—"; ws[valRef].t = "s"; setS(valRef, { alignment: { horizontal: "center" }, font: { color: { rgb: "9AA3AB" } } }); }
+    }
+  });
+  setS(XS.utils.encode_cell({ r: totalRow, c: 3 }), { font: { bold: true }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
+  const totalValRef = XS.utils.encode_cell({ r: totalRow, c: 4 });
+  if (ws[totalValRef]) { ws[totalValRef].z = MONEY; setS(totalValRef, { font: { bold: true }, numFmt: MONEY, alignment: { horizontal: "right" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } }); }
+
+  XS.utils.book_append_sheet(wb, ws, "Ausentes");
+  return XS.write(wb, { bookType: "xlsx", type: "buffer" });
+}
 const professionalReportModules = {
   "543": "CARDIOLOGIA",
   "546": "TRAUMATOLOGIA",
@@ -6443,6 +6508,25 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "content-disposition": `attachment; filename="Cruce_${slug}_${cruce.label.replace(/[^a-z0-9]+/gi, "_")}.xlsx"`,
+    });
+    return res.end(buf);
+  }
+  // Excel de "Ausentes" solo (con estilo NS) - para pasarle rápido la lista de
+  // no-shows a alguien sin abrir el libro completo. Reemplaza al CSV plano de
+  // antes (ver buildAusentesWorkbook: por qué el CSV rompía el N° de beneficio).
+  const cruzasExportAusentes = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/([^/]+)\/export-ausentes\.xlsx$/);
+  if (cruzasExportAusentes && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = cruzasExportAusentes;
+    const store = loadCruzas();
+    const cruce = (store[slug] || []).find((c) => c.id === id);
+    if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
+    const buf = buildAusentesWorkbook(cruce, slug);
+    res.writeHead(200, {
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="Ausentes_${slug}_${cruce.label.replace(/[^a-z0-9]+/gi, "_")}.xlsx"`,
     });
     return res.end(buf);
   }

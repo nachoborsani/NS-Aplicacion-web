@@ -6125,19 +6125,14 @@ function cambiarDetallePaciente(i, valor){ CZ.cruceActivo.pacientes[i].detalle =
 // CSV liviano solo con "Ausentes" (la tabla completa con colores ya está en
 // "Descargar Excel" - esto es para pasarle rápido la lista de no-shows a
 // alguien sin tener que abrir todo el libro).
-function descargarAusentesCsv(){
+// Antes armaba un CSV plano del lado del navegador: sin estilo, columnas sin
+// acomodar, y Excel reinterpretaba el N° de beneficio (14 dígitos) como
+// número (notación científica). Ahora baja el mismo Excel con estilo NS que
+// arma el servidor (buildAusentesWorkbook en server.js).
+function descargarAusentesExcel(){
   var c = CZ.cruceActivo; if (!c) return;
-  var filas = [['Beneficio','Nombre','Practica','Turno','Valor']].concat((c.ausentes||[]).map(function(a){
-    return [a.beneficio, a.nombre, a.practica, a.turno, a.valor||0];
-  }));
-  var csv = filas.map(function(f){
-    return f.map(function(v){ v = String(v == null ? '' : v); return /[",;\n]/.test(v) ? ('"' + v.replace(/"/g,'""') + '"') : v; }).join(';');
-  }).join('\r\n');
-  var blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'Ausentes_' + (c.label||'cruce').replace(/[^a-z0-9]+/gi,'_') + '.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  var slug = document.getElementById('czCliente').value;
+  window.open('/api/cruzas/' + slug + '/' + c.id + '/export-ausentes.xlsx', '_blank');
 }
 function renderFaltaOmeTable(){
   var c = CZ.cruceActivo;
