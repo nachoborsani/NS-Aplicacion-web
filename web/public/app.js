@@ -1802,6 +1802,7 @@ function renderOsdop(){
     return '<tr data-concepto="' + esc(concepto) + '">'
       + '<td>' + esc(concepto) + '</td>'
       + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (g.valor != null ? g.valor : '') + '" oninput="calcularOsdop()"></td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (g.coseguro != null ? g.coseguro : '') + '" oninput="calcularOsdop()"></td>'
       + '<td class="num"><input class="inp" type="number" inputmode="numeric" min="0" step="1" placeholder="0" value="' + (g.cantidad != null ? g.cantidad : '') + '" oninput="calcularOsdop()"></td>'
       + '<td class="num osdop-subtotal">$ 0,00</td>'
       + '</tr>';
@@ -1818,11 +1819,14 @@ function calcularOsdop(){
     var concepto = row.getAttribute('data-concepto');
     var inputs = row.querySelectorAll('input');
     var valor = Number(inputs[0].value) || 0;
-    var cantidad = Number(inputs[1].value) || 0;
-    var subtotal = valor * cantidad;
+    var coseguro = Number(inputs[1].value) || 0;
+    var cantidad = Number(inputs[2].value) || 0;
+    // Coseguro 0 no descuenta nada; si tiene valor, se resta del total de la
+    // fila (lo que pagó el afiliado se lo queda, la médica factura el resto).
+    var subtotal = (valor * cantidad) - coseguro;
     total += subtotal;
     row.querySelector('.osdop-subtotal').textContent = moneyFmt(subtotal);
-    datos[concepto] = { valor: inputs[0].value, cantidad: inputs[1].value };
+    datos[concepto] = { valor: inputs[0].value, coseguro: inputs[1].value, cantidad: inputs[2].value };
   });
   if (totalEl) totalEl.textContent = moneyFmt(total);
   osdopGuardar(datos);
