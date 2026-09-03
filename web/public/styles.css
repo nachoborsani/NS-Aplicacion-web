@@ -754,6 +754,15 @@
   .bandeja-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:600px}
   .bandeja-table th{background:var(--surface-2);text-align:left;padding:8px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);border-bottom:1px solid var(--border);white-space:nowrap}
   .bandeja-table td{padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text)}
+  /* OSDOP: calculadora de facturación (Scheffelaar) */
+  .osdop-table{width:100%;max-width:640px;border-collapse:collapse;font-size:13px}
+  .osdop-table th{background:var(--surface-2);text-align:left;padding:9px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);border-bottom:1px solid var(--border)}
+  .osdop-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text)}
+  .osdop-table th.num,.osdop-table td.num{text-align:right}
+  .osdop-table tfoot th{padding:10px;border-top:2px solid var(--border);border-bottom:0;font-size:13px}
+  .osdop-table tfoot th.num{font-size:16px;color:var(--turq-d);font-variant-numeric:tabular-nums}
+  .osdop-table input.inp{height:34px;text-align:right;font-variant-numeric:tabular-nums;max-width:130px}
+  .osdop-table .osdop-subtotal{font-weight:700;font-variant-numeric:tabular-nums}
   .cfg-block{margin-bottom:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
   .cfg-head{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2)}
   summary.cfg-head{margin:0;padding:11px 12px;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;background:var(--surface-2);user-select:none}

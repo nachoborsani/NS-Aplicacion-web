@@ -1722,7 +1722,8 @@ var CLIENT_SECTIONS = [
   { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
   { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios médicos' },
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
-  { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' }
+  { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' },
+  { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' }
 ];
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
 // tienen reportes ni mes en curso: solo Info básica + Dashboard general. Los
@@ -1733,7 +1734,12 @@ function clientSeccionesPermitidas(){
   // adjuntar reporte, honorarios ni usuarios médicos.
   if (ME && ME.role === 'operador') return ['basica'];
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
-  if (esMC) return ['general', 'basica'];
+  if (esMC) {
+    var seccionesMC = ['general', 'basica'];
+    // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
+    if (ACTIVE_CLIENT.slug === 'scheffelaar-mc') seccionesMC.push('osdop');
+    return seccionesMC;
+  }
   var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
   // La clínica NO adjunta reportes (solo lectura). El resto sí.
   if (!esClinica) base.push('reportes');
@@ -1773,6 +1779,53 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'general') renderClientGeneral();
   if (CLIENT_SECTION === 'medicos') loadClientMedicos();
   if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
+  if (CLIENT_SECTION === 'osdop') renderOsdop();
+}
+// OSDOP (Scheffelaar): calculadora simple valor x cantidad por concepto, para
+// saber cuánto debería facturar la médica. Vive solo en el navegador (localStorage
+// por cliente) — es una cuenta rápida, no un registro que necesite guardarse en
+// el servidor ni compartirse entre dispositivos.
+var OSDOP_CONCEPTOS = ['Cardiología', 'Clínica médica'];
+function osdopStorageKey(){ return 'ns_osdop_' + (ACTIVE_CLIENT ? ACTIVE_CLIENT.slug : ''); }
+function osdopCargarGuardado(){
+  try { return JSON.parse(localStorage.getItem(osdopStorageKey()) || '{}'); } catch (e) { return {}; }
+}
+function osdopGuardar(datos){
+  try { localStorage.setItem(osdopStorageKey(), JSON.stringify(datos)); } catch (e) {}
+}
+function renderOsdop(){
+  var body = document.getElementById('osdopBody');
+  if (!body) return;
+  var guardado = osdopCargarGuardado();
+  body.innerHTML = OSDOP_CONCEPTOS.map(function (concepto, i) {
+    var g = guardado[concepto] || {};
+    return '<tr data-concepto="' + esc(concepto) + '">'
+      + '<td>' + esc(concepto) + '</td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (g.valor != null ? g.valor : '') + '" oninput="calcularOsdop()"></td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="numeric" min="0" step="1" placeholder="0" value="' + (g.cantidad != null ? g.cantidad : '') + '" oninput="calcularOsdop()"></td>'
+      + '<td class="num osdop-subtotal">$ 0,00</td>'
+      + '</tr>';
+  }).join('');
+  calcularOsdop();
+}
+function calcularOsdop(){
+  var body = document.getElementById('osdopBody');
+  var totalEl = document.getElementById('osdopTotal');
+  if (!body) return;
+  var datos = {};
+  var total = 0;
+  [].slice.call(body.querySelectorAll('tr')).forEach(function (row) {
+    var concepto = row.getAttribute('data-concepto');
+    var inputs = row.querySelectorAll('input');
+    var valor = Number(inputs[0].value) || 0;
+    var cantidad = Number(inputs[1].value) || 0;
+    var subtotal = valor * cantidad;
+    total += subtotal;
+    row.querySelector('.osdop-subtotal').textContent = moneyFmt(subtotal);
+    datos[concepto] = { valor: inputs[0].value, cantidad: inputs[1].value };
+  });
+  if (totalEl) totalEl.textContent = moneyFmt(total);
+  osdopGuardar(datos);
 }
 // El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
 // se muestra solo para ese cliente; el resto ve el placeholder.
