@@ -281,6 +281,7 @@
                 <h3>Gastos fijos</h3>
                 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                   <label class="factura-cfg">Mes <input class="inp mini" id="gastosPeriodo" type="month" onchange="loadGastos()" style="width:150px"></label>
+                  <button class="btn btn-ghost btn-sm" type="button" onclick="copiarGastosMesAnterior()" title="Marca como pagados los mismos gastos que el mes pasado">Copiar del mes anterior</button>
                   <button class="btn btn-primary btn-sm" type="button" onclick="openGastoModal()">+ Gasto</button>
                 </div>
               </div>

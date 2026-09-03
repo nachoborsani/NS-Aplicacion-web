@@ -2384,6 +2384,15 @@ async function toggleGastoPagado(id, pagado){
   var res = await req('POST', '/api/gastos/pagado', { periodo: gastosPeriodoActual(), gastoId: id, pagado: pagado });
   if (res.ok){ GASTOS.pagos = res.data.pagos || {}; renderGastos(); }
 }
+// Marca como pagados en el mes actual los mismos gastos que estaban pagados el mes
+// anterior (los fijos recurrentes), así no hay que tildarlos uno por uno cada mes.
+async function copiarGastosMesAnterior(){
+  var periodo = gastosPeriodoActual(); if (!periodo){ return; }
+  var res = await req('POST', '/api/gastos/copiar-pagos', { periodo: periodo });
+  if (!res.ok){ alert(res.error || 'No se pudo copiar.'); return; }
+  GASTOS.pagos = res.data.pagos || GASTOS.pagos; renderGastos();
+  if (!res.data.copiados) alert('El mes anterior' + (res.data.prev ? ' (' + res.data.prev + ')' : '') + ' no tenía gastos pagados para copiar.');
+}
 
 // ===== Resumen de cuenta: sub-pestañas (Resumen · Ingresos · Gastos) =====
 var RES_SECTION = 'resumen';

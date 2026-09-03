@@ -5281,6 +5281,36 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, pagos: store.pagos });
   }
 
+  // Copiar del mes anterior: marca como pagados en `periodo` los mismos gastos que
+  // estaban pagados el mes previo (los fijos recurrentes). El dólar de los USD se
+  // toma de HOY (se están pagando este mes), igual que al tildar a mano.
+  if (p === "/api/gastos/copiar-pagos" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const periodo = String((b && b.periodo) || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(periodo)) return json(res, 400, { error: "Falta el mes (YYYY-MM)." });
+    let [yy, mm] = periodo.split("-").map(Number);
+    mm -= 1; if (mm < 1) { mm = 12; yy -= 1; }
+    const prev = yy + "-" + String(mm).padStart(2, "0");
+    const store = loadGastosOSemilla();
+    const prevPagos = (store.pagos && store.pagos[prev]) || {};
+    const pagadosPrev = new Set(Object.keys(prevPagos).filter((id) => prevPagos[id] && prevPagos[id].pagado));
+    store.pagos = store.pagos || {};
+    store.pagos[periodo] = store.pagos[periodo] || {};
+    const dolar = await getDolarOficial();
+    let copiados = 0;
+    for (const g of store.gastos) {
+      if (!pagadosPrev.has(g.id)) continue;
+      const reg = { pagado: true };
+      if (g.moneda === "USD") reg.rate = dolar.valor || 0;
+      store.pagos[periodo][g.id] = reg;
+      copiados += 1;
+    }
+    saveGastos(store);
+    return json(res, 200, { ok: true, pagos: store.pagos, copiados, prev });
+  }
+
   // --- Ingresos EXTRA (fuera de comisiones), por mes — admin-only ---
   if (p === "/api/ingresos" && req.method === "GET") {
     const me = getSessionUser(req);
