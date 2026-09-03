@@ -1723,8 +1723,13 @@ var CLIENT_SECTIONS = [
   { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios médicos' },
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' },
-  { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' }
+  { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' },
+  { key:'plansalud', sec:'client-section-plansalud', tab:'clientTabPlanSalud',crumb:'Plan Salud' }
 ];
+// Plan Salud (CIMA): módulo en desarrollo por etapas, visible SOLO para estos
+// usuarios puntuales (no es un tema de rol — ni "Dube" ni ningún otro admin
+// nuevo lo debe ver por default). Sumar a alguien es agregar su username acá.
+var PLAN_SALUD_USUARIOS = ['seba', 'nacho'];
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
 // tienen reportes ni mes en curso: solo Info básica + Dashboard general. Los
 // consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
@@ -1745,6 +1750,9 @@ function clientSeccionesPermitidas(){
   if (!esClinica) base.push('reportes');
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
+  // Plan Salud: en desarrollo, solo CIMA y solo para los usuarios habilitados
+  // a mano en PLAN_SALUD_USUARIOS — es un allowlist por persona, no por rol.
+  if (ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'cima' && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
   return base;
 }
 // Muestra/oculta las pestañas según el tipo de cliente.
@@ -1780,6 +1788,23 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'medicos') loadClientMedicos();
   if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
   if (CLIENT_SECTION === 'osdop') renderOsdop();
+  if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
+}
+// Plan Salud (CIMA): etapa 1, todavía en desarrollo. Por ahora solo confirma
+// qué archivo se eligió — el parseo real se suma cuando tengamos un reporte
+// de ejemplo del sistema CIMA para saber el formato exacto de columnas.
+function renderPlanSalud(){
+  var estado = document.getElementById('planSaludEstado');
+  if (estado) estado.textContent = '';
+  var nombre = document.getElementById('planSaludArchivoNombre');
+  if (nombre) nombre.textContent = '';
+}
+function planSaludArchivoElegido(input){
+  var nombre = document.getElementById('planSaludArchivoNombre');
+  var estado = document.getElementById('planSaludEstado');
+  var archivo = input && input.files && input.files[0];
+  if (nombre) nombre.textContent = archivo ? archivo.name : '';
+  if (estado) estado.textContent = archivo ? 'Archivo recibido. El lector de este reporte todavía está en desarrollo — por ahora solo queda guardado el nombre.' : '';
 }
 // OSDOP (Scheffelaar): calculadora simple valor x cantidad por concepto, para
 // saber cuánto debería facturar la médica. Vive solo en el navegador (localStorage

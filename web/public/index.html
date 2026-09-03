@@ -311,6 +311,7 @@
                 <button id="clientTabMedicos" type="button" onclick="setClientSection('medicos')" style="display:none">Usuarios médicos</button>
                 <button id="clientTabHonorarios" type="button" onclick="setClientSection('honorarios')" style="display:none">Honorarios</button>
                 <button id="clientTabOsdop" type="button" onclick="setClientSection('osdop')" style="display:none">OSDOP</button>
+                <button id="clientTabPlanSalud" type="button" onclick="setClientSection('plansalud')" style="display:none">Plan Salud</button>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
@@ -374,6 +375,24 @@
                     </table>
                     <button class="btn btn-ghost osdop-add-btn" type="button" id="osdopAddBtn" onclick="osdopAgregarFila()">+ Agregar fila</button>
                   </div>
+                </div>
+              </section>
+
+              <!-- Plan Salud (CIMA): módulo en desarrollo por etapas, visible solo
+                   para PLAN_SALUD_USUARIOS (ver app.js). Etapa 1: subir el reporte
+                   crudo de CIMA con los pacientes del plan que necesitan OME. -->
+              <section id="client-section-plansalud" class="client-section" style="display:none">
+                <div class="client-card" id="planSaludCard">
+                  <div class="client-card-head">
+                    <h3>Plan Salud — Pacientes sin OME</h3>
+                  </div>
+                  <p class="nom-muted">Módulo en desarrollo por etapas. Etapa 1: subir el reporte crudo del sistema CIMA con los pacientes del plan que necesitan OME.</p>
+                  <div id="planSaludUploadBox">
+                    <label class="btn btn-ghost" for="planSaludFileInput">📁 Subir reporte CIMA</label>
+                    <input type="file" id="planSaludFileInput" accept=".xls,.xlsx" style="display:none" onchange="planSaludArchivoElegido(this)">
+                    <span id="planSaludArchivoNombre" class="nom-muted"></span>
+                  </div>
+                  <div id="planSaludEstado" class="nom-muted" style="margin-top:10px"></div>
                 </div>
               </section>
 
