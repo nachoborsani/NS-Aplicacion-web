@@ -1609,6 +1609,9 @@ function unsign(signed) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   return value;
 }
+// Operativo = admin u operador. El operador hace el trabajo diario (afiliados,
+// informes, cabina, nomenclador) pero NO toca plata, cierre de mes ni clientes.
+function esOperativo(me) { return !!(me && (me.role === "admin" || me.role === "operador")); }
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
   const m = cookie.match(/(?:^|;\s*)ns_session=([^;]+)/);
@@ -4400,7 +4403,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/admin/worker/tasks" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const state = loadWorkerState();
     return json(res, 200, { tasks: (state.tasks || []).map(publicWorkerTask) });
   }
@@ -4414,11 +4417,16 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/admin/worker/tasks" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
     const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes"]);
     if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
+    // El operador solo dispara tareas de informes (subir/auditar a PAMI); la
+    // sincronización de bandeja y las pruebas quedan para el admin.
+    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes") {
+      return json(res, 403, { error: "Solo un administrador." });
+    }
     const LABELS = {
       healthcheck: "Prueba de worker", "bandeja-sync": "Sincronizar bandeja",
       "auditar-informes": "Verificar informes en PAMI", "subir-informes": "Subir informes a PAMI",
@@ -5938,7 +5946,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/nomencladores/activo" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const raw = String(url.searchParams.get("period") || "").trim();
     const period = normalizePeriod(raw) || raw;
     const store = loadNomencladorStore();
@@ -6186,7 +6194,7 @@ const server = http.createServer(async (req, res) => {
   if (padronUpload && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede cargar el padrón." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador puede cargar el padrón." });
     const slug = padronUpload[1];
     if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
     try {
@@ -6220,7 +6228,7 @@ const server = http.createServer(async (req, res) => {
   if (padronList && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin" && me.role !== "demo") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me) && me.role !== "demo") return json(res, 403, { error: "Solo un administrador." });
     const slug = padronList[1];
     const store = loadPadron();
     const cli = store[slug] || {};
@@ -6264,7 +6272,7 @@ const server = http.createServer(async (req, res) => {
   if (padronDel && req.method === "DELETE") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, dni] = padronDel;
     const store = loadPadron();
     if (store[slug] && store[slug][dni]) {
@@ -6282,7 +6290,7 @@ const server = http.createServer(async (req, res) => {
   if (padronFaltan && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = padronFaltan[1];
     const pad = loadPadron()[slug] || {};
     const faltan = new Map(); // dni -> nombre
@@ -6306,7 +6314,7 @@ const server = http.createServer(async (req, res) => {
   if (padronCompletar && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = padronCompletar[1];
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
@@ -6329,7 +6337,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/pami/capita" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
     let beneficio, dni;
@@ -6353,7 +6361,7 @@ const server = http.createServer(async (req, res) => {
   if (informesUp && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = informesUp[1];
     if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
     if (!informeExtract) return json(res, 503, { error: "El motor de lectura de informes no está disponible en el servidor." });
@@ -6387,7 +6395,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/informes-gmail-estado" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     if (!gmailInformes) return json(res, 200, { conectado: false, motivo: "Descarga de mail no disponible." });
     const token = gmailInformes.cargarToken(dataDir);
     if (!token) return json(res, 200, { conectado: false, motivo: "Falta autorizar la casilla de informes." });
@@ -6404,7 +6412,7 @@ const server = http.createServer(async (req, res) => {
   if (informesGmail && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = informesGmail[1];
     if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
     if (!informeExtract) return json(res, 503, { error: "El motor de lectura de informes no está disponible." });
@@ -6452,7 +6460,7 @@ const server = http.createServer(async (req, res) => {
   if (informesExport && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, fmt] = informesExport;
     const items = ((loadInformes()[slug] || {}).items) || [];
     const nombre = clientDisplayName(slug);
@@ -6474,7 +6482,7 @@ const server = http.createServer(async (req, res) => {
   if (informesList && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = informesList[1];
     const cli = loadInformes()[slug] || { items: [], updatedAt: "" };
     const items = cli.items || [];
@@ -6492,7 +6500,7 @@ const server = http.createServer(async (req, res) => {
   if (informeArch && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeArch;
     const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
@@ -6521,7 +6529,7 @@ const server = http.createServer(async (req, res) => {
   if (informeTxt && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeTxt;
     const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
     if (!it) return json(res, 404, { error: "Informe no encontrado." });
@@ -6541,7 +6549,7 @@ const server = http.createServer(async (req, res) => {
   if (informeRe && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeRe;
     const store = loadInformes();
     const it = ((store[slug] || {}).items || []).find((x) => x.id === id);
@@ -6594,7 +6602,7 @@ const server = http.createServer(async (req, res) => {
   if (informeResolver && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeResolver;
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
@@ -6637,7 +6645,7 @@ const server = http.createServer(async (req, res) => {
   if (informeBenef && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeBenef;
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
@@ -6670,7 +6678,7 @@ const server = http.createServer(async (req, res) => {
   if (informeDesest && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeDesest;
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
@@ -6696,7 +6704,7 @@ const server = http.createServer(async (req, res) => {
   if (informeReclamar && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeReclamar;
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
@@ -6719,7 +6727,7 @@ const server = http.createServer(async (req, res) => {
   if (informeDel && req.method === "DELETE") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const [, slug, id] = informeDel;
     const store = loadInformes();
     const cli = store[slug] || { items: [] };

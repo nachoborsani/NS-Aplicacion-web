@@ -88,10 +88,11 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
-  if (v === 'cabina' && !(ME && ME.role === 'admin')){ go('dash'); return; }
-  // Afiliados: además del admin, el usuario de demostración lo VE (solo lectura; las
-  // acciones las bloquea el backend y se ocultan por CSS). El resto, afuera.
-  if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'demo'))){ go('dash'); return; }
+  // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
+  if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
+  // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
+  // el backend le bloquea las acciones). El resto, afuera.
+  if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
   ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -1728,6 +1729,9 @@ var CLIENT_SECTIONS = [
 // consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
+  // El operador ve del cliente SOLO la información básica: nada de dashboards,
+  // adjuntar reporte, honorarios ni usuarios médicos.
+  if (ME && ME.role === 'operador') return ['basica'];
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
   if (esMC) return ['general', 'basica'];
   var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
@@ -6336,9 +6340,9 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
-  // Padrón e Informes recibidos: admin y el usuario de demostración (los ve, pero
-  // no puede usarlos: cualquier acción rebota con "te faltan permisos").
-  var verHerramientas = (u.role === 'admin' || u.role === 'demo');
+  // Padrón (Afiliados) e Informes recibidos: admin y operador (los USAN); el usuario
+  // de demostración los VE pero no puede ejecutar acciones (el backend se las bloquea).
+  var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');
   var np = document.getElementById('navPadron'); if (np) np.style.display = verHerramientas ? '' : 'none';
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
   var ini = initials(u.name);
