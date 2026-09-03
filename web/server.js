@@ -1619,6 +1619,15 @@ function unsign(signed) {
 // Operativo = admin u operador. El operador hace el trabajo diario (afiliados,
 // informes, cabina, nomenclador) pero NO toca plata, cierre de mes ni clientes.
 function esOperativo(me) { return !!(me && (me.role === "admin" || me.role === "operador")); }
+// Roles con visibilidad de clientes restringida a una lista puntual (me.clientes):
+// "demo" (solo ve, no modifica nada) y "colaborador" (trabaja normal, pero solo en
+// los clientes que se le asignaron - no debe enterarse de que existen los demás).
+function tieneClientesRestringidos(me) { return !!(me && (me.role === "demo" || me.role === "colaborador")); }
+function clientesVisiblesPara(me, clientes) {
+  if (!tieneClientesRestringidos(me)) return clientes;
+  const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
+  return clientes.filter((c) => permitidos.has(c.slug));
+}
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
   const m = cookie.match(/(?:^|;\s*)ns_session=([^;]+)/);
@@ -1765,7 +1774,7 @@ function publicUser(u) {
 // "demo": usuario de demostración (para mostrar la app sin poder usarla). Ve las
 // herramientas con datos reales y puede descargar, pero NO escribe nada y solo
 // accede a los clientes de su lista (u.clientes).
-const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo"]);
+const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo", "colaborador"]);
 const DEFAULT_CLIENTS = [
   {
     slug: "sala-millon",
@@ -4647,14 +4656,14 @@ const server = http.createServer(async (req, res) => {
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
     // El rol "clinica" (dueño del centro) DEBE estar atado a un centro existente.
     if (rl === "clinica" && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece el usuario clínica." });
-    // El rol "demo" DEBE tener al menos un cliente asignado (si no, no ve nada).
-    if (rl === "demo" && !cls.length) return json(res, 400, { error: "Elegí qué clientes puede ver el usuario de demostración." });
+    // Demo y colaborador DEBEN tener al menos un cliente asignado (si no, no ven nada).
+    if ((rl === "demo" || rl === "colaborador") && !cls.length) return json(res, 400, { error: "Elegí qué clientes puede ver este usuario." });
     if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
     if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
     const users = loadUsers() || [];
     if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
     users.push({ username: uname, name: nm, role: rl, email: em, centro: rl === "clinica" ? ce : "",
-                 clientes: rl === "demo" ? cls : [], password: hashPassword(pw), mustChange: true, active: true });
+                 clientes: (rl === "demo" || rl === "colaborador") ? cls : [], password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
   }
@@ -4716,9 +4725,9 @@ const server = http.createServer(async (req, res) => {
       if (users[idx].role === "clinica" && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
         return json(res, 400, { error: "El usuario clínica tiene que estar atado a un centro válido." });
       }
-      // Un usuario de demostración siempre debe tener al menos un cliente asignado.
-      if (users[idx].role === "demo" && !(users[idx].clientes || []).length) {
-        return json(res, 400, { error: "El usuario de demostración tiene que tener al menos un cliente asignado." });
+      // Demo y colaborador siempre deben tener al menos un cliente asignado.
+      if (tieneClientesRestringidos(users[idx]) && !(users[idx].clientes || []).length) {
+        return json(res, 400, { error: "Este usuario tiene que tener al menos un cliente asignado." });
       }
       saveUsers(users);
       return json(res, 200, { ok: true });
@@ -4781,11 +4790,8 @@ const server = http.createServer(async (req, res) => {
     let clients = loadClientsStore();
     // El rol clínica solo ve SU centro.
     if (me.role === "clinica") clients = clients.filter((c) => c.slug === me.centro);
-    // El usuario de demostración solo ve los clientes que se le asignaron.
-    if (me.role === "demo") {
-      const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
-      clients = clients.filter((c) => permitidos.has(c.slug));
-    }
+    // Demo y colaborador solo ven los clientes que se les asignaron.
+    clients = clientesVisiblesPara(me, clients);
     return json(res, 200, { clients });
   }
 
@@ -7437,7 +7443,9 @@ const server = http.createServer(async (req, res) => {
       modelos: informes.listarModelos(),
       // Clientes activos, para elegir "para quién" es el informe (reemplaza
       // al viejo "Centro" fijo por modelo). Solo lo mínimo para el selector.
-      clientes: loadClientsStore().map((c) => ({ slug: c.slug, name: c.name })),
+      // Filtrado igual que /api/clientes: demo y colaborador no deben poder
+      // armar un informe (con el logo/membrete) de un cliente que no ven.
+      clientes: clientesVisiblesPara(me, loadClientsStore()).map((c) => ({ slug: c.slug, name: c.name })),
       medicos: (cfg.medicos || []).map((m) => ({
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "",
         modelos: m.modelos || [], clientes: m.clientes || [],
