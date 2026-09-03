@@ -4970,7 +4970,11 @@ const server = http.createServer(async (req, res) => {
   if (clientPamiMatch && (req.method === "GET" || req.method === "POST")) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede ver o cambiar el acceso PAMI." });
+    // GET (ver el UP): admin u operador — el operador lo necesita para trabajar y NO
+    // devuelve la clave (esa va por /pami/credenciales, admin-only). POST (cambiar el
+    // acceso): solo admin.
+    const okRolPami = (req.method === "GET") ? esOperativo(me) : (me.role === "admin");
+    if (!okRolPami) return json(res, 403, { error: "Solo un administrador puede cambiar el acceso PAMI." });
     const slug = decodeURIComponent(clientPamiMatch[1]);
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });

@@ -1792,25 +1792,33 @@ function renderClientGeneral(){
   }
   if (tieneCred) credSchedCargar();
 }
-// Acceso PAMI del cliente (card en Informacion basica) — solo admin.
+// Acceso PAMI del cliente. La TARJETA editable (user/clave) es solo admin; el UP de
+// la cabecera lo ven admin y operador (el operador lo usa para trabajar; el GET del
+// backend no le manda la clave).
 async function loadClientPami(){
   var card = document.getElementById('clientPamiCard');
   if (!card) return;
-  if (!ME || ME.role !== 'admin' || !ACTIVE_CLIENT){ card.style.display = 'none'; setClientHeaderUp(''); return; }
-  card.style.display = '';
-  var user = document.getElementById('clientPamiUser');
-  var pass = document.getElementById('clientPamiPass');
-  var msg = document.getElementById('clientPamiMsg');
-  var revealBtn = document.getElementById('clientPamiRevealBtn');
-  user.value = ''; pass.value = ''; pass.type = 'password'; msg.textContent = '';
+  var esAdmin = !!(ME && ME.role === 'admin');
+  var puedeVerUp = esAdmin || !!(ME && ME.role === 'operador');
+  card.style.display = esAdmin ? '' : 'none';   // la tarjeta con user/clave, solo admin
   setClientHeaderUp('');   // se oculta al instante al cambiar de cliente; reaparece al traer el UP
-  document.getElementById('clientPamiPassIco').innerHTML = EYE_ON;
+  if (!ACTIVE_CLIENT || !puedeVerUp) return;
+  if (esAdmin){
+    document.getElementById('clientPamiUser').value = '';
+    document.getElementById('clientPamiPass').value = '';
+    document.getElementById('clientPamiPass').type = 'password';
+    document.getElementById('clientPamiMsg').textContent = '';
+    document.getElementById('clientPamiPassIco').innerHTML = EYE_ON;
+  }
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pami');
   if (res.ok && res.data){
-    user.value = res.data.pamiUser || '';
-    pass.placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
-    if (revealBtn) revealBtn.style.display = res.data.hasPassword ? '' : 'none';
     setClientHeaderUp(res.data.pamiUser || '');
+    if (esAdmin){
+      document.getElementById('clientPamiUser').value = res.data.pamiUser || '';
+      document.getElementById('clientPamiPass').placeholder = res.data.hasPassword ? '•••••• guardada — dejar vacío para no cambiarla' : 'Escribí la clave';
+      var revealBtn = document.getElementById('clientPamiRevealBtn');
+      if (revealBtn) revealBtn.style.display = res.data.hasPassword ? '' : 'none';
+    }
   }
 }
 // UP (usuario PAMI) al lado del nombre del cliente en la cabecera: se ve en TODAS las
