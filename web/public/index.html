@@ -363,15 +363,16 @@
                     <h3>OSDOP — Calculadora de facturación</h3>
                     <button class="btn btn-ghost" type="button" onclick="osdopExportarPDF()">🖨️ Exportar a PDF</button>
                   </div>
-                  <p class="nom-muted">Cargá el valor, el coseguro (si el afiliado pagó algo, se descuenta) y la cantidad de cada concepto — el total que debería facturar la médica se calcula solo.</p>
+                  <p class="nom-muted">Elegí el concepto de cada fila y cargá valor, coseguro (si el afiliado pagó algo, se descuenta) y cantidad — el total que debería facturar la médica se calcula solo. Una fila sin concepto elegido no suma ni resta. Hasta 8 filas, para separar por ejemplo pacientes con y sin coseguro dentro del mismo concepto.</p>
                   <!-- Encabezado solo para la versión impresa/PDF (oculto en pantalla). -->
                   <div class="osdop-print-head" id="osdopPrintHead"></div>
                   <div class="table-scroll">
                     <table class="osdop-table" id="osdopTable">
-                      <thead><tr><th>Concepto</th><th class="num">Valor</th><th class="num">Coseguro</th><th class="num">Cantidad</th><th class="num">Subtotal</th></tr></thead>
+                      <thead><tr><th>Concepto</th><th class="num">Valor</th><th class="num">Coseguro</th><th class="num">Cantidad</th><th class="num">Subtotal</th><th class="osdop-col-acciones"></th></tr></thead>
                       <tbody id="osdopBody"></tbody>
-                      <tfoot><tr><th colspan="4">Total a facturar</th><th class="num" id="osdopTotal">$ 0,00</th></tr></tfoot>
+                      <tfoot><tr><th colspan="4">Total a facturar</th><th class="num" id="osdopTotal">$ 0,00</th><th></th></tr></tfoot>
                     </table>
+                    <button class="btn btn-ghost osdop-add-btn" type="button" id="osdopAddBtn" onclick="osdopAgregarFila()">+ Agregar fila</button>
                   </div>
                 </div>
               </section>

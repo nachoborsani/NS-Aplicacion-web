@@ -1786,50 +1786,88 @@ function setClientSection(section){
 // por cliente) — es una cuenta rápida, no un registro que necesite guardarse en
 // el servidor ni compartirse entre dispositivos.
 var OSDOP_CONCEPTOS = ['Cardiología', 'Clínica médica'];
+var OSDOP_MAX_FILAS = 8;
 function osdopStorageKey(){ return 'ns_osdop_' + (ACTIVE_CLIENT ? ACTIVE_CLIENT.slug : ''); }
+function osdopFilaVacia(concepto){ return { concepto: concepto || '', valor: '', coseguro: '', cantidad: '' }; }
+// Guardado como ARRAY de filas (antes era un objeto por concepto fijo): un
+// mismo concepto puede repetirse en varias filas — ej. pacientes de Cardiología
+// con coseguro en una fila y sin coseguro en otra, cada una con su cantidad.
 function osdopCargarGuardado(){
-  try { return JSON.parse(localStorage.getItem(osdopStorageKey()) || '{}'); } catch (e) { return {}; }
+  try {
+    var raw = JSON.parse(localStorage.getItem(osdopStorageKey()) || 'null');
+    if (Array.isArray(raw) && raw.length) return raw;
+  } catch (e) {}
+  return OSDOP_CONCEPTOS.map(function (c) { return osdopFilaVacia(c); });
 }
-function osdopGuardar(datos){
-  try { localStorage.setItem(osdopStorageKey(), JSON.stringify(datos)); } catch (e) {}
+function osdopGuardar(filas){
+  try { localStorage.setItem(osdopStorageKey(), JSON.stringify(filas)); } catch (e) {}
+}
+function osdopOpcionesConcepto(seleccionado){
+  var html = '<option value=""' + (!seleccionado ? ' selected' : '') + '>Seleccionar…</option>';
+  OSDOP_CONCEPTOS.forEach(function (c) {
+    html += '<option value="' + esc(c) + '"' + (c === seleccionado ? ' selected' : '') + '>' + esc(c) + '</option>';
+  });
+  return html;
 }
 function renderOsdop(){
   var body = document.getElementById('osdopBody');
   if (!body) return;
-  var guardado = osdopCargarGuardado();
-  body.innerHTML = OSDOP_CONCEPTOS.map(function (concepto, i) {
-    var g = guardado[concepto] || {};
-    return '<tr data-concepto="' + esc(concepto) + '">'
-      + '<td>' + esc(concepto) + '</td>'
-      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (g.valor != null ? g.valor : '') + '" oninput="calcularOsdop()"></td>'
-      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (g.coseguro != null ? g.coseguro : '') + '" oninput="calcularOsdop()"></td>'
-      + '<td class="num"><input class="inp" type="number" inputmode="numeric" min="0" step="1" placeholder="0" value="' + (g.cantidad != null ? g.cantidad : '') + '" oninput="calcularOsdop()"></td>'
+  var filas = osdopCargarGuardado();
+  body.innerHTML = filas.map(function (f, i) {
+    return '<tr data-idx="' + i + '">'
+      + '<td><select class="inp" onchange="calcularOsdop()">' + osdopOpcionesConcepto(f.concepto) + '</select></td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (f.valor || '') + '" oninput="calcularOsdop()"></td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" value="' + (f.coseguro || '') + '" oninput="calcularOsdop()"></td>'
+      + '<td class="num"><input class="inp" type="number" inputmode="numeric" min="0" step="1" placeholder="0" value="' + (f.cantidad || '') + '" oninput="calcularOsdop()"></td>'
       + '<td class="num osdop-subtotal">$ 0,00</td>'
+      + '<td class="osdop-col-acciones"><button type="button" class="icon-danger-btn mini" title="Quitar fila" onclick="osdopQuitarFila(' + i + ')"><svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>'
       + '</tr>';
   }).join('');
   calcularOsdop();
+  osdopActualizarBotonAgregar(filas.length);
+}
+function osdopActualizarBotonAgregar(cantidadFilas){
+  var btn = document.getElementById('osdopAddBtn');
+  if (!btn) return;
+  btn.disabled = cantidadFilas >= OSDOP_MAX_FILAS;
+  btn.textContent = cantidadFilas >= OSDOP_MAX_FILAS ? 'Máximo ' + OSDOP_MAX_FILAS + ' filas' : '+ Agregar fila';
+}
+function osdopAgregarFila(){
+  var filas = osdopCargarGuardado();
+  if (filas.length >= OSDOP_MAX_FILAS) return;
+  filas.push(osdopFilaVacia());
+  osdopGuardar(filas);
+  renderOsdop();
+}
+function osdopQuitarFila(idx){
+  var filas = osdopCargarGuardado();
+  filas.splice(idx, 1);
+  if (!filas.length) filas = OSDOP_CONCEPTOS.map(function (c) { return osdopFilaVacia(c); });
+  osdopGuardar(filas);
+  renderOsdop();
 }
 function calcularOsdop(){
   var body = document.getElementById('osdopBody');
   var totalEl = document.getElementById('osdopTotal');
   if (!body) return;
-  var datos = {};
+  var filas = [];
   var total = 0;
   [].slice.call(body.querySelectorAll('tr')).forEach(function (row) {
-    var concepto = row.getAttribute('data-concepto');
+    var select = row.querySelector('select');
     var inputs = row.querySelectorAll('input');
+    var concepto = select.value;
     var valor = Number(inputs[0].value) || 0;
     var coseguro = Number(inputs[1].value) || 0;
     var cantidad = Number(inputs[2].value) || 0;
-    // Coseguro 0 no descuenta nada; si tiene valor, se resta del total de la
-    // fila (lo que pagó el afiliado se lo queda, la médica factura el resto).
-    var subtotal = (valor * cantidad) - coseguro;
+    // Sin concepto elegido, la fila no suma ni resta (queda en $0 aparte),
+    // aunque tenga números cargados — evita sumar de más por accidente.
+    var subtotal = concepto ? (valor * cantidad) - coseguro : 0;
     total += subtotal;
     row.querySelector('.osdop-subtotal').textContent = moneyFmt(subtotal);
-    datos[concepto] = { valor: inputs[0].value, coseguro: inputs[1].value, cantidad: inputs[2].value };
+    filas.push({ concepto: concepto, valor: inputs[0].value, coseguro: inputs[1].value, cantidad: inputs[2].value });
   });
   if (totalEl) totalEl.textContent = moneyFmt(total);
-  osdopGuardar(datos);
+  osdopGuardar(filas);
 }
 // Exportar a PDF: no hace falta servidor ni librería nueva, se arma un
 // encabezado (cliente + fecha) visible solo al imprimir y se dispara el
