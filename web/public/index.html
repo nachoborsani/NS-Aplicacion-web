@@ -1115,9 +1115,6 @@
 
           <!-- Popover compartido del selector de color por fila (ver czTogglePicker). -->
           <div id="czColorPopover" class="cz-color-popover" style="display:none"></div>
-
-          <!-- Área solo para impresión/PDF: se arma en JS al exportar. -->
-          <div id="czPrintArea" class="cz-print-area"></div>
         </section>
 
         <!-- Modal de revisión de un informe recibido -->
@@ -1747,6 +1744,13 @@
   </div>
 
 </div>
+
+  <!-- Área solo para impresión/PDF de Cruzas: se arma en JS al exportar. Vive
+       FUERA de #root a propósito: al imprimir ocultamos #root entero con
+       display:none (colapsa su altura de verdad, a diferencia de visibility:hidden)
+       y esta queda como único contenido visible, sin páginas en blanco al final. -->
+  <div id="czPrintArea" class="cz-print-area"></div>
+
   <script src="/app.js"></script>
 </body>
 </html>

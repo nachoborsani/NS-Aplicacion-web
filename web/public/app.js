@@ -6325,33 +6325,98 @@ function czMesDe(turno){
   var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(turno||''));
   return m ? meses[parseInt(m[2], 10) - 1] || '' : '';
 }
+function czTotalValor(arr){ return (arr || []).reduce(function(s, f){ return s + (f.valor || 0); }, 0); }
+// Fila de TOTAL al pie de una tabla del PDF: nadie debería tener que sumar
+// a mano 200 filas para saber cuánto hay en juego en cada sección.
+function czFilaTotalHtml(colspan, items, totalNoun){
+  var total = czTotalValor(items);
+  var conValor = items.filter(function(f){ return (f.valor || 0) > 0; }).length;
+  var etiqueta = 'TOTAL (' + items.length + ' ' + totalNoun + (conValor !== items.length ? ' · ' + conValor + ' valorizados' : '') + ')';
+  return '<tr class="cz-print-total"><td colspan="' + colspan + '">' + esc(etiqueta) + '</td><td class="num">' + moneyFmt(total) + '</td></tr>';
+}
 function exportarCrucePDF(){
   var c = CZ.cruceActivo; if (!c || c.status !== 'confirmado') return;
-  var porMes = {};
-  (c.faltaInforme || []).forEach(function(f){ var mes = czMesDe(f.turno) || 'SIN FECHA'; (porMes[mes] = porMes[mes] || []).push(f); });
-  var infHtml = Object.keys(porMes).map(function(mes){
-    var filas = porMes[mes].map(function(f){ return '<tr><td>' + esc(f.beneficio) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.practica) + '</td><td>' + esc(f.turno) + '</td></tr>'; }).join('');
-    return '<h4>' + esc(mes) + '</h4><table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th></tr></thead><tbody>' + filas + '</tbody></table>';
-  }).join('') || '<p>Nada pendiente de transmitir.</p>';
 
-  var ausFilas = (c.ausentes || []).map(function(a){
-    var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '—';
-    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td>' + val + '</td></tr>';
-  }).join('');
-  var ausHtml = ausFilas ? ('<table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th><th>Valor</th></tr></thead><tbody>' + ausFilas + '</tbody></table>') : '<p>Ningún no-show detectado.</p>';
+  var faltaInforme = c.faltaInforme || [];
+  var infHtml;
+  if (!faltaInforme.length) {
+    infHtml = '<p class="cz-print-vacio">Nada pendiente de transmitir.</p>';
+  } else {
+    var porMes = {};
+    faltaInforme.forEach(function(f){ var mes = czMesDe(f.turno) || 'SIN FECHA'; (porMes[mes] = porMes[mes] || []).push(f); });
+    var infFilas = Object.keys(porMes).map(function(mes){
+      var cab = '<tr><td colspan="5" class="cz-print-mes">' + esc(mes) + '</td></tr>';
+      var filas = porMes[mes].map(function(f){
+        var val = (f.valor || 0) > 0 ? moneyFmt(f.valor) : '—';
+        return '<tr><td class="centro">' + esc(f.beneficio) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.practica) + '</td><td class="centro">' + esc(f.turno) + '</td><td class="num">' + val + '</td></tr>';
+      }).join('');
+      return cab + filas;
+    }).join('');
+    infHtml = '<table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th><th class="num">Valor</th></tr></thead><tbody>' +
+      infFilas + czFilaTotalHtml(4, faltaInforme, 'prácticas') + '</tbody></table>';
+  }
+
+  var ausentes = c.ausentes || [];
+  var ausHtml;
+  if (!ausentes.length) {
+    ausHtml = '<p class="cz-print-vacio">Ningún no-show detectado.</p>';
+  } else {
+    var ausFilas = ausentes.map(function(a){
+      var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '—';
+      return '<tr><td class="centro">' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td class="centro">' + esc(a.turno) + '</td><td class="num">' + val + '</td></tr>';
+    }).join('');
+    ausHtml = '<table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th><th class="num">Valor</th></tr></thead><tbody>' +
+      ausFilas + czFilaTotalHtml(4, ausentes, 'turnos') + '</tbody></table>';
+  }
 
   var ome = [].concat(c.faltaOmeAuto || [], c.faltaOmeManual || []);
-  var omeFilas = ome.map(function(f){
-    return '<tr><td>' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td></tr>';
-  }).join('');
-  var omeHtml = omeFilas ? ('<table><thead><tr><th>Turno</th><th>Especialidad</th><th>Nombre</th><th>Beneficio</th><th>Obs</th></tr></thead><tbody>' + omeFilas + '</tbody></table>') : '<p>Nada pendiente.</p>';
+  var omeHtml;
+  if (!ome.length) {
+    omeHtml = '<p class="cz-print-vacio">Nada pendiente.</p>';
+  } else {
+    var omeFilas = ome.map(function(f){
+      var val = (f.valor || 0) > 0 ? moneyFmt(f.valor) : '—';
+      return '<tr><td class="centro">' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td class="centro">' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td><td class="num">' + val + '</td></tr>';
+    }).join('');
+    omeHtml = '<table><thead><tr><th>Turno</th><th>Especialidad</th><th>Nombre</th><th>Beneficio</th><th>Obs</th><th class="num">Valor</th></tr></thead><tbody>' +
+      omeFilas + czFilaTotalHtml(5, ome, 'turnos') + '</tbody></table>';
+  }
+
+  // El PDF es el resumen: una barra con los 3 conteos y el total valorizado
+  // en riesgo, antes de entrar al detalle fila por fila.
+  var granTotal = czTotalValor(faltaInforme) + czTotalValor(ausentes) + czTotalValor(ome);
+  var resumenHtml =
+    '<div class="cz-print-resumen">' +
+      '<div><b>' + faltaInforme.length + '</b><span>Falta informe</span></div>' +
+      '<div><b>' + ausentes.length + '</b><span>Ausentes</span></div>' +
+      '<div><b>' + ome.length + '</b><span>Falta ome</span></div>' +
+      '<div class="cz-print-resumen-total"><b>' + moneyFmt(granTotal) + '</b><span>Valorizado en riesgo</span></div>' +
+    '</div>';
 
   var clienteNombre = document.getElementById('czCliente').selectedOptions[0].textContent;
   document.getElementById('czPrintArea').innerHTML =
-    '<div class="cz-print-head"><div class="op-title">' + esc(clienteNombre) + ' — Cruce ' + esc(c.label) + '</div><div class="op-sub">Generado el ' + new Date().toLocaleDateString('es-AR') + '</div></div>' +
-    '<h3>Falta informe</h3>' + infHtml +
-    '<h3>Ausentes</h3>' + ausHtml +
-    '<h3>Falta ome</h3>' + omeHtml;
+    '<div class="cz-print-head"><div class="op-title">' + esc(clienteNombre) + ' — ' + esc(c.label) + '</div></div>' +
+    resumenHtml +
+    '<section><h3>Falta informe</h3>' + infHtml + '</section>' +
+    '<section><h3>Ausentes</h3>' + ausHtml + '</section>' +
+    '<section><h3>Falta ome</h3>' + omeHtml + '</section>';
+
+  // #czPrintArea vive fuera de #root (ver index.html): esta clase oculta #root
+  // entero con display:none mientras se imprime, así no queda ocupando alto y
+  // generando páginas en blanco después del contenido real (ver styles.css).
+  document.body.classList.add('cz-imprimiendo');
+  var limpiar = function(){ document.body.classList.remove('cz-imprimiendo'); };
+  if (window.matchMedia) {
+    var mq = window.matchMedia('print');
+    var onMq = function(ev){
+      if (ev.matches) return;
+      limpiar();
+      if (mq.removeEventListener) mq.removeEventListener('change', onMq); else mq.removeListener(onMq);
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onMq); else mq.addListener(onMq);
+  }
+  window.onafterprint = limpiar;
+  setTimeout(limpiar, 30000); // red de seguridad si el navegador no dispara ningún evento
   window.print();
 }
 
