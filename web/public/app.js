@@ -1831,6 +1831,19 @@ function calcularOsdop(){
   if (totalEl) totalEl.textContent = moneyFmt(total);
   osdopGuardar(datos);
 }
+// Exportar a PDF: no hace falta servidor ni librería nueva, se arma un
+// encabezado (cliente + fecha) visible solo al imprimir y se dispara el
+// diálogo nativo del navegador — ahí el usuario elige "Guardar como PDF".
+function osdopExportarPDF(){
+  var head = document.getElementById('osdopPrintHead');
+  if (head) {
+    var nombreCliente = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || 'Scheffelaar';
+    var hoy = new Date().toLocaleDateString('es-AR');
+    head.innerHTML = '<div class="op-title">OSDOP — ' + esc(nombreCliente) + '</div>'
+      + '<div class="op-sub">Calculadora de facturación — ' + esc(hoy) + '</div>';
+  }
+  window.print();
+}
 // El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
 // se muestra solo para ese cliente; el resto ve el placeholder.
 function renderClientGeneral(){

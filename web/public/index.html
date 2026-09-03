@@ -358,9 +358,14 @@
               <!-- OSDOP: calculadora de facturación, exclusiva de Scheffelaar (se
                    muestra por JS, igual criterio que credLoteCard de arriba). -->
               <section id="client-section-osdop" class="client-section" style="display:none">
-                <div class="client-card">
-                  <h3>OSDOP — Calculadora de facturación</h3>
+                <div class="client-card" id="osdopCard">
+                  <div class="client-card-head">
+                    <h3>OSDOP — Calculadora de facturación</h3>
+                    <button class="btn btn-ghost" type="button" onclick="osdopExportarPDF()">🖨️ Exportar a PDF</button>
+                  </div>
                   <p class="nom-muted">Cargá el valor, el coseguro (si el afiliado pagó algo, se descuenta) y la cantidad de cada concepto — el total que debería facturar la médica se calcula solo.</p>
+                  <!-- Encabezado solo para la versión impresa/PDF (oculto en pantalla). -->
+                  <div class="osdop-print-head" id="osdopPrintHead"></div>
                   <div class="table-scroll">
                     <table class="osdop-table" id="osdopTable">
                       <thead><tr><th>Concepto</th><th class="num">Valor</th><th class="num">Coseguro</th><th class="num">Cantidad</th><th class="num">Subtotal</th></tr></thead>
