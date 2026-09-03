@@ -5948,7 +5948,24 @@ async function deletePadronItem(slug, dni){
 // ===== Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI =====
 // Todo el estado del cruce que se está viendo/editando vive acá en memoria;
 // "Guardar cambios" es lo único que lo persiste en el servidor.
-var CZ = { clientesCargados: false, cruceActivo: null, filtroColor: null, _pickerFor: -1 };
+var CZ = { clientesCargados: false, cruceActivo: null, filtroColor: null, _pickerFor: -1, paginaPacientes: 1, paginaAusentes: 1 };
+var CZ_PAGE_SIZE = 75;
+// "Facturado" puede ser miles de filas - nada de renderizar todo junto, se
+// pagina de a 75 (misma idea para Ausentes).
+function czPaginaSlice(items, page){
+  var totalPages = Math.max(1, Math.ceil(items.length / CZ_PAGE_SIZE));
+  page = Math.min(Math.max(1, page || 1), totalPages);
+  var start = (page - 1) * CZ_PAGE_SIZE;
+  return { slice: items.slice(start, start + CZ_PAGE_SIZE), page: page, totalPages: totalPages, total: items.length };
+}
+function czPaginadorHtml(info, fnIrA){
+  if (info.totalPages <= 1) return '';
+  return '<div class="cz-paginador">' +
+    '<button type="button" class="btn btn-ghost" ' + (info.page <= 1 ? 'disabled' : '') + ' onclick="' + fnIrA + '(' + (info.page - 1) + ')">‹ Anterior</button>' +
+    '<span class="nom-muted">Página ' + info.page + ' de ' + info.totalPages + ' · ' + info.total + ' en total</span>' +
+    '<button type="button" class="btn btn-ghost" ' + (info.page >= info.totalPages ? 'disabled' : '') + ' onclick="' + fnIrA + '(' + (info.page + 1) + ')">Siguiente ›</button>' +
+  '</div>';
+}
 var CZ_COLORES = ['VERDE', 'AMARILLO', 'NARANJA', 'ROJO', 'GRIS'];
 var CZ_COLOR_HEX = { VERDE: '#c6efce', AMARILLO: '#ffeb9c', NARANJA: '#fcd5b4', ROJO: '#ffc7ce', GRIS: '#d9d9d9' };
 var CZ_LEYENDA = [['VERDE','Facturado'], ['AMARILLO','Revisar error'], ['NARANJA','Falta informe'], ['ROJO','Falta OME'], ['GRIS','Incongruencia']];
@@ -5961,6 +5978,11 @@ async function loadCruzasClientes(){
       var raw = await r.json();
       var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
       list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+      // Recuerda el último cliente elegido - si no, siempre arranca en el
+      // primero de la lista (Sala Millon) en vez de donde quedaste la vez pasada.
+      var ultimo = null;
+      try { ultimo = localStorage.getItem('ns_cruzas_cliente'); } catch(e){}
+      if (ultimo && list.some(function(c){ return c.slug === ultimo; })) sel.value = ultimo;
     } catch(e){}
     await cargarNomencladoresParaCruza();
   }
@@ -5984,6 +6006,8 @@ async function cargarNomencladoresParaCruza(){
 function onCambiaClienteCruzas(){
   CZ.cruceActivo = null;
   document.getElementById('czResultado').style.display = 'none';
+  var slug = document.getElementById('czCliente').value;
+  if (slug){ try { localStorage.setItem('ns_cruzas_cliente', slug); } catch(e){} }
   cargarHistorialCruzas();
 }
 function marcarArchivoElegido(inputId, spanId){
@@ -6051,8 +6075,10 @@ function renderCruceActivo(){
   document.getElementById('czResultado').style.display = c ? '' : 'none';
   if (!c) return;
   CZ.filtroColor = null;
+  CZ.paginaPacientes = 1;
+  CZ.paginaAusentes = 1;
   var buscar = document.getElementById('czBuscar'); if (buscar) buscar.value = '';
-  document.getElementById('czResTitulo').textContent = 'Cruce: ' + c.label;
+  document.getElementById('czResTitulo').textContent = c.label;
   document.getElementById('czEstadoBadge').innerHTML = c.status === 'confirmado'
     ? ('Confirmado el ' + new Date(c.confirmedAt).toLocaleString('es-AR'))
     : 'Borrador - todavía sin confirmar';
@@ -6062,13 +6088,22 @@ function renderCruceActivo(){
 
   czRenderPacientesTabla();
   renderFaltaOmeTable();
-
+  czRenderAusentesTabla();
+}
+function czRenderAusentesTabla(){
+  var c = CZ.cruceActivo; if (!c) return;
+  var ausentes = c.ausentes || [];
+  var info = czPaginaSlice(ausentes, CZ.paginaAusentes);
+  CZ.paginaAusentes = info.page;
   var ausBody = document.getElementById('czAusentesBody');
-  ausBody.innerHTML = (c.ausentes || []).map(function(a){
+  ausBody.innerHTML = info.slice.map(function(a){
     var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '<span class="nom-muted">—</span>';
     return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td class="num">' + val + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="nom-muted">Ningún no-show detectado en este cruce.</td></tr>';
+  var pagBox = document.getElementById('czAusentesPaginador');
+  if (pagBox) pagBox.innerHTML = czPaginadorHtml(info, 'czIrAPaginaAusentes');
 }
+function czIrAPaginaAusentes(p){ CZ.paginaAusentes = p; czRenderAusentesTabla(); }
 // Chips de resumen: clickeables, filtran la tabla por color. Tocar el color ya
 // activo lo saca (vuelve a "todos"). El buscador de texto se combina con el
 // color elegido (los dos filtros aplican juntos).
@@ -6096,9 +6131,11 @@ function czRenderPacientesTabla(){
     if (q && calcNorm(p.nombre + ' ' + p.dni + ' ' + p.beneficio).indexOf(q) < 0) return false;
     return true;
   });
+  var info = czPaginaSlice(pares, CZ.paginaPacientes);
+  CZ.paginaPacientes = info.page;
 
   var body = document.getElementById('czPacientesBody');
-  body.innerHTML = pares.map(function(par){
+  body.innerHTML = info.slice.map(function(par){
     var i = par[0], p = par[1];
     return '<tr>' +
       '<td>' + esc(p.beneficio) + '</td><td>' + esc(p.dni) + '</td><td>' + esc(p.nombre) + '</td><td>' + esc(p.especialidades) + '</td>' +
@@ -6106,12 +6143,16 @@ function czRenderPacientesTabla(){
       '<td><input class="inp" value="' + esc(p.detalle) + '" oninput="cambiarDetallePaciente(' + i + ',this.value)"></td>' +
     '</tr>';
   }).join('') || '<tr><td colspan="6" class="nom-muted">Ningún paciente coincide con el filtro.</td></tr>';
+  var pagBox = document.getElementById('czPacientesPaginador');
+  if (pagBox) pagBox.innerHTML = czPaginadorHtml(info, 'czIrAPaginaPacientes');
 }
+function czIrAPaginaPacientes(p){ CZ.paginaPacientes = p; czRenderPacientesTabla(); }
 function czFiltrarPorColor(color){
   CZ.filtroColor = (CZ.filtroColor === color) ? null : color;
+  CZ.paginaPacientes = 1;
   czRenderPacientesTabla();
 }
-function czAplicarFiltros(){ czRenderPacientesTabla(); }
+function czAplicarFiltros(){ CZ.paginaPacientes = 1; czRenderPacientesTabla(); }
 // Selector de color por fila: en vez de un <select> con el nombre escrito (el
 // color ya alcanza para leerlo), un pill de color + un popover chico con las
 // 5 opciones al tocarlo.

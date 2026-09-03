@@ -807,6 +807,7 @@
   .cz-chip-gris{background:linear-gradient(135deg,#b9c0c6,#6b747c)}
   .cz-filtros{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .cz-filtros #czBuscar{max-width:320px}
+  .cz-paginador{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px}
   /* Anchos fijos para que "Detalle" (la columna que importa leer entera) se
      lleve el espacio que sobra, en vez de repartirse parejo con columnas
      angostas como Beneficio o el pill de Estado. */
