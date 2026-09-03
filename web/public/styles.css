@@ -791,10 +791,13 @@
   .cz-swatch-rojo{background:linear-gradient(135deg,#ff9d9d 0%,#d63031 45%,#7d1c1d 100%)}
   .cz-swatch-gris{background:linear-gradient(135deg,#e7eaed 0%,#9aa3ab 45%,#5c646b 100%)}
   .cz-color-popover{position:fixed;z-index:80;display:flex;gap:6px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-  .cz-chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-  .cz-chip{font:inherit;font-size:12px;font-weight:800;letter-spacing:.02em;color:#fff;padding:6px 12px;border-radius:999px;border:1px solid rgba(0,0,0,.2);cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.35);opacity:.85;transition:opacity .12s ease,box-shadow .12s ease}
-  .cz-chip:hover{opacity:1}
+  .cz-chip-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center}
+  /* Semáforo: el color ya dice cuál es, el número es lo único que hace falta
+     leer - nada de "VERDE: 233" repitiendo lo que el color ya muestra. */
+  .cz-chip{font:inherit;font-size:13px;font-weight:800;letter-spacing:.02em;color:#fff;min-width:38px;height:38px;padding:0 10px;border-radius:999px;border:1px solid rgba(0,0,0,.2);cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.35);opacity:.85;transition:opacity .12s ease,box-shadow .12s ease,transform .12s ease;display:inline-flex;align-items:center;justify-content:center}
+  .cz-chip:hover{opacity:1;transform:translateY(-1px)}
   .cz-chip.on{opacity:1;box-shadow:0 0 0 3px var(--ring),inset 0 1px 0 rgba(255,255,255,.35)}
+  .cz-chip-mini{min-width:26px;height:22px;font-size:11px;padding:0 7px;cursor:default}
   .cz-chip-verde{background:linear-gradient(135deg,#4fcf82,#1f7d47)}
   .cz-chip-amarillo{background:linear-gradient(135deg,#f0c33e,#a9790a);color:#2b1e00;text-shadow:0 1px 0 rgba(255,255,255,.3)}
   .cz-chip-naranja{background:linear-gradient(135deg,#f0904a,#a9560a)}
@@ -802,6 +805,16 @@
   .cz-chip-gris{background:linear-gradient(135deg,#b9c0c6,#6b747c)}
   .cz-filtros{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .cz-filtros #czBuscar{max-width:320px}
+  /* Anchos fijos para que "Detalle" (la columna que importa leer entera) se
+     lleve el espacio que sobra, en vez de repartirse parejo con columnas
+     angostas como Beneficio o el pill de Estado. */
+  #czPacientesTable{table-layout:fixed;width:100%}
+  #czPacientesTable th:nth-child(1),#czPacientesTable td:nth-child(1){width:150px}
+  #czPacientesTable th:nth-child(2),#czPacientesTable td:nth-child(2){width:90px}
+  #czPacientesTable th:nth-child(3),#czPacientesTable td:nth-child(3){width:170px}
+  #czPacientesTable th:nth-child(4),#czPacientesTable td:nth-child(4){width:160px}
+  #czPacientesTable th:nth-child(5),#czPacientesTable td:nth-child(5){width:56px}
+  #czPacientesTable td:nth-child(1),#czPacientesTable td:nth-child(2),#czPacientesTable td:nth-child(3),#czPacientesTable td:nth-child(4){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* "Nueva cruza": dos filas separadas en vez de un solo flex-wrap mezclando
      campos con label (dos líneas) y botones (una línea) - mezclados en la
      misma fila quedaban desalineados y el orden de wrap saltaba feo. */

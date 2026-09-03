@@ -3769,11 +3769,13 @@ function buildAusentesWorkbook(cruce, slug) {
   const HEADER_ROW = 4; // fila 5 visual: 0=cliente,1=subtitulo,2=nota,3=blanco,4=encabezados
   const nomInfo = cruce.nomencladorLabel
     ? `Valorizado con nomenclador ${cruce.nomencladorLabel} (${cruce.nomencladorCodigosConValor || 0} de ${cruce.nomencladorCodigosEnAusentes || 0} códigos con precio).`
-    : "No había ningún nomenclador cargado al armar este cruce - por eso no hay valores.";
+    : conValor.length
+      ? "" // cruce viejo (de antes de guardar con qué nomenclador se corrió) pero sí tiene valores
+      : "Ningún código de esta lista tiene precio cargado en el nomenclador.";
   const rows = [
     [clientName],
     [["Ausentes (no vino el paciente)", cruce.label].filter(Boolean).join("  ·  ")],
-    [nomInfo + " \"—\" en Valor = ese código puntual no tiene precio en ese nomenclador (no es que valga $0)."],
+    [[nomInfo, "\"—\" en Valor = ese código puntual no tiene precio en ese nomenclador (no es que valga $0)."].filter(Boolean).join(" ")],
     [],
     ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
   ];
