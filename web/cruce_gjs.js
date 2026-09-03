@@ -316,9 +316,9 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, valorPorCodigo }) {
       const codigoPrincipal = codigos[0];
       const descripcionItem = `${codigoPrincipal} - ${e.nombre}`;
       if (estadoItem === "FALTA_INFORME") {
-        faltaInforme.push({ beneficio, nombre: info.nombre, practica: descripcionItem, turno: e.turno || "" });
+        faltaInforme.push({ beneficio, nombre: info.nombre, practica: descripcionItem, turno: e.turno || "", valor: valores.get(codigoPrincipal) || 0 });
       } else if (estadoItem === "AUSENTE" || estadoItem === "ERROR_REGION") {
-        faltaOmeAuto.push({ turno: e.turno || "", especialidad: e.especialidadDisplay || "", nombre: info.nombre, beneficio, obs: "Sin ome" });
+        faltaOmeAuto.push({ turno: e.turno || "", especialidad: e.especialidadDisplay || "", nombre: info.nombre, beneficio, obs: "Sin ome", valor: valores.get(codigoPrincipal) || 0 });
       }
     }
     if (sinMapeo) { peorEstado = peor(peorEstado, "PENDIENTE"); detalle.push("Especialidad/practica sin mapeo conocido (posible Holter u otra no catalogada) - revisar en CUP"); }

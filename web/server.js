@@ -3769,16 +3769,16 @@ function buildClientReportWorkbook(report) {
 
   return XS.write(wb, { bookType: "xlsx", type: "buffer" });
 }
-// Excel de "Ausentes" (Cruzas), con el mismo lenguaje visual que el reporte de
-// cliente de arriba (encabezado navy, bordes, moneda formateada) - antes esto
-// se armaba como un CSV plano del lado del navegador: sin estilo, columnas sin
-// acomodar, y Excel reinterpretaba el N° de beneficio (14 dígitos) como un
-// número y lo mostraba en notación científica. Acá el beneficio queda
-// explícitamente como texto, y un valor en $0 (código sin nomenclador
-// cargado) se muestra como "—" en vez de "$0,00" para no confundir "no tengo
-// el dato" con "vale cero".
-function buildAusentesWorkbook(cruce, slug) {
-  const XS = XLSXStyle;
+// Hoja de Excel genérica para una lista valorizada de Cruzas (Ausentes, Falta
+// informe, Falta ome), con el mismo lenguaje visual del reporte de cliente
+// (encabezado navy, bordes oscuros para que se vean al imprimir, moneda
+// formateada) y, si tiene columna de $, una fila de TOTAL al pie - nadie debería
+// tener que sumar 200 filas a mano para saber cuánto hay en juego. El
+// beneficio (14 dígitos) queda siempre tipado como texto para que Excel no lo
+// reinterprete como número en notación científica, y un $0 (código sin
+// nomenclador cargado) se muestra como "—" para no confundir "no tengo el
+// dato" con "vale cero".
+function buildCruzasListaSheet(XS, { clientName, subtitulo, headers, filas, anchos, centradas, colValor, totalNoun }) {
   const MONEY = '"$"#,##0.00';
   // Borde más oscuro que el del reporte de cliente a propósito: ese sale por
   // pantalla, este lo imprimen - un gris casi blanco (D9DEE1) queda invisible
@@ -3786,58 +3786,94 @@ function buildAusentesWorkbook(cruce, slug) {
   const bd = { style: "thin", color: { rgb: "595959" } };
   const BORDER = { top: bd, bottom: bd, left: bd, right: bd };
   const HEAD = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center", horizontal: "center" }, border: BORDER };
-  const clientName = String(clientDisplayName(slug) || slug || "").toUpperCase();
-  const ausentes = cruce.ausentes || [];
-  const conValor = ausentes.filter((a) => (a.valor || 0) > 0);
-  const totalValor = ausentes.reduce((s, a) => s + (a.valor || 0), 0);
+  const ncols = headers.length;
+  const centro = centradas || [];
+  const conValor = colValor != null ? filas.filter((f) => (f[colValor] || 0) > 0) : [];
+  const totalValor = colValor != null ? filas.reduce((s, f) => s + (f[colValor] || 0), 0) : 0;
 
   const HEADER_ROW = 3; // 0=cliente,1=subtitulo,2=blanco,3=encabezados
-  const rows = [
-    [clientName],
-    [["Ausentes (no vino el paciente)", cruce.label].filter(Boolean).join("  ·  ")],
-    [],
-    ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
-  ];
-  for (const a of ausentes) rows.push([a.beneficio, a.nombre, a.practica, a.turno, a.valor || 0]);
-  const totalRow = HEADER_ROW + 1 + ausentes.length + 1;
+  const rows = [[clientName], [subtitulo], [], headers];
+  for (const f of filas) rows.push(f.slice());
+  const totalRow = HEADER_ROW + 1 + filas.length + 1;
   rows.push([]);
-  rows.push(["", "", "", "TOTAL (" + ausentes.length + " turnos · " + conValor.length + " valorizados)", totalValor]);
+  if (colValor != null) {
+    const etiqueta = new Array(ncols).fill("");
+    const colEtiqueta = Math.max(colValor - 1, 0);
+    etiqueta[colEtiqueta] = "TOTAL (" + filas.length + " " + totalNoun + (conValor.length !== filas.length ? " · " + conValor.length + " valorizados" : "") + ")";
+    etiqueta[colValor] = totalValor;
+    rows.push(etiqueta);
+  }
 
-  const wb = XS.utils.book_new();
   const ws = XS.utils.aoa_to_sheet(rows);
-  ws["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 60 }, { wch: 24 }, { wch: 16 }];
-  ws["!merges"] = [XS.utils.decode_range("A1:E1"), XS.utils.decode_range("A2:E2")];
+  ws["!cols"] = anchos.map((wch) => ({ wch }));
+  const lastCol = XS.utils.encode_col(ncols - 1);
+  ws["!merges"] = [XS.utils.decode_range(`A1:${lastCol}1`), XS.utils.decode_range(`A2:${lastCol}2`)];
   const setS = (ref, s) => { if (ws[ref]) ws[ref].s = Object.assign({}, ws[ref].s, s); };
   setS("A1", { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } });
   setS("A2", { font: { italic: true, color: { rgb: "667079" } } });
-  for (let c = 0; c < 5; c += 1) setS(XS.utils.encode_cell({ r: HEADER_ROW, c }), HEAD);
-  ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: HEADER_ROW, c: 0 }, e: { r: HEADER_ROW, c: 4 } }) };
+  for (let c = 0; c < ncols; c += 1) setS(XS.utils.encode_cell({ r: HEADER_ROW, c }), HEAD);
+  ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: HEADER_ROW, c: 0 }, e: { r: HEADER_ROW, c: ncols - 1 } }) };
   ws["!freeze"] = { xSplit: 0, ySplit: HEADER_ROW + 1 };
 
   const dataStart = HEADER_ROW + 1;
-  ausentes.forEach((a, i) => {
+  filas.forEach((f, i) => {
     const r = dataStart + i;
-    // Beneficio y Turno centrados (son códigos/fechas cortas, se ven prolijos
-    // centrados); Nombre y Práctica quedan a la izquierda (son texto largo,
-    // centrarlos se ve mal); Valor a la derecha (convención de moneda).
-    setS(XS.utils.encode_cell({ r, c: 0 }), { border: BORDER, alignment: { horizontal: "center" } });
-    setS(XS.utils.encode_cell({ r, c: 1 }), { border: BORDER });
-    setS(XS.utils.encode_cell({ r, c: 2 }), { border: BORDER });
-    setS(XS.utils.encode_cell({ r, c: 3 }), { border: BORDER, alignment: { horizontal: "center" } });
-    const benRef = XS.utils.encode_cell({ r, c: 0 });
-    if (ws[benRef]) ws[benRef].t = "s"; // texto explícito: nunca lo reinterprete como número
-    const turnoRef = XS.utils.encode_cell({ r, c: 3 });
-    if (ws[turnoRef]) ws[turnoRef].t = "s";
-    const valRef = XS.utils.encode_cell({ r, c: 4 });
-    if (ws[valRef]) {
-      if ((a.valor || 0) > 0) setS(valRef, { border: BORDER, numFmt: MONEY, alignment: { horizontal: "right" } }), (ws[valRef].z = MONEY);
-      else { ws[valRef].v = "—"; ws[valRef].t = "s"; setS(valRef, { border: BORDER, alignment: { horizontal: "center" }, font: { color: { rgb: "9AA3AB" } } }); }
+    for (let c = 0; c < ncols; c += 1) {
+      const ref = XS.utils.encode_cell({ r, c });
+      if (!ws[ref]) continue;
+      if (c === colValor) {
+        if ((f[c] || 0) > 0) { setS(ref, { border: BORDER, numFmt: MONEY, alignment: { horizontal: "right" } }); ws[ref].z = MONEY; }
+        else { ws[ref].v = "—"; ws[ref].t = "s"; setS(ref, { border: BORDER, alignment: { horizontal: "center" }, font: { color: { rgb: "9AA3AB" } } }); }
+      } else {
+        setS(ref, { border: BORDER, alignment: centro.includes(c) ? { horizontal: "center" } : undefined });
+        if (centro.includes(c) && typeof ws[ref].v === "string") ws[ref].t = "s"; // texto explícito: nunca lo reinterprete como número
+      }
     }
   });
-  setS(XS.utils.encode_cell({ r: totalRow, c: 3 }), { font: { bold: true }, alignment: { horizontal: "center" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
-  const totalValRef = XS.utils.encode_cell({ r: totalRow, c: 4 });
-  if (ws[totalValRef]) { ws[totalValRef].z = MONEY; setS(totalValRef, { font: { bold: true }, numFmt: MONEY, alignment: { horizontal: "right" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } }); }
-
+  if (colValor != null) {
+    const colEtiqueta = Math.max(colValor - 1, 0);
+    setS(XS.utils.encode_cell({ r: totalRow, c: colEtiqueta }), { font: { bold: true }, alignment: { horizontal: centro.includes(colEtiqueta) ? "center" : "left" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } });
+    const totalValRef = XS.utils.encode_cell({ r: totalRow, c: colValor });
+    if (ws[totalValRef]) { ws[totalValRef].z = MONEY; setS(totalValRef, { font: { bold: true }, numFmt: MONEY, alignment: { horizontal: "right" }, border: { top: { style: "double", color: { rgb: "1F4E5F" } } } }); }
+  }
+  return ws;
+}
+function cruzasAusentesSheetOpts(cruce, clientName) {
+  const ausentes = cruce.ausentes || [];
+  return {
+    clientName, subtitulo: ["Ausentes", cruce.label].filter(Boolean).join("  ·  "),
+    headers: ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
+    filas: ausentes.map((a) => [a.beneficio, a.nombre, a.practica, a.turno, a.valor || 0]),
+    anchos: [18, 30, 60, 24, 16], centradas: [0, 3], colValor: 4, totalNoun: "turnos",
+  };
+}
+function cruzasFaltaInformeSheetOpts(cruce, clientName) {
+  const faltaInforme = cruce.faltaInforme || [];
+  return {
+    clientName, subtitulo: ["Falta informe", cruce.label].filter(Boolean).join("  ·  "),
+    headers: ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
+    filas: faltaInforme.map((f) => [f.beneficio, f.nombre, f.practica, f.turno, f.valor || 0]),
+    anchos: [18, 30, 60, 24, 16], centradas: [0, 3], colValor: 4, totalNoun: "prácticas",
+  };
+}
+function cruzasFaltaOmeSheetOpts(cruce, clientName) {
+  const faltaOme = [...(cruce.faltaOmeAuto || []), ...(cruce.faltaOmeManual || [])];
+  return {
+    clientName, subtitulo: ["Falta ome", cruce.label].filter(Boolean).join("  ·  "),
+    headers: ["Turno", "Especialidad", "Nombre", "Beneficio", "Obs", "Valor"],
+    filas: faltaOme.map((f) => [f.turno, f.especialidad, f.nombre, f.beneficio, f.obs, f.valor || 0]),
+    anchos: [22, 22, 30, 18, 30, 16], centradas: [0, 3], colValor: 5, totalNoun: "turnos",
+  };
+}
+// Excel de "Ausentes" (Cruzas) solo, para pasarle rápido la lista de no-shows
+// a alguien sin abrir el libro completo. Antes esto se armaba como un CSV
+// plano del lado del navegador: sin estilo, columnas sin acomodar, y Excel
+// reinterpretaba el N° de beneficio como número en notación científica.
+function buildAusentesWorkbook(cruce, slug) {
+  const XS = XLSXStyle;
+  const clientName = String(clientDisplayName(slug) || slug || "").toUpperCase();
+  const wb = XS.utils.book_new();
+  const ws = buildCruzasListaSheet(XS, cruzasAusentesSheetOpts(cruce, clientName));
   XS.utils.book_append_sheet(wb, ws, "Ausentes");
   return XS.write(wb, { bookType: "xlsx", type: "buffer" });
 }
@@ -6534,6 +6570,7 @@ const server = http.createServer(async (req, res) => {
     const cruce = (store[slug] || []).find((c) => c.id === id);
     if (!cruce) return json(res, 404, { error: "Cruce no encontrado." });
     const XS = XLSXStyle;
+    const clientName = String(clientDisplayName(slug) || slug || "").toUpperCase();
     const COLORS = { VERDE: "C6EFCE", AMARILLO: "FFEB9C", NARANJA: "FCD5B4", ROJO: "FFC7CE", GRIS: "D9D9D9" };
     const ORDEN = { GRIS: 0, ROJO: 1, NARANJA: 2, AMARILLO: 3, VERDE: 4 };
     const pacientesOrdenados = cruce.pacientes.slice().sort((a, b) => ORDEN[a.color] - ORDEN[b.color]);
@@ -6553,24 +6590,11 @@ const server = http.createServer(async (req, res) => {
     });
     XS.utils.book_append_sheet(wb, ws, "Cruce por paciente");
 
-    const aoaAus = [["Beneficio", "Nombre", "Práctica", "Turno", "Valor"]];
-    for (const a of cruce.ausentes || []) aoaAus.push([a.beneficio, a.nombre, a.practica, a.turno, a.valor || 0]);
-    const wsAus = XS.utils.aoa_to_sheet(aoaAus);
-    wsAus["!cols"] = [{ wch: 18 }, { wch: 30 }, { wch: 55 }, { wch: 22 }, { wch: 14 }];
-    for (let c = 0; c < 5; c += 1) { const ref = XS.utils.encode_cell({ r: 0, c }); if (wsAus[ref]) wsAus[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "DDEBF7" } } }; }
-    for (let r = 1; r <= (cruce.ausentes || []).length; r += 1) {
-      const ref = XS.utils.encode_cell({ r, c: 4 });
-      if (wsAus[ref] && typeof wsAus[ref].v === "number") wsAus[ref].z = '"$"#,##0.00';
-    }
-    XS.utils.book_append_sheet(wb, wsAus, "Ausentes");
-
-    const faltaOme = [...(cruce.faltaOmeAuto || []), ...(cruce.faltaOmeManual || [])];
-    const aoaOme = [["Turno", "Especialidad", "Nombre", "Beneficio", "Obs"]];
-    for (const f of faltaOme) aoaOme.push([f.turno, f.especialidad, f.nombre, f.beneficio, f.obs]);
-    const wsOme = XS.utils.aoa_to_sheet(aoaOme);
-    wsOme["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 18 }, { wch: 40 }];
-    for (let c = 0; c < 5; c += 1) { const ref = XS.utils.encode_cell({ r: 0, c }); if (wsOme[ref]) wsOme[ref].s = { font: { bold: true }, fill: { fgColor: { rgb: "DDEBF7" } } }; }
-    XS.utils.book_append_sheet(wb, wsOme, "Falta ome");
+    // Falta informe / Ausentes / Falta ome: mismo estilo profesional (navy,
+    // bordes, "—" en vez de "$0,00", fila de TOTAL) que "Descargar ausentes".
+    XS.utils.book_append_sheet(wb, buildCruzasListaSheet(XS, cruzasFaltaInformeSheetOpts(cruce, clientName)), "Falta informe");
+    XS.utils.book_append_sheet(wb, buildCruzasListaSheet(XS, cruzasAusentesSheetOpts(cruce, clientName)), "Ausentes");
+    XS.utils.book_append_sheet(wb, buildCruzasListaSheet(XS, cruzasFaltaOmeSheetOpts(cruce, clientName)), "Falta ome");
 
     const buf = XS.write(wb, { type: "buffer", bookType: "xlsx" });
     res.writeHead(200, {
