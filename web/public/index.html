@@ -998,15 +998,17 @@
 
           <div class="card" id="czNuevoCard">
             <div class="client-card-head"><h3>Nueva cruza</h3></div>
-            <div class="nom-upload" style="flex-wrap:wrap">
-              <label class="field" style="min-width:220px">
+            <div class="cz-nueva-row">
+              <label class="field" style="flex:1;min-width:220px">
                 <span>Etiqueta (ej: 2da quincena agosto)</span>
                 <input class="inp" id="czLabel" placeholder="Etiqueta del período">
               </label>
-              <label class="field" style="min-width:200px">
+              <label class="field" style="flex:1;min-width:220px">
                 <span>Nomenclador para valorizar "Ausentes"</span>
                 <select class="inp" id="czNomenclador"></select>
               </label>
+            </div>
+            <div class="cz-nueva-row cz-nueva-row-acciones">
               <label class="btn btn-ghost file-btn">
                 📁 Listado de consultas
                 <input id="czFileAgenda" type="file" accept=".xls,.xlsx,.xlsm" onchange="marcarArchivoElegido('czFileAgenda','czNombreAgenda')">

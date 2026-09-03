@@ -802,6 +802,12 @@
   .cz-chip-gris{background:linear-gradient(135deg,#b9c0c6,#6b747c)}
   .cz-filtros{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .cz-filtros #czBuscar{max-width:320px}
+  /* "Nueva cruza": dos filas separadas en vez de un solo flex-wrap mezclando
+     campos con label (dos líneas) y botones (una línea) - mezclados en la
+     misma fila quedaban desalineados y el orden de wrap saltaba feo. */
+  .cz-nueva-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+  .cz-nueva-row + .cz-nueva-row{margin-top:14px}
+  .cz-nueva-row-acciones{align-items:center}
   @media print {
     body *{visibility:hidden}
     #osdopCard,#osdopCard *{visibility:visible}
