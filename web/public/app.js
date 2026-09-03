@@ -6238,7 +6238,8 @@ function exportarCrucePDF(){
   }).join('') || '<p>Nada pendiente de transmitir.</p>';
 
   var ausFilas = (c.ausentes || []).map(function(a){
-    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td>' + moneyFmt(a.valor) + '</td></tr>';
+    var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '—';
+    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td>' + val + '</td></tr>';
   }).join('');
   var ausHtml = ausFilas ? ('<table><thead><tr><th>Beneficio</th><th>Nombre</th><th>Práctica</th><th>Turno</th><th>Valor</th></tr></thead><tbody>' + ausFilas + '</tbody></table>') : '<p>Ningún no-show detectado.</p>';
 
