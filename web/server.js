@@ -2451,6 +2451,16 @@ function nomencladorValorPorCodigo(period) {
   }
   return mapa;
 }
+// Igual que arriba pero devuelve también CON QUÉ nomenclador se armó el mapa
+// (período/etiqueta) - así "Cruzas" puede mostrar de qué nomenclador salieron
+// los valores en vez de dejarlo implícito (si el período activo no es el que
+// corresponde, un código puede aparecer sin valor y no queda claro por qué).
+function nomencladorValorPorCodigoConInfo(period) {
+  const store = loadNomencladorStore();
+  const payload = getNomencladorByPeriod(store, period);
+  const mapa = nomencladorValorPorCodigo(period);
+  return { mapa, periodo: payload ? payload.period : "", label: payload ? (payload.label || periodLabel(payload.period)) : "", cantidadCodigos: mapa.size };
+}
 function listNomencladores(store) {
   return Object.values(store.items || {})
     .map((item) => ({
@@ -3757,10 +3767,13 @@ function buildAusentesWorkbook(cruce, slug) {
   const totalValor = ausentes.reduce((s, a) => s + (a.valor || 0), 0);
 
   const HEADER_ROW = 4; // fila 5 visual: 0=cliente,1=subtitulo,2=nota,3=blanco,4=encabezados
+  const nomInfo = cruce.nomencladorLabel
+    ? `Valorizado con nomenclador ${cruce.nomencladorLabel} (${cruce.nomencladorCodigosConValor || 0} de ${cruce.nomencladorCodigosEnAusentes || 0} códigos con precio).`
+    : "No había ningún nomenclador cargado al armar este cruce - por eso no hay valores.";
   const rows = [
     [clientName],
     [["Ausentes (no vino el paciente)", cruce.label].filter(Boolean).join("  ·  ")],
-    ["Turno reservado con OME pinchada pero nunca validada. \"—\" en Valor = ese código no tiene precio cargado en el nomenclador vigente (no es que valga $0)."],
+    [nomInfo + " \"—\" en Valor = ese código puntual no tiene precio en ese nomenclador (no es que valga $0)."],
     [],
     ["Beneficio", "Nombre", "Práctica", "Turno", "Valor"],
   ];
@@ -6347,8 +6360,13 @@ const server = http.createServer(async (req, res) => {
       if (!agenda || !bandeja) return json(res, 400, { error: "Subí los dos archivos: Listado de consultas y bandeja de transmisión." });
       const extOk = (f) => [".xls", ".xlsx", ".xlsm"].includes(path.extname(f.filename).toLowerCase());
       if (!extOk(agenda) || !extOk(bandeja)) return json(res, 400, { error: "Los archivos deben ser Excel (.xls/.xlsx/.xlsm)." });
-      const valorPorCodigo = nomencladorValorPorCodigo(mp.fields.nomencladorPeriod);
-      const resultado = cruceGjs.calcularCruce({ agendaBuffer: agenda.data, bandejaBuffer: bandeja.data, valorPorCodigo });
+      const infoNom = nomencladorValorPorCodigoConInfo(mp.fields.nomencladorPeriod);
+      const resultado = cruceGjs.calcularCruce({ agendaBuffer: agenda.data, bandejaBuffer: bandeja.data, valorPorCodigo: infoNom.mapa });
+      // Cuántos de los códigos que aparecen en "Ausentes" efectivamente encontraron
+      // precio en ese nomenclador - para poder avisar en la UI si el período usado
+      // no es el que corresponde (en vez de un "—" silencioso sin explicación).
+      const codigosAusentes = new Set((resultado.ausentes || []).map((a) => String(a.practica || "").split(" - ")[0].trim()));
+      const codigosConValor = [...codigosAusentes].filter((cod) => infoNom.mapa.has(cod));
       const cruce = {
         id: crypto.randomUUID(),
         label: String(mp.fields.label || "").trim() || new Date().toLocaleDateString("es-AR"),
@@ -6358,6 +6376,10 @@ const server = http.createServer(async (req, res) => {
         confirmedAt: null,
         archivoAgenda: agenda.filename,
         archivoBandeja: bandeja.filename,
+        nomencladorPeriodo: infoNom.periodo,
+        nomencladorLabel: infoNom.label,
+        nomencladorCodigosEnAusentes: codigosAusentes.size,
+        nomencladorCodigosConValor: codigosConValor.length,
         excluidosCabecera: resultado.excluidosCabecera,
         excluidosParticular: resultado.excluidosParticular,
         resumen: resultado.resumen,

@@ -5961,8 +5961,24 @@ async function loadCruzasClientes(){
       var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
       list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     } catch(e){}
+    await cargarNomencladoresParaCruza();
   }
   onCambiaClienteCruzas();
+}
+// El nomenclador con el que se valoriza "Ausentes". Por defecto el activo (el
+// mismo que ya usa la Calculadora de proyecciones) - se puede elegir otro si
+// el cruce corresponde a un período distinto.
+async function cargarNomencladoresParaCruza(){
+  var sel = document.getElementById('czNomenclador');
+  if (!sel) return;
+  try {
+    var r = await fetch('/api/nomencladores');
+    var data = await r.json();
+    var lista = data.nomencladores || [];
+    var opts = '<option value="">' + (data.activePeriod ? ('Activo (' + esc(data.label || data.activePeriod) + ')') : 'Sin nomenclador cargado') + '</option>';
+    opts += lista.map(function(n){ return '<option value="' + esc(n.value) + '">' + esc(n.label) + '</option>'; }).join('');
+    sel.innerHTML = opts;
+  } catch(e){}
 }
 function onCambiaClienteCruzas(){
   CZ.cruceActivo = null;
@@ -6007,6 +6023,7 @@ async function cruzarAhora(){
     var fd = new FormData();
     fd.append('agenda', agenda); fd.append('bandeja', bandeja);
     fd.append('label', document.getElementById('czLabel').value || '');
+    fd.append('nomencladorPeriod', document.getElementById('czNomenclador').value || '');
     var r = await fetch('/api/cruzas/' + slug + '/cruzar', { method:'POST', body: fd });
     var data = {}; try { data = await r.json(); } catch(e){}
     if (!r.ok){ err.textContent = data.error || 'No se pudo procesar el cruce.'; err.style.display = 'block'; return; }
@@ -6045,9 +6062,16 @@ function renderCruceActivo(){
   czRenderPacientesTabla();
   renderFaltaOmeTable();
 
+  var nomInfo = document.getElementById('czNomencladorInfo');
+  if (nomInfo){
+    nomInfo.textContent = c.nomencladorLabel
+      ? ('Valorizado con nomenclador ' + c.nomencladorLabel + ' (' + (c.nomencladorCodigosConValor||0) + ' de ' + (c.nomencladorCodigosEnAusentes||0) + ' códigos con precio cargado).')
+      : 'No había ningún nomenclador cargado al armar este cruce - por eso no hay valores.';
+  }
   var ausBody = document.getElementById('czAusentesBody');
   ausBody.innerHTML = (c.ausentes || []).map(function(a){
-    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td class="num">' + moneyFmt(a.valor) + '</td></tr>';
+    var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '<span class="nom-muted">—</span>';
+    return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td class="num">' + val + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="nom-muted">Ningún no-show detectado en este cruce.</td></tr>';
 }
 // Chips de resumen: clickeables, filtran la tabla por color. Tocar el color ya
