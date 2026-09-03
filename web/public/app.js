@@ -5951,6 +5951,7 @@ async function deletePadronItem(slug, dni){
 var CZ = { clientesCargados: false, cruceActivo: null, filtroColor: null, _pickerFor: -1 };
 var CZ_COLORES = ['VERDE', 'AMARILLO', 'NARANJA', 'ROJO', 'GRIS'];
 var CZ_COLOR_HEX = { VERDE: '#c6efce', AMARILLO: '#ffeb9c', NARANJA: '#fcd5b4', ROJO: '#ffc7ce', GRIS: '#d9d9d9' };
+var CZ_LEYENDA = [['VERDE','Facturado'], ['AMARILLO','Revisar error'], ['NARANJA','Falta informe'], ['ROJO','Falta OME'], ['GRIS','Incongruencia']];
 async function loadCruzasClientes(){
   var sel = document.getElementById('czCliente');
   if (sel && !CZ.clientesCargados){
@@ -6062,19 +6063,6 @@ function renderCruceActivo(){
   czRenderPacientesTabla();
   renderFaltaOmeTable();
 
-  var nomInfo = document.getElementById('czNomencladorInfo');
-  if (nomInfo){
-    var hayValores = (c.ausentes || []).some(function(a){ return (a.valor||0) > 0; });
-    if (c.nomencladorLabel){
-      nomInfo.textContent = 'Valorizado con nomenclador ' + c.nomencladorLabel + ' (' + (c.nomencladorCodigosConValor||0) + ' de ' + (c.nomencladorCodigosEnAusentes||0) + ' códigos con precio).';
-    } else if (hayValores) {
-      // Cruce viejo (de antes de que guardáramos qué nomenclador se usó): hay
-      // valores igual, así que no corresponde decir "no había nomenclador".
-      nomInfo.textContent = '';
-    } else {
-      nomInfo.textContent = 'Ningún código de esta lista tiene precio cargado en el nomenclador.';
-    }
-  }
   var ausBody = document.getElementById('czAusentesBody');
   ausBody.innerHTML = (c.ausentes || []).map(function(a){
     var val = (a.valor || 0) > 0 ? moneyFmt(a.valor) : '<span class="nom-muted">—</span>';
@@ -6094,11 +6082,13 @@ function czRenderPacientesTabla(){
   }).join('');
 
   var q = calcNorm((document.getElementById('czBuscar') || {}).value || '').trim();
-  var filtro = document.getElementById('czFiltroActivo');
-  var partes = [];
-  if (CZ.filtroColor) partes.push('color = ' + CZ.filtroColor);
-  if (q) partes.push('texto = "' + q + '"');
-  if (filtro) filtro.textContent = partes.length ? ('Filtrando por ' + partes.join(' y ') + ' · ') : '';
+  var leyenda = document.getElementById('czFiltroActivo');
+  if (leyenda && !leyenda.dataset.wired){
+    leyenda.dataset.wired = '1';
+    leyenda.innerHTML = CZ_LEYENDA.map(function(x){
+      return '<span class="cz-leyenda-item"><span class="cz-swatch cz-swatch-tiny cz-swatch-' + x[0].toLowerCase() + '"></span>' + x[1] + '</span>';
+    }).join('');
+  }
 
   var pares = c.pacientes.map(function(p, i){ return [i, p]; }).filter(function(par){
     var p = par[1];
@@ -6106,7 +6096,6 @@ function czRenderPacientesTabla(){
     if (q && calcNorm(p.nombre + ' ' + p.dni + ' ' + p.beneficio).indexOf(q) < 0) return false;
     return true;
   });
-  if (filtro) filtro.textContent += pares.length + ' de ' + c.pacientes.length;
 
   var body = document.getElementById('czPacientesBody');
   body.innerHTML = pares.map(function(par){

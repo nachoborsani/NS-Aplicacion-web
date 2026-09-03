@@ -785,6 +785,8 @@
   .cz-swatch{width:26px;height:26px;border-radius:8px;border:1px solid rgba(0,0,0,.25);cursor:pointer;padding:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 3px rgba(0,0,0,.25);transition:transform .1s ease}
   .cz-swatch:hover{transform:scale(1.08)}
   .cz-swatch-lg{width:34px;height:34px;border-radius:9px}
+  .cz-swatch-tiny{width:11px;height:11px;border-radius:50%;cursor:default;box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+  .cz-leyenda-item{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:12px;color:var(--text-2)}
   .cz-swatch-verde{background:linear-gradient(135deg,#8bf0ab 0%,#2fa360 45%,#155c33 100%)}
   .cz-swatch-amarillo{background:linear-gradient(135deg,#ffe694 0%,#e8b013 45%,#93700a 100%)}
   .cz-swatch-naranja{background:linear-gradient(135deg,#ffbb7a 0%,#e8720f 45%,#93460a 100%)}
