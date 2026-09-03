@@ -5428,6 +5428,14 @@ function calcWire(){
   document.getElementById('calcSave').addEventListener('click', calcGuardar);
   document.getElementById('calcDownload').addEventListener('click', calcDescargar);
   document.getElementById('calcClear').addEventListener('click', function(){ CALC.saved=[]; calcPersistSaved(); calcRenderSaved(); });
+  // "Limpiar todo" de la proyección en curso (no de las guardadas): si agregaste
+  // un modulo entero por error (pueden ser 100+ practicas), borrar una por una
+  // no es viable - se pide confirmacion porque es irreversible.
+  document.getElementById('calcClearItems').addEventListener('click', function(){
+    if(!CALC.items.length) return;
+    if(!confirm('¿Vaciar toda la proyección actual (' + CALC.items.length + ' práctica' + (CALC.items.length!==1?'s':'') + ')? No se puede deshacer.')) return;
+    CALC.items=[]; calcRender();
+  });
   var sr=document.getElementById('calcSearch');
   sr.addEventListener('input', calcSearchDo);
   sr.addEventListener('keydown', function(e){ if(e.key==='Escape') calcCloseSearch(); });
