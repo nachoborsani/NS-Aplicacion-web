@@ -1028,6 +1028,7 @@
               <div class="client-card-head">
                 <h3 id="czResTitulo">Cruce</h3>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="btn btn-ghost" onclick="descargarAusentesCsv()">⬇️ Descargar ausentes</button>
                   <button class="btn btn-ghost" onclick="descargarCruceExcel()">⬇️ Descargar Excel</button>
                   <button class="btn btn-ghost" id="czGuardarBtn" onclick="guardarEdicionesCruce()">💾 Guardar cambios</button>
                   <button class="btn btn-primary" id="czConfirmarBtn" onclick="confirmarCruce()">✅ Confirmar</button>
@@ -1036,13 +1037,6 @@
                 </div>
               </div>
               <div id="czEstadoBadge" class="nom-muted"></div>
-              <div id="czResumenChips" class="cab-resumen"></div>
-              <div class="table-scroll">
-                <table class="nom-results-table" id="czPacientesTable">
-                  <thead><tr><th>Beneficio</th><th>DNI</th><th>Nombre</th><th>Especialidad(es)</th><th>Estado</th><th>Detalle</th></tr></thead>
-                  <tbody id="czPacientesBody"></tbody>
-                </table>
-              </div>
             </div>
 
             <div class="card">
@@ -1058,6 +1052,21 @@
             </div>
 
             <div class="card">
+              <div class="client-card-head"><h3>Cruce por paciente</h3></div>
+              <div id="czResumenChips" class="cz-chip-row"></div>
+              <div class="cz-filtros">
+                <input class="inp" id="czBuscar" placeholder="Buscar por nombre, DNI o beneficio…" oninput="czAplicarFiltros()">
+                <span class="nom-muted" id="czFiltroActivo"></span>
+              </div>
+              <div class="table-scroll">
+                <table class="nom-results-table" id="czPacientesTable">
+                  <thead><tr><th>Beneficio</th><th>DNI</th><th>Nombre</th><th>Especialidad(es)</th><th>Estado</th><th>Detalle</th></tr></thead>
+                  <tbody id="czPacientesBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
               <div class="client-card-head"><h3>Ausentes (no vino el paciente)</h3></div>
               <p class="nom-muted">Turno reservado y OME pinchada en la bandeja, pero nunca validada - y nadie de la agenda lo reclamó. Se arma solo, no se edita acá.</p>
               <div class="table-scroll">
@@ -1068,6 +1077,9 @@
               </div>
             </div>
           </div>
+
+          <!-- Popover compartido del selector de color por fila (ver czTogglePicker). -->
+          <div id="czColorPopover" class="cz-color-popover" style="display:none"></div>
 
           <!-- Área solo para impresión/PDF: se arma en JS al exportar. -->
           <div id="czPrintArea" class="cz-print-area"></div>

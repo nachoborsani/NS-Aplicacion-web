@@ -777,6 +777,31 @@
   .cz-historial-item:hover{background:var(--surface-2)}
   .cz-tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border)}
   .cz-tag.ok{background:color-mix(in srgb,#12b3a6 14%,var(--surface));border-color:color-mix(in srgb,#12b3a6 40%,var(--border));color:#0a7d73}
+  /* Colores metalizados de estado (Cruzas): gradiente + sombra interior en vez
+     de un relleno plano - un pastel plano con la palabra encima del mismo
+     color era ilegible ("VERDE" sobre fondo verde clarito). El color ya dice
+     todo, por eso el pill de cada fila no lleva texto - solo el popover al
+     tocarlo aclara cuál es cuál (title + los 5 para elegir). */
+  .cz-swatch{width:26px;height:26px;border-radius:8px;border:1px solid rgba(0,0,0,.25);cursor:pointer;padding:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 3px rgba(0,0,0,.25);transition:transform .1s ease}
+  .cz-swatch:hover{transform:scale(1.08)}
+  .cz-swatch-lg{width:34px;height:34px;border-radius:9px}
+  .cz-swatch-verde{background:linear-gradient(135deg,#8bf0ab 0%,#2fa360 45%,#155c33 100%)}
+  .cz-swatch-amarillo{background:linear-gradient(135deg,#ffe694 0%,#e8b013 45%,#93700a 100%)}
+  .cz-swatch-naranja{background:linear-gradient(135deg,#ffbb7a 0%,#e8720f 45%,#93460a 100%)}
+  .cz-swatch-rojo{background:linear-gradient(135deg,#ff9d9d 0%,#d63031 45%,#7d1c1d 100%)}
+  .cz-swatch-gris{background:linear-gradient(135deg,#e7eaed 0%,#9aa3ab 45%,#5c646b 100%)}
+  .cz-color-popover{position:fixed;z-index:80;display:flex;gap:6px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .cz-chip-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .cz-chip{font:inherit;font-size:12px;font-weight:800;letter-spacing:.02em;color:#fff;padding:6px 12px;border-radius:999px;border:1px solid rgba(0,0,0,.2);cursor:pointer;text-shadow:0 1px 1px rgba(0,0,0,.35);box-shadow:inset 0 1px 0 rgba(255,255,255,.35);opacity:.85;transition:opacity .12s ease,box-shadow .12s ease}
+  .cz-chip:hover{opacity:1}
+  .cz-chip.on{opacity:1;box-shadow:0 0 0 3px var(--ring),inset 0 1px 0 rgba(255,255,255,.35)}
+  .cz-chip-verde{background:linear-gradient(135deg,#4fcf82,#1f7d47)}
+  .cz-chip-amarillo{background:linear-gradient(135deg,#f0c33e,#a9790a);color:#2b1e00;text-shadow:0 1px 0 rgba(255,255,255,.3)}
+  .cz-chip-naranja{background:linear-gradient(135deg,#f0904a,#a9560a)}
+  .cz-chip-rojo{background:linear-gradient(135deg,#e85c5d,#a11f20)}
+  .cz-chip-gris{background:linear-gradient(135deg,#b9c0c6,#6b747c)}
+  .cz-filtros{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .cz-filtros #czBuscar{max-width:320px}
   @media print {
     body *{visibility:hidden}
     #osdopCard,#osdopCard *{visibility:visible}

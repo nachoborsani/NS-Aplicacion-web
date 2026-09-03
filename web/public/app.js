@@ -5948,7 +5948,7 @@ async function deletePadronItem(slug, dni){
 // ===== Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI =====
 // Todo el estado del cruce que se está viendo/editando vive acá en memoria;
 // "Guardar cambios" es lo único que lo persiste en el servidor.
-var CZ = { clientesCargados: false, cruceActivo: null };
+var CZ = { clientesCargados: false, cruceActivo: null, filtroColor: null, _pickerFor: -1 };
 var CZ_COLORES = ['VERDE', 'AMARILLO', 'NARANJA', 'ROJO', 'GRIS'];
 var CZ_COLOR_HEX = { VERDE: '#c6efce', AMARILLO: '#ffeb9c', NARANJA: '#fcd5b4', ROJO: '#ffc7ce', GRIS: '#d9d9d9' };
 async function loadCruzasClientes(){
@@ -6032,6 +6032,8 @@ function renderCruceActivo(){
   var c = CZ.cruceActivo;
   document.getElementById('czResultado').style.display = c ? '' : 'none';
   if (!c) return;
+  CZ.filtroColor = null;
+  var buscar = document.getElementById('czBuscar'); if (buscar) buscar.value = '';
   document.getElementById('czResTitulo').textContent = 'Cruce: ' + c.label;
   document.getElementById('czEstadoBadge').innerHTML = c.status === 'confirmado'
     ? ('Confirmado el ' + new Date(c.confirmedAt).toLocaleString('es-AR'))
@@ -6040,22 +6042,7 @@ function renderCruceActivo(){
   document.getElementById('czPdfBtn').disabled = c.status !== 'confirmado';
   document.getElementById('czPdfBtn').title = c.status === 'confirmado' ? '' : 'Confirmá el cruce primero';
 
-  var chips = document.getElementById('czResumenChips');
-  chips.innerHTML = CZ_COLORES.map(function(k){
-    var n = (c.resumen && c.resumen[k.toLowerCase()]) || 0;
-    return '<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k + ': ' + n + '</span>';
-  }).join(' ');
-
-  var body = document.getElementById('czPacientesBody');
-  body.innerHTML = c.pacientes.map(function(p, i){
-    var opts = CZ_COLORES.map(function(k){ return '<option value="' + k + '"' + (k === p.color ? ' selected' : '') + '>' + k + '</option>'; }).join('');
-    return '<tr>' +
-      '<td>' + esc(p.beneficio) + '</td><td>' + esc(p.dni) + '</td><td>' + esc(p.nombre) + '</td><td>' + esc(p.especialidades) + '</td>' +
-      '<td><select class="inp cz-color-select" data-color="' + p.color + '" style="background:' + CZ_COLOR_HEX[p.color] + '" onchange="cambiarColorPaciente(' + i + ',this.value)">' + opts + '</select></td>' +
-      '<td><input class="inp" value="' + esc(p.detalle) + '" oninput="cambiarDetallePaciente(' + i + ',this.value)"></td>' +
-    '</tr>';
-  }).join('');
-
+  czRenderPacientesTabla();
   renderFaltaOmeTable();
 
   var ausBody = document.getElementById('czAusentesBody');
@@ -6063,17 +6050,95 @@ function renderCruceActivo(){
     return '<tr><td>' + esc(a.beneficio) + '</td><td>' + esc(a.nombre) + '</td><td>' + esc(a.practica) + '</td><td>' + esc(a.turno) + '</td><td class="num">' + moneyFmt(a.valor) + '</td></tr>';
   }).join('') || '<tr><td colspan="5" class="nom-muted">Ningún no-show detectado en este cruce.</td></tr>';
 }
+// Chips de resumen: clickeables, filtran la tabla por color. Tocar el color ya
+// activo lo saca (vuelve a "todos"). El buscador de texto se combina con el
+// color elegido (los dos filtros aplican juntos).
+function czRenderPacientesTabla(){
+  var c = CZ.cruceActivo; if (!c) return;
+  var chips = document.getElementById('czResumenChips');
+  chips.innerHTML = CZ_COLORES.map(function(k){
+    var n = (c.resumen && c.resumen[k.toLowerCase()]) || 0;
+    var on = CZ.filtroColor === k ? ' on' : '';
+    return '<button type="button" class="cz-chip cz-chip-' + k.toLowerCase() + on + '" onclick="czFiltrarPorColor(\'' + k + '\')">' + k + ': ' + n + '</button>';
+  }).join('');
+
+  var q = calcNorm((document.getElementById('czBuscar') || {}).value || '').trim();
+  var filtro = document.getElementById('czFiltroActivo');
+  var partes = [];
+  if (CZ.filtroColor) partes.push('color = ' + CZ.filtroColor);
+  if (q) partes.push('texto = "' + q + '"');
+  if (filtro) filtro.textContent = partes.length ? ('Filtrando por ' + partes.join(' y ') + ' · ') : '';
+
+  var pares = c.pacientes.map(function(p, i){ return [i, p]; }).filter(function(par){
+    var p = par[1];
+    if (CZ.filtroColor && p.color !== CZ.filtroColor) return false;
+    if (q && calcNorm(p.nombre + ' ' + p.dni + ' ' + p.beneficio).indexOf(q) < 0) return false;
+    return true;
+  });
+  if (filtro) filtro.textContent += pares.length + ' de ' + c.pacientes.length;
+
+  var body = document.getElementById('czPacientesBody');
+  body.innerHTML = pares.map(function(par){
+    var i = par[0], p = par[1];
+    return '<tr>' +
+      '<td>' + esc(p.beneficio) + '</td><td>' + esc(p.dni) + '</td><td>' + esc(p.nombre) + '</td><td>' + esc(p.especialidades) + '</td>' +
+      '<td><button type="button" class="cz-swatch cz-swatch-' + p.color.toLowerCase() + '" title="' + p.color + ' - tocar para cambiar" onclick="czTogglePicker(event,' + i + ')"></button></td>' +
+      '<td><input class="inp" value="' + esc(p.detalle) + '" oninput="cambiarDetallePaciente(' + i + ',this.value)"></td>' +
+    '</tr>';
+  }).join('') || '<tr><td colspan="6" class="nom-muted">Ningún paciente coincide con el filtro.</td></tr>';
+}
+function czFiltrarPorColor(color){
+  CZ.filtroColor = (CZ.filtroColor === color) ? null : color;
+  czRenderPacientesTabla();
+}
+function czAplicarFiltros(){ czRenderPacientesTabla(); }
+// Selector de color por fila: en vez de un <select> con el nombre escrito (el
+// color ya alcanza para leerlo), un pill de color + un popover chico con las
+// 5 opciones al tocarlo.
+function czTogglePicker(ev, i){
+  ev.stopPropagation();
+  var pop = document.getElementById('czColorPopover');
+  if (CZ._pickerFor === i && pop.style.display !== 'none'){ czCerrarPicker(); return; }
+  CZ._pickerFor = i;
+  pop.innerHTML = CZ_COLORES.map(function(k){
+    return '<button type="button" class="cz-swatch cz-swatch-' + k.toLowerCase() + ' cz-swatch-lg" title="' + k + '" onclick="czElegirColor(' + i + ',\'' + k + '\')"></button>';
+  }).join('');
+  var r = ev.currentTarget.getBoundingClientRect();
+  pop.style.left = Math.round(r.left) + 'px';
+  pop.style.top = Math.round(r.bottom + 6) + 'px';
+  pop.style.display = 'flex';
+}
+function czCerrarPicker(){ var pop = document.getElementById('czColorPopover'); if (pop) pop.style.display = 'none'; CZ._pickerFor = -1; }
+document.addEventListener('click', function(e){ var pop = document.getElementById('czColorPopover'); if (pop && pop.style.display !== 'none' && !pop.contains(e.target)) czCerrarPicker(); });
+function czElegirColor(i, valor){
+  cambiarColorPaciente(i, valor);
+  czCerrarPicker();
+}
 function cambiarColorPaciente(i, valor){
   CZ.cruceActivo.pacientes[i].color = valor;
-  var sel = document.querySelectorAll('#czPacientesBody select')[i];
-  if (sel){ sel.dataset.color = valor; sel.style.background = CZ_COLOR_HEX[valor]; }
   var c = CZ.cruceActivo;
   c.resumen = { verde:0, amarillo:0, naranja:0, rojo:0, gris:0 };
   c.pacientes.forEach(function(p){ c.resumen[p.color.toLowerCase()] = (c.resumen[p.color.toLowerCase()]||0) + 1; });
-  var chips = document.getElementById('czResumenChips');
-  chips.innerHTML = CZ_COLORES.map(function(k){ return '<span class="cab-chip" style="background:' + CZ_COLOR_HEX[k] + '">' + k + ': ' + (c.resumen[k.toLowerCase()]||0) + '</span>'; }).join(' ');
+  czRenderPacientesTabla();
 }
 function cambiarDetallePaciente(i, valor){ CZ.cruceActivo.pacientes[i].detalle = valor; }
+// CSV liviano solo con "Ausentes" (la tabla completa con colores ya está en
+// "Descargar Excel" - esto es para pasarle rápido la lista de no-shows a
+// alguien sin tener que abrir todo el libro).
+function descargarAusentesCsv(){
+  var c = CZ.cruceActivo; if (!c) return;
+  var filas = [['Beneficio','Nombre','Practica','Turno','Valor']].concat((c.ausentes||[]).map(function(a){
+    return [a.beneficio, a.nombre, a.practica, a.turno, a.valor||0];
+  }));
+  var csv = filas.map(function(f){
+    return f.map(function(v){ v = String(v == null ? '' : v); return /[",;\n]/.test(v) ? ('"' + v.replace(/"/g,'""') + '"') : v; }).join(';');
+  }).join('\r\n');
+  var blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Ausentes_' + (c.label||'cruce').replace(/[^a-z0-9]+/gi,'_') + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
 function renderFaltaOmeTable(){
   var c = CZ.cruceActivo;
   var body = document.getElementById('czFaltaOmeBody');
