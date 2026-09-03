@@ -95,6 +95,8 @@ function go(v, el){
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
   // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
   if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  // Configuración general: un colaborador no debe entrar (usuarios, débitos, etc.).
+  if (v === 'soon' && ME && ME.role === 'colaborador'){ go('dash'); return; }
   ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -857,14 +859,15 @@ function initials(name){
   return (name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
 }
 function roleLabel(r){
-  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración' }[r] || r;
+  return { admin:'Administrador', operador:'Operador', colaborador:'Colaborador', medico:'Médico', clinica:'Clínica', demo:'Demostración' }[r] || r;
 }
 var ROLE = {
-  admin:    { chip:'admin', label:'Admin',    bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
-  operador: { chip:'oper',  label:'Operador', bg:'linear-gradient(135deg,#18B7B2,#0f7f7c)' },
-  medico:   { chip:'med',   label:'Médico',   bg:'linear-gradient(135deg,#3B82C4,#2a5f96)' },
-  clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
-  demo:     { chip:'demo',  label:'Demo',     bg:'linear-gradient(135deg,#667085,#475467)' },
+  admin:       { chip:'admin', label:'Admin',       bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
+  operador:    { chip:'oper',  label:'Operador',    bg:'linear-gradient(135deg,#18B7B2,#0f7f7c)' },
+  colaborador: { chip:'colab', label:'Colaborador', bg:'linear-gradient(135deg,#c47a3b,#96581f)' },
+  medico:      { chip:'med',   label:'Médico',      bg:'linear-gradient(135deg,#3B82C4,#2a5f96)' },
+  clinica:     { chip:'clin',  label:'Clínica',     bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
+  demo:        { chip:'demo',  label:'Demo',        bg:'linear-gradient(135deg,#667085,#475467)' },
 };
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 var USERS = [];
@@ -1673,18 +1676,21 @@ function renderClientList(){
   var pot = document.getElementById('clientNavListPotenciales');
   var potGroup = document.getElementById('navGroupPotenciales');
   // Los "en análisis" (potenciales) van a su propia sección, salen de Consultorios/MedCab.
-  // El usuario de demostración ve SOLO los clientes que se le asignaron. En el
+  // Demo y colaborador ven SOLO los clientes que se les asignaron. En el
   // servidor ya se filtra, pero el modo espejo no cambia la sesión (sigue siendo la
   // del admin y trae la lista completa), así que el filtro va también acá para que
   // la vista previa muestre exactamente lo que va a ver esa persona.
   var VISIBLES = CLIENTS;
-  if (ME && ME.role === 'demo'){
+  if (ME && (ME.role === 'demo' || ME.role === 'colaborador')){
     var permitidosDemo = ME.clientes || [];
     VISIBLES = CLIENTS.filter(function(c){ return permitidosDemo.indexOf(c.slug) >= 0; });
   }
   var consultorios = VISIBLES.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
   var medCab = VISIBLES.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
-  var potenciales = VISIBLES.filter(function(c){ return c.enAnalisis; });
+  // Potenciales clientes: un colaborador no debe verlos NUNCA, sea cual sea su
+  // lista de clientes permitidos (a diferencia de demo, que sí podría verlos
+  // si se le asignara alguno a propósito).
+  var potenciales = (ME && ME.role === 'colaborador') ? [] : VISIBLES.filter(function(c){ return c.enAnalisis; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
@@ -5765,8 +5771,13 @@ function umPintarClientes(sel){
   }).join('') || '<div class="hint">No hay clientes cargados.</div>';
 }
 function umToggleClientes(){
+  var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
-  if (f) f.style.display = (document.getElementById('umRole').value === 'demo') ? '' : 'none';
+  if (f) f.style.display = (role === 'demo' || role === 'colaborador') ? '' : 'none';
+  var hint = document.getElementById('umClientesHint');
+  if (hint) hint.textContent = role === 'colaborador'
+    ? 'Solo ve y trabaja con estos clientes - ni se entera de que existen los demás (tampoco puede elegirlos para generar un informe).'
+    : 'Solo ve estos clientes. Puede mirar todo y descargar, pero no modificar nada.';
 }
 function umClientesElegidos(){
   return [].slice.call(document.querySelectorAll('#umClientes input:checked')).map(function(i){ return i.value; });
@@ -6732,6 +6743,8 @@ function aplicarUsuario(u){
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
   // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
   var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
+  // Configuración general (usuarios, débitos): un colaborador no debe entrar ahí.
+  var ngen = document.getElementById('navGeneral'); if (ngen) ngen.style.display = (u.role === 'colaborador') ? 'none' : '';
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
