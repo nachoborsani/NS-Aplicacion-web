@@ -2532,7 +2532,12 @@ async function loadResultado(){
       '</div>';
     }).join('') || '<div class="mescurso-line"><span class="nom-muted">Sin facturas con cobro en el mes</span><b></b></div>';
     if ((d.ingresoExtra || 0) > 0) filas += '<div class="mescurso-line"><span>Ingresos extra</span><b>+ ' + moneyFmt(d.ingresoExtra) + '</b></div>';
-    filas += '<div class="mescurso-line alert"><span>Gastos fijos</span><b>− ' + moneyFmt(d.gastos) + '</b></div>';
+    // La línea muestra el TOTAL de gastos fijos del mes (impacta aunque no se haya
+    // pagado); la nota dice cuánto va pagado. La ganancia real de arriba resta solo
+    // lo pagado (se descuenta a medida que se paga).
+    var gTot = d.gastosTotal || 0, gPag = d.gastos || 0;
+    var notaG = gTot > 0 ? '<span class="res-fecha">' + (gPag >= gTot ? '✓ todo pagado' : 'pagado ' + moneyFmt(gPag) + ' de ' + moneyFmt(gTot)) + '</span>' : '';
+    filas += '<div class="mescurso-line alert"><span>Gastos fijos ' + notaG + '</span><b>− ' + moneyFmt(gTot) + '</b></div>';
     box.innerHTML = filas;
   }
   document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes · dólar oficial ' + (d.dolar && d.dolar.valor ? moneyFmt(d.dolar.valor) : '—');

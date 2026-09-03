@@ -276,6 +276,22 @@ function gastosPagadosDelMes(gstore, mes, dolarHoy) {
   }
   return total;
 }
+// Total de gastos fijos del mes (estén pagados o no) — para MOSTRAR el costo del mes.
+// Los pagados van al dólar congelado; los que faltan pagar, al dólar de hoy (estimado).
+// Igual que la columna "En ARS" de la pestaña Gastos.
+function gastosTotalDelMes(gstore, mes, dolarHoy) {
+  const pagosMes = (gstore.pagos && gstore.pagos[mes]) || {};
+  let total = 0;
+  for (const g of gstore.gastos || []) {
+    const monto = Number(g.monto) || 0;
+    if (g.moneda === "USD") {
+      const pago = pagosMes[g.id];
+      const rate = (pago && pago.pagado && Number(pago.rate)) ? Number(pago.rate) : (Number(dolarHoy) || 0);
+      total += monto * rate;
+    } else total += monto;
+  }
+  return total;
+}
 // Ingresos EXTRA (fuera de las comisiones PAMI): entradas por-mes que suman a
 // "En bolsillo". Se reparten 50/50 entre los socios, igual que las comisiones.
 const ingresosFile = path.join(dataDir, "ingresos_extra.json");
@@ -5374,6 +5390,8 @@ const server = http.createServer(async (req, res) => {
     const dolar = await getDolarOficial();
     // Solo lo pagado ESE mes (plata que de verdad salió), al dólar congelado.
     const gastos = gastosPagadosDelMes(gstore, mes, dolar.valor);
+    // Total de gastos fijos del mes (pagados o no) — para MOSTRAR el costo del mes.
+    const gastosTotalMes = gastosTotalDelMes(gstore, mes, dolar.valor);
     const del = ingresoNSDelMes(fstore, mes, nombreCliente);
     // Ingresos extra (otros, fuera de comisiones): suman a NS y se reparten 50/50.
     const extra = ingresosExtraDelMes(mes, dolar.valor);
@@ -5400,7 +5418,7 @@ const server = http.createServer(async (req, res) => {
       mes,
       ingresoNS, ingresoComisiones, ingresoExtra: extra,
       ingresoNacho: del.ingresoNacho + extraMitad, ingresoSeba: del.ingresoSeba + extraMitad,
-      gastos, dolar: { valor: dolar.valor, fecha: dolar.fecha },
+      gastos, gastosTotal: gastosTotalMes, dolar: { valor: dolar.valor, fecha: dolar.fecha },
       bolsilloNS: ingresoNS - gastos,
       bolsilloNacho: del.ingresoNacho + extraMitad - gastosMitad,
       bolsilloSeba: del.ingresoSeba + extraMitad - gastosMitad,
