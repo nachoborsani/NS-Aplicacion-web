@@ -184,7 +184,11 @@
             <section class="card ini-card">
               <div class="ini-head">
                 <span class="ini-ic">💬</span>
-                <div><h2>Mensajes</h2><div class="ini-meta">Canal interno · solo admins</div></div>
+                <div><h2>Mensajes</h2><div class="ini-meta">Canal interno</div></div>
+                <label class="ini-switch" title="Los mensajes que mandes de acá en más los ven también los operadores">
+                  <input type="checkbox" id="iniCompartirOperadores" onchange="iniToggleCompartir(this.checked)">
+                  <span>Compartir con operadores</span>
+                </label>
                 <span class="ini-unread" id="iniUnread" style="display:none">0</span>
               </div>
               <div class="ini-feed" id="iniFeed"><div class="ini-empty">Cargando…</div></div>
@@ -219,6 +223,31 @@
                   <ul class="ini-list" id="iniDone"></ul>
                 </div>
               </div>
+            </section>
+          </div>
+
+          <!-- Panel de operador (Javi por ahora): chat con los admins, accesos
+               rápidos configurables, y pendientes por cliente. -->
+          <div class="op-grid" id="operadorPaneles" style="display:none">
+            <section class="card ini-card op-panel-chat">
+              <div class="ini-head">
+                <span class="ini-ic">💬</span>
+                <div><h2>Mensajes</h2><div class="ini-meta">Con Nacho y Sebastian</div></div>
+                <span class="ini-unread" id="opUnread" style="display:none">0</span>
+              </div>
+              <div class="ini-feed" id="opFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-composer">
+                <textarea id="opMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
+                <button class="btn btn-primary btn-sm" id="opSend" onclick="opEnviarMsg()">Enviar</button>
+              </div>
+            </section>
+            <section class="card ini-card op-panel-accesos">
+              <div class="ini-head"><span class="ini-ic">⚡</span><div><h2>Accesos rápidos</h2></div></div>
+              <div class="ini-empty">Próximamente.</div>
+            </section>
+            <section class="card ini-card op-panel-pendientes">
+              <div class="ini-head"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2></div></div>
+              <div class="ini-empty">Próximamente.</div>
             </section>
           </div>
         </section>
