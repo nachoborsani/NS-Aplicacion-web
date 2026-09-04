@@ -1261,18 +1261,38 @@ async function opAgregarTarea(){
 // ===== Inicio (admin): "Accesos rápidos" - catálogo configurable de atajos.
 // Guardado en localStorage por usuario (conveniencia de este dispositivo, no
 // dato compartido). Catálogo = vistas generales + un acceso directo por cliente. =====
+// El catálogo respeta EXACTAMENTE los mismos permisos que ya gatean el
+// sidebar/go() (aplicarUsuario, más arriba) - nada aparece acá que el rol no
+// pueda realmente abrir. Solo los admin ven todo; el resto ve según su rol
+// y, en clientes, según su lista restringida si la tiene.
 function iniAccesosCatalogo(){
-  var items = [
-    { id:'v:informes', ic:'📋', tx:'Informes', run:function(){ go('informes'); } },
-    { id:'v:nomencladores', ic:'📑', tx:'Nomencladores', run:function(){ go('nomencladores'); } },
-    { id:'v:padron', ic:'👥', tx:'Afiliados', run:function(){ go('padron'); } },
-    { id:'v:cabina', ic:'📥', tx:'Informes recibidos', run:function(){ go('cabina'); } },
-    { id:'v:cruzas', ic:'🔀', tx:'Cruzas', run:function(){ go('cruzas'); } },
-    { id:'v:resumen', ic:'💰', tx:'Resumen de cuenta', run:function(){ go('resumen'); } },
-    { id:'v:facturas', ic:'🧾', tx:'Facturas', run:function(){ go('facturas'); } },
-    { id:'v:soon', ic:'⚙️', tx:'Configuración general', run:function(){ go('soon'); } },
-  ];
-  (typeof CLIENTS !== 'undefined' && CLIENTS || []).forEach(function(c){
+  var role = ME && ME.role;
+  var esAdmin = role === 'admin';
+  // Afiliados/Informes recibidos: mismo criterio que navPadron/navCabina (admin, operador, demo).
+  var verHerramientas = esAdmin || role === 'operador' || role === 'demo';
+  var restringido = tieneClientesRestringidos(ME);
+  var items = [];
+  if (esAdmin || role === 'operador') {
+    items.push({ id:'v:informes', ic:'📋', tx:'Informes', run:function(){ go('informes'); } });
+    items.push({ id:'v:nomencladores', ic:'📑', tx:'Nomencladores', run:function(){ go('nomencladores'); } });
+  }
+  if (verHerramientas) {
+    items.push({ id:'v:padron', ic:'👥', tx:'Afiliados', run:function(){ go('padron'); } });
+    items.push({ id:'v:cabina', ic:'📥', tx:'Informes recibidos', run:function(){ go('cabina'); } });
+  }
+  // Cruzas, Resumen de cuenta y Facturas: son de NS (montos, negocio propio) - solo admin.
+  if (esAdmin) {
+    items.push({ id:'v:cruzas', ic:'🔀', tx:'Cruzas', run:function(){ go('cruzas'); } });
+    items.push({ id:'v:resumen', ic:'💰', tx:'Resumen de cuenta', run:function(){ go('resumen'); } });
+    items.push({ id:'v:facturas', ic:'🧾', tx:'Facturas', run:function(){ go('facturas'); } });
+  }
+  // Configuración general: mismo criterio que navGeneral (oculto si tiene clientes restringidos).
+  if (esAdmin || (role === 'operador' && !restringido)) {
+    items.push({ id:'v:soon', ic:'⚙️', tx:'Configuración general', run:function(){ go('soon'); } });
+  }
+  var clientes = (typeof CLIENTS !== 'undefined' && CLIENTS) || [];
+  var clientesVisibles = restringido ? clientes.filter(function(c){ return (ME.clientes||[]).indexOf(c.slug) >= 0; }) : clientes;
+  clientesVisibles.forEach(function(c){
     items.push({ id:'c:'+c.slug, ic:'🏥', tx:c.name || c.slug, grupo:'clientes', run:function(){ go('clientes'); selectClientWhenReady(c.slug); } });
   });
   return items;
@@ -1302,6 +1322,12 @@ async function iniAccesosRender(scope){
   if (!CLIENTS || !CLIENTS.length){ var r = await api('/api/clientes'); if (r.ok) CLIENTS = r.data.clients || []; }
   var catalogo = iniAccesosCatalogo();
   var elegidos = iniAccesosElegidos();
+  // Si algo elegido antes ya no está en el catálogo (por ejemplo, cambió el
+  // rol o se restringió a clientes), se descarta acá - así el contador "X/9"
+  // no queda atado a un acceso que ya ni se puede mostrar.
+  var catIds = catalogo.map(function(it){ return it.id; });
+  var elegidosValidos = elegidos.filter(function(id){ return catIds.indexOf(id) >= 0; });
+  if (elegidosValidos.length !== elegidos.length){ elegidos = elegidosValidos; iniAccesosGuardar(elegidos); }
   var tiles = elegidos.map(function(id){ return catalogo.find(function(it){ return it.id===id; }); }).filter(Boolean);
   grid.innerHTML = tiles.length ? tiles.map(function(it, i){
     return '<button type="button" class="ini-acceso-tile" onclick="iniAccesosIr('+i+')"><span class="ic">'+it.ic+'</span><span class="tx">'+esc(it.tx)+'</span></button>';
