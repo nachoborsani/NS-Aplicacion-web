@@ -1004,7 +1004,7 @@ async function cargarInicio(marcarLeido){
     iniRenderAdjunto('iniAdjPreview', INICIO.adjunto, 'iniQuitarAdjunto');
     iniCargarPendientesOperador();
     iniAccesosRender();
-    iniPanelesAplicar('admin'); iniPanelesWireDrag('admin');
+    iniPanelesAplicar('admin'); iniPanelesWireDrag('admin'); iniAjustarAltoObservar('admin');
   } else {
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = '';
@@ -1014,7 +1014,7 @@ async function cargarInicio(marcarLeido){
     iniCargarMisPendientes();
     iniAccesosRender('op');
     opRenderTareas();
-    iniPanelesAplicar('op'); iniPanelesWireDrag('op');
+    iniPanelesAplicar('op'); iniPanelesWireDrag('op'); iniAjustarAltoObservar('op');
   }
   iniActualizarBell();
 }
@@ -1447,8 +1447,56 @@ function iniPanelesWireDrag(scope){
       orden[ia] = b; orden[ib] = a;
       iniPanelesGuardar(scope, orden);
       iniPanelesAplicar(scope);
+      iniAjustarAltoProgramar(scope);
     });
   });
+}
+// Que la tarjeta del slot alto (la que abarca las 3 filas - el chat, salvo
+// que se haya reordenado) llegue exactamente hasta abajo de las 3 apiladas al
+// lado, en vez de dejar un hueco vacío o quedarse corta. Es una MEDICIÓN +
+// una altura fija en px (no un stretch de CSS en vivo): ya probamos
+// align-items:stretch + sin tope de alto y terminó en un crecimiento sin fin
+// al escribir muchos mensajes (ver PR "arreglar crecimiento infinito del
+// chat") - esto no tiene ese riesgo porque cada cálculo asigna un número
+// fijo, no una regla que se realimente sola. Si el contenido no entra en ese
+// alto, escrolea adentro (overflow-y:auto ya está puesto en el elemento).
+function iniAjustarAltoColumnaAlta(scope){
+  var cont = iniPanelesContenedor(scope); if (!cont) return;
+  var slotAlto = cont.querySelector(scope === 'op' ? '.op-slot-a' : '.ini-slot-a');
+  if (!slotAlto) return;
+  var scroll = slotAlto.querySelector('.ini-feed, .ini-tasks, .ini-pendop-list');
+  if (!scroll) return;
+  var rectAlto = slotAlto.getBoundingClientRect();
+  // Solo cuenta como "columna vecina" lo que arranca a la derecha del slot
+  // alto - un panel de ancho completo más abajo (como Accesos rápidos del
+  // operador) empieza en el mismo left, así que queda afuera de la cuenta:
+  // el slot alto tiene que igualar SU columna vecina, no el layout entero.
+  var resto = Array.from(cont.querySelectorAll('[data-panel]')).filter(function(el){
+    return el !== slotAlto && el.getBoundingClientRect().left >= rectAlto.right - 1;
+  });
+  if (!resto.length) return;
+  var top = Math.min.apply(null, resto.map(function(el){ return el.getBoundingClientRect().top; }));
+  var bottom = Math.max.apply(null, resto.map(function(el){ return el.getBoundingClientRect().bottom; }));
+  var altoObjetivo = bottom - top;
+  var altoFijoTarjeta = slotAlto.getBoundingClientRect().height - scroll.getBoundingClientRect().height;
+  var nuevoAlto = Math.max(210, Math.round(altoObjetivo - altoFijoTarjeta));
+  scroll.style.height = nuevoAlto + 'px';
+  scroll.style.maxHeight = nuevoAlto + 'px';
+}
+var INI_ALTURA_TIMERS = {};
+function iniAjustarAltoProgramar(scope){
+  clearTimeout(INI_ALTURA_TIMERS[scope]);
+  INI_ALTURA_TIMERS[scope] = setTimeout(function(){ iniAjustarAltoColumnaAlta(scope); }, 60);
+}
+// Se re-mide sola cuando cambia el contenido (mensaje nuevo, tarea agregada,
+// accesos editados) o cambia el ancho de ventana - así no hay que acordarse
+// de llamarla a mano desde cada función que toca estas tarjetas.
+function iniAjustarAltoObservar(scope){
+  var cont = iniPanelesContenedor(scope); if (!cont || cont._alturaObservada) return;
+  cont._alturaObservada = true;
+  new MutationObserver(function(){ iniAjustarAltoProgramar(scope); }).observe(cont, { childList:true, subtree:true, characterData:true });
+  window.addEventListener('resize', function(){ iniAjustarAltoProgramar(scope); });
+  iniAjustarAltoProgramar(scope);
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
