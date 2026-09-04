@@ -6814,22 +6814,23 @@ function exportarCrucePDF(){
       ausFilas + czFilaTotalHtml(4, ausentes, 'turnos') + '</tbody></table>';
   }
 
+  // Sin columna Valor: acá no hay un código de práctica confiable (las
+  // manuales son una obs libre, no un código) - mismo criterio que en el Excel.
   var ome = [].concat(c.faltaOmeAuto || [], c.faltaOmeManual || []);
   var omeHtml;
   if (!ome.length) {
     omeHtml = '<p class="cz-print-vacio">Nada pendiente.</p>';
   } else {
     var omeFilas = ome.map(function(f){
-      var val = (f.valor || 0) > 0 ? moneyFmt(f.valor) : '—';
-      return '<tr><td class="centro">' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td class="centro">' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td><td class="num">' + val + '</td></tr>';
+      return '<tr><td class="centro">' + esc(f.turno) + '</td><td>' + esc(f.especialidad) + '</td><td>' + esc(f.nombre) + '</td><td class="centro">' + esc(f.beneficio) + '</td><td>' + esc(f.obs) + '</td></tr>';
     }).join('');
-    omeHtml = '<table><thead><tr><th>Turno</th><th>Especialidad</th><th>Nombre</th><th>Beneficio</th><th>Obs</th><th class="num">Valor</th></tr></thead><tbody>' +
-      omeFilas + czFilaTotalHtml(5, ome, 'turnos') + '</tbody></table>';
+    omeHtml = '<table><thead><tr><th>Turno</th><th>Especialidad</th><th>Nombre</th><th>Beneficio</th><th>Obs</th></tr></thead><tbody>' + omeFilas + '</tbody></table>';
   }
 
   // El PDF es el resumen: una barra con los 3 conteos y el total valorizado
-  // en riesgo, antes de entrar al detalle fila por fila.
-  var granTotal = czTotalValor(faltaInforme) + czTotalValor(ausentes) + czTotalValor(ome);
+  // en riesgo, antes de entrar al detalle fila por fila. Falta ome no suma acá
+  // (no tiene columna de Valor - ver arriba).
+  var granTotal = czTotalValor(faltaInforme) + czTotalValor(ausentes);
   var resumenHtml =
     '<div class="cz-print-resumen">' +
       '<div><b>' + faltaInforme.length + '</b><span>Falta informe</span></div>' +

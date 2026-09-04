@@ -3947,11 +3947,14 @@ function cruzasFaltaInformeSheetOpts(cruce, clientName) {
 }
 function cruzasFaltaOmeSheetOpts(cruce, clientName) {
   const faltaOme = [...(cruce.faltaOmeAuto || []), ...(cruce.faltaOmeManual || [])];
+  // Sin columna Valor: acá no hay un código de práctica confiable (las
+  // manuales son una obs libre, no un código) - un "—" en todas las filas
+  // no aporta nada, mejor no mostrar la columna.
   return {
     clientName, subtitulo: ["Falta ome", cruce.label].filter(Boolean).join("  ·  "),
-    headers: ["Turno", "Especialidad", "Nombre", "Beneficio", "Obs", "Valor"],
-    filas: faltaOme.map((f) => [f.turno, f.especialidad, f.nombre, f.beneficio, f.obs, f.valor || 0]),
-    anchos: [22, 22, 30, 18, 30, 16], centradas: [0, 3], colValor: 5, totalNoun: "turnos",
+    headers: ["Turno", "Especialidad", "Nombre", "Beneficio", "Obs"],
+    filas: faltaOme.map((f) => [f.turno, f.especialidad, f.nombre, f.beneficio, f.obs]),
+    anchos: [22, 22, 30, 18, 40], centradas: [0, 3], colValor: null, totalNoun: "turnos",
   };
 }
 // Excel de "Ausentes" (Cruzas) solo, para pasarle rápido la lista de no-shows
