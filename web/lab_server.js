@@ -15,6 +15,8 @@ const uid = () => crypto.randomUUID();
 const nowIso = () => new Date().toISOString();
 const clean = (v) => String(v == null ? "" : v).trim();
 const soloDigitos = (v) => clean(v).replace(/\D/g, "");
+const money = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
+const normNombre = (v) => clean(v).toLowerCase().normalize("NFD").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
 function storeFile(dataDir) { return path.join(dataDir, "lab_gestion.json"); }
 
@@ -31,6 +33,9 @@ function emptyStore() {
     pacientes: [],
     turnos: [],
     evoluciones: [],
+    cierres: [],
+    presupuestos: [],
+    seqPresup: 0,
     version: 1,
   };
 }
@@ -235,6 +240,39 @@ async function handleLab(ctx) {
     }
   }
 
+  // -- Caja: cierre diario formal (arqueo) --
+  if (recurso === "caja" && idPath === "cierre") {
+    const fecha = clean(url.searchParams.get("fecha"));
+    if (!fecha) return json(res, 400, { error: "Falta la fecha." }), true;
+    const cierres = store.cierres || (store.cierres = []);
+    const calcular = () => {
+      const delDia = (store.turnos || []).filter((t) => t.fecha === fecha && t.estado !== "cancelado");
+      const cobrados = delDia.filter((t) => t.pagado);
+      const porMedio = {}; const porProf = {};
+      let cobrado = 0, sena = 0, insumos = 0;
+      cobrados.forEach((t) => {
+        const monto = (Number(t.importe) || 0) + (Number(t.insumos) || 0);
+        cobrado += monto; sena += Number(t.sena) || 0; insumos += Number(t.insumos) || 0;
+        const medio = t.medioPago || "Sin especificar";
+        porMedio[medio] = money((porMedio[medio] || 0) + monto);
+        const pid = t.profesionalId || "-";
+        if (!porProf[pid]) porProf[pid] = { profesionalId: pid, monto: 0, turnos: 0 };
+        porProf[pid].monto = money(porProf[pid].monto + monto); porProf[pid].turnos++;
+      });
+      return { cobrado: money(cobrado), sena: money(sena), insumos: money(insumos),
+        turnos: delDia.length, turnosCobrados: cobrados.length, porMedio, porProfesional: Object.values(porProf) };
+    };
+    const existente = cierres.find((c) => c.fecha === fecha);
+    if (method === "GET") return json(res, 200, { cerrado: !!existente, cierre: existente || null, preview: calcular() }), true;
+    if (method === "POST") {
+      if (existente) return json(res, 409, { error: "La caja de ese día ya está cerrada." }), true;
+      const cierre = { id: uid(), fecha, totales: calcular(), cerradoPor: me.username, cerradoEl: nowIso() };
+      cierres.unshift(cierre); saveStore(dataDir, store);
+      return json(res, 200, { cierre }), true;
+    }
+    if (method === "DELETE") { store.cierres = cierres.filter((c) => c.fecha !== fecha); saveStore(dataDir, store); return json(res, 200, { ok: true }), true; }
+  }
+
   // -- Profesionales --
   if (recurso === "profesionales") {
     const lista = store.profesionales;
@@ -282,6 +320,33 @@ async function handleLab(ctx) {
       store.evoluciones.push(ev); saveStore(dataDir, store);
       return json(res, 200, { item: ev }), true;
     }
+  }
+
+  // -- Pacientes: detectar duplicados y unificar --
+  if (recurso === "pacientes" && idPath === "duplicados" && method === "GET") {
+    const pacientes = store.pacientes || [];
+    const grupos = [];
+    const porDoc = {};
+    pacientes.forEach((p) => { const d = soloDigitos(p.documento); if (d) (porDoc[d] = porDoc[d] || []).push(p); });
+    Object.keys(porDoc).forEach((d) => { if (porDoc[d].length > 1) grupos.push({ clave: "DNI " + d, pacientes: porDoc[d] }); });
+    const yaEn = new Set(grupos.flatMap((g) => g.pacientes.map((p) => p.id)));
+    const porNom = {};
+    pacientes.forEach((p) => { if (yaEn.has(p.id)) return; const n = normNombre([p.apellido, p.nombre].join(" ")); if (n && n.length > 3) (porNom[n] = porNom[n] || []).push(p); });
+    Object.keys(porNom).forEach((n) => { if (porNom[n].length > 1) grupos.push({ clave: [porNom[n][0].apellido, porNom[n][0].nombre].filter(Boolean).join(", "), pacientes: porNom[n] }); });
+    return json(res, 200, { grupos }), true;
+  }
+  if (recurso === "pacientes" && idPath === "unificar" && method === "POST") {
+    const body = await readBody(req);
+    const mantener = clean(body.mantener);
+    const fusionar = (Array.isArray(body.fusionar) ? body.fusionar : []).map(clean).filter((x) => x && x !== mantener);
+    if (!mantener || !fusionar.length) return json(res, 400, { error: "Elegí a quién mantener y cuáles fusionar." }), true;
+    const set = new Set(fusionar);
+    let turnosMov = 0, evolMov = 0;
+    (store.turnos || []).forEach((t) => { if (set.has(t.pacienteId)) { t.pacienteId = mantener; turnosMov++; } });
+    (store.evoluciones || []).forEach((e) => { if (set.has(e.pacienteId)) { e.pacienteId = mantener; evolMov++; } });
+    store.pacientes = (store.pacientes || []).filter((p) => !set.has(p.id));
+    saveStore(dataDir, store);
+    return json(res, 200, { ok: true, fusionados: fusionar.length, turnosMovidos: turnosMov, evolucionesMovidas: evolMov }), true;
   }
 
   // -- Pacientes --
@@ -371,6 +436,37 @@ async function handleLab(ctx) {
       store.turnos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store);
       return json(res, 200, { ok: true }), true;
     }
+  }
+
+  // -- Presupuestos --
+  if (recurso === "presupuestos") {
+    const lista = store.presupuestos || (store.presupuestos = []);
+    if (method === "GET" && !idPath) {
+      const pacId = clean(url.searchParams.get("pacienteId"));
+      const items = (pacId ? lista.filter((x) => x.pacienteId === pacId) : lista).slice(0, 100);
+      return json(res, 200, { items }), true;
+    }
+    if (method === "GET" && idPath) {
+      const it = lista.find((x) => x.id === idPath);
+      return it ? (json(res, 200, { item: it }), true) : (json(res, 404, { error: "No encontrado." }), true);
+    }
+    if (method === "POST") {
+      const body = await readBody(req);
+      const items = (Array.isArray(body.items) ? body.items : []).map((it) => {
+        const cantidad = Math.max(1, parseInt(it.cantidad, 10) || 1);
+        const precioUnitario = money(it.precioUnitario);
+        return { concepto: clean(it.concepto), cantidad, precioUnitario, subtotal: money(cantidad * precioUnitario) };
+      }).filter((it) => it.concepto);
+      if (!items.length) return json(res, 400, { error: "Agregá al menos un ítem con concepto." }), true;
+      const total = money(items.reduce((a, it) => a + it.subtotal, 0));
+      store.seqPresup = (store.seqPresup || 0) + 1;
+      const presup = { id: uid(), numero: store.seqPresup, fecha: clean(body.fecha) || nowIso().slice(0, 10),
+        pacienteId: clean(body.pacienteId), pacienteNombre: clean(body.pacienteNombre), obraSocial: clean(body.obraSocial),
+        items, total, observaciones: clean(body.observaciones), creadoPor: me.username, creadoEl: nowIso() };
+      lista.unshift(presup); saveStore(dataDir, store);
+      return json(res, 200, { item: presup }), true;
+    }
+    if (method === "DELETE" && idPath) { store.presupuestos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store); return json(res, 200, { ok: true }), true; }
   }
 
   json(res, 404, { error: "Ruta de laboratorio no encontrada: " + p });

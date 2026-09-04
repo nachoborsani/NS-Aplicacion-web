@@ -473,7 +473,7 @@
   function viewPacientes(c) {
     c.innerHTML =
       '<div class="lab-card">' +
-        '<div class="lab-list-head"><h3>Pacientes</h3><button class="lab-btn primary" id="lab-pac-new">+ Nuevo paciente</button></div>' +
+        '<div class="lab-list-head"><h3>Pacientes</h3><div class="lab-inline"><button class="lab-btn ghost" id="lab-pac-dup">🔗 Unificar duplicados</button><button class="lab-btn primary" id="lab-pac-new">+ Nuevo paciente</button></div></div>' +
         '<div class="lab-search"><input class="lab-in" id="lab-pac-q" placeholder="Buscar por apellido, documento, celular o N° afiliado…" autocomplete="off"></div>' +
         '<div id="lab-pac-list"><div class="lab-muted" style="padding:16px">Escribí para buscar. (Hay pacientes cargados si ya usaste la agenda.)</div></div>' +
       "</div>";
@@ -481,7 +481,38 @@
     var timer = null;
     q.oninput = function () { clearTimeout(timer); timer = setTimeout(pacBuscar, 250); };
     document.getElementById("lab-pac-new").onclick = function () { pacForm(null); };
+    document.getElementById("lab-pac-dup").onclick = function () { dupModal(); };
     pacBuscar();
+  }
+  async function dupModal() {
+    var m = modal("Unificar pacientes duplicados", { ancho: "ancho" });
+    m.body.innerHTML = '<div class="lab-muted">Buscando duplicados…</div>';
+    var r = await api("/api/lab/pacientes/duplicados");
+    var grupos = (r.data && r.data.grupos) || [];
+    if (!grupos.length) { m.body.innerHTML = '<div class="lab-muted" style="padding:12px">No se encontraron pacientes duplicados (por DNI ni por nombre).</div>'; return; }
+    m.body.innerHTML = '<div class="lab-muted" style="margin-bottom:10px">' + grupos.length + " grupo(s) con posibles duplicados. Elegí cuál queda (los otros se fusionan: sus turnos e historia clínica pasan al elegido).</div>" +
+      grupos.map(function (g, gi) {
+        return '<div class="lab-dup-grupo"><div class="lab-dup-clave">' + esc(g.clave) + "</div>" +
+          g.pacientes.map(function (p, pi) {
+            return '<label class="lab-dup-row"><input type="radio" name="dup-' + gi + '" value="' + p.id + '"' + (pi === 0 ? " checked" : "") + "> <b>" + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b> " +
+              '<span class="lab-muted">' + esc([p.documento, p.obraSocial, p.celular].filter(Boolean).join(" · ")) + "</span></label>";
+          }).join("") +
+          '<button class="lab-btn xs primary lab-dup-go" data-gi="' + gi + '">Unificar este grupo</button></div>';
+      }).join("");
+    m.body.querySelectorAll(".lab-dup-go").forEach(function (b) {
+      b.onclick = async function () {
+        var gi = b.getAttribute("data-gi");
+        var g = grupos[gi];
+        var mantener = (m.body.querySelector('input[name="dup-' + gi + '"]:checked') || {}).value;
+        if (!mantener) return;
+        var fusionar = g.pacientes.map(function (p) { return p.id; }).filter(function (id) { return id !== mantener; });
+        if (!confirm("¿Unificar " + fusionar.length + " paciente(s) en el elegido? No se puede deshacer.")) return;
+        var rr = await api("/api/lab/pacientes/unificar", { mantener: mantener, fusionar: fusionar });
+        if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo unificar.", true); return; }
+        toast("Unificados ✓ (" + rr.data.turnosMovidos + " turnos movidos)");
+        dupModal(); pacBuscar();
+      };
+    });
   }
   async function pacBuscar() {
     var q = (document.getElementById("lab-pac-q") || {}).value || "";
@@ -492,7 +523,7 @@
       '<table class="lab-table"><thead><tr><th>Apellido y nombre</th><th>Documento</th><th>Obra social</th><th>Celular</th><th></th></tr></thead><tbody>' +
       (items.map(function (p) {
         return '<tr data-id="' + p.id + '"><td><b>' + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b></td><td>" + esc(p.documento || "") + "</td><td>" + esc(p.obraSocial || "") + (p.nroAfiliado ? " " + esc(p.nroAfiliado) : "") + "</td><td>" + esc(p.celular || "") + "</td>" +
-          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos">📅</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
+          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos" title="Turnos">📅</button> <button class="lab-btn xs ghost lab-pac-presup" title="Presupuesto">💰</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
       }).join("") || '<tr><td colspan="5" class="lab-muted" style="padding:16px">Sin pacientes.</td></tr>') + "</tbody></table>";
     list.querySelectorAll(".lab-pac-edit").forEach(function (b) {
       b.onclick = async function () {
@@ -515,6 +546,74 @@
         turnosPacienteModal(rr.data && rr.data.item);
       };
     });
+    list.querySelectorAll(".lab-pac-presup").forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        var rr = await api("/api/lab/pacientes/" + id);
+        presupModal(rr.data && rr.data.item);
+      };
+    });
+  }
+  // Presupuesto: ítems (concepto + cantidad + precio) → total → guardar + imprimir.
+  function presupModal(p) {
+    p = p || {};
+    var m = modal("Presupuesto · " + ([p.apellido, p.nombre].filter(Boolean).join(", ") || "sin paciente"), { ancho: "ancho" });
+    m.body.innerHTML =
+      '<div class="lab-presup-items"><div class="lab-presup-h"><span>Concepto</span><span>Cant.</span><span>Precio unit.</span><span>Subtotal</span><span></span></div><div id="pr-rows"></div>' +
+      '<button class="lab-btn xs" id="pr-add">+ Agregar ítem</button></div>' +
+      '<div class="lab-presup-tot">Total: <b id="pr-total">$0,00</b></div>' +
+      '<label>Observaciones<input class="lab-in" id="pr-obs" placeholder="Validez, condiciones…"></label>' +
+      '<div class="lab-modal-actions"><button class="lab-btn ghost" id="pr-cancel">Cancelar</button><button class="lab-btn" id="pr-print">🖨️ Guardar e imprimir</button><button class="lab-btn primary" id="pr-save">Guardar</button></div>';
+    var rows = m.body.querySelector("#pr-rows");
+    function recalc() {
+      var tot = 0;
+      rows.querySelectorAll(".lab-presup-row").forEach(function (r) {
+        var cant = parseFloat(r.querySelector(".pr-cant").value) || 0;
+        var pu = parseFloat(r.querySelector(".pr-pu").value) || 0;
+        var sub = Math.round(cant * pu * 100) / 100;
+        r.querySelector(".pr-sub").textContent = fmt$(sub); tot += sub;
+      });
+      m.body.querySelector("#pr-total").textContent = fmt$(tot);
+    }
+    function addRow() {
+      var r = e("div", { class: "lab-presup-row" });
+      r.innerHTML = '<input class="lab-in pr-con" placeholder="Práctica / concepto"><input class="lab-in pr-cant" type="number" min="1" value="1"><input class="lab-in pr-pu" type="number" min="0" step="100" value="0"><span class="pr-sub">$0,00</span><button class="lab-btn xs ghost danger pr-del">✕</button>';
+      r.querySelector(".pr-del").onclick = function () { r.remove(); recalc(); };
+      r.querySelector(".pr-cant").oninput = recalc; r.querySelector(".pr-pu").oninput = recalc;
+      rows.appendChild(r);
+    }
+    addRow();
+    m.body.querySelector("#pr-add").onclick = addRow;
+    m.body.querySelector("#pr-cancel").onclick = labClose;
+    function juntar() {
+      var items = [];
+      rows.querySelectorAll(".lab-presup-row").forEach(function (r) {
+        var con = r.querySelector(".pr-con").value.trim();
+        if (con) items.push({ concepto: con, cantidad: r.querySelector(".pr-cant").value, precioUnitario: r.querySelector(".pr-pu").value });
+      });
+      return items;
+    }
+    async function guardar() {
+      var items = juntar();
+      if (!items.length) { toast("Agregá al menos un ítem.", true); return null; }
+      var r = await api("/api/lab/presupuestos", { pacienteId: p.id || "", pacienteNombre: [p.apellido, p.nombre].filter(Boolean).join(", "), obraSocial: p.obraSocial || "", items: items, observaciones: m.body.querySelector("#pr-obs").value });
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return null; }
+      return r.data.item;
+    }
+    m.body.querySelector("#pr-save").onclick = async function () { var it = await guardar(); if (it) { labClose(); toast("Presupuesto N° " + it.numero + " guardado ✓"); } };
+    m.body.querySelector("#pr-print").onclick = async function () { var it = await guardar(); if (it) { labClose(); toast("Presupuesto N° " + it.numero + " guardado ✓"); imprimirPresupuesto(it); } };
+  }
+  function imprimirPresupuesto(pr) {
+    var filas = (pr.items || []).map(function (it) { return "<tr><td>" + esc(it.concepto) + "</td><td style='text-align:center'>" + it.cantidad + "</td><td style='text-align:right'>" + fmt$(it.precioUnitario) + "</td><td style='text-align:right'>" + fmt$(it.subtotal) + "</td></tr>"; }).join("");
+    var html = '<html><head><meta charset="utf-8"><title>Presupuesto ' + pr.numero + '</title>' +
+      '<style>body{font-family:system-ui,Arial,sans-serif;padding:30px;color:#111}h1{font-size:20px;margin:0}table{width:100%;border-collapse:collapse;font-size:14px;margin-top:14px}td,th{padding:7px 5px;border-bottom:1px solid #ddd}.tot{font-size:22px;font-weight:700;margin-top:16px;text-align:right}.muted{color:#666;font-size:12px}</style></head><body>' +
+      "<h1>Presupuesto N° " + pr.numero + "</h1><div class='muted'>" + esc((pr.fecha || "").split("-").reverse().join("/")) + (pr.pacienteNombre ? " · " + esc(pr.pacienteNombre) : "") + (pr.obraSocial ? " · " + esc(pr.obraSocial) : "") + "</div>" +
+      "<table><tr><th style='text-align:left'>Concepto</th><th>Cant.</th><th style='text-align:right'>Precio unit.</th><th style='text-align:right'>Subtotal</th></tr>" + filas + "</table>" +
+      "<div class='tot'>Total: " + fmt$(pr.total) + "</div>" +
+      (pr.observaciones ? "<div class='muted' style='margin-top:14px'>" + esc(pr.observaciones) + "</div>" : "") +
+      "</body></html>";
+    var w = window.open("", "_blank"); if (!w) { toast("Permití las ventanas emergentes para imprimir.", true); return; }
+    w.document.write(html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
   }
   async function turnosPacienteModal(p) {
     if (!p) return;
@@ -686,6 +785,53 @@
       "</tbody></table>" +
       '<div class="lab-muted" style="margin-top:10px;font-size:13px">El cobrado suma importe + insumos de los turnos marcados como <b>Cobrado</b>. Marcá el cobro desde cada turno en la Agenda.</div>'
       : '<div class="lab-muted" style="padding:20px">No hay turnos ese día.</div>';
+    body.appendChild(e("div", { class: "lab-cierre", id: "cj-cierre" }));
+    cierreLoad();
+  }
+  async function cierreLoad() {
+    var box = document.getElementById("cj-cierre"); if (!box) return;
+    var r = await api("/api/lab/caja/cierre?fecha=" + LAB.cajaFecha);
+    var d = r.data || {};
+    var t = d.cerrado ? (d.cierre.totales || {}) : (d.preview || {});
+    var medios = Object.keys(t.porMedio || {}).map(function (k) { return '<span class="lab-chip">' + esc(k) + ": <b>" + fmt$(t.porMedio[k]) + "</b></span>"; }).join("");
+    if (d.cerrado) {
+      box.innerHTML = '<div class="lab-cierre-head"><b>✔ Caja cerrada</b> · ' + fmt$(t.cobrado) + ' · ' + (t.turnosCobrados || 0) + ' cobros' +
+        '<span class="lab-muted"> — por ' + esc(d.cierre.cerradoPor) + " el " + esc((d.cierre.cerradoEl || "").slice(0, 16).replace("T", " ")) + "</span></div>" +
+        (medios ? '<div class="lab-chips">' + medios + "</div>" : "") +
+        '<div class="lab-cierre-actions"><button class="lab-btn" id="cj-print">🖨️ Imprimir arqueo</button><button class="lab-btn ghost danger" id="cj-reabrir">Reabrir</button></div>';
+      box.querySelector("#cj-print").onclick = function () { imprimirArqueo(d.cierre); };
+      box.querySelector("#cj-reabrir").onclick = async function () {
+        if (!confirm("¿Reabrir la caja de este día? Vas a poder volver a cobrar y cerrar.")) return;
+        await req("DELETE", "/api/lab/caja/cierre?fecha=" + LAB.cajaFecha);
+        toast("Caja reabierta"); cajaLoad();
+      };
+    } else {
+      box.innerHTML = '<div class="lab-cierre-head">Caja del día <b>abierta</b> · a cobrar hoy: <b>' + fmt$(t.cobrado) + "</b> (" + (t.turnosCobrados || 0) + " cobros)</div>" +
+        (medios ? '<div class="lab-chips">' + medios + "</div>" : "") +
+        '<div class="lab-cierre-actions"><button class="lab-btn primary" id="cj-cerrar">🔒 Finalizar caja</button></div>';
+      box.querySelector("#cj-cerrar").onclick = async function () {
+        if (!confirm("¿Finalizar la caja de " + LAB.cajaFecha.split("-").reverse().join("/") + "? Queda el arqueo del día.")) return;
+        var rr = await api("/api/lab/caja/cierre?fecha=" + LAB.cajaFecha, { fecha: LAB.cajaFecha });
+        if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo cerrar.", true); return; }
+        toast("Caja cerrada ✓"); cajaLoad();
+      };
+    }
+  }
+  function imprimirArqueo(cierre) {
+    var t = cierre.totales || {};
+    var cli = (window.ME && window.ME.centro) || "Centro médico";
+    var medios = Object.keys(t.porMedio || {}).map(function (k) { return "<tr><td>" + esc(k) + "</td><td style='text-align:right'>" + fmt$(t.porMedio[k]) + "</td></tr>"; }).join("");
+    var profs = (t.porProfesional || []).map(function (pp) { return "<tr><td>" + esc(nombreProf(pp.profesionalId)) + "</td><td style='text-align:center'>" + pp.turnos + "</td><td style='text-align:right'>" + fmt$(pp.monto) + "</td></tr>"; }).join("");
+    var html = '<html><head><meta charset="utf-8"><title>Arqueo ' + esc(cierre.fecha) + '</title>' +
+      '<style>body{font-family:system-ui,Arial,sans-serif;padding:30px;color:#111}h1{font-size:20px;margin:0}h2{font-size:14px;margin:18px 0 6px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid #ddd}.tot{font-size:22px;font-weight:700;margin-top:16px}.muted{color:#666;font-size:12px}</style></head><body>' +
+      "<h1>Arqueo de caja</h1><div class='muted'>" + esc(cierre.fecha.split("-").reverse().join("/")) + " · cerrada por " + esc(cierre.cerradoPor) + "</div>" +
+      "<div class='tot'>Total cobrado: " + fmt$(t.cobrado) + "</div>" +
+      "<div class='muted'>" + (t.turnosCobrados || 0) + " cobros sobre " + (t.turnos || 0) + " turnos · seña " + fmt$(t.sena) + " · insumos " + fmt$(t.insumos) + "</div>" +
+      "<h2>Por medio de pago</h2><table>" + (medios || "<tr><td class='muted'>—</td></tr>") + "</table>" +
+      "<h2>Por profesional</h2><table><tr><th style='text-align:left'>Profesional</th><th>Turnos</th><th style='text-align:right'>Monto</th></tr>" + (profs || "<tr><td class='muted'>—</td></tr>") + "</table>" +
+      "</body></html>";
+    var w = window.open("", "_blank"); if (!w) { toast("Permití las ventanas emergentes para imprimir.", true); return; }
+    w.document.write(html); w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
   }
 
   /* ========================== ESTADÍSTICA ============================== */
@@ -842,6 +988,19 @@
       ".lab-est-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}",
       ".lab-est-card{border:1px solid var(--border);border-radius:10px;padding:12px}.lab-est-card h4{margin:0 0 8px}",
       "textarea.lab-in{resize:vertical;font-family:inherit}",
+      ".lab-cierre{margin-top:14px;border-top:2px solid var(--border);padding-top:12px}",
+      ".lab-cierre-head{font-size:15px;margin-bottom:8px}",
+      ".lab-cierre-actions{display:flex;gap:8px;margin-top:10px}",
+      ".lab-chips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}",
+      ".lab-chip{background:var(--bg,#f1f5f9);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:13px}",
+      ".lab-dup-grupo{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}",
+      ".lab-dup-clave{font-weight:700;margin-bottom:8px}",
+      ".lab-dup-row{display:block;padding:5px 0;font-size:14px;cursor:pointer}",
+      ".lab-presup-h,.lab-presup-row{display:grid;grid-template-columns:1fr 70px 120px 110px 34px;gap:8px;align-items:center}",
+      ".lab-presup-h{font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}",
+      ".lab-presup-row{margin-bottom:6px}.lab-presup-row .pr-sub{text-align:right;font-variant-numeric:tabular-nums}",
+      ".lab-presup-tot{text-align:right;font-size:18px;margin:12px 0}",
+      "@media(max-width:640px){.lab-presup-h{display:none}.lab-presup-row{grid-template-columns:1fr 1fr}}",
       ".lab-hc-new{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}",
       ".lab-hc-item{border-left:3px solid var(--accent,#2dd4bf);padding:6px 0 6px 12px;margin-bottom:12px}",
       ".lab-hc-meta{font-size:13px;margin-bottom:3px}.lab-hc-txt{font-size:14px;white-space:pre-wrap}",
