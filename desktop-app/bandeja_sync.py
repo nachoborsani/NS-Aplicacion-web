@@ -22,7 +22,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from ns_web import DEFAULT_BASE_URL, NSWebClient, load_config
+from ns_web import DEFAULT_BASE_URL, NSWebClient, NSWebError, load_config
 
 _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
           "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -233,6 +233,24 @@ def future_month_ranges(period: str, n: int = 2) -> list[tuple[str, str, str, st
     return out
 
 
+def past_month_ranges(period: str, n: int = 2) -> list[tuple[str, str, str, str]]:
+    """Los N meses COMPLETOS ANTERIORES a `period`, cada uno como
+    (period, desde, hasta, label). Son los meses cerrados que siguen abiertos: los
+    informes se pueden cargar hasta ~60 días después, así que su bandeja todavía se
+    mueve. Se bajan para refrescar SU reporte en el lugar (la web congela los
+    débitos si ya están confirmados). Ej period=2026-09 → agosto y julio 2026."""
+    year, month = int(period[:4]), int(period[5:7])
+    out = []
+    for i in range(1, n + 1):
+        m, y = month - i, year
+        while m <= 0:
+            m += 12
+            y -= 1
+        last = calendar.monthrange(y, m)[1]
+        out.append((f"{y}-{m:02d}", f"01/{m:02d}/{y}", f"{last:02d}/{m:02d}/{y}", f"{_MESES[m]} {y}"))
+    return out
+
+
 def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     """Lee el Excel exportado y devuelve (filas como dicts, columnas). La primera
     fila no vacía se toma como encabezado."""
@@ -303,6 +321,7 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
     transmit_info = None
     exported_futuros = []  # (fperiod, flabel, path) de los meses futuros
+    exported_pasados = []  # (pperiod, plabel, path) de los meses cerrados abiertos
     try:
         from pami_transmision import PamiTransmisionController
 
@@ -357,6 +376,19 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                     exported_futuros.append((fperiod, flabel, exp_fut))
                 except Exception:  # noqa: BLE001 - un mes futuro que falla no corta el resto
                     pass
+            # 5) Meses cerrados que siguen ABIERTOS (agosto, julio): se re-exportan
+            #    para refrescar "faltan informes" a medida que se transmite fuera de
+            #    término. La web actualiza SU reporte en el lugar (si hay) y congela
+            #    los débitos ya confirmados. Un mes sin reporte guardado se saltea.
+            for pperiod, pdesde, phasta, plabel in past_month_ranges(period, n=2):
+                try:
+                    if progress:
+                        progress(f"{name}: bajando {plabel} para refrescar informes…")
+                    tmp_pas = Path(tempfile.gettempdir()) / f"bandeja_pas_{slug}_{pperiod}.xlsx"
+                    exp_pas = bot.exportar_excel_panel(str(tmp_pas), {"fecha_desde": pdesde, "fecha_hasta": phasta})
+                    exported_pasados.append((pperiod, plabel, exp_pas))
+                except Exception:  # noqa: BLE001 - un mes pasado que falla no corta el resto
+                    pass
         finally:
             try:
                 bot.cerrar()
@@ -388,7 +420,28 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                 futuros_count += 1
             except Exception:  # noqa: BLE001
                 pass
+        # Refrescar EN EL LUGAR los reportes de los meses cerrados abiertos. La web
+        # devuelve 404 si ese mes no tiene reporte guardado (se saltea). Con débitos
+        # confirmados sólo mueve "faltan informes"; el débito queda intacto.
+        cerrados_refrescados = []
+        for pperiod, plabel, exp_pas in exported_pasados:
+            try:
+                r = web.actualizar_reporte_cerrado(slug, pperiod, exp_pas)
+                antes = (r.get("antes") or {}).get("faltan")
+                despues = (r.get("despues") or {}).get("faltan")
+                cerrados_refrescados.append({"period": pperiod, "faltanAntes": antes,
+                                             "faltanDespues": despues,
+                                             "congelado": bool(r.get("congelado")),
+                                             "debitoIntacto": bool(r.get("debitoIntacto"))})
+            except NSWebError as exc:
+                # "No hay reporte guardado de …": mes sin cierre, no es un error.
+                if "No hay reporte" not in str(exc):
+                    cerrados_refrescados.append({"period": pperiod, "error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                cerrados_refrescados.append({"period": pperiod, "error": str(exc)})
         res = {"slug": slug, "name": name, "ok": True, "count": len(rows)}
+        if cerrados_refrescados:
+            res["cerrados"] = cerrados_refrescados
         if futuros_count:
             res["futuros"] = futuros_count
         if adelante_count is not None:

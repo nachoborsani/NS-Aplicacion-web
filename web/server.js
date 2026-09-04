@@ -3686,6 +3686,57 @@ function reportDebitStatus(report) {
   if (report && (report.debitStatus === "confirmado" || report.debitStatus === "pendiente")) return report.debitStatus;
   return reportHasRealDebits(report && report.rows) ? "confirmado" : "pendiente";
 }
+// Actualiza un reporte YA GUARDADO con una bajada fresca de la MISMA bandeja, sin
+// duplicarlo (mismo id). Regla del usuario: los informes se pueden cargar hasta 60
+// días después, así que un mes cerrado sigue moviéndose. Pero si los débitos ya
+// están CONFIRMADOS (cerrados), lo ÚNICO que puede cambiar es el estado de
+// transmisión —que es lo que mueve "faltan informes"— y los débitos, valores y
+// totales quedan CONGELADOS tal como se confirmaron (esas prácticas se transmiten
+// fuera de término y se cobran aparte, pero el débito ya quedó fijado). Los turnos
+// nuevos cargados tarde se agregan; una fila vieja que la bajada nueva ya no trae
+// se conserva (no perder un débito confirmado ni una práctica pendiente).
+// Si el reporte todavía está PENDIENTE, los débitos siguen abiertos: se toma la
+// bajada fresca completa (las reglas re-derivan) y sólo se arrastran los débitos
+// cargados a mano o de validación.
+function actualizarReporteEnLugar(oldReport, freshRows) {
+  const congelado = reportDebitStatus(oldReport) === "confirmado";
+  const oldByKey = new Map();
+  for (const r of (Array.isArray(oldReport.rows) ? oldReport.rows : [])) oldByKey.set(dashboardRowKey(r), r);
+  let mergedRows;
+  if (congelado) {
+    const usados = new Set();
+    mergedRows = (freshRows || []).map((nr) => {
+      const k = dashboardRowKey(nr);
+      const old = oldByKey.get(k);
+      if (!old) return nr; // turno nuevo cargado tarde: entra fresco, sin débito
+      usados.add(k);
+      // Congelar todo lo del reporte confirmado; sólo refrescar la transmisión.
+      return {
+        ...old,
+        validated: !!nr.validated,
+        validatedAt: nr.validatedAt || old.validatedAt,
+        validatedLabel: nr.validatedLabel || old.validatedLabel,
+        transmitted: !!nr.transmitted,
+        transmittedAt: nr.transmittedAt || old.transmittedAt,
+        transmittedLabel: nr.transmittedLabel || old.transmittedLabel,
+        absent: !!nr.absent,
+        appointmentLabel: nr.appointmentLabel || old.appointmentLabel,
+      };
+    });
+    for (const [k, old] of oldByKey) if (!usados.has(k)) mergedRows.push(old);
+  } else {
+    mergedRows = (freshRows || []).map((nr) => {
+      const old = oldByKey.get(dashboardRowKey(nr));
+      if (old && old.manualDebit && (old.debitSource === "manual" || old.debitSource === "validacion")) {
+        return { ...nr, manualDebit: true, debitSource: old.debitSource, debitType: old.debitType,
+          debitAmount: old.debitAmount, autoDebit: !!old.autoDebit, autoDebitReason: old.autoDebitReason || "" };
+      }
+      return nr;
+    });
+  }
+  const rows = sanitizeReportRows(mergedRows);
+  return { ...oldReport, rows, rowCount: rows.length, summary: summarizeReportRows(rows), updatedAt: new Date().toISOString() };
+}
 function reportListItem(report) {
   const summary = summarizeReportRows(reportRows(report));
   return {
@@ -6317,6 +6368,66 @@ const server = http.createServer(async (req, res) => {
         return json(res, 400, { error: "Subi una bandeja Excel .xls, .xlsx o .xlsm." });
       }
       return json(res, 200, parseTransmisionWorkbook(multipart.file.data, multipart.file.filename, payload, client));
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar la bandeja." });
+    }
+  }
+
+  // Actualizar EN EL LUGAR el reporte de un mes cerrado con una bajada fresca de
+  // la misma bandeja (para que "faltan informes" refleje lo transmitido hasta 60
+  // días después). No duplica el reporte; con débitos confirmados los congela y
+  // sólo mueve el estado de transmisión. Lo llama la app en cada corrida.
+  const clientReportUpdateMatch = p.match(/^\/api\/clientes\/([^/]+)\/reportes\/actualizar$/);
+  if (clientReportUpdateMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const slug = decodeURIComponent(clientReportUpdateMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const rawPeriod = String(url.searchParams.get("period") || "").trim();
+    const period = normalizePeriod(rawPeriod) || rawPeriod;
+    if (!period) return json(res, 400, { error: "Falta el período (period=YYYY-MM)." });
+    // El reporte de ese período (el más nuevo si hay varios).
+    const store = loadClientReportsStore();
+    const candidatos = (store.items || [])
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => item.clientSlug === slug &&
+        (String(item.nomencladorPeriod) === period || reportDashboardPeriod(item) === period))
+      .sort((a, b) => String(b.item.closedAt || "").localeCompare(String(a.item.closedAt || "")));
+    if (!candidatos.length) return json(res, 404, { error: `No hay reporte guardado de ${period} para actualizar.` });
+    const { item: oldReport, idx } = candidatos[0];
+    // Parseo la bandeja fresca con el nomenclador del reporte (o el activo si no está).
+    const nstore = loadNomencladorStore();
+    const payload = getNomencladorByPeriod(nstore, oldReport.nomencladorPeriod) || getNomencladorByPeriod(nstore, "");
+    if (!payload) return json(res, 404, { error: "No hay nomenclador cargado para parsear la bandeja." });
+    try {
+      const raw = await readBuffer(req);
+      const multipart = extractMultipart(raw, req.headers["content-type"]);
+      const ext = path.extname(multipart.file.filename).toLowerCase();
+      if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
+        return json(res, 400, { error: "Subi una bandeja Excel .xls, .xlsx o .xlsm." });
+      }
+      const parsed = parseTransmisionWorkbook(multipart.file.data, multipart.file.filename, payload, client);
+      const freshRows = parsed.rows || [];
+      // Métricas antes/después para el aviso (que se vea que el débito no se tocó).
+      const faltanDe = (rows) => (rows || []).filter((r) => reportRowMissingInforme(r)).length;
+      const debitoDe = (rows) => (rows || []).reduce((a, r) => a + reportRowDebit(r), 0);
+      const antes = { faltan: faltanDe(oldReport.rows), debito: money(debitoDe(oldReport.rows)), filas: (oldReport.rows || []).length };
+      const congelado = reportDebitStatus(oldReport) === "confirmado";
+      const updated = actualizarReporteEnLugar(oldReport, freshRows);
+      const despues = { faltan: faltanDe(updated.rows), debito: money(debitoDe(updated.rows)), filas: updated.rows.length };
+      // dry=1: no guarda, sólo devuelve el antes/después (para probar o previsualizar).
+      const dry = ["1", "true", "si"].includes(String(url.searchParams.get("dry") || "").toLowerCase());
+      if (!dry) {
+        store.items[idx] = updated;
+        saveClientReportsStore(store);
+      }
+      return json(res, 200, {
+        report: reportListItem(updated),
+        congelado, period, antes, despues, dry,
+        debitoIntacto: antes.debito === despues.debito,
+      });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar la bandeja." });
     }

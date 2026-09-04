@@ -283,6 +283,67 @@ class NSWebClient:
             },
         )
 
+    def actualizar_reporte_cerrado(self, slug: str, period: str, excel_path: str) -> dict:
+        """Refresca EN EL LUGAR el reporte de un mes cerrado con la bandeja fresca.
+        La web lo parsea con el nomenclador y, si los débitos están confirmados,
+        sólo mueve 'faltan informes' (congela débitos/valores). Manda el Excel como
+        multipart. Devuelve {antes, despues, congelado, debitoIntacto, ...}."""
+        import os
+        import uuid
+
+        with open(excel_path, "rb") as fh:
+            file_bytes = fh.read()
+        filename = os.path.basename(excel_path)
+        boundary = "----nsform" + uuid.uuid4().hex
+        pre = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            "Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+        ).encode("utf-8")
+        post = f"\r\n--{boundary}--\r\n".encode("utf-8")
+        data = pre + file_bytes + post
+
+        path = (f"/api/clientes/{urllib.parse.quote(slug)}/reportes/actualizar"
+                f"?period={urllib.parse.quote(period)}")
+        parsed = urllib.parse.urlsplit(self.base_url)
+        is_https = parsed.scheme == "https"
+        host = parsed.hostname or "localhost"
+        port = parsed.port or (443 if is_https else 80)
+        headers = {"Accept": "application/json",
+                   "Content-Type": f"multipart/form-data; boundary={boundary}"}
+        if self._cookie:
+            headers["Cookie"] = self._cookie
+        last_err = None
+        for intento in range(3):
+            conn = None
+            try:
+                cls = http.client.HTTPSConnection if is_https else http.client.HTTPConnection
+                conn = cls(host, port, timeout=max(self.timeout, 120))
+                conn.request("POST", path, body=data, headers=headers)
+                resp = conn.getresponse()
+                text = resp.read().decode("utf-8") or "{}"
+                if resp.status >= 400:
+                    try:
+                        message = json.loads(text).get("error") or f"HTTP {resp.status}"
+                    except Exception:
+                        message = f"HTTP {resp.status}"
+                    raise NSWebError(message)
+                return json.loads(text)
+            except (ConnectionResetError, http.client.IncompleteRead) as exc:
+                last_err = exc
+                time.sleep(0.4 * (intento + 1))
+                continue
+            except NSWebError:
+                raise
+            except OSError as exc:
+                raise NSWebError(f"No se pudo conectar con {self.base_url} ({exc}).") from exc
+            finally:
+                if conn is not None:
+                    conn.close()
+        raise NSWebError(
+            f"La conexion con {self.base_url} se corto al actualizar {period}. Probá de nuevo."
+        ) from last_err
+
     def bandeja_estados(self) -> dict:
         """Estado del último sync de cada cliente {slug: {ok, error, at, ...}}.
 
