@@ -6864,9 +6864,11 @@ async function loadCabinaView(){
       var r = await fetch('/api/clientes');
       var raw = await r.json();
       var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      // Solo los clientes que usan el sistema de informes (por ahora, solo Caballito).
-      // Cuando se sume otro, agregar su slug acá.
-      var CON_INFORMES = ['caballito-pediatrico'];
+      // Solo los clientes que usan el sistema de informes. Scheffelaar y
+      // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
+      // cargan a mano, más adelante entran solas varias veces por día.
+      // Cuando se sume otro cliente, agregar su slug acá.
+      var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel'];
       list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
           .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     } catch(e){}
