@@ -3332,11 +3332,48 @@ function ensureInformesCfg(cb){
   }).catch(function(){ _informesCfgCargando = false; });
 }
 function codigoDePractica(s){ var m = String(s || '').match(/\d{4,}/); return m ? m[0] : ''; }
+// Palabras genéricas que no distinguen una práctica de otra (no puntúan en el
+// match por nombre).
+var _PRACT_GENERICAS = { ECOGRAFIA:1, ECOGRAFICO:1, ECOGRAFICA:1, ECO:1, DE:1, DEL:1, LA:1, EL:1, LOS:1, LAS:1, Y:1, O:1, CON:1, SIN:1, POR:1, COMPLETA:1, COMPLETO:1, BILATERAL:1, BIALTERAL:1, COMPUTARIZADA:1, COMPUTARIZADO:1, ESTUDIO:1, MEDICION:1, UNI:1, INCLUYE:1, INSUMOS:1, CATETERES:1, NI:1 };
+function _normPract(s){
+  return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function _clavesPract(s){
+  return _normPract(s).split(' ').filter(function(w){ return w.length >= 3 && !_PRACT_GENERICAS[w]; });
+}
+// Elige, entre una lista de modelos, el que mejor pega por nombre con la práctica
+// de la fila. Puntúa por palabras clave compartidas; a igualdad, gana el modelo
+// más específico que no le sobren palabras (vesical vs vesical-con-residuo).
+function _mejorModeloPorNombre(practica, modelos){
+  var filaKw = _clavesPract(practica);
+  if (!filaKw.length) return null;
+  var best = null, bestScore = -1;
+  (modelos || []).forEach(function(m){
+    var mKw = _clavesPract([m.estudio, m.label, m.practica].filter(Boolean).join(' '));
+    if (!mKw.length) return;
+    var matched = mKw.filter(function(w){ return filaKw.indexOf(w) >= 0; }).length;
+    if (!matched) return;
+    // más palabras compartidas manda; a igualdad, el modelo con menos palabras
+    // clave (match más ajustado, sin pedir de más).
+    var score = matched - mKw.length * 0.001;
+    if (score > bestScore){ bestScore = score; best = m; }
+  });
+  return best;
+}
 function modeloParaPracticaRow(practica){
+  var modelos = INFORMES_CFG.modelos || [];
   var cod = codigoDePractica(practica);
-  if (!cod) return null;
-  // Sólo código único y exacto: los combinados ("717111 + 717125") no se autogeneran.
-  return (INFORMES_CFG.modelos || []).find(function(m){ return String(m.codigoPractica || '') === cod; }) || null;
+  if (cod){
+    var porCod = modelos.filter(function(m){ return String(m.codigoPractica || '') === cod; });
+    if (porCod.length === 1) return porCod[0];
+    // Varios modelos con el mismo código (ej. PAMI usa 180114 para vesical Y
+    // próstata): desempata por el nombre de la fila.
+    if (porCod.length > 1) return _mejorModeloPorNombre(practica, porCod) || porCod[0];
+  }
+  // Sin código o código sin modelo: matchea por nombre (los modelos de ecografía
+  // tienen codigoPractica vacío pero el estudio identifica la práctica).
+  return _mejorModeloPorNombre(practica, modelos);
 }
 function faltanInformesDe(panelId){
   if (panelId === 'informes') return MESCURSO_FALTAN_INFORMES || [];
