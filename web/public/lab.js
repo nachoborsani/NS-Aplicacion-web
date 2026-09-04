@@ -688,8 +688,14 @@
         '<label>Dirección<input class="lab-in" id="pc-dir" value="' + esc(p.direccion || "") + '"></label>' +
       "</div>" +
       '<label>Observaciones<input class="lab-in" id="pc-obs" value="' + esc(p.observaciones || "") + '"></label></div>' +
-      '<div class="lab-modal-actions"><button class="lab-btn ghost" id="pc-cancel">Cancelar</button><button class="lab-btn primary" id="pc-ok">Guardar</button></div>';
+      '<div class="lab-modal-actions">' + (p.id ? '<button class="lab-btn ghost danger" id="pc-del">Eliminar</button>' : "") + '<button class="lab-btn ghost" id="pc-cancel">Cancelar</button><button class="lab-btn primary" id="pc-ok">Guardar</button></div>';
     m.body.querySelector("#pc-cancel").onclick = labClose;
+    if (p.id) m.body.querySelector("#pc-del").onclick = async function () {
+      if (!confirm("¿Eliminar la ficha de " + [p.apellido, p.nombre].filter(Boolean).join(", ") + "? Se borra su historia clínica; los turnos quedan con el nombre.")) return;
+      var r = await req("DELETE", "/api/lab/pacientes/" + p.id);
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo eliminar.", true); return; }
+      labClose(); toast("Paciente eliminado" + (r.data.turnosFuturos ? " (tenía " + r.data.turnosFuturos + " turno/s futuros)" : "")); pacBuscar();
+    };
     m.body.querySelector("#pc-ok").onclick = async function () {
       var payload = {
         apellido: m.body.querySelector("#pc-ap").value, nombre: m.body.querySelector("#pc-no").value,

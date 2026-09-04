@@ -383,6 +383,14 @@ async function handleLab(ctx) {
       saveStore(dataDir, store);
       return json(res, 200, { item: lista[idx] }), true;
     }
+    if (method === "DELETE" && idPath) {
+      const turnosFuturos = (store.turnos || []).filter((t) => t.pacienteId === idPath && t.estado !== "cancelado" && t.fecha >= nowIso().slice(0, 10)).length;
+      store.pacientes = lista.filter((x) => x.id !== idPath);
+      // La historia clínica del paciente se va con él; los turnos conservan el nombre.
+      store.evoluciones = (store.evoluciones || []).filter((e) => e.pacienteId !== idPath);
+      saveStore(dataDir, store);
+      return json(res, 200, { ok: true, turnosFuturos }), true;
+    }
   }
 
   // -- Turnos / Agenda --
