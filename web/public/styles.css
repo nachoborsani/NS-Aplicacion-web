@@ -298,8 +298,13 @@
      libre en una sola fila, que con muchos mensajes/tareas crecían sin límite
      y no dejaba lugar para las 2 tarjetas nuevas de abajo). */
   /* Chat a toda la columna izquierda; a la derecha se apilan Tareas + Pendientes +
-     Accesos, así el alto del chat se llena sin dejar huecos al costado. */
-  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;align-items:start;margin-top:18px}
+     Accesos, así el alto del chat se llena sin dejar huecos al costado.
+     align-items normal (stretch, no "start"): el chat ocupa las 3 filas de
+     alto real que suman Tareas+Pendientes+Accesos, no solo su propio
+     contenido - si no, quedaba un hueco vacío debajo del chat cuando la
+     columna derecha era más alta (ver .ini-panel-msg .ini-feed más abajo,
+     que es lo que efectivamente se estira para llenar ese alto). */
+  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;margin-top:18px}
   .ini-panel-msg{grid-column:1;grid-row:1 / span 3}
   .ini-panel-tareas{grid-column:2;grid-row:1}
   .ini-panel-pendop{grid-column:2;grid-row:2}
@@ -316,8 +321,17 @@
   .ini-unread{margin-left:auto;background:var(--error);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
   /* mensajes */
   .ini-feed{max-height:420px;min-height:210px;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
-  /* Chat de admins: más angosto (max-width en el panel) y más alto (feed más largo). */
-  .ini-panel-msg .ini-feed{max-height:460px;min-height:340px}
+  /* Chat de admins: más angosto (max-width en el panel) y se estira para
+     llenar el alto real de la columna derecha (ver align-items en .ini-grid),
+     en vez de un tope fijo que dejaba un hueco vacío debajo del composer. */
+  .ini-panel-msg .ini-feed{flex:1 1 auto;min-height:340px;max-height:none}
+  /* Scrollbar del feed de mensajes: mismo celeste/turquesa que ya usa el menú
+     lateral (.nav), para que se vea igual en vez del gris nativo del navegador. */
+  .ini-feed{scrollbar-width:thin;scrollbar-color:var(--turq) transparent}
+  .ini-feed::-webkit-scrollbar{width:8px}
+  .ini-feed::-webkit-scrollbar-track{background:transparent}
+  .ini-feed::-webkit-scrollbar-thumb{background:var(--turq);border-radius:999px}
+  .ini-feed::-webkit-scrollbar-thumb:hover{background:var(--turq-d)}
   .ini-msg{display:flex;gap:9px;max-width:84%}
   .ini-av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;background:var(--petrol)}
   .ini-av.me{background:var(--turq-d)}
