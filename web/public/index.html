@@ -181,7 +181,7 @@
 
           <div class="ini-grid" id="inicioPaneles" style="display:none">
             <!-- Mensajes -->
-            <section class="card ini-card">
+            <section class="card ini-card ini-panel-msg">
               <div class="ini-head">
                 <span class="ini-ic">💬</span>
                 <div><h2>Mensajes</h2><div class="ini-meta">Canal interno</div></div>
@@ -198,7 +198,7 @@
               </div>
             </section>
             <!-- Tareas -->
-            <section class="card ini-card">
+            <section class="card ini-card ini-panel-tareas">
               <div class="ini-head">
                 <span class="ini-ic">✅</span>
                 <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
@@ -212,6 +212,7 @@
                   <input type="date" id="iniTaskVence" class="ini-vence-in" title="Fecha de vencimiento (opcional)">
                   <button class="btn btn-primary btn-sm" id="iniAddTask" style="margin-left:auto" onclick="iniAgregarTarea()">+ Agregar</button>
                 </div>
+                <div class="ini-task-err" id="iniTaskErr" style="display:none"></div>
               </div>
               <div class="ini-tasks">
                 <ul class="ini-list" id="iniOpen"></ul>
@@ -222,6 +223,28 @@
                   </div>
                   <ul class="ini-list" id="iniDone"></ul>
                 </div>
+              </div>
+            </section>
+            <!-- Pendientes del operador (por ahora Javi): informes sin resolver y sin
+                 transmitir, por cliente - mismo criterio que ya usa Informes recibidos. -->
+            <section class="card ini-card ini-panel-pendop">
+              <div class="ini-head">
+                <span class="ini-ic">🔔</span>
+                <div><h2>Pendientes de Javi</h2><div class="ini-meta" id="iniPendOpMeta">—</div></div>
+              </div>
+              <ul class="ini-pendop-list" id="iniPendOpList"><li class="ini-empty">Cargando…</li></ul>
+            </section>
+            <!-- Accesos rápidos: catálogo configurable de atajos (ver iniAccesos* en app.js). -->
+            <section class="card ini-card ini-panel-accesos">
+              <div class="ini-head">
+                <span class="ini-ic">⚡</span>
+                <div><h2>Accesos rápidos</h2></div>
+                <button class="btn btn-ghost btn-sm" id="iniAccesosEditBtn" onclick="iniAccesosToggleEditor()">Editar</button>
+              </div>
+              <div class="ini-accesos-grid" id="iniAccesosGrid"></div>
+              <div class="ini-accesos-editor" id="iniAccesosEditor" style="display:none">
+                <div class="ini-meta" id="iniAccesosContador">0 / 9 elegidos</div>
+                <div class="ini-accesos-catalogo" id="iniAccesosCatalogo"></div>
               </div>
             </section>
           </div>

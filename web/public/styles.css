@@ -290,9 +290,19 @@
   .drawer-item .di-tx b{display:block;font-size:13.5px;color:var(--text)}
   .drawer-item .di-tx span{font-size:12px;color:var(--text-2)}
 
-  /* ===== Inicio: mensajes internos + tareas compartidas ===== */
-  .ini-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start;margin-top:18px}
-  @media(max-width:860px){ .ini-grid{grid-template-columns:1fr} }
+  /* ===== Inicio: mensajes internos + tareas compartidas + pendientes del
+     operador + accesos rápidos - grid 2x2 fijo (antes eran 2 tarjetas de alto
+     libre en una sola fila, que con muchos mensajes/tareas crecían sin límite
+     y no dejaba lugar para las 2 tarjetas nuevas de abajo). */
+  .ini-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;align-items:start;margin-top:18px}
+  .ini-panel-msg{grid-column:1;grid-row:1}
+  .ini-panel-tareas{grid-column:2;grid-row:1}
+  .ini-panel-pendop{grid-column:1;grid-row:2}
+  .ini-panel-accesos{grid-column:2;grid-row:2}
+  @media(max-width:860px){
+    .ini-grid{grid-template-columns:1fr}
+    .ini-panel-msg,.ini-panel-tareas,.ini-panel-pendop,.ini-panel-accesos{grid-column:1;grid-row:auto}
+  }
   .ini-card{display:flex;flex-direction:column;overflow:hidden;padding:0}
   .ini-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
   .ini-head .ini-ic{font-size:20px;line-height:1}
@@ -301,6 +311,9 @@
   .ini-unread{margin-left:auto;background:var(--error);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
   /* mensajes */
   .ini-feed{max-height:420px;min-height:210px;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+  /* El chat de admins queda más chico que antes (deja lugar a las 2 tarjetas
+     nuevas de abajo) - el del operador no se toca, no se pidió achicarlo. */
+  .ini-panel-msg .ini-feed{max-height:230px;min-height:160px}
   .ini-msg{display:flex;gap:9px;max-width:84%}
   .ini-av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;background:var(--petrol)}
   .ini-av.me{background:var(--turq-d)}
@@ -344,7 +357,10 @@
   .ini-assign{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:2px;gap:1px;flex-wrap:wrap}
   .ini-assign button{border:0;background:transparent;color:var(--text-2);font:inherit;font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;cursor:pointer}
   .ini-assign button.on{background:var(--celeste);color:var(--turq-d)}
-  .ini-tasks{padding:6px 10px 8px}
+  /* Una tarea siempre tiene que quedar asignada a alguien - se puede tildar a
+     Ignacio y/o Sebastian a la vez (multi), pero no queda "sin asignar". */
+  .ini-task-err{font-size:11.5px;color:var(--error);font-weight:600}
+  .ini-tasks{max-height:300px;overflow-y:auto;padding:6px 10px 8px}
   .ini-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
   .ini-task{display:flex;align-items:flex-start;gap:10px;padding:9px 8px;border-radius:10px}
   .ini-task:hover{background:var(--hover)}
@@ -377,6 +393,40 @@
   .ini-venc-cnt{color:var(--error)}
   .ini-link{border:0;background:transparent;color:var(--turq-d);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer;padding:0}
   .ini-link:hover{text-decoration:underline}
+  /* Tarea vencida: en vez de dejarla en rojo pasivo, pide una acción concreta -
+     resolverla o pasarla a una fecha nueva - en vez de que quede ahí sin más. */
+  .ini-task-urgent{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed color-mix(in srgb,var(--error) 35%,transparent)}
+  .ini-task-urgent>span{font-size:11px;color:var(--error);font-weight:600}
+  .ini-task-urgent .btn{padding:3px 10px;font-size:11px}
+  .ini-due-btn{position:relative;display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--error);color:var(--error);cursor:pointer;color-scheme:light dark}
+  .ini-due-btn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;cursor:pointer}
+
+  /* Pendientes del operador: una fila por cliente, con badges numéricos estilo
+     notificación de celular - el color ya avisa la urgencia, sin texto de más. */
+  .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:300px}
+  .ini-pendop-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px}
+  .ini-pendop-row:hover{background:var(--hover)}
+  .ini-pendop-nombre{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ini-pendop-badges{display:flex;gap:6px;flex:0 0 auto}
+  .ini-pendop-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+  .ini-pendop-badge.pend{background:var(--warning)}
+  .ini-pendop-badge.transm{background:var(--error)}
+
+  /* Accesos rápidos: grilla de hasta 9 atajos elegidos por el usuario + editor
+     desplegable con el catálogo completo (todas las vistas + todos los clientes). */
+  .ini-accesos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px}
+  .ini-acceso-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer;font:inherit;text-align:center}
+  .ini-acceso-tile:hover{border-color:var(--turq);background:var(--hover)}
+  .ini-acceso-tile .ic{font-size:19px;line-height:1}
+  .ini-acceso-tile .tx{font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .ini-accesos-editor{border-top:1px solid var(--border);background:var(--surface-2)}
+  .ini-accesos-editor .ini-meta{padding:10px 16px 0}
+  .ini-accesos-catalogo{max-height:260px;overflow-y:auto;padding:8px 16px 14px;display:flex;flex-direction:column;gap:1px}
+  .ini-acceso-opt{display:flex;align-items:center;gap:9px;padding:6px 4px;font-size:13px;cursor:pointer;color:var(--text)}
+  .ini-acceso-opt input{flex:0 0 auto}
+  .ini-acceso-opt.disabled{opacity:.4;cursor:not-allowed}
+  .ini-acceso-grupo{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);margin:10px 0 2px}
+  .ini-acceso-grupo:first-child{margin-top:2px}
   .ini-del{border:0;background:transparent;color:var(--text-2);cursor:pointer;font-size:14px;opacity:0;transition:opacity .12s;flex:0 0 auto;padding:2px;line-height:1}
   .ini-del:hover{color:var(--error)}
   .ini-donehead{display:flex;align-items:center;gap:7px;padding:9px 8px 5px;color:var(--text-2);font-size:12px;font-weight:700;cursor:pointer;user-select:none}
