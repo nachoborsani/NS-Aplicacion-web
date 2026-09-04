@@ -97,6 +97,7 @@ function sanitizeProfesional(body, previo) {
   p.especialidadId = body.especialidadId !== undefined ? clean(body.especialidadId) : (p.especialidadId || "");
   p.consultorioId = body.consultorioId !== undefined ? clean(body.consultorioId) : (p.consultorioId || "");
   p.color = body.color !== undefined ? clean(body.color) : (p.color || "#2dd4bf");
+  p.valorConsulta = body.valorConsulta !== undefined ? (Math.round((parseFloat(body.valorConsulta) || 0) * 100) / 100) : (previo && previo.valorConsulta || 0);
   p.activo = body.activo === undefined ? (previo ? previo.activo : true) : !!body.activo;
   if (body.horarios !== undefined) {
     p.horarios = (Array.isArray(body.horarios) ? body.horarios : []).map((h) => ({
@@ -324,11 +325,16 @@ async function handleLab(ctx) {
     const lista = store.turnos;
     // GET ?desde=&hasta=[&profesionalId=]  -> lista cruda de turnos en el rango
     // (para Caja y Estadística). Se prioriza sobre el modo agenda.
-    if (method === "GET" && !idPath && url.searchParams.get("desde")) {
+    if (method === "GET" && !idPath && (url.searchParams.get("desde") || url.searchParams.get("pacienteId"))) {
       const desde = clean(url.searchParams.get("desde"));
       const hasta = clean(url.searchParams.get("hasta")) || desde;
       const profId = clean(url.searchParams.get("profesionalId"));
-      const items = lista.filter((t) => t.fecha >= desde && t.fecha <= hasta && t.estado !== "cancelado" && (!profId || t.profesionalId === profId));
+      const pacId = clean(url.searchParams.get("pacienteId"));
+      const items = lista.filter((t) => t.estado !== "cancelado" &&
+        (!desde || (t.fecha >= desde && t.fecha <= hasta)) &&
+        (!profId || t.profesionalId === profId) &&
+        (!pacId || t.pacienteId === pacId))
+        .sort((a, b) => String(b.fecha + b.hora).localeCompare(String(a.fecha + a.hora)));
       return json(res, 200, { items }), true;
     }
     // GET ?profesionalId=&fecha=  -> agenda del profesional ese día (con slots)

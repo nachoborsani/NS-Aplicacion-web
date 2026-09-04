@@ -275,6 +275,8 @@
   // Reservar turno en un horario (o sobreturno si hora vacía).
   function bookModal(hora) {
     var m = modal("Dar turno · " + (hora || "sobreturno"));
+    var profActual = LAB.cat.profesionales.find(function (x) { return x.id === LAB.ag.profesionalId; });
+    var valorDef = (profActual && profActual.valorConsulta) || 0;
     var osOpts = '<option value="">— Obra social —</option>' + LAB.cat.obrasSociales.map(function (o) { return "<option>" + esc(o.nombre) + "</option>"; }).join("");
     m.body.innerHTML =
       '<div class="lab-form">' +
@@ -287,7 +289,7 @@
           '<label>N° afiliado<input class="lab-in" id="bk-afil"></label>' +
           '<label>Celular<input class="lab-in" id="bk-cel"></label>' +
           '<label>' + (hora ? "Horario" : "Horario (sobreturno)") + '<input class="lab-in" id="bk-hora" value="' + esc(hora) + '" placeholder="HH:MM"></label>' +
-          '<label>Importe consulta<input class="lab-in" id="bk-importe" type="number" min="0" step="100" placeholder="0"></label>' +
+          '<label>Importe consulta<input class="lab-in" id="bk-importe" type="number" min="0" step="100" value="' + valorDef + '" placeholder="0"></label>' +
         "</div>" +
         '<label>Motivo<input class="lab-in" id="bk-motivo" placeholder="Consulta, control, estudio…"></label>' +
       "</div>" +
@@ -431,6 +433,7 @@
           '<label>Matrícula<input class="lab-in" id="pf-mat" value="' + esc(p.matricula || "") + '"></label>' +
           '<label>Especialidad<select class="lab-in" id="pf-esp">' + espOpts + "</select></label>" +
           '<label>Consultorio<select class="lab-in" id="pf-cons">' + consOpts + "</select></label>" +
+          '<label>Valor consulta (particular)<input class="lab-in" id="pf-valor" type="number" min="0" step="100" value="' + (p.valorConsulta || 0) + '"></label>' +
         "</div>" +
         '<div class="lab-horarios-head"><b>Horarios de atención</b><button class="lab-btn xs" id="pf-add-h">+ Agregar bloque</button></div>' +
         '<div id="pf-horarios"></div>' +
@@ -458,7 +461,7 @@
         var ins = row.querySelectorAll("input");
         return { dow: parseInt(row.querySelector(".dow").value, 10), desde: ins[0].value, hasta: ins[1].value, duracionMin: parseInt(row.querySelector(".dur").value, 10) || 15 };
       });
-      var payload = { nombre: nombre, matricula: m.body.querySelector("#pf-mat").value, especialidadId: m.body.querySelector("#pf-esp").value, consultorioId: m.body.querySelector("#pf-cons").value, horarios: horarios };
+      var payload = { nombre: nombre, matricula: m.body.querySelector("#pf-mat").value, especialidadId: m.body.querySelector("#pf-esp").value, consultorioId: m.body.querySelector("#pf-cons").value, valorConsulta: m.body.querySelector("#pf-valor").value, horarios: horarios };
       var r = p.id ? await req("PUT", "/api/lab/profesionales/" + p.id, payload) : await api("/api/lab/profesionales", payload);
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
       labClose(); toast("Profesional guardado ✓");
@@ -489,7 +492,7 @@
       '<table class="lab-table"><thead><tr><th>Apellido y nombre</th><th>Documento</th><th>Obra social</th><th>Celular</th><th></th></tr></thead><tbody>' +
       (items.map(function (p) {
         return '<tr data-id="' + p.id + '"><td><b>' + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b></td><td>" + esc(p.documento || "") + "</td><td>" + esc(p.obraSocial || "") + (p.nroAfiliado ? " " + esc(p.nroAfiliado) : "") + "</td><td>" + esc(p.celular || "") + "</td>" +
-          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
+          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos">📅</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
       }).join("") || '<tr><td colspan="5" class="lab-muted" style="padding:16px">Sin pacientes.</td></tr>') + "</tbody></table>";
     list.querySelectorAll(".lab-pac-edit").forEach(function (b) {
       b.onclick = async function () {
@@ -505,6 +508,27 @@
         hcModal(rr.data && rr.data.item);
       };
     });
+    list.querySelectorAll(".lab-pac-turnos").forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        var rr = await api("/api/lab/pacientes/" + id);
+        turnosPacienteModal(rr.data && rr.data.item);
+      };
+    });
+  }
+  async function turnosPacienteModal(p) {
+    if (!p) return;
+    var m = modal("Turnos · " + [p.apellido, p.nombre].filter(Boolean).join(", "), { ancho: "ancho" });
+    m.body.innerHTML = '<div class="lab-muted">Cargando…</div>';
+    var r = await api("/api/lab/turnos?pacienteId=" + encodeURIComponent(p.id));
+    var items = (r.data && r.data.items) || [];
+    m.body.innerHTML = items.length ?
+      '<table class="lab-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Profesional</th><th>Motivo</th><th>Estado</th></tr></thead><tbody>' +
+      items.map(function (t) {
+        var est = ESTADOS[t.estado] || ESTADOS.dado;
+        return "<tr><td>" + esc((t.fecha || "").split("-").reverse().join("/")) + "</td><td>" + esc(t.hora) + "</td><td>" + esc(nombreProf(t.profesionalId)) + "</td><td>" + esc(t.motivo || "") + '</td><td><span class="lab-pill" style="background:' + est.color + '">' + esc(est.label) + "</span></td></tr>";
+      }).join("") + "</tbody></table>"
+      : '<div class="lab-muted">Este paciente no tiene turnos.</div>';
   }
 
   // Historia clínica: evoluciones del paciente (timeline + alta).
@@ -701,6 +725,23 @@
           return "<tr><td>" + esc(nombreFn ? nombreFn(k) : k) + '</td><td style="text-align:right"><b>' + obj[k] + '</b> <span class="lab-muted">' + pct + "%</span></td></tr>";
         }).join("") + "</tbody></table></div>";
     }
+    // Deudores: turnos con saldo (importe+insumos) sin cobrar, agrupados por paciente.
+    var deud = {};
+    turnos.forEach(function (t) {
+      var saldo = (Number(t.importe) || 0) + (Number(t.insumos) || 0);
+      if (!t.pagado && saldo > 0) {
+        var k = t.pacienteNombre || "(sin nombre)";
+        if (!deud[k]) deud[k] = { total: 0, n: 0 };
+        deud[k].total += saldo; deud[k].n++;
+      }
+    });
+    var deudKeys = Object.keys(deud).sort(function (a, b) { return deud[b].total - deud[a].total; });
+    var deudTotal = deudKeys.reduce(function (a, k) { return a + deud[k].total; }, 0);
+    var deudoresHtml = deudKeys.length ?
+      '<div class="lab-est-card"><h4>Deudores · ' + fmt$(deudTotal) + '</h4><table class="lab-table"><tbody>' +
+      deudKeys.map(function (k) { return "<tr><td>" + esc(k) + '</td><td style="text-align:right"><b>' + fmt$(deud[k].total) + '</b> <span class="lab-muted">' + deud[k].n + " turno" + (deud[k].n === 1 ? "" : "s") + "</span></td></tr>"; }).join("") +
+      "</tbody></table></div>" : "";
+
     body.innerHTML =
       '<div class="lab-kpis">' +
         '<div class="lab-kpi"><span>Turnos</span><b>' + total + "</b></div>" +
@@ -708,12 +749,14 @@
         '<div class="lab-kpi"><span>Ausentes</span><b>' + aus + " <small>" + Math.round(aus / total * 100) + "%</small></b></div>" +
         '<div class="lab-kpi"><span>Facturado</span><b>' + fmt$(facturado) + "</b></div>" +
         '<div class="lab-kpi"><span>Cobrado</span><b>' + fmt$(cobrado) + "</b></div>" +
+        '<div class="lab-kpi"><span>Por cobrar</span><b>' + fmt$(deudTotal) + "</b></div>" +
       "</div>" +
       '<div class="lab-est-grid">' +
         tabla("Turnos por profesional", porProf, nombreProf) +
         tabla("Turnos por especialidad", porEsp) +
         tabla("Turnos por obra social", porOS) +
         tabla("Turnos por estado", porEstado, function (k) { return (ESTADOS[k] || { label: k }).label; }) +
+        deudoresHtml +
       "</div>";
   }
 
