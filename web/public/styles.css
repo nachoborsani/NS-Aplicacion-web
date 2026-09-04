@@ -480,6 +480,7 @@
   .ini-pendop-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
   .ini-pendop-badge.pend{background:var(--warning)}
   .ini-pendop-badge.transm{background:var(--error)}
+  .ini-pendop-badge.cup{background:var(--info)}
   /* Variante recortada (Inicio del operador): esta tarjeta ahora comparte
      lugar con "Tareas" abajo, así que la lista de centros pendientes queda
      más baja que en la del admin. */

@@ -417,6 +417,17 @@
                 <div id="schefeLinks" style="display:none;gap:8px;margin-bottom:12px">
                   <a class="btn btn-navy" href="https://docs.google.com/spreadsheets/d/1sZP1NuVzyzjc17lrFFePy6IVQNUB3epNXJIXoBJI334/edit" target="_blank" rel="noopener">📄 Ir a la planilla</a>
                 </div>
+                <!-- Informe del CUP (médico de cabecera): lo suben admin u operador a mano,
+                     no hay bot que lo baje solo como en los consultorios. Se muestra por JS. -->
+                <div class="client-card" id="cupInformeCard" style="display:none">
+                  <h3>📥 Informe del CUP</h3>
+                  <p class="nom-muted">Subí el Excel que bajás del Panel de prestaciones de PAMI (CUP) para este médico. Con eso se calculan los pendientes de validar y transmitir, y mejora el cruce de "Informes recibidos".</p>
+                  <label class="btn btn-primary file-btn">
+                    📁 Subir informe del CUP
+                    <input id="cupInformeFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="subirCupInforme(this.files); this.value=''">
+                  </label>
+                  <div id="cupInformeEstado" class="nom-muted" style="margin-top:10px"></div>
+                </div>
                 <div class="client-card" id="generalPlaceholder">
                   <h3>Dashboard general</h3>
                   <p class="nom-muted">Acá vamos a ir sumando la información del médico de cabecera (avances según su Drive, etc.). Por ahora está en preparación.</p>

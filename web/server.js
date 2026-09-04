@@ -469,6 +469,17 @@ function mesAnteriorYM(ym) {
   return y + "-" + String(mo).padStart(2, "0");
 }
 
+// Resumen liviano (validar / transmitir / listas) de una bandeja cruda, para
+// mostrar en la tarjeta "Informe del CUP" sin mandar las filas completas.
+function bandejaResumenCup(bandeja) {
+  let pendienteValidar = 0, pendienteTransmitir = 0, listas = 0;
+  for (const r of cabinaLib.bandejaParaMatcher(bandeja)) {
+    if (!r.validada) pendienteValidar += 1;
+    else if (!r.transmitida) pendienteTransmitir += 1;
+    else listas += 1;
+  }
+  return { pendienteValidar, pendienteTransmitir, listas };
+}
 // Corre el match de un informe ya extraído contra la bandeja + padrón del cliente.
 function matchearInforme(slug, extract) {
   // Las facturas no se matchean contra la bandeja: quedan marcadas como "Factura".
@@ -4961,8 +4972,9 @@ const server = http.createServer(async (req, res) => {
       clientesVisiblesPara(me, todosClientes).forEach((c) => slugsVisibles.add(c.slug));
     }
     const informes = loadInformes();
+    const bandejas = loadClientBandejas();
     const filas = [];
-    let totalPendientes = 0, totalSinTransmitir = 0;
+    let totalPendientes = 0, totalSinTransmitir = 0, totalCup = 0;
     for (const slug of slugsVisibles) {
       const items = (informes[slug] || {}).items || [];
       let pendientes = 0, sinTransmitir = 0;
@@ -4971,14 +4983,29 @@ const server = http.createServer(async (req, res) => {
         if (e !== "ya_transmitido" && e !== "desestimado") pendientes += 1;
         if (e === "ok") sinTransmitir += 1;
       }
-      if (pendientes || sinTransmitir) {
-        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir });
+      // Médico de cabecera (Scheffelaar/Dubesarky): además de lo anterior (que
+      // depende de que se haya subido un informe a "Informes recibidos"), sumamos
+      // lo que surge directo del informe del CUP recién subido - pendiente de
+      // validar o de transmitir en PAMI, aunque todavía no se haya cargado ningún
+      // informe para esa OME.
+      let cup = 0;
+      const cliente = todosClientes.find((c) => c.slug === slug);
+      if (cliente && cliente.tipo === "med_cabecera") {
+        const bandeja = bandejas[slug];
+        if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
+          const r = bandejaResumenCup(bandeja);
+          cup = r.pendienteValidar + r.pendienteTransmitir;
+        }
+      }
+      if (pendientes || sinTransmitir || cup) {
+        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir, cup });
         totalPendientes += pendientes;
         totalSinTransmitir += sinTransmitir;
+        totalCup += cup;
       }
     }
-    filas.sort((a, b) => (b.pendientes + b.sinTransmitir) - (a.pendientes + a.sinTransmitir));
-    return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir });
+    filas.sort((a, b) => (b.pendientes + b.sinTransmitir + b.cup) - (a.pendientes + a.sinTransmitir + a.cup));
+    return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir, totalCup });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
@@ -6065,6 +6092,70 @@ const server = http.createServer(async (req, res) => {
     };
     saveClientBandejas(store);
     return json(res, 200, { ok: true, count: rows.length });
+  }
+
+  // Bandeja subida A MANO desde la web (Excel tal cual se baja del CUP de PAMI):
+  // pensada para clientes que no tienen bot que la baje sola de noche (por ahora,
+  // los médicos de cabecera Scheffelaar/Dubesarky). Cae en el MISMO client_bandejas.json
+  // que la bandeja automática, así que alimenta gratis todo lo que ya la usa
+  // (match de "Informes recibidos", Dashboard mes en curso, Pendientes de Javi).
+  const clientBandejaArchivoMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/archivo$/);
+  if (clientBandejaArchivoMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(clientBandejaArchivoMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    if (me.role === "operador" && !clientesVisiblesPara(me, [client]).length) {
+      return json(res, 403, { error: "No tenés acceso a este cliente." });
+    }
+    if (req.method === "GET") {
+      const bandeja = loadClientBandejas()[slug];
+      if (!bandeja) return json(res, 200, { bandeja: null });
+      return json(res, 200, { bandeja: { ...bandejaResumenCup(bandeja), month: bandeja.month, monthLabel: bandeja.monthLabel,
+        uploadedAt: bandeja.uploadedAt, uploadedBy: bandeja.uploadedBy, count: bandeja.count,
+        archivo: bandeja.archivo || "", origen: bandeja.origen || "" } });
+    }
+    try {
+      const raw = await readBuffer(req);
+      const multipart = extractMultipart(raw, req.headers["content-type"]);
+      if (!multipart.file) return json(res, 400, { error: "Subí el Excel del informe del CUP." });
+      const ext = path.extname(multipart.file.filename).toLowerCase();
+      if (![".xls", ".xlsx", ".xlsm"].includes(ext)) {
+        return json(res, 400, { error: "Subí un Excel .xls, .xlsx o .xlsm (el informe exportado del CUP)." });
+      }
+      const wb = XLSX.read(multipart.file.data, { type: "buffer", cellDates: false });
+      const sheetName = wb.SheetNames[0];
+      if (!sheetName) return json(res, 400, { error: "El archivo no tiene hojas." });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "", raw: true });
+      if (!rows.length) return json(res, 400, { error: "El archivo no tiene filas para procesar." });
+      const columns = Object.keys(rows[0] || {});
+      const month = normalizePeriod(new Date().toISOString().slice(0, 7));
+      const store = loadClientBandejas();
+      store[slug] = {
+        month,
+        monthLabel: periodLabel(month),
+        generatedAt: new Date().toISOString(),
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: me.username,
+        count: rows.length,
+        columns,
+        rows,
+        origen: "manual",
+        archivo: multipart.file.filename,
+      };
+      saveClientBandejas(store);
+      // Resumen inmediato (validar / transmitir / listas) para mostrar en la
+      // propia pantalla de carga, sin esperar a "Informes recibidos".
+      return json(res, 200, {
+        ok: true, count: rows.length, month, monthLabel: periodLabel(month),
+        archivo: multipart.file.filename, uploadedAt: store[slug].uploadedAt, uploadedBy: me.username,
+        ...bandejaResumenCup(store[slug]),
+      });
+    } catch (error) {
+      return json(res, 400, { error: error.message || "No se pudo procesar el archivo." });
+    }
   }
 
   // Bandeja "hacia adelante" (turnos futuros) — la sube la app, la lee la card
