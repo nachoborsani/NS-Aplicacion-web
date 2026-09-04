@@ -164,6 +164,9 @@
           <span class="client-up-header" id="clientHeaderUp" hidden></span>
         </div>
         <div class="sp"></div>
+        <button class="icon-btn" id="labBtn" onclick="go('lab')" title="Laboratorio — sistema en desarrollo" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 3l6 6-3 3-6-6 3-3zM12 6L3 15v6h6l9-9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="icon-btn" onclick="toggleTheme()" title="Claro / Oscuro">
           <svg id="thIco" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -1318,6 +1321,13 @@
         </section>
 
         <!-- ADMINISTRACIÓN / GASTOS -->
+        <section id="view-lab" style="display:none">
+          <div class="card" style="text-align:center;padding:64px 24px;color:var(--text-2)">
+            <div style="font-size:44px;margin-bottom:10px">🔨</div>
+            <h2 style="margin:0 0 6px;color:var(--text)">Laboratorio</h2>
+            <p style="margin:0">Espacio en blanco para desarrollar el sistema paralelo.</p>
+          </div>
+        </section>
         <section id="view-soon" style="display:none">
           <div class="card general-card">
             <div class="general-card-head">

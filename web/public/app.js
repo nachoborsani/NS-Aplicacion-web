@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 // ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
@@ -95,10 +95,12 @@ function go(v, el){
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
   // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
   if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  // Laboratorio (sistema paralelo en desarrollo): solo admin por ahora.
+  if (v === 'lab' && !(ME && ME.role === 'admin')){ go('dash'); return; }
   // Configuración general: un operador con clientes restringidos no debe entrar
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
@@ -7167,6 +7169,7 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
+  var lb = document.getElementById('labBtn'); if (lb) lb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Laboratorio (martillo), solo admin
   // Padrón (Afiliados) e Informes recibidos: admin y operador (los USAN); el usuario
   // de demostración los VE pero no puede ejecutar acciones (el backend se las bloquea).
   var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');
