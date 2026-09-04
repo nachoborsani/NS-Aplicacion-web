@@ -3228,6 +3228,7 @@ function buildBandejaResumen(slug) {
         practica: pracRaw,
         turno: String(row[kTurno] || "").trim(),
         valor: money(valueGross),
+        ome: kOme ? cleanIdentifier(row[kOme]) : "",
       });
     }
     // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
@@ -3541,6 +3542,7 @@ function addRowToDashboardPeriod(target, row) {
       practica: [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - "),
       turno: String(row.appointmentLabel || row.appointmentAt || ""),
       valor: money(row.valueGross),
+      ome: cleanIdentifier(row.order),
     });
   }
   if (!row.matchFound && !row.valueEdited) target.unmatched += 1;
@@ -7939,6 +7941,84 @@ const server = http.createServer(async (req, res) => {
           ? "Falta instalar pdf-lib en el servidor. Hacé un Redeploy (build limpio) en Railway."
           : "Error al generar el PDF del informe.",
       });
+    }
+  }
+
+  // Generar un informe Y subirlo a PAMI de una: arma el PDF (igual que /generar),
+  // lo guarda como informe del cliente resuelto a la OME, y encola la tarea
+  // "subir-informes" para que el worker lo suba. Para el botón "Crear y subir" de
+  // Faltan informes. Necesita la OME (viene de la fila del faltante).
+  if (p === "/api/informes/generar-y-subir" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const body = await readBody(req);
+    const modelo = String(body.modelo || "consulta-570129");
+    if (!informes.MODELOS[modelo]) return json(res, 400, { error: "No se encontró la plantilla del modelo seleccionado." });
+    const slug = String(body.clienteSlug || "");
+    const cliente = loadClientsStore().find((c) => c.slug === slug);
+    if (!cliente) return json(res, 400, { error: "Elegí para qué cliente es el informe." });
+    const pac = body.paciente || {};
+    const ome = cabinaLib.digs(body.ome);
+    const faltan = [];
+    if (!String(pac.nombre || "").trim()) faltan.push("el nombre");
+    if (!String(pac.benef || "").trim()) faltan.push("el N° de beneficiario");
+    if (!ome) faltan.push("la OME");
+    if (faltan.length) return json(res, 400, { error: "Falta " + faltan.join(", ") + " para subir." });
+    try {
+      const cfg = loadInformesConfig();
+      const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
+      const membrete = membreteDeCliente(cliente);
+      const bytes = await informes.buildInformePdf(modelo, {
+        paciente: pac,
+        textoInforme: body.textoInforme,
+        solicitante: body.solicitante || (medico ? medico.nombre : ""),
+        estudio: body.estudio,
+        valores: sanitizarValores(body.valores),
+        firmaArchivo: medico ? medico.firma : "",
+        medicoNombre: medico ? medico.nombre : "",
+        medicoMatricula: medico ? (medico.matricula || "") : "",
+        ...membrete,
+      });
+      // Guardar el PDF como informe del cliente.
+      const id = crypto.randomBytes(16).toString("hex");
+      const stored = id + ".pdf";
+      const filename = informes.informeFilename(modelo, pac);
+      fs.mkdirSync(path.join(informesDir, slug), { recursive: true });
+      fs.writeFileSync(path.join(informesDir, slug, stored), Buffer.from(bytes));
+      const extract = {
+        dni: cabinaLib.digs(pac.documento), beneficio: cabinaLib.digs(pac.benef),
+        nombre: String(pac.nombre || "").trim(), practica: String(body.practicaTexto || body.estudio || "").trim(),
+        fecha: String(pac.fecha || "").trim(),
+      };
+      const item = {
+        id, filename, ext: ".pdf", stored, origen: "generado",
+        storedAt: new Date().toISOString(), fecha: extract.fecha,
+        extract, match: matchearInforme(slug, extract),
+        resuelto: { ome, omes: [ome], beneficio: extract.beneficio, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido: false },
+        error: null,
+      };
+      const store = loadInformes();
+      if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
+      store[slug].items.unshift(item);
+      store[slug].updatedAt = new Date().toISOString();
+      saveInformes(store);
+      // Encolar la subida a PAMI.
+      const state = loadWorkerState();
+      const task = {
+        id: crypto.randomUUID(), type: "subir-informes",
+        label: "Subir informe generado a PAMI", status: "pending",
+        clientSlug: slug, payload: { informeIds: [id] },
+        createdAt: new Date().toISOString(), createdBy: me.username, attempts: 0, logs: [],
+      };
+      appendWorkerTaskLog(task, "info", `Informe generado y encolado por ${me.username} (OME ${ome}).`);
+      state.tasks.unshift(task);
+      state.tasks = state.tasks.slice(0, 500);
+      saveWorkerState(state);
+      return json(res, 200, { ok: true, informeId: id, taskId: task.id, ome });
+    } catch (error) {
+      console.log("[generar-y-subir] error:", error && error.message);
+      return json(res, 500, { error: "No se pudo generar/encolar el informe: " + (error && error.message || "error") });
     }
   }
 

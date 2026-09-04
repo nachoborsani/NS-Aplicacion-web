@@ -3386,8 +3386,56 @@ function accionCrearInforme(panelId){
   return function(idx){
     var x = faltanInformesDe(panelId)[idx];
     if (!x || !modeloParaPracticaRow(x.practica)) return '';
-    return '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
+    var btn = '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
+    // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
+    if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
+    return btn;
   };
+}
+// Arma el payload de generación a partir de la fila del faltante + su modelo.
+// Devuelve null (con alert) si falta el médico del modelo.
+function payloadInformeDeFila(x){
+  var m = modeloParaPracticaRow(x.practica);
+  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return null; }
+  var medicoId = loteMedicoParaModelo(m.key);
+  if (!medicoId){ alert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
+  var preset = (INFORMES_CFG.descripciones || []).find(function(d){ return scopeAplica(d.modelos, m.key); });
+  var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
+  return {
+    modelo: m.key,
+    clienteSlug: (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '',
+    paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '' },
+    textoInforme: (preset && preset.texto) || '',
+    estudio: m.estudio || '',
+    valores: (preset && preset.valores) || {},
+    medicoId: medicoId,
+    _modelo: m
+  };
+}
+// Crear + subir a PAMI en un clic (con confirmación). Encola la subida en el worker.
+async function crearYSubirInforme(panelId, idx, btn){
+  var x = faltanInformesDe(panelId)[idx];
+  if (!x) return;
+  if (!x.ome){ alert('Esta práctica no tiene OME en la bandeja, no se puede subir.'); return; }
+  var payload = payloadInformeDeFila(x);
+  if (!payload) return;
+  var m = payload._modelo; delete payload._modelo;
+  payload.ome = x.ome;
+  payload.practicaTexto = x.practica || '';
+  if (!confirm('Vas a CREAR y SUBIR a PAMI este informe:\n\n' +
+      (x.nombre || '') + '\n' + (x.practica || '') + '\nOME ' + x.ome + '\nModelo: ' + (m.label || m.key) +
+      '\n\nEsto es real e irreversible (se genera el informe estándar y se sube a la OME). ¿Confirmás?')) return;
+  var prev = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = '…'; }
+  try {
+    var r = await api('/api/informes/generar-y-subir', payload);
+    if (!r.ok) throw new Error((r.data && r.data.error) || ('No se pudo (HTTP ' + r.status + ').'));
+    if (btn){ btn.textContent = '📤 Encolado'; }
+    alert('Informe generado y encolado para subir a PAMI (OME ' + x.ome + ').\n\nLo sube el worker de la app. Revisá en un rato en "Informes recibidos" / la campana si subió OK.');
+  } catch (e){
+    alert(e && e.message ? e.message : 'No se pudo crear/subir el informe.');
+    if (btn){ btn.disabled = false; btn.textContent = prev; }
+  }
 }
 async function crearInformeDirecto(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
