@@ -95,6 +95,8 @@ function go(v, el){
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
   // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
   if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  // Nomencladores: por ahora un operador no lo necesita.
+  if (v === 'nomencladores' && ME && ME.role === 'operador'){ go('dash'); return; }
   // Laboratorio (sistema paralelo en desarrollo): solo admin por ahora.
   if (v === 'lab' && !(ME && ME.role === 'admin')){ go('dash'); return; }
   // Configuración general: un operador con clientes restringidos no debe entrar
@@ -1274,14 +1276,15 @@ function iniAccesosCatalogo(){
   var items = [];
   if (esAdmin || role === 'operador') {
     items.push({ id:'v:informes', ic:'📋', tx:'Informes', run:function(){ go('informes'); } });
-    items.push({ id:'v:nomencladores', ic:'📑', tx:'Nomencladores', run:function(){ go('nomencladores'); } });
   }
   if (verHerramientas) {
     items.push({ id:'v:padron', ic:'👥', tx:'Afiliados', run:function(){ go('padron'); } });
     items.push({ id:'v:cabina', ic:'📥', tx:'Informes recibidos', run:function(){ go('cabina'); } });
   }
-  // Cruzas, Resumen de cuenta y Facturas: son de NS (montos, negocio propio) - solo admin.
+  // Cruzas, Nomencladores, Resumen de cuenta y Facturas: por ahora, solo admin
+  // (Nomencladores todavía no le hace falta a un operador; el resto es de NS).
   if (esAdmin) {
+    items.push({ id:'v:nomencladores', ic:'📑', tx:'Nomencladores', run:function(){ go('nomencladores'); } });
     items.push({ id:'v:cruzas', ic:'🔀', tx:'Cruzas', run:function(){ go('cruzas'); } });
     items.push({ id:'v:resumen', ic:'💰', tx:'Resumen de cuenta', run:function(){ go('resumen'); } });
     items.push({ id:'v:facturas', ic:'🧾', tx:'Facturas', run:function(){ go('facturas'); } });
@@ -7346,6 +7349,9 @@ function aplicarUsuario(u){
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
   // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
   var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
+  // Nomencladores: por ahora un operador no lo necesita - se le oculta (mismo
+  // criterio de alcance que Consultorios).
+  var nn = document.getElementById('navNomencladores'); if (nn) nn.style.display = (u.role === 'operador') ? 'none' : '';
   // Configuración general (usuarios, débitos): alguien con clientes restringidos
   // no debe entrar ahí - un operador sin restringir sí, como siempre.
   var ngen = document.getElementById('navGeneral'); if (ngen) ngen.style.display = tieneClientesRestringidos(u) ? 'none' : '';
