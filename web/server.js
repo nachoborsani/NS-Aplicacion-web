@@ -4571,6 +4571,28 @@ const server = http.createServer(async (req, res) => {
     task.result = body && body.result && typeof body.result === "object" ? body.result : null;
     appendWorkerTaskLog(task, ok ? "info" : "error", ok ? "Tarea finalizada." : task.error);
     saveWorkerState(state);
+    // Aviso por Telegram cuando termina una subida de informes a PAMI (así no hay
+    // que ir a mirar). Resume subidos/total y los que fallaron con el motivo.
+    if (task.type === "subir-informes") {
+      try {
+        const r = task.result || {};
+        const det = Array.isArray(r.detalle) ? r.detalle : [];
+        const fallas = det.filter((d) => d && d.estado && !["transmitido", "ya_transmitido"].includes(d.estado));
+        const cli = task.clientSlug || "";
+        let txt = "📤 <b>Subida a PAMI</b>" + (cli ? " · " + cli : "") + "\n";
+        if (!ok) {
+          txt += "❌ La tarea falló: " + (task.error || "error") + ".";
+        } else {
+          txt += "✅ Subidos " + (r.subidos || 0) + " de " + (r.total || det.length || 0) + ".";
+          if (fallas.length) {
+            txt += "\n⚠️ " + fallas.length + " con problema:";
+            fallas.slice(0, 8).forEach((d) => { txt += "\n• OME " + (d.ome || "?") + ": " + (d.motivo || d.estado); });
+            if (fallas.length > 8) txt += "\n…y " + (fallas.length - 8) + " más.";
+          }
+        }
+        avisarTelegram(txt).catch(() => {});
+      } catch { /* un aviso que falla no puede tumbar el complete */ }
+    }
     return json(res, 200, { ok: true, task: publicWorkerTask(task) });
   }
 
