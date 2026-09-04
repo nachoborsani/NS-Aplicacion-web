@@ -1244,13 +1244,16 @@ async function iniRenderPendientesEn(listId, metaId){
   if (!res.ok){ list.innerHTML = '<li class="ini-empty">No se pudo cargar.</li>'; return; }
   var d = res.data || {};
   var clientes = d.clientes || [];
-  if (meta) meta.textContent = (d.totalPendientes||0) + ' pendientes · ' + (d.totalSinTransmitir||0) + ' sin transmitir';
+  var metaTxt = (d.totalPendientes||0) + ' pendientes · ' + (d.totalSinTransmitir||0) + ' sin transmitir';
+  if (d.totalCup) metaTxt += ' · ' + d.totalCup + ' del CUP';
+  if (meta) meta.textContent = metaTxt;
   list.innerHTML = clientes.length ? clientes.map(function(c){
     return '<li class="ini-pendop-row">'
       + '<span class="ini-pendop-nombre">'+esc(c.nombre)+'</span>'
       + '<span class="ini-pendop-badges">'
       + (c.pendientes ? '<span class="ini-pendop-badge pend" title="Informes pendientes">'+c.pendientes+'</span>' : '')
       + (c.sinTransmitir ? '<span class="ini-pendop-badge transm" title="Sin transmitir">'+c.sinTransmitir+'</span>' : '')
+      + (c.cup ? '<span class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir">'+c.cup+'</span>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }
@@ -2368,10 +2371,13 @@ function osdopExportarPDF(){
 function renderClientGeneral(){
   var card = document.getElementById('credLoteCard'), ph = document.getElementById('generalPlaceholder');
   var links = document.getElementById('schefeLinks');
+  var cupCard = document.getElementById('cupInformeCard');
   var slug = ACTIVE_CLIENT ? ACTIVE_CLIENT.slug : '';
   var tieneCred = CRED_CLIENTES.indexOf(slug) >= 0;
+  var esMC = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera');
   if (card) card.style.display = tieneCred ? '' : 'none';
-  if (ph) ph.style.display = tieneCred ? 'none' : '';
+  if (cupCard) cupCard.style.display = esMC ? '' : 'none';
+  if (ph) ph.style.display = (tieneCred || esMC) ? 'none' : '';
   if (links){
     var sid = CRED_PLANILLA[slug];
     if (tieneCred && sid){
@@ -2380,6 +2386,41 @@ function renderClientGeneral(){
     } else { links.style.display = 'none'; }
   }
   if (tieneCred) credSchedCargar();
+  if (esMC) cargarCupInforme();
+}
+// ===== Informe del CUP (médico de cabecera): sube a mano el Excel del Panel de
+// prestaciones de PAMI. Cae en la misma bandeja que ya usa "Informes recibidos"
+// y "Pendientes de Javi", así que alimenta todo eso sin ningún cambio más. =====
+function cupInformeResumenHTML(d){
+  if (!d || !d.uploadedAt) return '<p class="nom-muted">Todavía no se subió ningún informe del CUP para este médico.</p>';
+  var fecha = new Date(d.uploadedAt).toLocaleString('es-AR');
+  return '<p><b>Última carga:</b> ' + esc(d.archivo || '') + ' · ' + esc(d.monthLabel || '') + '</p>'
+    + '<p class="nom-muted">' + fecha + ' · ' + esc(d.uploadedBy || '') + ' · ' + (d.count||0) + ' filas</p>'
+    + '<div class="ini-pendop-badges" style="margin-top:8px">'
+    + ((d.pendienteValidar||0) ? '<span class="ini-pendop-badge pend" title="Pendiente validar">'+d.pendienteValidar+' por validar</span>' : '')
+    + ((d.pendienteTransmitir||0) ? '<span class="ini-pendop-badge cup" title="Pendiente transmitir">'+d.pendienteTransmitir+' por transmitir</span>' : '')
+    + ((d.listas||0) ? '<span class="ini-pendop-badge transm" style="background:var(--success)" title="Validadas y transmitidas">'+d.listas+' listas</span>' : '')
+    + '</div>';
+}
+async function cargarCupInforme(){
+  var box = document.getElementById('cupInformeEstado');
+  if (!box || !ACTIVE_CLIENT) return;
+  box.innerHTML = 'Cargando…';
+  var r = await api('/api/clientes/' + ACTIVE_CLIENT.slug + '/bandeja/archivo');
+  if (!r.ok){ box.innerHTML = '<span class="msg err">No se pudo cargar el estado.</span>'; return; }
+  box.innerHTML = cupInformeResumenHTML((r.data || {}).bandeja);
+}
+async function subirCupInforme(files){
+  if (!files || !files[0] || !ACTIVE_CLIENT) return;
+  var box = document.getElementById('cupInformeEstado');
+  if (box) box.innerHTML = 'Procesando informe del CUP…';
+  var fd = new FormData(); fd.append('file', files[0]);
+  var r = await fetch('/api/clientes/' + ACTIVE_CLIENT.slug + '/bandeja/archivo', { method:'POST', body: fd });
+  var data = {}; try { data = await r.json(); } catch(e){}
+  if (!r.ok){ if (box) box.innerHTML = '<span class="msg err">' + esc(data.error || 'No se pudo procesar el archivo.') + '</span>'; return; }
+  if (box) box.innerHTML = cupInformeResumenHTML(data);
+  iniCargarPendientesOperador();
+  iniCargarMisPendientes();
 }
 // Acceso PAMI del cliente. La TARJETA editable (user/clave) es solo admin; el UP de
 // la cabecera lo ven admin y operador (el operador lo usa para trabajar; el GET del
