@@ -22,6 +22,19 @@
     --shadow-sm:0 1px 2px rgba(0,0,0,.4);
   }
   *{box-sizing:border-box}
+  /* Scrollbar celeste/turquesa en TODA la app, sin excepción - antes solo
+     .nav y .ini-feed la tenían y el resto (tablas, modales, listas largas)
+     quedaba con la barra gris nativa del navegador, que no combinaba. Va acá
+     con "*" en vez de listar cada elemento con scroll uno por uno (son
+     decenas) - así ningún elemento nuevo queda afuera por olvido. Un
+     selector más específico (como .nav, que usa un track navy en vez de
+     transparente) sigue ganando por especificidad si hace falta un track
+     distinto en algún caso puntual. */
+  *{scrollbar-width:thin;scrollbar-color:var(--turq) transparent}
+  *::-webkit-scrollbar{width:8px;height:8px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:var(--turq);border-radius:999px}
+  *::-webkit-scrollbar-thumb:hover{background:var(--turq-d)}
   html,body{margin:0}
   body{background:var(--bg);color:var(--text);
     font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;
@@ -1251,6 +1264,10 @@
   .calc-sr-warn{font-size:9.5px;font-weight:700;color:var(--warning);background:var(--warning-bg);padding:1px 6px;border-radius:5px}
   .calc-sr-empty{padding:14px;text-align:center;color:var(--text-2);font-size:12.5px}
   .calc-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  /* Filtro dentro del módulo elegido: algunos módulos tienen 40+ prácticas y
+     escrolear un <select> nativo tan largo (que además no se puede pintar de
+     celeste, es un popup del sistema operativo) es incómodo. */
+  .calc-cod-filtro{margin-bottom:6px;font-size:12.5px;height:32px}
   @media(max-width:520px){ .calc-pick{grid-template-columns:1fr} }
   .calc-pick .field{margin:0}
   .calc-filter{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}

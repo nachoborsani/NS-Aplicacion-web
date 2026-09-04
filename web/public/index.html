@@ -899,7 +899,11 @@
                     <div class="calc-or">o elegí por módulo</div>
                     <div class="calc-pick">
                       <div class="field"><label>Módulo</label><select class="inp" id="calcMod"></select></div>
-                      <div class="field"><label>Código / práctica</label><select class="inp" id="calcCod"></select></div>
+                      <div class="field">
+                        <label>Código / práctica</label>
+                        <input class="inp calc-cod-filtro" id="calcCodFiltro" placeholder="Filtrar dentro del módulo…  (nombre o código)" autocomplete="off">
+                        <select class="inp" id="calcCod"></select>
+                      </div>
                     </div>
                     <div class="calc-filter">
                       <label class="chk-mini"><input type="checkbox" id="calcSoloPract" checked> Solo prácticas (esconder consultas)</label>
