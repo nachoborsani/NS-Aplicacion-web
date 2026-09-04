@@ -184,8 +184,8 @@
 
           <div class="ini-grid" id="inicioPaneles" style="display:none">
             <!-- Mensajes -->
-            <section class="card ini-card ini-panel-msg">
-              <div class="ini-head">
+            <section class="card ini-card ini-panel-msg" data-panel="msg">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">💬</span>
                 <div><h2>Mensajes</h2><div class="ini-meta">Canal interno</div></div>
                 <div class="ini-canales" id="iniCanales" style="display:none"></div>
@@ -201,8 +201,8 @@
               </div>
             </section>
             <!-- Tareas -->
-            <section class="card ini-card ini-panel-tareas">
-              <div class="ini-head">
+            <section class="card ini-card ini-panel-tareas" data-panel="tareas">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">✅</span>
                 <div class="ini-head-tit"><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
                 <input id="iniTask" class="ini-task-head" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
@@ -230,16 +230,16 @@
             </section>
             <!-- Pendientes del operador (por ahora Javi): informes sin resolver y sin
                  transmitir, por cliente - mismo criterio que ya usa Informes recibidos. -->
-            <section class="card ini-card ini-panel-pendop">
-              <div class="ini-head">
+            <section class="card ini-card ini-panel-pendop" data-panel="pendop">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">🔔</span>
                 <div><h2>Pendientes de Javi</h2><div class="ini-meta" id="iniPendOpMeta">—</div></div>
               </div>
               <ul class="ini-pendop-list" id="iniPendOpList"><li class="ini-empty">Cargando…</li></ul>
             </section>
             <!-- Accesos rápidos: catálogo configurable de atajos (ver iniAccesos* en app.js). -->
-            <section class="card ini-card ini-panel-accesos">
-              <div class="ini-head">
+            <section class="card ini-card ini-panel-accesos" data-panel="accesos">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">⚡</span>
                 <div><h2>Accesos rápidos</h2></div>
                 <button class="btn btn-ghost btn-sm" id="iniAccesosEditBtn" onclick="iniAccesosToggleEditor()">Editar</button>
@@ -255,8 +255,8 @@
           <!-- Panel de operador (Javi por ahora): chat con los admins, accesos
                rápidos configurables, y pendientes por cliente. -->
           <div class="op-grid" id="operadorPaneles" style="display:none">
-            <section class="card ini-card op-panel-chat">
-              <div class="ini-head">
+            <section class="card ini-card op-panel-chat" data-panel="chat">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">💬</span>
                 <div><h2>Mensajes</h2><div class="ini-meta">Con Nacho y Sebastian</div></div>
                 <span class="ini-unread" id="opUnread" style="display:none">0</span>
@@ -270,8 +270,8 @@
                 <button class="btn btn-primary btn-sm" id="opSend" onclick="opEnviarMsg()">Enviar</button>
               </div>
             </section>
-            <section class="card ini-card op-panel-pendientes">
-              <div class="ini-head"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2><div class="ini-meta" id="opPendMeta">—</div></div></div>
+            <section class="card ini-card op-panel-pendientes" data-panel="pendientes">
+              <div class="ini-head ini-drag-handle"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2><div class="ini-meta" id="opPendMeta">—</div></div></div>
               <ul class="ini-pendop-list ini-pendop-list-cortita" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
               <!-- Tareas propias: mismo mecanismo que las de los admins (título +
                    fecha opcional, se resuelven o se reprograman si se vencen),
@@ -301,8 +301,8 @@
             <!-- Accesos rápidos: mismo catálogo/editor que en el Inicio del admin
                  (ver iniAccesos* en app.js), con ids propios porque las 2 vistas
                  conviven en el DOM (una queda oculta, no se destruye). -->
-            <section class="card ini-card op-panel-accesos">
-              <div class="ini-head">
+            <section class="card ini-card op-panel-accesos" data-panel="accesos">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">⚡</span>
                 <div><h2>Accesos rápidos</h2></div>
                 <button class="btn btn-ghost btn-sm" id="opAccesosEditBtn" onclick="iniAccesosToggleEditor('op')">Editar</button>

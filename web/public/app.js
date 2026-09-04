@@ -1004,6 +1004,7 @@ async function cargarInicio(marcarLeido){
     iniRenderAdjunto('iniAdjPreview', INICIO.adjunto, 'iniQuitarAdjunto');
     iniCargarPendientesOperador();
     iniAccesosRender();
+    iniPanelesAplicar('admin'); iniPanelesWireDrag('admin');
   } else {
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = '';
@@ -1013,6 +1014,7 @@ async function cargarInicio(marcarLeido){
     iniCargarMisPendientes();
     iniAccesosRender('op');
     opRenderTareas();
+    iniPanelesAplicar('op'); iniPanelesWireDrag('op');
   }
   iniActualizarBell();
 }
@@ -1393,6 +1395,60 @@ function iniAccesosToggle(id, on, scope){
   else if (!on && i>=0){ elegidos.splice(i,1); }
   iniAccesosGuardar(elegidos);
   iniAccesosRender(scope);
+}
+
+// ===== Reordenar las tarjetas del Inicio arrastrando una encima de otra.
+// Cada tarjeta conserva su forma (una tarjeta angosta sigue siendo angosta
+// donde caiga) - lo que se intercambia es el SLOT de la grilla, no el tamaño;
+// un auto-acomodo tipo masonry sería de más para 4 tarjetas de tamaño fijo.
+// Guardado por usuario en localStorage, mismo criterio que Accesos rápidos. =====
+function iniPanelesDefault(scope){ return scope === 'op' ? ['chat','pendientes','accesos'] : ['msg','tareas','pendop','accesos']; }
+function iniPanelesSlots(scope){ return scope === 'op' ? ['op-slot-a','op-slot-b','op-slot-c'] : ['ini-slot-a','ini-slot-b','ini-slot-c','ini-slot-d']; }
+function iniPanelesKey(scope){ return 'ns_paneles_' + (scope || 'admin') + '_' + (ME && ME.username || ''); }
+function iniPanelesOrden(scope){
+  var def = iniPanelesDefault(scope);
+  try {
+    var v = JSON.parse(localStorage.getItem(iniPanelesKey(scope)) || 'null');
+    if (Array.isArray(v) && v.length === def.length && def.every(function(p){ return v.indexOf(p) >= 0; })) return v;
+  } catch(e){}
+  return def.slice();
+}
+function iniPanelesGuardar(scope, orden){ try{ localStorage.setItem(iniPanelesKey(scope), JSON.stringify(orden)); }catch(e){} }
+function iniPanelesContenedor(scope){ return document.getElementById(scope === 'op' ? 'operadorPaneles' : 'inicioPaneles'); }
+function iniPanelesAplicar(scope){
+  var cont = iniPanelesContenedor(scope); if (!cont) return;
+  var orden = iniPanelesOrden(scope);
+  var slots = iniPanelesSlots(scope);
+  orden.forEach(function(panelId, i){
+    var el = cont.querySelector('[data-panel="' + panelId + '"]');
+    if (!el) return;
+    slots.forEach(function(s){ el.classList.remove(s); });
+    el.classList.add(slots[i]);
+  });
+}
+function iniPanelesWireDrag(scope){
+  var cont = iniPanelesContenedor(scope); if (!cont || cont._dragWired) return;
+  cont._dragWired = true;
+  var dragged = null;
+  cont.querySelectorAll('[data-panel]').forEach(function(el){
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', function(e){ dragged = el; el.classList.add('ini-dragging'); try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.getAttribute('data-panel')); }catch(ex){} });
+    el.addEventListener('dragend', function(){ el.classList.remove('ini-dragging'); dragged = null; cont.querySelectorAll('.ini-drop-target').forEach(function(x){ x.classList.remove('ini-drop-target'); }); });
+    el.addEventListener('dragover', function(e){ if (!dragged || dragged === el) return; e.preventDefault(); el.classList.add('ini-drop-target'); });
+    el.addEventListener('dragleave', function(){ el.classList.remove('ini-drop-target'); });
+    el.addEventListener('drop', function(e){
+      e.preventDefault();
+      el.classList.remove('ini-drop-target');
+      if (!dragged || dragged === el) return;
+      var a = dragged.getAttribute('data-panel'), b = el.getAttribute('data-panel');
+      var orden = iniPanelesOrden(scope);
+      var ia = orden.indexOf(a), ib = orden.indexOf(b);
+      if (ia < 0 || ib < 0) return;
+      orden[ia] = b; orden[ib] = a;
+      iniPanelesGuardar(scope, orden);
+      iniPanelesAplicar(scope);
+    });
+  });
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
