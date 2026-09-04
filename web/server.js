@@ -359,6 +359,21 @@ function ingresosExtraDelMes(mes, dolarValor) {
   }
   return total;
 }
+// Detalle de los ingresos extra del mes, con su estado de cobrado — para que el
+// Resumen los trate igual que las facturas (checkbox, cuentan solo si están cobrados).
+function ingresosExtraDetalle(mes, dolarValor) {
+  const store = loadIngresos();
+  return store.ingresos
+    .filter((g) => String(g.mes || "") === mes)
+    .map((g) => ({
+      id: g.id,
+      name: g.descripcion || "Ingreso extra",
+      monto: ingresoNSShare(g, dolarValor),
+      cobrado: !!g.cobrado,
+      fechaCobro: g.fechaCobro || "",
+      extra: true,
+    }));
+}
 // Cotización del dólar oficial (venta), cacheada 3h para no golpear la API.
 let _DOLAR_CACHE = { valor: 0, fecha: "", ts: 0 };
 async function getDolarOficial() {
@@ -5554,6 +5569,19 @@ const server = http.createServer(async (req, res) => {
     saveFacturas(store);
     return json(res, 200, { ok: true });
   }
+  // Marcar un ingreso extra como cobrado / no cobrado (misma lógica que las facturas).
+  if (p === "/api/ingresos/cobrado" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const id = String((b && b.id) || "").trim();
+    const store = loadIngresos();
+    const g = store.ingresos.find((x) => x.id === id);
+    if (!g) return json(res, 404, { error: "Ingreso no encontrado." });
+    g.cobrado = !!(b && b.cobrado);
+    saveIngresos(store);
+    return json(res, 200, { ok: true });
+  }
   // Borrar un registro de factura.
   const facturaDelMatch = p.match(/^\/api\/facturas\/([^/]+)$/);
   if (facturaDelMatch && req.method === "DELETE") {
@@ -5766,6 +5794,7 @@ const server = http.createServer(async (req, res) => {
       bolsilloSeba: del.ingresoSeba + extraMitad - gastosMitad,
       facturasContadas: del.facturasContadas,
       detalle: del.detalle,
+      extras: ingresosExtraDetalle(mes, dolar.valor),
       serie,
     });
   }

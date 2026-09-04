@@ -2888,11 +2888,11 @@ async function loadResultado(){
   var res = await api('/api/resultado' + (mes ? '?mes=' + encodeURIComponent(mes) : ''));
   if (!res.ok || !res.data) return;
   var d = res.data;
-  // Falta cobrar (arriba, grande) = comisiones de facturas todavía sin cobrar.
-  // Ganancia real del mes (abajo) = lo efectivamente cobrado + ingresos extra − gastos.
+  // Falta cobrar (arriba, grande) = facturas + ingresos extra todavía SIN cobrar.
+  // Ganancia real del mes (abajo) = lo efectivamente cobrado − gastos pagados. Los
+  // ingresos extra ahora funcionan igual que las facturas: cuentan solo si están cobrados.
   var faltaCobrar = 0, cobrado = 0;
-  (d.detalle || []).forEach(function(x){ if (x.cobrado) cobrado += (x.monto || 0); else faltaCobrar += (x.monto || 0); });
-  cobrado += (d.ingresoExtra || 0);
+  (d.detalle || []).concat(d.extras || []).forEach(function(x){ if (x.cobrado) cobrado += (x.monto || 0); else faltaCobrar += (x.monto || 0); });
   var ganancia = cobrado - (d.gastos || 0);
   var bols = document.getElementById('resBolsillo');
   bols.textContent = moneyFmt(faltaCobrar);
@@ -2910,18 +2910,23 @@ async function loadResultado(){
   var box = document.getElementById('resDesglose');
   if (box){
     var hoy = new Date(); hoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
-    var filas = (d.detalle || []).map(function(x){
+    var mapFila = function(x){
       var vencido = !x.cobrado && x.fechaCobro && x.fechaCobro < hoy;
       var cls = 'mescurso-line res-cobro-line' + (x.cobrado ? ' cobrado' : (vencido ? ' vencido' : ''));
       var fecha = x.fechaCobro ? x.fechaCobro.split('-').reverse().slice(0, 2).join('/') : '';
-      var nota = fecha ? '<span class="res-fecha">' + (x.cobrado ? '✓ cobrado' : (vencido ? '⚠ cobro vencido ' + fecha : 'cobra ' + fecha)) + '</span>' : '';
+      var nota = fecha
+        ? '<span class="res-fecha">' + (x.cobrado ? '✓ cobrado' : (vencido ? '⚠ cobro vencido ' + fecha : 'cobra ' + fecha)) + '</span>'
+        : (x.cobrado ? '<span class="res-fecha">✓ cobrado</span>' : '');
+      var toggle = x.extra ? 'toggleIngresoCobrado' : 'toggleResCobrado';
+      var etq = x.extra ? ' <span class="res-etq">extra</span>' : '';
       return '<div class="' + cls + '">' +
-        '<span class="res-cobro-nombre"><input type="checkbox" class="res-check" ' + (x.cobrado ? 'checked' : '') + ' onchange="toggleResCobrado(\'' + x.id + '\', this.checked)" title="Marcar cobrado">' +
-        esc(x.name) + ' ' + nota + '</span>' +
-        '<b>' + moneyFmt(x.monto) + '</b>' +
+        '<span class="res-cobro-nombre"><input type="checkbox" class="res-check" ' + (x.cobrado ? 'checked' : '') + ' onchange="' + toggle + '(\'' + esc(x.id) + '\', this.checked)" title="Marcar cobrado">' +
+        esc(x.name) + etq + ' ' + nota + '</span>' +
+        '<b>' + (x.extra ? '+ ' : '') + moneyFmt(x.monto) + '</b>' +
       '</div>';
-    }).join('') || '<div class="mescurso-line"><span class="nom-muted">Sin facturas con cobro en el mes</span><b></b></div>';
-    if ((d.ingresoExtra || 0) > 0) filas += '<div class="mescurso-line"><span>Ingresos extra</span><b>+ ' + moneyFmt(d.ingresoExtra) + '</b></div>';
+    };
+    var filas = (d.detalle || []).map(mapFila).join('') + (d.extras || []).map(mapFila).join('');
+    if (!filas) filas = '<div class="mescurso-line"><span class="nom-muted">Sin facturas ni ingresos con cobro en el mes</span><b></b></div>';
     // La línea muestra el TOTAL de gastos fijos del mes (impacta aunque no se haya
     // pagado); la nota dice cuánto va pagado. La ganancia real de arriba resta solo
     // lo pagado (se descuenta a medida que se paga).
@@ -2935,6 +2940,10 @@ async function loadResultado(){
 }
 async function toggleResCobrado(id, cobrado){
   var res = await req('POST', '/api/facturas/cobrado', { id: id, cobrado: cobrado });
+  if (res.ok) loadResultado();
+}
+async function toggleIngresoCobrado(id, cobrado){
+  var res = await req('POST', '/api/ingresos/cobrado', { id: id, cobrado: cobrado });
   if (res.ok) loadResultado();
 }
 var RES_MESES = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];

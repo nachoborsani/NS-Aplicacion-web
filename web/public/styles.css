@@ -41,7 +41,7 @@
   .brand.sm .mark .cross{width:24px;height:24px;transform:translateY(4px)}
   .brand.sm .tag{font-size:9.5px;letter-spacing:.11em}
   .logo-login{display:block;width:220px;height:auto}
-  .logo-side{display:block;width:150px;height:auto;margin:2px auto 4px}
+  .logo-side{display:block;width:112px;height:auto;margin:1px auto 2px}
 
   /* ============ LOGIN ============ */
   .login{position:fixed;inset:0;display:grid;place-items:center;padding:24px;
@@ -96,7 +96,7 @@
 
   .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--navy);
     display:flex;flex-direction:column;padding:16px 12px;z-index:40;transition:transform .22s ease}
-  .sidebar .brand{padding:6px 8px 16px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:12px}
+  .sidebar .brand{padding:4px 8px 9px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px}
   /* min-height:0 es necesario para que el nav realmente scrollee dentro de su
      espacio flex en vez de crecer más allá de la pantalla (el default de un
      flex item es min-height:auto = "al menos lo que ocupa el contenido", lo
@@ -1600,6 +1600,7 @@
   .res-check{margin-right:8px;accent-color:var(--turq);width:15px;height:15px;cursor:pointer;flex:0 0 auto}
   .res-cobro-nombre{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
   .res-fecha{font-size:10.5px;color:var(--text-2);margin-left:4px}
+  .res-etq{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--turq);border:1px solid var(--turq);border-radius:5px;padding:0 4px;margin-left:4px;font-weight:700}
   .res-cobro-line.vencido{background:var(--error-bg);border-color:var(--error)}
   .res-cobro-line.vencido .res-fecha{color:var(--error);font-weight:700}
   .res-cobro-line.cobrado .res-fecha{color:var(--turq);font-weight:600}
