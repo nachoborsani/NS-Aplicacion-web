@@ -495,6 +495,25 @@ function bandejaResumenCup(bandeja) {
   }
   return { pendienteValidar, pendienteTransmitir, listas };
 }
+// Cuántos meses cerrados hacia atrás se suman al matcheo de informes. Los informes
+// llegan tarde: la OME puede estar en el mes pasado o en el anterior (ej. un
+// estudio de julio cuyo informe se procesa en septiembre). Antes era 1 solo mes.
+const INFORME_MESES_ATRAS = 2;
+// Filas (formato matcher) de los reportes de los últimos `meses` meses cerrados
+// anteriores a `month`. Reusado por matchearInforme y omesTransmitidasDeCliente
+// para que ambos vean exactamente los mismos meses.
+function reporteRowsMesesAtras(slug, month, meses) {
+  let out = [];
+  let per = mesAnteriorYM(month);
+  const items = loadClientReportsStore().items || [];
+  for (let i = 0; i < meses && per; i++) {
+    const rep = items.find((r) => r.clientSlug === slug && String(r.nomencladorPeriod) === per);
+    if (rep && Array.isArray(rep.rows)) out = out.concat(cabinaLib.reporteParaMatcher(rep.rows));
+    per = mesAnteriorYM(per);
+  }
+  return out;
+}
+
 // Corre el match de un informe ya extraído contra la bandeja + padrón del cliente.
 function matchearInforme(slug, extract) {
   // Las facturas no se matchean contra la bandeja: quedan marcadas como "Factura".
@@ -504,17 +523,10 @@ function matchearInforme(slug, extract) {
   }
   const bandeja = loadClientBandejas()[slug];
   let bandejaRows = cabinaLib.bandejaParaMatcher(bandeja);
-  // + el reporte del MES ANTERIOR (bandeja cerrada que subió el user): los informes
-  // que llegan a principio de mes suelen ser de estudios de fin del mes pasado, y su
-  // OME está en la bandeja anterior. Solo para matchear; la facturación no se toca.
-  const prevPeriodo = mesAnteriorYM(bandeja && bandeja.month);
-  if (prevPeriodo) {
-    const rep = (loadClientReportsStore().items || []).find(
-      (r) => r.clientSlug === slug && String(r.nomencladorPeriod) === prevPeriodo);
-    if (rep && Array.isArray(rep.rows)) {
-      bandejaRows = bandejaRows.concat(cabinaLib.reporteParaMatcher(rep.rows));
-    }
-  }
+  // + los reportes de los meses cerrados anteriores (bandejas que subió el user):
+  // los informes llegan tarde y su OME puede estar en el mes pasado o en el anterior.
+  // Solo para matchear; la facturación no se toca.
+  bandejaRows = bandejaRows.concat(reporteRowsMesesAtras(slug, bandeja && bandeja.month, INFORME_MESES_ATRAS));
   const padronCliente = loadPadron()[slug] || {};
   // Pistas de práctica: las que guardó la lectura del archivo y, si el informe es
   // viejo (se leyó antes de que existiera la lista), se releen del texto guardado
@@ -569,12 +581,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
 function omesTransmitidasDeCliente(slug) {
   const bandeja = loadClientBandejas()[slug];
   let rows = cabinaLib.bandejaParaMatcher(bandeja);
-  const prevPeriodo = mesAnteriorYM(bandeja && bandeja.month);
-  if (prevPeriodo) {
-    const rep = (loadClientReportsStore().items || []).find(
-      (r) => r.clientSlug === slug && String(r.nomencladorPeriod) === prevPeriodo);
-    if (rep && Array.isArray(rep.rows)) rows = rows.concat(cabinaLib.reporteParaMatcher(rep.rows));
-  }
+  rows = rows.concat(reporteRowsMesesAtras(slug, bandeja && bandeja.month, INFORME_MESES_ATRAS));
   const set = new Set();
   for (const r of rows) {
     if (r && r.transmitida) { const o = cabinaLib.digs(r.nOrden); if (o) set.add(o); }
