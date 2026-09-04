@@ -163,6 +163,13 @@ function sanitizeTurno(body, previo, store) {
   t.motivo = body.motivo !== undefined ? clean(body.motivo) : (t.motivo || "");
   t.observaciones = body.observaciones !== undefined ? clean(body.observaciones) : (t.observaciones || "");
   t.estado = ESTADOS_TURNO.includes(body.estado) ? body.estado : (t.estado || "dado");
+  // Cobro (para Caja): importe de la consulta, seña, insumos, si se cobró y medio.
+  const money = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
+  if (body.importe !== undefined) t.importe = money(body.importe); else if (t.importe === undefined) t.importe = 0;
+  if (body.sena !== undefined) t.sena = money(body.sena); else if (t.sena === undefined) t.sena = 0;
+  if (body.insumos !== undefined) t.insumos = money(body.insumos); else if (t.insumos === undefined) t.insumos = 0;
+  if (body.pagado !== undefined) t.pagado = !!body.pagado; else if (t.pagado === undefined) t.pagado = false;
+  t.medioPago = body.medioPago !== undefined ? clean(body.medioPago) : (t.medioPago || "");
   // Si viene pacienteId, completamos nombre/doc/OS desde la ficha.
   if (t.pacienteId) {
     const pac = (store.pacientes || []).find((x) => x.id === t.pacienteId);
@@ -289,6 +296,15 @@ async function handleLab(ctx) {
   // -- Turnos / Agenda --
   if (recurso === "turnos") {
     const lista = store.turnos;
+    // GET ?desde=&hasta=[&profesionalId=]  -> lista cruda de turnos en el rango
+    // (para Caja y Estadística). Se prioriza sobre el modo agenda.
+    if (method === "GET" && !idPath && url.searchParams.get("desde")) {
+      const desde = clean(url.searchParams.get("desde"));
+      const hasta = clean(url.searchParams.get("hasta")) || desde;
+      const profId = clean(url.searchParams.get("profesionalId"));
+      const items = lista.filter((t) => t.fecha >= desde && t.fecha <= hasta && t.estado !== "cancelado" && (!profId || t.profesionalId === profId));
+      return json(res, 200, { items }), true;
+    }
     // GET ?profesionalId=&fecha=  -> agenda del profesional ese día (con slots)
     if (method === "GET" && !idPath) {
       const profId = clean(url.searchParams.get("profesionalId"));

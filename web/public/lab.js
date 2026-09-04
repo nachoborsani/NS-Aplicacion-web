@@ -86,7 +86,7 @@
   function shell() {
     var wrap = e("div", { class: "lab-wrap" });
     var nav = e("div", { class: "lab-nav" });
-    [["agenda", "📅 Agenda"], ["pacientes", "👤 Pacientes"], ["profesionales", "🩺 Profesionales"],
+    [["agenda", "📅 Agenda"], ["caja", "💵 Caja"], ["estadistica", "📊 Estadística"], ["pacientes", "👤 Pacientes"], ["profesionales", "🩺 Profesionales"],
      ["especialidades", "🏷️ Especialidades"], ["consultorios", "🚪 Consultorios"], ["obrasSociales", "🩹 Obras Sociales"]]
       .forEach(function (m) {
         var b = e("button", { class: "lab-tab", "data-mod": m[0] }, m[1]);
@@ -116,6 +116,8 @@
     var c = document.getElementById("lab-content");
     if (!c) return;
     if (mod === "agenda") viewAgenda(c);
+    else if (mod === "caja") viewCaja(c);
+    else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
@@ -153,6 +155,8 @@
       '<div class="lab-ag-info" id="lab-ag-info"></div>';
     c.appendChild(head);
 
+    c.appendChild(e("div", { class: "lab-card lab-cal-card", id: "lab-ag-cal" }));
+
     var leyenda = e("div", { class: "lab-leyenda" }, Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
       return '<span class="lab-lg"><i style="background:' + ESTADOS[k].color + '"></i>' + esc(ESTADOS[k].label) + "</span>";
     }).join(""));
@@ -168,6 +172,7 @@
     document.getElementById("lab-ag-prev").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, -1); viewAgenda(c); };
     document.getElementById("lab-ag-next").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, 1); viewAgenda(c); };
 
+    renderCalendario();
     if (LAB.ag.profesionalId) agLoad();
     else document.getElementById("lab-ag-grid").innerHTML = '<div class="lab-muted" style="padding:24px">No hay profesionales cargados. Andá a <b>Profesionales</b> y creá uno con sus horarios.</div>';
   }
@@ -175,6 +180,50 @@
   function shiftDia(iso, delta) {
     var d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + delta);
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  var MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+  function shiftMes(iso, delta) {
+    var d = new Date(iso + "T00:00:00"); d.setMonth(d.getMonth() + delta); d.setDate(1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+  }
+  function renderCalendario() {
+    var box = document.getElementById("lab-ag-cal"); if (!box) return;
+    var d = new Date(LAB.ag.fecha + "T00:00:00");
+    var y = d.getFullYear(), mo = d.getMonth();
+    var startDow = new Date(y, mo, 1).getDay();
+    var days = new Date(y, mo + 1, 0).getDate();
+    var hoy = hoyISO();
+    var html = '<div class="lab-cal-head"><button class="lab-btn ghost xs" id="cal-prev">‹</button>' +
+      "<b>" + MESES[mo] + " " + y + "</b><button class=\"lab-btn ghost xs\" id=\"cal-next\">›</button></div><div class=\"lab-cal-grid\">";
+    ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"].forEach(function (w) { html += '<span class="lab-cal-w">' + w + "</span>"; });
+    for (var i = 0; i < startDow; i++) html += "<span></span>";
+    for (var dd = 1; dd <= days; dd++) {
+      var iso = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
+      html += '<button class="lab-cal-d' + (iso === LAB.ag.fecha ? " sel" : "") + (iso === hoy ? " hoy" : "") + '" data-iso="' + iso + '">' + dd + '<i class="lab-cal-dot" data-iso="' + iso + '"></i></button>';
+    }
+    box.innerHTML = html + "</div>";
+    box.querySelector("#cal-prev").onclick = function () { LAB.ag.fecha = shiftMes(LAB.ag.fecha, -1); viewAgenda(document.getElementById("lab-content")); };
+    box.querySelector("#cal-next").onclick = function () { LAB.ag.fecha = shiftMes(LAB.ag.fecha, 1); viewAgenda(document.getElementById("lab-content")); };
+    box.querySelectorAll(".lab-cal-d").forEach(function (b) {
+      b.onclick = function () {
+        LAB.ag.fecha = b.getAttribute("data-iso");
+        var di = document.getElementById("lab-ag-date"); if (di) di.value = LAB.ag.fecha;
+        box.querySelectorAll(".lab-cal-d.sel").forEach(function (x) { x.classList.remove("sel"); });
+        b.classList.add("sel");
+        agLoad();
+      };
+    });
+    if (LAB.ag.profesionalId) cargarPuntosMes(y, mo);
+  }
+  async function cargarPuntosMes(y, mo) {
+    var desde = y + "-" + String(mo + 1).padStart(2, "0") + "-01";
+    var hasta = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(new Date(y, mo + 1, 0).getDate()).padStart(2, "0");
+    var r = await api("/api/lab/turnos?profesionalId=" + encodeURIComponent(LAB.ag.profesionalId) + "&desde=" + desde + "&hasta=" + hasta);
+    var cont = {};
+    ((r.data && r.data.items) || []).forEach(function (t) { cont[t.fecha] = (cont[t.fecha] || 0) + 1; });
+    document.querySelectorAll(".lab-cal-dot").forEach(function (dot) {
+      if (cont[dot.getAttribute("data-iso")]) dot.classList.add("on");
+    });
   }
 
   async function agLoad() {
@@ -238,6 +287,7 @@
           '<label>N° afiliado<input class="lab-in" id="bk-afil"></label>' +
           '<label>Celular<input class="lab-in" id="bk-cel"></label>' +
           '<label>' + (hora ? "Horario" : "Horario (sobreturno)") + '<input class="lab-in" id="bk-hora" value="' + esc(hora) + '" placeholder="HH:MM"></label>' +
+          '<label>Importe consulta<input class="lab-in" id="bk-importe" type="number" min="0" step="100" placeholder="0"></label>' +
         "</div>" +
         '<label>Motivo<input class="lab-in" id="bk-motivo" placeholder="Consulta, control, estudio…"></label>' +
       "</div>" +
@@ -282,7 +332,7 @@
         hora: hh, pacienteId: selPacId, pacienteNombre: nombre,
         documento: m.body.querySelector("#bk-doc").value, obraSocial: m.body.querySelector("#bk-os").value,
         nroAfiliado: m.body.querySelector("#bk-afil").value, celular: m.body.querySelector("#bk-cel").value,
-        motivo: m.body.querySelector("#bk-motivo").value, permitirSobreturno: !hora,
+        motivo: m.body.querySelector("#bk-motivo").value, importe: m.body.querySelector("#bk-importe").value, permitirSobreturno: !hora,
       };
       var r = await api("/api/lab/turnos", payload);
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo dar el turno.", true); this.disabled = false; return; }
@@ -308,19 +358,37 @@
         "<div><b>" + esc(t.hora) + "</b> · " + esc(t.pacienteNombre || "—") + "</div>" +
         '<div class="lab-muted">' + [esc(t.documento), esc(t.obraSocial), esc(t.motivo)].filter(Boolean).join(" · ") + "</div>" +
       "</div>" +
+      '<div class="lab-sec-tit">Estado</div>' +
       '<div class="lab-estados">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
         return '<button class="lab-est-btn' + (t.estado === k ? " on" : "") + '" data-est="' + k + '" style="--c:' + ESTADOS[k].color + '">' + esc(ESTADOS[k].label) + "</button>";
       }).join("") + "</div>" +
-      '<div class="lab-modal-actions"><button class="lab-btn ghost danger" id="tn-cancel">Cancelar turno</button><button class="lab-btn ghost" id="tn-close">Cerrar</button></div>';
+      '<div class="lab-sec-tit">Cobro</div>' +
+      '<div class="lab-grid3">' +
+        '<label>Importe<input class="lab-in" id="tn-imp" type="number" min="0" step="100" value="' + (t.importe || 0) + '"></label>' +
+        '<label>Seña<input class="lab-in" id="tn-sena" type="number" min="0" step="100" value="' + (t.sena || 0) + '"></label>' +
+        '<label>Insumos<input class="lab-in" id="tn-ins" type="number" min="0" step="100" value="' + (t.insumos || 0) + '"></label>' +
+        '<label>Medio<select class="lab-in" id="tn-medio"><option value="">—</option>' + ["Efectivo", "Débito", "Crédito", "Transferencia", "Mercado Pago"].map(function (x) { return "<option" + (t.medioPago === x ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></label>" +
+        '<label class="lab-chk"><input type="checkbox" id="tn-pag"' + (t.pagado ? " checked" : "") + "> Cobrado</label>" +
+      "</div>" +
+      '<div class="lab-modal-actions"><button class="lab-btn ghost danger" id="tn-cancel">Cancelar turno</button><button class="lab-btn primary" id="tn-guardar">Guardar cobro</button></div>';
     m.body.querySelectorAll(".lab-est-btn").forEach(function (b) {
       b.onclick = async function () {
         var est = b.getAttribute("data-est");
         var rr = await req("PUT", "/api/lab/turnos/" + id, { estado: est });
         if (!rr.ok) { toast("No se pudo cambiar el estado.", true); return; }
-        labClose(); toast("Estado: " + ESTADOS[est].label); agLoad();
+        m.body.querySelectorAll(".lab-est-btn").forEach(function (x) { x.classList.remove("on"); });
+        b.classList.add("on"); t.estado = est; toast("Estado: " + ESTADOS[est].label); agLoad();
       };
     });
-    m.body.querySelector("#tn-close").onclick = labClose;
+    m.body.querySelector("#tn-guardar").onclick = async function () {
+      var rr = await req("PUT", "/api/lab/turnos/" + id, {
+        importe: m.body.querySelector("#tn-imp").value, sena: m.body.querySelector("#tn-sena").value,
+        insumos: m.body.querySelector("#tn-ins").value, medioPago: m.body.querySelector("#tn-medio").value,
+        pagado: m.body.querySelector("#tn-pag").checked,
+      });
+      if (!rr.ok) { toast("No se pudo guardar.", true); return; }
+      labClose(); toast("Cobro guardado ✓"); agLoad();
+    };
     m.body.querySelector("#tn-cancel").onclick = async function () {
       if (!confirm("¿Cancelar este turno?")) return;
       var rr = await req("DELETE", "/api/lab/turnos/" + id);
@@ -504,6 +572,105 @@
     });
   }
 
+  /* ========================== CAJA ===================================== */
+  function fmt$(n) { return "$" + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function nombreProf(id) { var p = LAB.cat.profesionales.find(function (x) { return x.id === id; }); return p ? p.nombre : "—"; }
+
+  function viewCaja(c) {
+    if (!LAB.cajaFecha) LAB.cajaFecha = hoyISO();
+    c.innerHTML =
+      '<div class="lab-card"><div class="lab-list-head"><h3>💵 Caja diaria</h3>' +
+        '<div class="lab-inline"><input type="date" class="lab-in" id="cj-fecha" value="' + esc(LAB.cajaFecha) + '"><button class="lab-btn" id="cj-hoy">Hoy</button></div></div>' +
+        '<div id="cj-body"><div class="lab-muted" style="padding:16px">Cargando…</div></div>' +
+      "</div>";
+    document.getElementById("cj-fecha").onchange = function () { LAB.cajaFecha = this.value; cajaLoad(); };
+    document.getElementById("cj-hoy").onclick = function () { LAB.cajaFecha = hoyISO(); document.getElementById("cj-fecha").value = LAB.cajaFecha; cajaLoad(); };
+    cajaLoad();
+  }
+  async function cajaLoad() {
+    var body = document.getElementById("cj-body"); if (!body) return;
+    var r = await api("/api/lab/turnos?desde=" + LAB.cajaFecha + "&hasta=" + LAB.cajaFecha);
+    var turnos = (r.data && r.data.items) || [];
+    var porProf = {};
+    turnos.forEach(function (t) {
+      var g = porProf[t.profesionalId] || (porProf[t.profesionalId] = { turnos: 0, atendidos: 0, ausentes: 0, importe: 0, sena: 0, insumos: 0, cobrado: 0 });
+      g.turnos++;
+      if (t.estado === "atendido") g.atendidos++;
+      if (t.estado === "ausente" || t.estado === "ausente_aviso") g.ausentes++;
+      g.importe += Number(t.importe) || 0; g.sena += Number(t.sena) || 0; g.insumos += Number(t.insumos) || 0;
+      if (t.pagado) g.cobrado += (Number(t.importe) || 0) + (Number(t.insumos) || 0);
+    });
+    var tot = { turnos: 0, atendidos: 0, ausentes: 0, importe: 0, sena: 0, insumos: 0, cobrado: 0 };
+    var filas = Object.keys(porProf).map(function (pid) {
+      var g = porProf[pid];
+      ["turnos", "atendidos", "ausentes", "importe", "sena", "insumos", "cobrado"].forEach(function (k) { tot[k] += g[k]; });
+      var pend = g.importe + g.insumos - g.cobrado;
+      return "<tr><td><b>" + esc(nombreProf(pid)) + "</b></td><td>" + g.turnos + "</td><td>" + g.atendidos + "</td><td>" + g.ausentes +
+        "</td><td>" + fmt$(g.importe) + "</td><td>" + fmt$(g.sena) + "</td><td>" + fmt$(g.insumos) + "</td><td><b>" + fmt$(g.cobrado) + "</b></td><td class=" + (pend > 0 ? '"lab-pend"' : '""') + ">" + fmt$(pend) + "</td></tr>";
+    }).join("");
+    var pendTot = tot.importe + tot.insumos - tot.cobrado;
+    body.innerHTML = turnos.length ?
+      '<table class="lab-table"><thead><tr><th>Profesional</th><th>Turnos</th><th>Atend.</th><th>Ausent.</th><th>Importe</th><th>Seña</th><th>Insumos</th><th>Cobrado</th><th>Pendiente</th></tr></thead><tbody>' +
+        filas +
+        '<tr class="lab-tot"><td><b>TOTAL</b></td><td>' + tot.turnos + "</td><td>" + tot.atendidos + "</td><td>" + tot.ausentes + "</td><td>" + fmt$(tot.importe) + "</td><td>" + fmt$(tot.sena) + "</td><td>" + fmt$(tot.insumos) + "</td><td><b>" + fmt$(tot.cobrado) + "</b></td><td><b>" + fmt$(pendTot) + "</b></td></tr>" +
+      "</tbody></table>" +
+      '<div class="lab-muted" style="margin-top:10px;font-size:13px">El cobrado suma importe + insumos de los turnos marcados como <b>Cobrado</b>. Marcá el cobro desde cada turno en la Agenda.</div>'
+      : '<div class="lab-muted" style="padding:20px">No hay turnos ese día.</div>';
+  }
+
+  /* ========================== ESTADÍSTICA ============================== */
+  function viewEstadistica(c) {
+    if (!LAB.est) { var h = hoyISO(); LAB.est = { desde: h.slice(0, 8) + "01", hasta: h }; }
+    c.innerHTML =
+      '<div class="lab-card"><div class="lab-list-head"><h3>📊 Estadística</h3>' +
+        '<div class="lab-inline"><input type="date" class="lab-in" id="es-desde" value="' + esc(LAB.est.desde) + '"><span style="align-self:center">a</span><input type="date" class="lab-in" id="es-hasta" value="' + esc(LAB.est.hasta) + '"><button class="lab-btn primary" id="es-ver">Ver</button></div></div>' +
+        '<div id="es-body"><div class="lab-muted" style="padding:16px">Elegí un rango y tocá Ver.</div></div>' +
+      "</div>";
+    document.getElementById("es-ver").onclick = function () {
+      LAB.est.desde = document.getElementById("es-desde").value; LAB.est.hasta = document.getElementById("es-hasta").value; estLoad();
+    };
+    estLoad();
+  }
+  async function estLoad() {
+    var body = document.getElementById("es-body"); if (!body) return;
+    body.innerHTML = '<div class="lab-muted" style="padding:16px">Cargando…</div>';
+    var r = await api("/api/lab/turnos?desde=" + LAB.est.desde + "&hasta=" + LAB.est.hasta);
+    var turnos = (r.data && r.data.items) || [];
+    if (!turnos.length) { body.innerHTML = '<div class="lab-muted" style="padding:16px">No hay turnos en el rango.</div>'; return; }
+    var porProf = {}, porEsp = {}, porOS = {}, porEstado = {}, facturado = 0, cobrado = 0;
+    turnos.forEach(function (t) {
+      porProf[t.profesionalId] = (porProf[t.profesionalId] || 0) + 1;
+      var esp = nombreEsp(t.especialidadId) || "(sin especialidad)"; porEsp[esp] = (porEsp[esp] || 0) + 1;
+      var os = t.obraSocial || "(sin OS)"; porOS[os] = (porOS[os] || 0) + 1;
+      porEstado[t.estado] = (porEstado[t.estado] || 0) + 1;
+      facturado += Number(t.importe) || 0; if (t.pagado) cobrado += (Number(t.importe) || 0) + (Number(t.insumos) || 0);
+    });
+    var total = turnos.length;
+    var atend = porEstado.atendido || 0, aus = (porEstado.ausente || 0) + (porEstado.ausente_aviso || 0);
+    function tabla(titulo, obj, nombreFn) {
+      var keys = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; });
+      return '<div class="lab-est-card"><h4>' + esc(titulo) + "</h4><table class=\"lab-table\"><tbody>" +
+        keys.map(function (k) {
+          var pct = Math.round(obj[k] / total * 100);
+          return "<tr><td>" + esc(nombreFn ? nombreFn(k) : k) + '</td><td style="text-align:right"><b>' + obj[k] + '</b> <span class="lab-muted">' + pct + "%</span></td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    body.innerHTML =
+      '<div class="lab-kpis">' +
+        '<div class="lab-kpi"><span>Turnos</span><b>' + total + "</b></div>" +
+        '<div class="lab-kpi"><span>Atendidos</span><b>' + atend + " <small>" + Math.round(atend / total * 100) + "%</small></b></div>" +
+        '<div class="lab-kpi"><span>Ausentes</span><b>' + aus + " <small>" + Math.round(aus / total * 100) + "%</small></b></div>" +
+        '<div class="lab-kpi"><span>Facturado</span><b>' + fmt$(facturado) + "</b></div>" +
+        '<div class="lab-kpi"><span>Cobrado</span><b>' + fmt$(cobrado) + "</b></div>" +
+      "</div>" +
+      '<div class="lab-est-grid">' +
+        tabla("Turnos por profesional", porProf, nombreProf) +
+        tabla("Turnos por especialidad", porEsp) +
+        tabla("Turnos por obra social", porOS) +
+        tabla("Turnos por estado", porEstado, function (k) { return (ESTADOS[k] || { label: k }).label; }) +
+      "</div>";
+  }
+
   /* ========================== CSS ====================================== */
   function injectCss() {
     if (document.getElementById("lab-styles")) return;
@@ -565,7 +732,27 @@
       ".lab-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#0f172a;color:#fff;padding:10px 18px;border-radius:10px;opacity:0;transition:.3s;z-index:10000;font-size:14px}",
       ".lab-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}",
       ".lab-toast.err{background:#b91c1c}",
-      "@media(max-width:640px){.lab-grid2{grid-template-columns:1fr}.lab-ag-fecha{margin-left:0}}",
+      ".lab-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end}",
+      ".lab-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)}",
+      ".lab-sec-tit{font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px}",
+      ".lab-cal-card{max-width:340px}",
+      ".lab-cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
+      ".lab-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}",
+      ".lab-cal-w{font-size:11px;color:var(--text-2);padding:2px 0}",
+      ".lab-cal-d{position:relative;border:0;background:transparent;color:var(--text);padding:7px 0;border-radius:7px;cursor:pointer;font-size:13px}",
+      ".lab-cal-d:hover{background:rgba(45,212,191,.15)}",
+      ".lab-cal-d.hoy{outline:1px solid var(--accent,#2dd4bf)}",
+      ".lab-cal-d.sel{background:var(--accent,#2dd4bf);color:#04201c;font-weight:700}",
+      ".lab-cal-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:transparent}",
+      ".lab-cal-dot.on{background:#f59e0b}.lab-cal-d.sel .lab-cal-dot.on{background:#04201c}",
+      ".lab-pend{color:#ef4444;font-weight:600}",
+      ".lab-tot td{border-top:2px solid var(--border);font-weight:600}",
+      ".lab-kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}",
+      ".lab-kpi{flex:1;min-width:120px;background:var(--bg,#f8fafc);border:1px solid var(--border);border-radius:10px;padding:10px 14px}",
+      ".lab-kpi span{display:block;font-size:12px;color:var(--text-2)}.lab-kpi b{font-size:20px}.lab-kpi small{font-size:12px;color:var(--text-2);font-weight:600}",
+      ".lab-est-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}",
+      ".lab-est-card{border:1px solid var(--border);border-radius:10px;padding:12px}.lab-est-card h4{margin:0 0 8px}",
+      "@media(max-width:640px){.lab-grid2,.lab-grid3,.lab-est-grid{grid-template-columns:1fr}.lab-ag-fecha{margin-left:0}}",
     ].join("\n");
     document.head.appendChild(css);
   }
