@@ -931,7 +931,7 @@ var INICIO = { yo:'', admins:[], mensajes:[], tareas:[], unread:0, noLeidos:{}, 
 function iniEsAdmin(){ return !!(ME && ME.role === 'admin'); }
 // Canal por defecto y etiqueta. "seba" = Nacho↔Seba (admins); "operadores" = con los operadores.
 function iniCanalDefault(){ return (ME && ME.role === 'operador') ? 'operadores' : 'seba'; }
-function iniCanalLabel(c){ return c === 'operadores' ? 'Operadores' : 'Seba'; }
+function iniCanalLabel(c){ return c === 'operadores' ? 'Operadores' : 'Admin'; }
 function iniTotalNoLeidos(){ var t=0, nl=INICIO.noLeidos||{}; Object.keys(nl).forEach(function(k){ t += nl[k]||0; }); return t; }
 function iniFmtHora(iso){
   try{
