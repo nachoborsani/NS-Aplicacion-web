@@ -7052,7 +7052,7 @@ function abrirInforme(id){
         var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
         return '<div class="cab-cand">'
           + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
-          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
+          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
           + estado
           + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
           + '</div>';
