@@ -306,14 +306,27 @@
      nuevo => crecimiento sin fin al escribir). El .ini-feed de abajo vuelve a
      tener un tope fijo en px con scroll interno - real, no infinito. */
   .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;align-items:start;margin-top:18px}
-  .ini-panel-msg{grid-column:1;grid-row:1 / span 3}
-  .ini-panel-tareas{grid-column:2;grid-row:1}
-  .ini-panel-pendop{grid-column:2;grid-row:2}
-  .ini-panel-accesos{grid-column:2;grid-row:3}
+  /* La UBICACIÓN de cada tarjeta vive en estas 4 clases "slot" (a/b/c/d), no
+     en la clase de identidad (.ini-panel-msg, etc., que sigue existiendo para
+     estilos propios de cada una). iniPanelesAplicar() en app.js le pone a
+     cada tarjeta el slot que le toque según el orden guardado - arrastrar una
+     tarjeta sobre otra intercambia sus slots (ver iniPanelesWireDrag). Así el
+     usuario puede reacomodarlas sin necesitar un layout que se auto-acomode
+     solo (de más para 4 tarjetas de tamaño fijo). */
+  .ini-slot-a{grid-column:1;grid-row:1 / span 3}
+  .ini-slot-b{grid-column:2;grid-row:1}
+  .ini-slot-c{grid-column:2;grid-row:2}
+  .ini-slot-d{grid-column:2;grid-row:3}
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
-    .ini-panel-msg,.ini-panel-tareas,.ini-panel-pendop,.ini-panel-accesos{grid-column:1;grid-row:auto}
+    .ini-slot-a,.ini-slot-b,.ini-slot-c,.ini-slot-d{grid-column:1;grid-row:auto}
   }
+  /* Arrastrar para reordenar: se agarra desde el header (.ini-drag-handle),
+     no desde cualquier punto de la tarjeta, para no pisar clicks en botones/
+     inputs de adentro. */
+  .ini-drag-handle{cursor:grab}
+  [data-panel].ini-dragging{opacity:.45}
+  [data-panel].ini-drop-target{outline:2px dashed var(--turq);outline-offset:-2px}
   .ini-card{display:flex;flex-direction:column;overflow:hidden;padding:0}
   .ini-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
   .ini-head .ini-ic{font-size:20px;line-height:1}
@@ -353,12 +366,13 @@
      completo) y Accesos rápidos abajo ocupando las 2 columnas (con hasta 9
      atajos de a 3 por fila, ahí sí aprovecha el ancho). */
   .op-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;margin-top:18px}
-  .op-panel-chat{grid-column:1;grid-row:1}
-  .op-panel-pendientes{grid-column:2;grid-row:1}
-  .op-panel-accesos{grid-column:1/3;grid-row:2}
+  /* Mismo mecanismo de slots que .ini-grid arriba (ver ese comentario). */
+  .op-slot-a{grid-column:1;grid-row:1}
+  .op-slot-b{grid-column:2;grid-row:1}
+  .op-slot-c{grid-column:1/3;grid-row:2}
   @media(max-width:860px){
     .op-grid{grid-template-columns:1fr}
-    .op-panel-chat,.op-panel-accesos,.op-panel-pendientes{grid-column:1;grid-row:auto}
+    .op-slot-a,.op-slot-b,.op-slot-c{grid-column:1;grid-row:auto}
   }
   [data-theme="dark"] .ini-msg.me .ini-txt{color:#dff8f7}
   .ini-empty{color:var(--text-2);font-size:13px;text-align:center;padding:26px 10px}
