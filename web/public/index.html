@@ -1213,17 +1213,26 @@
             <button id="infTabConfig" type="button" onclick="setInformesTab('config')" style="display:none">Configuración</button>
           </div>
           <section id="inf-tab-generar" class="inf-section">
-          <div class="inf-gen-layout">
+          <!-- El Cliente queda SIEMPRE visible (fuera del bloque que se oculta
+               para médico de cabecera): si no, elegir Scheffelaar/Dubesarky
+               dejaba sin forma de volver a elegir otro cliente. -->
+          <div class="card" id="infClienteCard" style="margin-bottom:16px">
+            <div class="field">
+              <label>Cliente</label>
+              <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
+            </div>
+          </div>
+          <!-- Médico de cabecera (Scheffelaar/Dubesarky): no es una clínica, la
+               cascada Especialidad/Práctica de abajo no le aplica - todavía no
+               hay un flujo de informes propio para este tipo de cliente. -->
+          <div class="card" id="infMedCabAviso" style="display:none">
+            <p class="nom-muted">La generación de informes para médicos de cabecera todavía está en desarrollo.</p>
+          </div>
+          <div class="inf-gen-layout" id="infGenLayout">
           <div class="card" id="infFormCard" oninput="programarPreviewVivo()" onchange="programarPreviewVivo()">
-            <div class="form-grid two">
-              <div class="field">
-                <label>Cliente</label>
-                <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
-              </div>
-              <div class="field">
-                <label>Especialidad</label>
-                <select class="inp" id="infEspecialidad" onchange="onEspecialidadChange()"></select>
-              </div>
+            <div class="field">
+              <label>Especialidad</label>
+              <select class="inp" id="infEspecialidad" onchange="onEspecialidadChange()"></select>
             </div>
             <div class="field">
               <label>Práctica</label>

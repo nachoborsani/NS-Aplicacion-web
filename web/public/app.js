@@ -532,7 +532,26 @@ function llenarCentros(){
   if (prev && clientes.some(function(c){ return c.slug === prev; })) sel.value = prev;
   onCentroChange(true);
 }
+// Un médico de cabecera (Scheffelaar/Dubesarky) no es una clínica: la cascada
+// Especialidad/Práctica de abajo (pensada para consultorios con varias
+// especialidades) no le corresponde. Todavía no hay un flujo propio para
+// generarle informes, así que por ahora se avisa en vez de mostrar el
+// formulario armado para otro tipo de cliente.
+function infClienteEsMedCab(slug){
+  var c = (INFORMES_CFG.clientes || []).find(function(x){ return x.slug === slug; });
+  return !!(c && c.tipo === 'med_cabecera');
+}
 function onCentroChange(keep){
+  var slug = (document.getElementById('infCentro') || {}).value || '';
+  var esMedCab = infClienteEsMedCab(slug);
+  var aviso = document.getElementById('infMedCabAviso'), layout = document.getElementById('infGenLayout');
+  if (aviso) aviso.style.display = esMedCab ? '' : 'none';
+  if (layout) layout.style.display = esMedCab ? 'none' : '';
+  if (esMedCab) return;
+  // El Cliente ahora vive fuera de #infFormCard (queda visible siempre), así
+  // que cambiarlo ya no dispara programarPreviewVivo() por burbujeo - se llama
+  // a mano acá (afecta el membrete/logo de la vista previa).
+  programarPreviewVivo();
   var sel = document.getElementById('infEspecialidad'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
   var esps = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.especialidad; }));
