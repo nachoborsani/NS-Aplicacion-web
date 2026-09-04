@@ -421,12 +421,18 @@
                      no hay bot que lo baje solo como en los consultorios. Se muestra por JS. -->
                 <div class="client-card" id="cupInformeCard" style="display:none">
                   <h3>📥 Informe del CUP</h3>
-                  <p class="nom-muted">Subí el Excel que bajás del Panel de prestaciones de PAMI (CUP) para este médico. Con eso se calculan los pendientes de validar y transmitir, y mejora el cruce de "Informes recibidos".</p>
-                  <label class="btn btn-primary file-btn">
-                    📁 Subir informe del CUP
-                    <input id="cupInformeFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="subirCupInforme(this.files); this.value=''">
-                  </label>
-                  <div id="cupInformeEstado" class="nom-muted" style="margin-top:10px"></div>
+                  <p class="nom-muted">Subí el Excel que bajás del Panel de prestaciones de PAMI (CUP) para este médico. Elegí a qué mes corresponde: queda guardado aparte, sin pisar los demás meses. Con eso se calculan los pendientes de validar y transmitir, y mejora el cruce de "Informes recibidos".</p>
+                  <div class="cup-informe-upload">
+                    <label class="field-inline">
+                      <span class="nom-muted">Mes del informe</span>
+                      <input class="inp" id="cupInformeMes" type="month">
+                    </label>
+                    <label class="btn btn-primary file-btn">
+                      📁 Subir informe del CUP
+                      <input id="cupInformeFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="subirCupInforme(this.files); this.value=''">
+                    </label>
+                  </div>
+                  <div id="cupInformeEstado" style="margin-top:12px"></div>
                 </div>
                 <div class="client-card" id="generalPlaceholder">
                   <h3>Dashboard general</h3>

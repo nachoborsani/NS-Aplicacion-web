@@ -437,6 +437,20 @@ function saveClientBandejasFuturas(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasFuturasFile, JSON.stringify(store, null, 2));
 }
+// Historial por MES del "Informe del CUP" subido a mano (médicos de cabecera sin
+// bot). Estructura: { slug: { "2026-09": {rows,columns,...} } } — igual patrón que
+// las bandejas futuras, pero acá cada mes queda guardado (no se pisa al subir el
+// siguiente). El mes más nuevo del historial es, además, el que se copia a
+// client_bandejas.json para que siga alimentando el match de "Informes recibidos".
+const clientBandejasCupFile = path.join(dataDir, "client_bandejas_cup.json");
+function loadClientBandejasCup() {
+  try { const j = JSON.parse(fs.readFileSync(clientBandejasCupFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function saveClientBandejasCup(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(clientBandejasCupFile, JSON.stringify(store, null, 2));
+}
 // Padrón de afiliados por cliente: { [slug]: { [dni]: {dni, beneficio, nombre, tramite, ...} } }.
 // Se alimenta subiendo turneras. Es la base para matchear informes por número exacto.
 const padronFile = path.join(dataDir, "padron.json");
@@ -6117,12 +6131,22 @@ const server = http.createServer(async (req, res) => {
     if (me.role === "operador" && !clientesVisiblesPara(me, [client]).length) {
       return json(res, 403, { error: "No tenés acceso a este cliente." });
     }
+    // Historial completo (un renglón por mes subido), más nuevo primero. Cada
+    // renglón trae su propio resumen (validar/transmitir/listas) pero SIN las
+    // filas crudas — livianito para la lista.
     if (req.method === "GET") {
-      const bandeja = loadClientBandejas()[slug];
-      if (!bandeja) return json(res, 200, { bandeja: null });
-      return json(res, 200, { bandeja: { ...bandejaResumenCup(bandeja), month: bandeja.month, monthLabel: bandeja.monthLabel,
-        uploadedAt: bandeja.uploadedAt, uploadedBy: bandeja.uploadedBy, count: bandeja.count,
-        archivo: bandeja.archivo || "", origen: bandeja.origen || "" } });
+      const historialStore = loadClientBandejasCup();
+      const meses = historialStore[slug] || {};
+      const liveMonth = (loadClientBandejas()[slug] || {}).month || "";
+      const historial = Object.keys(meses)
+        .sort((a, b) => b.localeCompare(a))
+        .map((month) => {
+          const b = meses[month];
+          return { month, monthLabel: b.monthLabel || periodLabel(month), uploadedAt: b.uploadedAt,
+            uploadedBy: b.uploadedBy, count: b.count, archivo: b.archivo || "",
+            live: month === liveMonth, ...bandejaResumenCup(b) };
+        });
+      return json(res, 200, { historial });
     }
     try {
       const raw = await readBuffer(req);
@@ -6138,9 +6162,10 @@ const server = http.createServer(async (req, res) => {
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "", raw: true });
       if (!rows.length) return json(res, 400, { error: "El archivo no tiene filas para procesar." });
       const columns = Object.keys(rows[0] || {});
-      const month = normalizePeriod(new Date().toISOString().slice(0, 7));
-      const store = loadClientBandejas();
-      store[slug] = {
+      // El mes lo elige quien sube (por si el informe es de un mes que ya pasó);
+      // si no manda nada válido, cae en el mes en curso.
+      const month = normalizePeriod(multipart.fields.month) || normalizePeriod(new Date().toISOString().slice(0, 7));
+      const entry = {
         month,
         monthLabel: periodLabel(month),
         generatedAt: new Date().toISOString(),
@@ -6152,13 +6177,27 @@ const server = http.createServer(async (req, res) => {
         origen: "manual",
         archivo: multipart.file.filename,
       };
-      saveClientBandejas(store);
+      const historialStore = loadClientBandejasCup();
+      if (!historialStore[slug] || typeof historialStore[slug] !== "object") historialStore[slug] = {};
+      historialStore[slug][month] = entry;
+      saveClientBandejasCup(historialStore);
+      // El mes más nuevo del historial (no necesariamente el recién subido, si
+      // se está completando uno viejo) es el que queda "en vivo" para el match
+      // de "Informes recibidos" y el resto de lo que ya usa client_bandejas.json.
+      const meses = Object.keys(historialStore[slug]).sort((a, b) => b.localeCompare(a));
+      const masNuevo = meses[0];
+      if (masNuevo === month) {
+        const bandejasStore = loadClientBandejas();
+        bandejasStore[slug] = entry;
+        saveClientBandejas(bandejasStore);
+      }
       // Resumen inmediato (validar / transmitir / listas) para mostrar en la
       // propia pantalla de carga, sin esperar a "Informes recibidos".
       return json(res, 200, {
         ok: true, count: rows.length, month, monthLabel: periodLabel(month),
-        archivo: multipart.file.filename, uploadedAt: store[slug].uploadedAt, uploadedBy: me.username,
-        ...bandejaResumenCup(store[slug]),
+        archivo: multipart.file.filename, uploadedAt: entry.uploadedAt, uploadedBy: me.username,
+        live: masNuevo === month,
+        ...bandejaResumenCup(entry),
       });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el archivo." });
