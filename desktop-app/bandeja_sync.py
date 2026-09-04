@@ -424,13 +424,16 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         # devuelve 404 si ese mes no tiene reporte guardado (se saltea). Con débitos
         # confirmados sólo mueve "faltan informes"; el débito queda intacto.
         cerrados_refrescados = []
-        for pperiod, plabel, exp_pas in exported_pasados:
+        # exported_pasados viene en orden [mes-1 (sin cerrar), mes-2 (cerrado)].
+        # Al primero (el "sin cerrar") lo creamos si todavía no existe; a los más
+        # viejos no (si no hay reporte, se saltean).
+        for pos, (pperiod, plabel, exp_pas) in enumerate(exported_pasados):
             try:
-                r = web.actualizar_reporte_cerrado(slug, pperiod, exp_pas)
+                r = web.actualizar_reporte_cerrado(slug, pperiod, exp_pas, crear_si_falta=(pos == 0))
                 antes = (r.get("antes") or {}).get("faltan")
                 despues = (r.get("despues") or {}).get("faltan")
                 cerrados_refrescados.append({"period": pperiod, "faltanAntes": antes,
-                                             "faltanDespues": despues,
+                                             "faltanDespues": despues, "creado": bool(r.get("creado")),
                                              "congelado": bool(r.get("congelado")),
                                              "debitoIntacto": bool(r.get("debitoIntacto"))})
             except NSWebError as exc:

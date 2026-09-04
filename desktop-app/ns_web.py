@@ -283,11 +283,14 @@ class NSWebClient:
             },
         )
 
-    def actualizar_reporte_cerrado(self, slug: str, period: str, excel_path: str) -> dict:
+    def actualizar_reporte_cerrado(self, slug: str, period: str, excel_path: str,
+                                   crear_si_falta: bool = False) -> dict:
         """Refresca EN EL LUGAR el reporte de un mes cerrado con la bandeja fresca.
         La web lo parsea con el nomenclador y, si los débitos están confirmados,
         sólo mueve 'faltan informes' (congela débitos/valores). Manda el Excel como
-        multipart. Devuelve {antes, despues, congelado, debitoIntacto, ...}."""
+        multipart. Si crear_si_falta=True y no existe el reporte de ese período, lo
+        crea (para el mes 'sin cerrar'). Devuelve {antes, despues, congelado,
+        debitoIntacto, creado, ...}."""
         import os
         import uuid
 
@@ -305,6 +308,8 @@ class NSWebClient:
 
         path = (f"/api/clientes/{urllib.parse.quote(slug)}/reportes/actualizar"
                 f"?period={urllib.parse.quote(period)}")
+        if crear_si_falta:
+            path += "&crearSiFalta=1"
         parsed = urllib.parse.urlsplit(self.base_url)
         is_https = parsed.scheme == "https"
         host = parsed.hostname or "localhost"

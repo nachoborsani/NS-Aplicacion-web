@@ -6566,11 +6566,17 @@ const server = http.createServer(async (req, res) => {
       .filter(({ item }) => item.clientSlug === slug &&
         (String(item.nomencladorPeriod) === period || reportDashboardPeriod(item) === period))
       .sort((a, b) => String(b.item.closedAt || "").localeCompare(String(a.item.closedAt || "")));
-    if (!candidatos.length) return json(res, 404, { error: `No hay reporte guardado de ${period} para actualizar.` });
-    const { item: oldReport, idx } = candidatos[0];
-    // Parseo la bandeja fresca con el nomenclador del reporte (o el activo si no está).
+    // crearSiFalta=1: si no hay reporte de ese período, lo CREA desde la bandeja
+    // fresca (para el mes "sin cerrar", que la app baja en cada corrida). Si no
+    // viene el flag y no hay reporte, 404 como antes.
+    const crearSiFalta = ["1", "true", "si"].includes(String(url.searchParams.get("crearSiFalta") || "").toLowerCase());
+    const dry = ["1", "true", "si"].includes(String(url.searchParams.get("dry") || "").toLowerCase());
+    if (!candidatos.length && !crearSiFalta) return json(res, 404, { error: `No hay reporte guardado de ${period} para actualizar.` });
+    const oldReport = candidatos.length ? candidatos[0].item : null;
+    const idx = candidatos.length ? candidatos[0].idx : -1;
+    // Nomenclador para parsear: el del reporte si existe, si no el del período pedido, si no el activo.
     const nstore = loadNomencladorStore();
-    const payload = getNomencladorByPeriod(nstore, oldReport.nomencladorPeriod) || getNomencladorByPeriod(nstore, "");
+    const payload = getNomencladorByPeriod(nstore, (oldReport && oldReport.nomencladorPeriod) || period) || getNomencladorByPeriod(nstore, "");
     if (!payload) return json(res, 404, { error: "No hay nomenclador cargado para parsear la bandeja." });
     try {
       const raw = await readBuffer(req);
@@ -6581,15 +6587,32 @@ const server = http.createServer(async (req, res) => {
       }
       const parsed = parseTransmisionWorkbook(multipart.file.data, multipart.file.filename, payload, client);
       const freshRows = parsed.rows || [];
-      // Métricas antes/después para el aviso (que se vea que el débito no se tocó).
       const faltanDe = (rows) => (rows || []).filter((r) => reportRowMissingInforme(r)).length;
       const debitoDe = (rows) => (rows || []).reduce((a, r) => a + reportRowDebit(r), 0);
+      // -- No existe todavía: CREAR el reporte del mes sin cerrar --
+      if (!oldReport) {
+        const rows = sanitizeReportRows(freshRows);
+        if (!rows.length) return json(res, 400, { error: "La bandeja no trae prácticas para crear el reporte." });
+        const summary = summarizeReportRows(rows);
+        const nuevo = {
+          id: crypto.randomUUID(), clientSlug: slug, clientName: client.name,
+          title: `${client.name} - ${periodLabel(period)} - ${rows.length} practicas`,
+          sourceFilename: path.basename(String(multipart.file.filename || "bandeja_transmision.xls")),
+          nomencladorPeriod: period, nomencladorLabel: periodLabel(period),
+          rowCount: rows.length, closedAt: new Date().toISOString(), closedBy: me.username,
+          expectedAmount: 0, observations: "",
+          debitStatus: reportHasRealDebits(rows) ? "confirmado" : "pendiente",
+          summary, rows, updatedAt: new Date().toISOString(),
+        };
+        if (!dry) { store.items = [nuevo, ...(store.items || [])]; saveClientReportsStore(store); }
+        return json(res, 200, { report: reportListItem(nuevo), creado: true, period, dry,
+          despues: { faltan: faltanDe(rows), debito: money(debitoDe(rows)), filas: rows.length } });
+      }
+      // -- Ya existe: actualizar en el lugar (congela débitos si está confirmado) --
       const antes = { faltan: faltanDe(oldReport.rows), debito: money(debitoDe(oldReport.rows)), filas: (oldReport.rows || []).length };
       const congelado = reportDebitStatus(oldReport) === "confirmado";
       const updated = actualizarReporteEnLugar(oldReport, freshRows);
       const despues = { faltan: faltanDe(updated.rows), debito: money(debitoDe(updated.rows)), filas: updated.rows.length };
-      // dry=1: no guarda, sólo devuelve el antes/después (para probar o previsualizar).
-      const dry = ["1", "true", "si"].includes(String(url.searchParams.get("dry") || "").toLowerCase());
       if (!dry) {
         store.items[idx] = updated;
         saveClientReportsStore(store);
