@@ -108,6 +108,7 @@ function go(v, el){
   document.body.classList.toggle('client-view', v === 'clientes');
   // Laboratorio: menú mínimo (logo + Inicio + pie), se esconde el resto del nav.
   document.body.classList.toggle('lab-mode', v === 'lab');
+  if (v === 'lab' && window.labInit) window.labInit();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'dash'){ updateDashClientsTile(); cargarInicio(true); }
   if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos

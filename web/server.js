@@ -18,6 +18,7 @@ let gmailInformes = null;
 try { gmailInformes = require("./gmail_informes"); }
 catch (e) { console.warn("[informes] descarga de Gmail no disponible:", e && e.message); }
 const cruceGjs = require("./cruce_gjs");
+const { handleLab } = require("./lab_server");
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -4455,6 +4456,12 @@ const server = http.createServer(async (req, res) => {
   // Versión de los assets (para avisar "hay versión nueva, recargá" sin depender
   // de que el usuario recargue el index.html — la SPA no lo hace al navegar por hash).
   if (p === "/api/version") return json(res, 200, { version: String(ASSET_VER) });
+
+  // ---- Laboratorio: sistema de gestión para centros médicos (en desarrollo) ----
+  // Módulo aislado (solo admin). Ver web/lab_server.js.
+  if (p.startsWith("/api/lab/")) {
+    if (await handleLab({ req, res, method: req.method, p, url, me: getSessionUser(req), json, readBody, dataDir })) return;
+  }
 
   // ---- Worker externo: autenticación por token, sin cookie de navegador ----
   if (p === "/api/worker/ping" && req.method === "GET") {
