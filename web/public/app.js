@@ -3997,6 +3997,9 @@ function mesCursoCardSinCerrar(current, reporte){
   if (fechaRep) footParts.push('Reporte del ' + esc(fechaRep));
   if (cierre) footParts.push('los débitos cierran el ' + esc(cierre));
   var foot = footParts.length ? '<div class="mescurso-foot">' + footParts.join(' · ') + '</div>' : '';
+  // Última actualización del refresco automático (la app barre este mes en cada
+  // bajada). Refleja hasta cuándo está al día la transmisión.
+  var syncSc = (reporte && reporte.updatedAt) ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(reporte.updatedAt)) + '</b></div>' : '';
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
@@ -4014,7 +4017,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line' + (ausentes > 0 ? ' mescurso-click" onclick="toggleAusentesJulio()' : '') + '"><span>Ausentes sin activar' + (ausentes > 0 ? ' <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span>' : '') + '</span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
-    + '</div>' + foot + '</div>';
+    + '</div>' + syncSc + foot + '</div>';
 }
 function irAReporteSinCerrar(){
   if (!MESCURSO_REPORTE_ID) return;
@@ -4036,6 +4039,7 @@ function mesCursoCardMesCerrado(current, reporte){
   var faltan = current.missingInforme || 0, faltanMonto = current.missingInformeAmount || 0;
   var ausentes = current.absent || 0, ausMonto = current.absentAmount || 0;
   var foot = fechaRep ? '<div class="mescurso-foot">Reporte del ' + esc(fechaRep) + '</div>' : '';
+  var syncSc = (reporte && reporte.updatedAt) ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(reporte.updatedAt)) + '</b></div>' : '';
   var clickable = reporte ? ' mescurso-click" onclick="mesCursoAbrirReporte(\'' + esc(reporte.id) + '\')' : '';
   // Confirmados = ya cotejados contra PAMI → dejan de ser "posibles".
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
@@ -4052,7 +4056,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line warn' + (debCount > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()' : '') + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + (debCount > 0 ? ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + (faltan > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()' : '') + '"><span>Faltan informes' + (faltan > 0 ? ' <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + (ausentes > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()' : '') + '"><span>Ausentes sin activar' + (ausentes > 0 ? ' <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
-    + '</div>' + foot + '</div>';
+    + '</div>' + syncSc + foot + '</div>';
 }
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
