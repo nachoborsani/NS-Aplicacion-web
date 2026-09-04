@@ -3096,6 +3096,75 @@ function toggleModulosJulio(){ mesCursoTogglePanel('modulos-julio'); }
 function toggleModulosCerrado(){ mesCursoTogglePanel('modulos-cerrado'); }
 function toggleDebitosAdelante(){ mesCursoTogglePanel('debitos-adelante'); }
 function toggleDebitosFuturo(period){ mesCursoTogglePanel('debitos-futuro:' + period); }
+// ---- Crear informe directo desde "Faltan informes" -------------------------
+// Los modelos traen codigoPractica (ej "570129") y la fila de faltante trae la
+// práctica como "570129 - CONSULTA...". Si hay un modelo con ese código, se
+// puede generar el PDF de una: usa el médico y el texto por defecto del modelo.
+var _informesCfgCargando = false;
+function ensureInformesCfg(cb){
+  if ((INFORMES_CFG.modelos || []).length){ if (cb) cb(); return; }
+  if (_informesCfgCargando) return;
+  _informesCfgCargando = true;
+  api('/api/informes/config').then(function(res){
+    if (res.ok && res.data) INFORMES_CFG = res.data;
+    _informesCfgCargando = false;
+    if (cb) cb();
+  }).catch(function(){ _informesCfgCargando = false; });
+}
+function codigoDePractica(s){ var m = String(s || '').match(/\d{4,}/); return m ? m[0] : ''; }
+function modeloParaPracticaRow(practica){
+  var cod = codigoDePractica(practica);
+  if (!cod) return null;
+  // Sólo código único y exacto: los combinados ("717111 + 717125") no se autogeneran.
+  return (INFORMES_CFG.modelos || []).find(function(m){ return String(m.codigoPractica || '') === cod; }) || null;
+}
+function faltanInformesDe(panelId){
+  if (panelId === 'informes') return MESCURSO_FALTAN_INFORMES || [];
+  if (panelId === 'informes-julio') return MESCURSO_FALTAN_INFORMES_JULIO || [];
+  if (panelId === 'informes-cerrado') return MESCURSO_FALTAN_INFORMES_CERRADO || [];
+  return [];
+}
+// Botón por fila: sólo aparece si hay un modelo para esa práctica.
+function accionCrearInforme(panelId){
+  return function(idx){
+    var x = faltanInformesDe(panelId)[idx];
+    if (!x || !modeloParaPracticaRow(x.practica)) return '';
+    return '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
+  };
+}
+async function crearInformeDirecto(panelId, idx, btn){
+  var x = faltanInformesDe(panelId)[idx];
+  if (!x) return;
+  var m = modeloParaPracticaRow(x.practica);
+  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return; }
+  var medicoId = loteMedicoParaModelo(m.key);
+  if (!medicoId){ alert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return; }
+  var preset = (INFORMES_CFG.descripciones || []).find(function(d){ return scopeAplica(d.modelos, m.key); });
+  var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
+  var payload = {
+    modelo: m.key,
+    clienteSlug: (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '',
+    paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '' },
+    textoInforme: (preset && preset.texto) || '',
+    estudio: m.estudio || '',
+    valores: (preset && preset.valores) || {},
+    medicoId: medicoId
+  };
+  var prev = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = '…'; }
+  try {
+    var r = await fetch('/api/informes/generar', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} throw new Error((d && d.error) || ('No se pudo generar (HTTP ' + r.status + ').')); }
+    var blob = await r.blob();
+    var cd = r.headers.get('content-disposition') || '';
+    var mm = cd.match(/filename="([^"]+)"/);
+    bajarBlob(blob, mm ? mm[1] : ('informe_' + String(x.nombre || 'paciente').replace(/[^a-z0-9]+/gi, '_') + '.pdf'));
+    if (btn){ btn.textContent = '✓ Listo'; }
+  } catch (e){
+    alert(e && e.message ? e.message : 'No se pudo generar el informe.');
+    if (btn){ btn.disabled = false; btn.textContent = prev; }
+  }
+}
 // Abre/cierra debajo de los cuadros el detalle copiable.
 function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
@@ -3109,6 +3178,11 @@ function mesCursoTogglePanel(tipo){
     panel.innerHTML = ''; MESCURSO_PANEL_ABIERTO = ''; apagarCarets();
     return;
   }
+  // Los paneles de faltan-informes muestran el botón "Crear informe": si la
+  // config de modelos todavía no llegó, la traemos y re-dibujamos el panel.
+  if (/^informes/.test(tipo) && !(INFORMES_CFG.modelos || []).length){
+    ensureInformesCfg(function(){ if (MESCURSO_PANEL_ABIERTO === tipo){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(tipo); } });
+  }
   var html = '';
   var cols = ['Benef', 'Apellido y nombre', 'Práctica', 'Turno', 'Valor'];
   var mapInformes = function(x){ return [x.benef, x.nombre, x.practica, x.turno, moneyFmt(x.valor || 0)]; };
@@ -3119,15 +3193,15 @@ function mesCursoTogglePanel(tipo){
   if (tipo === 'informes'){
     var fi = MESCURSO_FALTAN_INFORMES || [];
     if (!fi.length) return;
-    html = mesCursoTablaHtml('Faltan informes · ' + fi.length, 'error', 'copiarFaltanInformes', cols, fi.map(mapInformes), 'informes');
+    html = mesCursoTablaHtml('Faltan informes · ' + fi.length, 'error', 'copiarFaltanInformes', cols, fi.map(mapInformes), 'informes', accionCrearInforme('informes'));
   } else if (tipo === 'informes-julio'){
     var fj = MESCURSO_FALTAN_INFORMES_JULIO || [];
     if (!fj.length) return;
-    html = mesCursoTablaHtml('Faltan informes (mes anterior) · ' + fj.length, 'error', 'copiarFaltanInformesJulio', cols, fj.map(mapInformes), 'informes-julio');
+    html = mesCursoTablaHtml('Faltan informes (mes anterior) · ' + fj.length, 'error', 'copiarFaltanInformesJulio', cols, fj.map(mapInformes), 'informes-julio', accionCrearInforme('informes-julio'));
   } else if (tipo === 'informes-cerrado'){
     var fc = MESCURSO_FALTAN_INFORMES_CERRADO || [];
     if (!fc.length) return;
-    html = mesCursoTablaHtml('Faltan informes (mes cerrado) · ' + fc.length, 'error', 'copiarFaltanInformesCerrado', cols, fc.map(mapInformes), 'informes-cerrado');
+    html = mesCursoTablaHtml('Faltan informes (mes cerrado) · ' + fc.length, 'error', 'copiarFaltanInformesCerrado', cols, fc.map(mapInformes), 'informes-cerrado', accionCrearInforme('informes-cerrado'));
   } else if (tipo === 'debitos-julio'){
     var dj = MESCURSO_POSIBLES_DEBITOS_JULIO || [];
     if (!dj.length) return;
@@ -3194,15 +3268,19 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoFueraCorteJulioCaret', tipo === 'fueracorte-julio');
   if (tipo.indexOf('debitos-futuro:') === 0) mesCursoSetCaret('mescursoDebFut-' + tipo.slice('debitos-futuro:'.length), true);
 }
-function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId){
+function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accionFn){
   // Columnas que absorben el ancho sobrante (las de texto largo): así la tabla
   // llena el panel sin dejar un bloque vacío a la derecha ni abrir huecos entre
   // las columnas cortas. El resto se ajusta al contenido.
   var expand = /informes|ausentes/.test(String(panelId || '')) ? [1, 2] : (/modulos/.test(String(panelId || '')) ? [0] : [1, 3, 6]);
   var clase = function(i){ return expand.indexOf(i) >= 0 ? ' class="mc-exp"' : ''; };
-  var thead = '<tr>' + headers.map(function(h, i){ return '<th' + clase(i) + '>' + esc(h) + '</th>'; }).join('') + '</tr>';
-  var tbody = filas.map(function(f){
-    return '<tr>' + f.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('') + '</tr>';
+  // Columna extra opcional (botón "Crear informe"): no se copia ni se exporta,
+  // sólo se muestra. La celda va sin escapar porque trae HTML del botón.
+  var conAcc = typeof accionFn === 'function';
+  var thead = '<tr>' + headers.map(function(h, i){ return '<th' + clase(i) + '>' + esc(h) + '</th>'; }).join('') + (conAcc ? '<th></th>' : '') + '</tr>';
+  var tbody = filas.map(function(f, idx){
+    return '<tr>' + f.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
+      + (conAcc ? '<td class="mc-acc">' + (accionFn(idx) || '') + '</td>' : '') + '</tr>';
   }).join('');
   var acciones = '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
   if (panelId){
@@ -3723,6 +3801,7 @@ async function loadClientMesCurso(){
   MESCURSO_DEBITOS_CERRADO = (current2 && current2.posiblesDebitosRows) || [];   // detalle de la card "Cerrado"
   MESCURSO_AUSENTES_CERRADO = (current2 && current2.ausentesRows) || [];
   MESCURSO_FALTAN_INFORMES_CERRADO = (current2 && current2.missingInformeRows) || [];
+  ensureInformesCfg(); // para tener listo el botón "Crear informe" en los faltantes
   MESCURSO_MODULOS_CERRADO = mescMods(current2 && current2.modules);
   var hayJunio = current2 && current2.period === prev2 && ((current2.reportCount || 0) > 0 || (current2.totalRows || 0) > 0);
   var reporte2 = hayJunio ? (reportes.filter(function(r){ return r.dashboardPeriod === prev2; })[0] || null) : null;

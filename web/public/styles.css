@@ -1324,6 +1324,8 @@
      hace falta. overflow-wrap:break-word (no 'anywhere') para que NO se colapsen a
      una letra cuando el espacio aprieta: su mínimo es la palabra más larga. */
   .mescurso-panel td.mc-exp,.mescurso-panel th.mc-exp{white-space:normal;width:auto;min-width:80px;overflow-wrap:break-word}
+  .mescurso-panel td.mc-acc{white-space:nowrap;width:1%;text-align:right}
+  .mescurso-panel .mc-crear{padding:2px 8px;font-size:12px;white-space:nowrap}
   /* Credencial provisoria */
   .cred-card{max-width:760px}
   /* Afiliados: Consultar cápita + Credencial provisoria lado a lado (más cuadradas). */
