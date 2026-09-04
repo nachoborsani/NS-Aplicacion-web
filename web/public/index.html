@@ -185,14 +185,14 @@
               <div class="ini-head">
                 <span class="ini-ic">💬</span>
                 <div><h2>Mensajes</h2><div class="ini-meta">Canal interno</div></div>
-                <label class="ini-switch" title="Los mensajes que mandes de acá en más los ven también los operadores">
-                  <input type="checkbox" id="iniCompartirOperadores" onchange="iniToggleCompartir(this.checked)">
-                  <span>Compartir con operadores</span>
-                </label>
+                <div class="ini-canales" id="iniCanales" style="display:none"></div>
                 <span class="ini-unread" id="iniUnread" style="display:none">0</span>
               </div>
               <div class="ini-feed" id="iniFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-adjp" id="iniAdjPreview" style="display:none"></div>
               <div class="ini-composer">
+                <input type="file" id="iniFileInput" style="display:none" onchange="iniOnFileInput(this)">
+                <button class="icon-btn" type="button" title="Adjuntar foto o archivo" onclick="iniPickAdjunto()"><svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 <textarea id="iniMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
                 <button class="btn btn-primary btn-sm" id="iniSend" onclick="iniEnviarMsg()">Enviar</button>
               </div>
@@ -259,7 +259,10 @@
                 <span class="ini-unread" id="opUnread" style="display:none">0</span>
               </div>
               <div class="ini-feed" id="opFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-adjp" id="opAdjPreview" style="display:none"></div>
               <div class="ini-composer">
+                <input type="file" id="opFileInput" style="display:none" onchange="opOnFileInput(this)">
+                <button class="icon-btn" type="button" title="Adjuntar foto o archivo" onclick="opPickAdjunto()"><svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 <textarea id="opMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
                 <button class="btn btn-primary btn-sm" id="opSend" onclick="opEnviarMsg()">Enviar</button>
               </div>

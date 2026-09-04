@@ -351,6 +351,23 @@
   .ini-composer{border-top:1px solid var(--border);padding:11px 13px;display:flex;gap:9px;align-items:flex-end;background:var(--surface-2)}
   .ini-composer textarea{flex:1;resize:none;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;min-height:40px;max-height:120px;outline:none}
   .ini-composer textarea:focus{border-color:var(--turq)}
+  .ini-composer .icon-btn{flex:0 0 auto;align-self:center}
+  /* selector de canales del chat */
+  .ini-canales{display:flex;gap:6px}
+  .ini-canales button{position:relative;border:1px solid var(--border);background:var(--surface);color:var(--text-2);border-radius:999px;padding:4px 14px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .ini-canales button.on{background:var(--turq);border-color:var(--turq);color:#fff}
+  .ini-cdot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--error);border:2px solid var(--surface)}
+  /* adjuntos en los mensajes */
+  .ini-adj-img{display:block;margin:2px 0 5px}
+  .ini-adj-img img{max-width:220px;max-height:220px;border-radius:10px;display:block}
+  .ini-adj-file{display:inline-flex;align-items:center;gap:7px;margin:2px 0 5px;padding:7px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);text-decoration:none;color:var(--text);max-width:240px}
+  .ini-adj-file .ini-adj-nm{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ini-adj-file .ini-adj-sz{font-size:11px;color:var(--text-2);margin-left:auto;white-space:nowrap}
+  /* preview del adjunto antes de enviar */
+  .ini-adjp{display:flex;align-items:center;gap:6px;padding:8px 14px;border-top:1px solid var(--border);background:var(--surface-2);font-size:12.5px;color:var(--text-2)}
+  .ini-adjp .ini-adjp-nm{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+  .ini-adjp .ini-adjp-x{margin-left:auto;border:none;background:transparent;color:var(--text-2);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
+  .ini-adjp .ini-adjp-x:hover{background:var(--surface);color:var(--error)}
   /* tareas */
   .ini-addbar{padding:13px 15px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:9px;background:var(--surface-2)}
   .ini-addbar input{border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none}
