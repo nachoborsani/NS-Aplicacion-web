@@ -7791,7 +7791,10 @@ const server = http.createServer(async (req, res) => {
       // al viejo "Centro" fijo por modelo). Solo lo mínimo para el selector.
       // Filtrado igual que /api/clientes: un usuario con clientes restringidos
       // no debe poder armar un informe (con el logo/membrete) de uno que no ve.
-      clientes: clientesVisiblesPara(me, loadClientsStore()).map((c) => ({ slug: c.slug, name: c.name })),
+      // tipo viaja para que el front distinga médico de cabecera de consultorio
+      // (Scheffelaar/Dubesarky no son clínicas - la cascada Especialidad/Práctica
+      // no les aplica, todavía no hay un flujo propio para ellos).
+      clientes: clientesVisiblesPara(me, loadClientsStore()).map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "consultorio" })),
       medicos: (cfg.medicos || []).map((m) => ({
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "",
         modelos: m.modelos || [], clientes: m.clientes || [],
