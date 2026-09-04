@@ -489,7 +489,7 @@
       '<table class="lab-table"><thead><tr><th>Apellido y nombre</th><th>Documento</th><th>Obra social</th><th>Celular</th><th></th></tr></thead><tbody>' +
       (items.map(function (p) {
         return '<tr data-id="' + p.id + '"><td><b>' + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b></td><td>" + esc(p.documento || "") + "</td><td>" + esc(p.obraSocial || "") + (p.nroAfiliado ? " " + esc(p.nroAfiliado) : "") + "</td><td>" + esc(p.celular || "") + "</td>" +
-          '<td><button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
+          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
       }).join("") || '<tr><td colspan="5" class="lab-muted" style="padding:16px">Sin pacientes.</td></tr>') + "</tbody></table>";
     list.querySelectorAll(".lab-pac-edit").forEach(function (b) {
       b.onclick = async function () {
@@ -498,6 +498,52 @@
         pacForm(rr.data && rr.data.item);
       };
     });
+    list.querySelectorAll(".lab-pac-hc").forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        var rr = await api("/api/lab/pacientes/" + id);
+        hcModal(rr.data && rr.data.item);
+      };
+    });
+  }
+
+  // Historia clínica: evoluciones del paciente (timeline + alta).
+  async function hcModal(p) {
+    if (!p) return;
+    var m = modal("Historia clínica · " + [p.apellido, p.nombre].filter(Boolean).join(", "), { ancho: "ancho" });
+    var profOpts = '<option value="">— Profesional —</option>' + LAB.cat.profesionales.map(function (o) { return '<option value="' + o.id + '">' + esc(o.nombre) + "</option>"; }).join("");
+    m.body.innerHTML =
+      '<div class="lab-hc-new"><div class="lab-grid3">' +
+        '<label>Fecha<input class="lab-in" type="date" id="hc-fecha" value="' + hoyISO() + '"></label>' +
+        '<label>Profesional<select class="lab-in" id="hc-prof">' + profOpts + "</select></label>" +
+        '<label>Motivo<input class="lab-in" id="hc-motivo" placeholder="Consulta, control…"></label>' +
+      "</div>" +
+      '<label>Evolución<textarea class="lab-in" id="hc-texto" rows="3" placeholder="Escribí la evolución del paciente…"></textarea></label>' +
+      '<div style="text-align:right"><button class="lab-btn primary" id="hc-add">Agregar evolución</button></div></div>' +
+      '<div class="lab-sec-tit">Evoluciones</div><div id="hc-list"><div class="lab-muted">Cargando…</div></div>';
+    async function load() {
+      var r = await api("/api/lab/pacientes/" + p.id + "/evoluciones");
+      var items = (r.data && r.data.items) || [];
+      var box = m.body.querySelector("#hc-list");
+      box.innerHTML = items.length ? items.map(function (ev) {
+        return '<div class="lab-hc-item"><div class="lab-hc-meta"><b>' + esc((ev.fecha || "").split("-").reverse().join("/")) + "</b>" +
+          (ev.profesionalId ? " · " + esc(nombreProf(ev.profesionalId)) : "") + (ev.motivo ? " · " + esc(ev.motivo) : "") +
+          ' <span class="lab-muted">(' + esc(ev.creadoPor || "") + ")</span></div>" +
+          '<div class="lab-hc-txt">' + esc(ev.texto).replace(/\n/g, "<br>") + "</div></div>";
+      }).join("") : '<div class="lab-muted">Sin evoluciones todavía.</div>';
+    }
+    m.body.querySelector("#hc-add").onclick = async function () {
+      var texto = m.body.querySelector("#hc-texto").value.trim();
+      if (!texto) { toast("Escribí la evolución.", true); return; }
+      var r = await api("/api/lab/pacientes/" + p.id + "/evoluciones", {
+        fecha: m.body.querySelector("#hc-fecha").value, profesionalId: m.body.querySelector("#hc-prof").value,
+        motivo: m.body.querySelector("#hc-motivo").value, texto: texto,
+      });
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
+      m.body.querySelector("#hc-texto").value = ""; m.body.querySelector("#hc-motivo").value = "";
+      toast("Evolución agregada ✓"); load();
+    };
+    load();
   }
   function pacForm(p) {
     p = p || {};
@@ -752,6 +798,10 @@
       ".lab-kpi span{display:block;font-size:12px;color:var(--text-2)}.lab-kpi b{font-size:20px}.lab-kpi small{font-size:12px;color:var(--text-2);font-weight:600}",
       ".lab-est-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}",
       ".lab-est-card{border:1px solid var(--border);border-radius:10px;padding:12px}.lab-est-card h4{margin:0 0 8px}",
+      "textarea.lab-in{resize:vertical;font-family:inherit}",
+      ".lab-hc-new{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px}",
+      ".lab-hc-item{border-left:3px solid var(--accent,#2dd4bf);padding:6px 0 6px 12px;margin-bottom:12px}",
+      ".lab-hc-meta{font-size:13px;margin-bottom:3px}.lab-hc-txt{font-size:14px;white-space:pre-wrap}",
       "@media(max-width:640px){.lab-grid2,.lab-grid3,.lab-est-grid{grid-template-columns:1fr}.lab-ag-fecha{margin-left:0}}",
     ].join("\n");
     document.head.appendChild(css);

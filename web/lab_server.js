@@ -30,6 +30,7 @@ function emptyStore() {
     obrasSociales: [],
     pacientes: [],
     turnos: [],
+    evoluciones: [],
     version: 1,
   };
 }
@@ -254,6 +255,31 @@ async function handleLab(ctx) {
     if (method === "DELETE" && idPath) {
       store.profesionales = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store);
       return json(res, 200, { ok: true }), true;
+    }
+  }
+
+  // -- Historia clínica (evoluciones) de un paciente: /pacientes/:id/evoluciones --
+  if (recurso === "pacientes" && seg[2] === "evoluciones") {
+    const pacId = idPath;
+    if (!store.evoluciones) store.evoluciones = [];
+    if (method === "GET") {
+      const items = store.evoluciones.filter((x) => x.pacienteId === pacId)
+        .sort((a, b) => String(b.fecha + b.creadoEl).localeCompare(String(a.fecha + a.creadoEl)));
+      return json(res, 200, { items }), true;
+    }
+    if (method === "POST") {
+      const body = await readBody(req);
+      const ev = {
+        id: uid(), pacienteId: pacId,
+        fecha: clean(body.fecha) || nowIso().slice(0, 10),
+        profesionalId: clean(body.profesionalId),
+        motivo: clean(body.motivo),
+        texto: clean(body.texto),
+        creadoEl: nowIso(), creadoPor: me.username,
+      };
+      if (!ev.texto) return json(res, 400, { error: "La evolución no puede estar vacía." }), true;
+      store.evoluciones.push(ev); saveStore(dataDir, store);
+      return json(res, 200, { item: ev }), true;
     }
   }
 
