@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 // ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
@@ -95,13 +95,17 @@ function go(v, el){
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
   // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
   if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  // Laboratorio (sistema paralelo en desarrollo): solo admin por ahora.
+  if (v === 'lab' && !(ME && ME.role === 'admin')){ go('dash'); return; }
   // Configuración general: un operador con clientes restringidos no debe entrar
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
+  // Laboratorio: menú mínimo (logo + Inicio + pie), se esconde el resto del nav.
+  document.body.classList.toggle('lab-mode', v === 'lab');
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'dash'){ updateDashClientsTile(); cargarInicio(true); }
   if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos
@@ -927,8 +931,12 @@ async function updateDashClientsTile(){
 }
 
 // ============ INICIO: mensajes internos + tareas compartidas (solo admin) ============
-var INICIO = { yo:'', admins:[], mensajes:[], tareas:[], unread:0, assign:[], wired:false, pollTimer:null };
+var INICIO = { yo:'', admins:[], mensajes:[], tareas:[], unread:0, noLeidos:{}, canal:'', canales:[], adjunto:null, adjuntoOp:null, assign:[], wired:false, wiredOperador:false, pollTimer:null };
 function iniEsAdmin(){ return !!(ME && ME.role === 'admin'); }
+// Canal por defecto y etiqueta. "seba" = Nacho↔Seba (admins); "operadores" = con los operadores.
+function iniCanalDefault(){ return (ME && ME.role === 'operador') ? 'operadores' : 'seba'; }
+function iniCanalLabel(c){ return c === 'operadores' ? 'Operadores' : 'Admin'; }
+function iniTotalNoLeidos(){ var t=0, nl=INICIO.noLeidos||{}; Object.keys(nl).forEach(function(k){ t += nl[k]||0; }); return t; }
 function iniFmtHora(iso){
   try{
     var d = new Date(iso); if (isNaN(d.getTime())) return '';
@@ -953,52 +961,63 @@ async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
   var op = document.getElementById('operadorPaneles');
   if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; return; }
-  var res = await api('/api/inicio');
-  if (!res.ok){ return; }
+  if (!INICIO.canal) INICIO.canal = iniCanalDefault();
+  var res = await api('/api/inicio?canal=' + encodeURIComponent(INICIO.canal));
+  if (!res.ok){
+    if (INICIO.canal !== iniCanalDefault()){ INICIO.canal = iniCanalDefault(); return cargarInicio(marcarLeido); }
+    return;
+  }
   INICIO.yo = res.data.yo || ''; INICIO.admins = res.data.admins || [];
   INICIO.mensajes = res.data.mensajes || []; INICIO.tareas = res.data.tareas || [];
-  INICIO.unread = res.data.unread || 0;
-  INICIO.compartidoOperadores = !!res.data.compartidoOperadores;
-  if (marcarLeido && INICIO.unread > 0){ await api('/api/inicio/mensajes/leidos', {}); INICIO.unread = 0; }
+  INICIO.canal = res.data.canal || INICIO.canal;
+  INICIO.canales = res.data.canales || [INICIO.canal];
+  INICIO.noLeidos = res.data.noLeidos || {};
+  INICIO.unread = INICIO.noLeidos[INICIO.canal] || 0;
+  if (marcarLeido && INICIO.unread > 0){ await api('/api/inicio/mensajes/leidos', { canal: INICIO.canal }); INICIO.noLeidos[INICIO.canal] = 0; INICIO.unread = 0; }
 
   if (iniEsAdmin()){
     if (op) op.style.display = 'none';
     if (pl) pl.style.display = '';
-    if (!INICIO.wired){
-      INICIO.wired = true;
-      var mi = document.getElementById('iniMsg');
-      if (mi){
-        mi.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); iniEnviarMsg(); } });
-        mi.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
-      }
-      var sw = document.getElementById('iniCompartirOperadores');
-      if (sw) sw.checked = INICIO.compartidoOperadores;
-    } else {
-      var sw2 = document.getElementById('iniCompartirOperadores');
-      if (sw2) sw2.checked = INICIO.compartidoOperadores;
-    }
-    iniRenderAssign(); iniRenderMensajesEn('iniFeed'); iniRenderTareas();
+    if (!INICIO.wired){ INICIO.wired = true; iniWireComposer('iniMsg', iniEnviarMsg, iniSetAdjunto); }
+    iniRenderCanales(); iniRenderAssign(); iniRenderMensajesEn('iniFeed'); iniRenderTareas();
+    iniRenderAdjunto('iniAdjPreview', INICIO.adjunto, 'iniQuitarAdjunto');
     iniCargarPendientesOperador();
     iniAccesosRender();
   } else {
-    // Operador: ve el panel de operador (Inicio admin queda oculto para él).
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = '';
-    if (!INICIO.wiredOperador){
-      INICIO.wiredOperador = true;
-      var om = document.getElementById('opMsg');
-      if (om){
-        om.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); opEnviarMsg(); } });
-        om.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
-      }
-    }
+    if (!INICIO.wiredOperador){ INICIO.wiredOperador = true; iniWireComposer('opMsg', opEnviarMsg, opSetAdjunto); }
     iniRenderMensajesEn('opFeed');
+    iniRenderAdjunto('opAdjPreview', INICIO.adjuntoOp, 'opQuitarAdjunto');
     iniCargarMisPendientes();
     iniAccesosRender('op');
     opRenderTareas();
   }
   iniActualizarBell();
 }
+// Engancha un composer (Enter para enviar, autosize, pegar imagen del portapapeles).
+function iniWireComposer(id, sendFn, setAdjFn){
+  var mi = document.getElementById(id); if(!mi) return;
+  mi.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendFn(); } });
+  mi.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(120,this.scrollHeight)+'px'; });
+  mi.addEventListener('paste', function(e){
+    var items = (e.clipboardData || {}).items || [];
+    for (var i=0;i<items.length;i++){ if(items[i].kind==='file'){ var f=items[i].getAsFile(); if(f){ setAdjFn(f); e.preventDefault(); break; } } }
+  });
+}
+// Selector de canales (solo admin, que ve los dos). El operador ve un solo canal.
+function iniRenderCanales(){
+  var box = document.getElementById('iniCanales'); if(!box) return;
+  var cs = INICIO.canales || [];
+  if (cs.length < 2){ box.style.display = 'none'; return; }
+  box.style.display = '';
+  box.innerHTML = cs.map(function(c){
+    var n = (INICIO.noLeidos && INICIO.noLeidos[c]) || 0;
+    var punto = (n>0 && c!==INICIO.canal) ? '<span class="ini-cdot"></span>' : '';
+    return '<button type="button" class="'+(c===INICIO.canal?'on':'')+'" onclick="iniSetCanal(\''+c+'\')">'+esc(iniCanalLabel(c))+punto+'</button>';
+  }).join('');
+}
+function iniSetCanal(c){ if (c === INICIO.canal) return; INICIO.canal = c; cargarInicio(true); }
 // Multi-asignado: se puede tildar a Ignacio y/o Sebastian a la vez - una tarea
 // nunca puede quedar sin nadie tildado (por eso no hay opción "Sin asignar").
 function iniRenderAssign(){
@@ -1027,44 +1046,62 @@ function iniRenderMensajesEn(feedId){
   if (!ms.length){ feed.innerHTML = '<div class="ini-empty">Todavía no hay mensajes. Dejá el primero 👇</div>'; return; }
   feed.innerHTML = ms.map(function(m){
     var mine = m.autor === INICIO.yo;
-    var badge = '';
-    if (iniEsAdmin()){
-      badge = m.visibleOperadores
-        ? '<span class="ini-vis-badge" title="Los operadores lo ven">👁</span>'
-        : '<span class="ini-vis-badge" title="Solo lo ven los admins">🔒</span>';
-    }
+    var adj = m.adjunto ? iniAdjuntoHtml(m.adjunto) : '';
+    var txt = m.texto ? '<div class="ini-txt">'+esc(m.texto)+'</div>' : '';
     return '<div class="ini-msg'+(mine?' me':'')+'">'
       + '<span class="ini-av'+(mine?' me':'')+'">'+esc(iniIniciales(m.autorNombre))+'</span>'
-      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+badge+'</div>'
-      + '<div class="ini-txt">'+esc(m.texto)+'</div><div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
+      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+'</div>'
+      + adj + txt + '<div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
   }).join('');
   feed.scrollTop = feed.scrollHeight;
 }
 function iniRenderMensajes(){ iniRenderMensajesEn('iniFeed'); }
-async function iniEnviarMsg(){
-  var inp = document.getElementById('iniMsg'); if(!inp) return;
-  var t = inp.value.trim(); if(!t) return;
-  var res = await api('/api/inicio/mensajes', { texto:t });
-  if (!res.ok){ alert(res.data.error || 'No se pudo enviar el mensaje.'); return; }
-  inp.value=''; inp.style.height='';
-  INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
-  iniRenderMensajesEn('iniFeed'); iniActualizarBell();
+function iniFmtSize(n){ n=Number(n)||0; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(0)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
+function iniAdjuntoHtml(a){
+  var url = '/api/inicio/adjuntos/' + encodeURIComponent(a.id);
+  if (String(a.tipo||'').indexOf('image/') === 0){
+    return '<a class="ini-adj-img" href="'+url+'" target="_blank" rel="noopener"><img src="'+url+'" alt="'+esc(a.filename)+'" loading="lazy"></a>';
+  }
+  return '<a class="ini-adj-file" href="'+url+'" target="_blank" rel="noopener" download="'+esc(a.filename)+'">'
+    + '<span class="ini-adj-ic">📎</span><span class="ini-adj-nm">'+esc(a.filename)+'</span>'
+    + '<span class="ini-adj-sz">'+iniFmtSize(a.size)+'</span></a>';
 }
-async function opEnviarMsg(){
-  var inp = document.getElementById('opMsg'); if(!inp) return;
-  var t = inp.value.trim(); if(!t) return;
-  var res = await api('/api/inicio/mensajes', { texto:t });
-  if (!res.ok){ alert(res.data.error || 'No se pudo enviar el mensaje.'); return; }
-  inp.value=''; inp.style.height='';
-  INICIO.mensajes.push(res.data.mensaje); INICIO.unread = 0;
-  iniRenderMensajesEn('opFeed'); iniActualizarBell();
+// Envío unificado (admin u operador): texto + canal actual + adjunto opcional (FormData).
+async function iniSend(textareaId, adjKey, feedId, previewId, quitarName){
+  var inp = document.getElementById(textareaId); if(!inp) return;
+  var t = inp.value.trim(); var f = INICIO[adjKey];
+  if (!t && !f) return;
+  var fd = new FormData();
+  fd.append('texto', t);
+  fd.append('canal', INICIO.canal || iniCanalDefault());
+  if (f) fd.append('archivo', f, f.name || 'archivo');
+  var r = await fetch('/api/inicio/mensajes', { method:'POST', body: fd });
+  var data = await r.json().catch(function(){ return {}; });
+  if (!r.ok){ alert((data && data.error) || 'No se pudo enviar el mensaje.'); return; }
+  inp.value=''; inp.style.height=''; INICIO[adjKey]=null; iniRenderAdjunto(previewId, null, quitarName);
+  INICIO.mensajes.push(data.mensaje);
+  if (INICIO.noLeidos) INICIO.noLeidos[INICIO.canal] = 0;
+  INICIO.unread = 0;
+  iniRenderMensajesEn(feedId); iniActualizarBell();
 }
-// Interruptor admin: prende/apaga si, de acá en más, los operadores van a ver
-// los mensajes que escriban los admins (no reescribe lo ya mandado).
-async function iniToggleCompartir(on){
-  var res = await req('POST', '/api/inicio/compartir', { on: !!on });
-  if (!res.ok){ alert(res.data.error || 'No se pudo cambiar.'); var sw = document.getElementById('iniCompartirOperadores'); if (sw) sw.checked = !on; return; }
-  INICIO.compartidoOperadores = !!res.data.compartidoOperadores;
+function iniEnviarMsg(){ iniSend('iniMsg','adjunto','iniFeed','iniAdjPreview','iniQuitarAdjunto'); }
+function opEnviarMsg(){ iniSend('opMsg','adjuntoOp','opFeed','opAdjPreview','opQuitarAdjunto'); }
+// Adjuntos del composer (admin usa INICIO.adjunto; operador INICIO.adjuntoOp).
+function iniPickAdjunto(){ var i=document.getElementById('iniFileInput'); if(i) i.click(); }
+function iniOnFileInput(input){ if(input.files && input.files[0]){ iniSetAdjunto(input.files[0]); input.value=''; } }
+function iniSetAdjunto(f){ if(f.size>30*1024*1024){ alert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjunto=f; iniRenderAdjunto('iniAdjPreview', f, 'iniQuitarAdjunto'); }
+function iniQuitarAdjunto(){ INICIO.adjunto=null; iniRenderAdjunto('iniAdjPreview', null, 'iniQuitarAdjunto'); }
+function opPickAdjunto(){ var i=document.getElementById('opFileInput'); if(i) i.click(); }
+function opOnFileInput(input){ if(input.files && input.files[0]){ opSetAdjunto(input.files[0]); input.value=''; } }
+function opSetAdjunto(f){ if(f.size>30*1024*1024){ alert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjuntoOp=f; iniRenderAdjunto('opAdjPreview', f, 'opQuitarAdjunto'); }
+function opQuitarAdjunto(){ INICIO.adjuntoOp=null; iniRenderAdjunto('opAdjPreview', null, 'opQuitarAdjunto'); }
+function iniRenderAdjunto(boxId, f, quitarName){
+  var box = document.getElementById(boxId); if(!box) return;
+  if (!f){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='';
+  var esImg = String(f.type||'').indexOf('image/')===0;
+  box.innerHTML = (esImg ? '🖼️ ' : '📎 ') + '<span class="ini-adjp-nm">'+esc(f.name||'archivo')+'</span> <span class="ini-adjp-sz">('+iniFmtSize(f.size)+')</span>'
+    + '<button type="button" class="ini-adjp-x" title="Quitar" onclick="'+quitarName+'()">✕</button>';
 }
 function iniHoyISO(){
   var d = new Date();
@@ -1311,8 +1348,9 @@ function iniAccesosToggle(id, on, scope){
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
-  var n = INICIO.unread || 0;
-  if (dot) dot.style.display = n>0 ? '' : 'none';
+  var total = iniTotalNoLeidos();   // campana = todos los canales
+  var n = INICIO.unread || 0;        // badge del panel = canal actual
+  if (dot) dot.style.display = total>0 ? '' : 'none';
   ['iniUnread','opUnread'].forEach(function(id){
     var badge = document.getElementById(id);
     if (!badge) return;
@@ -1322,11 +1360,16 @@ function iniActualizarBell(){
 async function iniRefrescarBell(){
   if (!iniPuedeVerInicio()){ var d=document.getElementById('bellDot'); if(d) d.style.display='none'; return; }
   var res = await api('/api/inicio/no-leidos');
-  if (res.ok){ INICIO.unread = res.data.unread||0; iniActualizarBell(); }
+  if (res.ok){
+    INICIO.noLeidos = res.data.porCanal || {};
+    INICIO.unread = INICIO.noLeidos[INICIO.canal || iniCanalDefault()] || 0;
+    iniActualizarBell();
+    iniRenderCanales();
+  }
 }
 function iniRenderDrawer(){
   var body = document.getElementById('drawerBody'); if(!body) return;
-  var n = INICIO.unread || 0;
+  var n = iniTotalNoLeidos();
   if (iniPuedeVerInicio() && n>0){
     body.innerHTML = '<div class="drawer-item" onclick="closeDrawer();go(\'dash\',navElFor(\'dash\'))">'
       + '<div class="di-ic">💬</div><div class="di-tx"><b>'+n+' mensaje'+(n>1?'s':'')+' nuevo'+(n>1?'s':'')+' en el Inicio</b>'
@@ -2894,11 +2937,11 @@ async function loadResultado(){
   var res = await api('/api/resultado' + (mes ? '?mes=' + encodeURIComponent(mes) : ''));
   if (!res.ok || !res.data) return;
   var d = res.data;
-  // Falta cobrar (arriba, grande) = comisiones de facturas todavía sin cobrar.
-  // Ganancia real del mes (abajo) = lo efectivamente cobrado + ingresos extra − gastos.
+  // Falta cobrar (arriba, grande) = facturas + ingresos extra todavía SIN cobrar.
+  // Ganancia real del mes (abajo) = lo efectivamente cobrado − gastos pagados. Los
+  // ingresos extra ahora funcionan igual que las facturas: cuentan solo si están cobrados.
   var faltaCobrar = 0, cobrado = 0;
-  (d.detalle || []).forEach(function(x){ if (x.cobrado) cobrado += (x.monto || 0); else faltaCobrar += (x.monto || 0); });
-  cobrado += (d.ingresoExtra || 0);
+  (d.detalle || []).concat(d.extras || []).forEach(function(x){ if (x.cobrado) cobrado += (x.monto || 0); else faltaCobrar += (x.monto || 0); });
   var ganancia = cobrado - (d.gastos || 0);
   var bols = document.getElementById('resBolsillo');
   bols.textContent = moneyFmt(faltaCobrar);
@@ -2916,18 +2959,23 @@ async function loadResultado(){
   var box = document.getElementById('resDesglose');
   if (box){
     var hoy = new Date(); hoy = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0') + '-' + String(hoy.getDate()).padStart(2, '0');
-    var filas = (d.detalle || []).map(function(x){
+    var mapFila = function(x){
       var vencido = !x.cobrado && x.fechaCobro && x.fechaCobro < hoy;
       var cls = 'mescurso-line res-cobro-line' + (x.cobrado ? ' cobrado' : (vencido ? ' vencido' : ''));
       var fecha = x.fechaCobro ? x.fechaCobro.split('-').reverse().slice(0, 2).join('/') : '';
-      var nota = fecha ? '<span class="res-fecha">' + (x.cobrado ? '✓ cobrado' : (vencido ? '⚠ cobro vencido ' + fecha : 'cobra ' + fecha)) + '</span>' : '';
+      var nota = fecha
+        ? '<span class="res-fecha">' + (x.cobrado ? '✓ cobrado' : (vencido ? '⚠ cobro vencido ' + fecha : 'cobra ' + fecha)) + '</span>'
+        : (x.cobrado ? '<span class="res-fecha">✓ cobrado</span>' : '');
+      var toggle = x.extra ? 'toggleIngresoCobrado' : 'toggleResCobrado';
+      var etq = x.extra ? ' <span class="res-etq">extra</span>' : '';
       return '<div class="' + cls + '">' +
-        '<span class="res-cobro-nombre"><input type="checkbox" class="res-check" ' + (x.cobrado ? 'checked' : '') + ' onchange="toggleResCobrado(\'' + x.id + '\', this.checked)" title="Marcar cobrado">' +
-        esc(x.name) + ' ' + nota + '</span>' +
-        '<b>' + moneyFmt(x.monto) + '</b>' +
+        '<span class="res-cobro-nombre"><input type="checkbox" class="res-check" ' + (x.cobrado ? 'checked' : '') + ' onchange="' + toggle + '(\'' + esc(x.id) + '\', this.checked)" title="Marcar cobrado">' +
+        esc(x.name) + etq + ' ' + nota + '</span>' +
+        '<b>' + (x.extra ? '+ ' : '') + moneyFmt(x.monto) + '</b>' +
       '</div>';
-    }).join('') || '<div class="mescurso-line"><span class="nom-muted">Sin facturas con cobro en el mes</span><b></b></div>';
-    if ((d.ingresoExtra || 0) > 0) filas += '<div class="mescurso-line"><span>Ingresos extra</span><b>+ ' + moneyFmt(d.ingresoExtra) + '</b></div>';
+    };
+    var filas = (d.detalle || []).map(mapFila).join('') + (d.extras || []).map(mapFila).join('');
+    if (!filas) filas = '<div class="mescurso-line"><span class="nom-muted">Sin facturas ni ingresos con cobro en el mes</span><b></b></div>';
     // La línea muestra el TOTAL de gastos fijos del mes (impacta aunque no se haya
     // pagado); la nota dice cuánto va pagado. La ganancia real de arriba resta solo
     // lo pagado (se descuenta a medida que se paga).
@@ -2941,6 +2989,10 @@ async function loadResultado(){
 }
 async function toggleResCobrado(id, cobrado){
   var res = await req('POST', '/api/facturas/cobrado', { id: id, cobrado: cobrado });
+  if (res.ok) loadResultado();
+}
+async function toggleIngresoCobrado(id, cobrado){
+  var res = await req('POST', '/api/ingresos/cobrado', { id: id, cobrado: cobrado });
   if (res.ok) loadResultado();
 }
 var RES_MESES = ['', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -3014,6 +3066,7 @@ var MESCURSO_POSIBLES_DEBITOS = []; // detalle copiable de los cruces que debita
 var MESCURSO_FALTAN_INFORMES_JULIO = []; // faltan informe del reporte "sin cerrar"
 var MESCURSO_POSIBLES_DEBITOS_JULIO = []; // posibles débitos del reporte "sin cerrar"
 var MESCURSO_DEBITOS_CERRADO = []; // débitos del mes cerrado (card "Cerrado", el ante-último)
+var MESCURSO_FALTAN_INFORMES_CERRADO = []; // faltan informe del mes cerrado (card "Cerrado")
 var MESCURSO_MODULOS = [];          // desglose por módulo del mes en curso
 var MESCURSO_MODULOS_JULIO = [];    // ... del reporte "sin cerrar"
 var MESCURSO_MODULOS_CERRADO = [];  // ... del mes cerrado
@@ -3032,6 +3085,7 @@ function toggleFaltanInformes(){ mesCursoTogglePanel('informes'); }
 function togglePosiblesDebitos(){ mesCursoTogglePanel('debitos'); }
 function toggleAusentes(){ mesCursoTogglePanel('ausentes'); }
 function toggleFaltanInformesJulio(){ mesCursoTogglePanel('informes-julio'); }
+function toggleFaltanInformesCerrado(){ mesCursoTogglePanel('informes-cerrado'); }
 function toggleDebitosJulio(){ mesCursoTogglePanel('debitos-julio'); }
 function toggleDebitosCerrado(){ mesCursoTogglePanel('debitos-cerrado'); }
 function toggleAusentesJulio(){ mesCursoTogglePanel('ausentes-julio'); }
@@ -3047,7 +3101,7 @@ function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
   if (!panel) return;
   var apagarCarets = function(){
-    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoFueraCorteJulioCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret']
+    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoInformesCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoFueraCorteJulioCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret']
       .forEach(function(id){ mesCursoSetCaret(id, false); });
     document.querySelectorAll('[id^="mescursoDebFut-"]').forEach(function(c){ c.textContent = '▸'; });
   };
@@ -3070,6 +3124,10 @@ function mesCursoTogglePanel(tipo){
     var fj = MESCURSO_FALTAN_INFORMES_JULIO || [];
     if (!fj.length) return;
     html = mesCursoTablaHtml('Faltan informes (mes anterior) · ' + fj.length, 'error', 'copiarFaltanInformesJulio', cols, fj.map(mapInformes), 'informes-julio');
+  } else if (tipo === 'informes-cerrado'){
+    var fc = MESCURSO_FALTAN_INFORMES_CERRADO || [];
+    if (!fc.length) return;
+    html = mesCursoTablaHtml('Faltan informes (mes cerrado) · ' + fc.length, 'error', 'copiarFaltanInformesCerrado', cols, fc.map(mapInformes), 'informes-cerrado');
   } else if (tipo === 'debitos-julio'){
     var dj = MESCURSO_POSIBLES_DEBITOS_JULIO || [];
     if (!dj.length) return;
@@ -3125,6 +3183,7 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoInformesJulioCaret', tipo === 'informes-julio');
   mesCursoSetCaret('mescursoDebitosJulioCaret', tipo === 'debitos-julio');
   mesCursoSetCaret('mescursoDebitosCerradoCaret', tipo === 'debitos-cerrado');
+  mesCursoSetCaret('mescursoInformesCerradoCaret', tipo === 'informes-cerrado');
   mesCursoSetCaret('mescursoModulosCaret', tipo === 'modulos');
   mesCursoSetCaret('mescursoModulosJulioCaret', tipo === 'modulos-julio');
   mesCursoSetCaret('mescursoModulosCerradoCaret', tipo === 'modulos-cerrado');
@@ -3170,6 +3229,7 @@ function mesCursoDescargarDatos(panelId){
   if (panelId === 'fueracorte-julio') return { titulo: 'A facturar fuera de corte (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FUERACORTE_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'informes-cerrado') return { titulo: 'Faltan informes (mes cerrado) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_CERRADO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'debitos-julio') return { titulo: 'Posibles débitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [7] };
   if (panelId === 'debitos-cerrado') return { titulo: 'Débitos (mes cerrado) - ' + cli, columnas: debCols, filas: (MESCURSO_DEBITOS_CERRADO || []).map(mapDeb), moneyCols: [7] };
   if (panelId === 'modulos' || panelId === 'modulos-julio' || panelId === 'modulos-cerrado'){
@@ -3235,6 +3295,10 @@ function copiarFueraCorteJulio(btn){
 function copiarFaltanInformesJulio(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
     (MESCURSO_FALTAN_INFORMES_JULIO || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
+}
+function copiarFaltanInformesCerrado(btn){
+  mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
+    (MESCURSO_FALTAN_INFORMES_CERRADO || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
 }
 function copiarPosiblesDebitos(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO'],
@@ -3603,7 +3667,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + (debCount > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()' : '') + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + (debCount > 0 ? ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
-    + '<div class="mescurso-line alert"><span>Faltan informes</span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line alert' + (faltan > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()' : '') + '"><span>Faltan informes' + (faltan > 0 ? ' <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line' + (ausentes > 0 ? ' mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()' : '') + '"><span>Ausentes sin activar' + (ausentes > 0 ? ' <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span>' : '') + '</span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>' + foot + '</div>';
 }
@@ -3658,6 +3722,7 @@ async function loadClientMesCurso(){
   var current2 = dash2 && dash2.current ? dash2.current : null;
   MESCURSO_DEBITOS_CERRADO = (current2 && current2.posiblesDebitosRows) || [];   // detalle de la card "Cerrado"
   MESCURSO_AUSENTES_CERRADO = (current2 && current2.ausentesRows) || [];
+  MESCURSO_FALTAN_INFORMES_CERRADO = (current2 && current2.missingInformeRows) || [];
   MESCURSO_MODULOS_CERRADO = mescMods(current2 && current2.modules);
   var hayJunio = current2 && current2.period === prev2 && ((current2.reportCount || 0) > 0 || (current2.totalRows || 0) > 0);
   var reporte2 = hayJunio ? (reportes.filter(function(r){ return r.dashboardPeriod === prev2; })[0] || null) : null;
@@ -7045,7 +7110,7 @@ function abrirInforme(id){
         var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
         return '<div class="cab-cand">'
           + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
-          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · turno '+esc(c.turno||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
+          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
           + estado
           + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
           + '</div>';
@@ -7164,6 +7229,7 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
+  var lb = document.getElementById('labBtn'); if (lb) lb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Laboratorio (martillo), solo admin
   // Padrón (Afiliados) e Informes recibidos: admin y operador (los USAN); el usuario
   // de demostración los VE pero no puede ejecutar acciones (el backend se las bloquea).
   var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');

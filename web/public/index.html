@@ -164,6 +164,9 @@
           <span class="client-up-header" id="clientHeaderUp" hidden></span>
         </div>
         <div class="sp"></div>
+        <button class="icon-btn" id="labBtn" onclick="go('lab')" title="Laboratorio — sistema en desarrollo" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M15 3l6 6-3 3-6-6 3-3zM12 6L3 15v6h6l9-9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button class="icon-btn" onclick="toggleTheme()" title="Claro / Oscuro">
           <svg id="thIco" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -185,14 +188,14 @@
               <div class="ini-head">
                 <span class="ini-ic">💬</span>
                 <div><h2>Mensajes</h2><div class="ini-meta">Canal interno</div></div>
-                <label class="ini-switch" title="Los mensajes que mandes de acá en más los ven también los operadores">
-                  <input type="checkbox" id="iniCompartirOperadores" onchange="iniToggleCompartir(this.checked)">
-                  <span>Compartir con operadores</span>
-                </label>
+                <div class="ini-canales" id="iniCanales" style="display:none"></div>
                 <span class="ini-unread" id="iniUnread" style="display:none">0</span>
               </div>
               <div class="ini-feed" id="iniFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-adjp" id="iniAdjPreview" style="display:none"></div>
               <div class="ini-composer">
+                <input type="file" id="iniFileInput" style="display:none" onchange="iniOnFileInput(this)">
+                <button class="icon-btn" type="button" title="Adjuntar foto o archivo" onclick="iniPickAdjunto()"><svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 <textarea id="iniMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
                 <button class="btn btn-primary btn-sm" id="iniSend" onclick="iniEnviarMsg()">Enviar</button>
               </div>
@@ -201,10 +204,10 @@
             <section class="card ini-card ini-panel-tareas">
               <div class="ini-head">
                 <span class="ini-ic">✅</span>
-                <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
+                <div class="ini-head-tit"><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
+                <input id="iniTask" class="ini-task-head" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
               </div>
               <div class="ini-addbar">
-                <input id="iniTask" placeholder="Nueva tarea…  (ej. revisar bandeja de UOM)" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
                 <div class="ini-addrow">
                   <span class="ini-lbl">para</span>
                   <div class="ini-assign" id="iniAssign"></div>
@@ -259,7 +262,10 @@
                 <span class="ini-unread" id="opUnread" style="display:none">0</span>
               </div>
               <div class="ini-feed" id="opFeed"><div class="ini-empty">Cargando…</div></div>
+              <div class="ini-adjp" id="opAdjPreview" style="display:none"></div>
               <div class="ini-composer">
+                <input type="file" id="opFileInput" style="display:none" onchange="opOnFileInput(this)">
+                <button class="icon-btn" type="button" title="Adjuntar foto o archivo" onclick="opPickAdjunto()"><svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8.5-8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 <textarea id="opMsg" rows="1" placeholder="Escribí un mensaje…  (Enter para enviar)"></textarea>
                 <button class="btn btn-primary btn-sm" id="opSend" onclick="opEnviarMsg()">Enviar</button>
               </div>
@@ -1350,6 +1356,13 @@
         </section>
 
         <!-- ADMINISTRACIÓN / GASTOS -->
+        <section id="view-lab" style="display:none">
+          <div class="card" style="text-align:center;padding:64px 24px;color:var(--text-2)">
+            <div style="font-size:44px;margin-bottom:10px">🔨</div>
+            <h2 style="margin:0 0 6px;color:var(--text)">Laboratorio</h2>
+            <p style="margin:0">Espacio en blanco para desarrollar el sistema paralelo.</p>
+          </div>
+        </section>
         <section id="view-soon" style="display:none">
           <div class="card general-card">
             <div class="general-card-head">

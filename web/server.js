@@ -63,43 +63,45 @@ function saveHonorarios(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.
 const cruzasFile = path.join(dataDir, "cruzas.json");
 function loadCruzas() { try { const j = JSON.parse(fs.readFileSync(cruzasFile, "utf8")); return j && typeof j === "object" ? j : {}; } catch { return {}; } }
 function saveCruzas(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(cruzasFile, JSON.stringify(store, null, 2)); }
-// Inicio: canal interno de mensajes entre admins + tareas compartidas. `leido`
-// guarda, por usuario, hasta qué momento vio los mensajes (para el "no leídos").
+// Inicio: mensajes por CANAL + tareas compartidas. Dos canales en el mismo espacio:
+// "seba" (Nacho↔Seba, solo admins) y "operadores" (admins + operadores). `leido`
+// guarda, por usuario y canal, hasta qué momento vio los mensajes. Los mensajes
+// pueden llevar un adjunto (foto/archivo) guardado en inicioAdjuntosDir.
 const inicioFile = path.join(dataDir, "inicio.json");
+const inicioAdjuntosDir = path.join(dataDir, "inicio_adjuntos");
+const INICIO_CANALES = ["seba", "operadores"];
+function inicioCanalNorm(c) { c = String(c || "seba").toLowerCase(); return INICIO_CANALES.indexOf(c) >= 0 ? c : "seba"; }
+// Quién ve/escribe cada canal: "operadores" lo ven admin y operador; "seba" solo admin.
+function puedeCanalInicio(me, canal) { return canal === "operadores" ? esOperativo(me) : (!!me && me.role === "admin"); }
+function inicioCanalesVisibles(me) { return INICIO_CANALES.filter((c) => puedeCanalInicio(me, c)); }
+// Canal de un mensaje. Migración del modelo viejo: un mensaje sin `canal` que estaba
+// marcado visibleOperadores pasa a ser del canal "operadores"; el resto, "seba".
+function inicioCanalDeMsg(m) { return m.canal || (m.visibleOperadores ? "operadores" : "seba"); }
 function loadInicio() {
   try {
     const j = JSON.parse(fs.readFileSync(inicioFile, "utf8"));
     if (!j || typeof j !== "object") throw 0;
-    return {
-      mensajes: Array.isArray(j.mensajes) ? j.mensajes : [],
-      tareas: Array.isArray(j.tareas) ? j.tareas : [],
-      leido: (j.leido && typeof j.leido === "object") ? j.leido : {},
-      // Interruptor admin: "los operadores pueden ver desde acá". Cada mensaje
-      // de un admin guarda el estado de este interruptor AL MOMENTO de
-      // escribirlo (ver visibleOperadores abajo) - cambiarlo no reescribe lo
-      // ya enviado, solo define lo que se manda de ahora en más.
-      compartidoOperadores: !!j.compartidoOperadores,
-    };
-  } catch { return { mensajes: [], tareas: [], leido: {}, compartidoOperadores: false }; }
+    return { mensajes: Array.isArray(j.mensajes) ? j.mensajes : [], tareas: Array.isArray(j.tareas) ? j.tareas : [], leido: (j.leido && typeof j.leido === "object") ? j.leido : {} };
+  } catch { return { mensajes: [], tareas: [], leido: {} }; }
 }
 function saveInicio(store) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(inicioFile, JSON.stringify(store, null, 2)); }
-// No leídos = mensajes de OTRO autor posteriores al último "visto" del usuario.
-// Para un operador, solo cuentan los mensajes que puede ver (soloVisibles=true).
-function inicioNoLeidos(store, username, soloVisibles) {
-  const desde = store.leido[username] || "";
-  return (store.mensajes || []).filter((m) => {
-    if (m.autor === username) return false;
-    if (String(m.at) <= desde) return false;
-    if (soloVisibles && !m.visibleOperadores) return false;
-    return true;
-  }).length;
+// `leido[usuario]` es {seba, operadores}. Legacy: string = era el canal "seba".
+function inicioLeidoDe(store, username, canal) {
+  const v = store.leido[username];
+  if (typeof v === "string") return canal === "seba" ? v : "";
+  return (v && v[canal]) || "";
 }
-// Mensajes que un usuario puede ver: admin los ve todos; un operador solo los
-// marcados visibleOperadores (compartidos a propósito) + los suyos propios.
-function inicioMensajesPara(store, me) {
-  const todos = store.mensajes || [];
-  if (me.role === "admin") return todos;
-  return todos.filter((m) => m.visibleOperadores || m.autor === me.username);
+function inicioSetLeido(store, username, canal, at) {
+  let v = store.leido[username];
+  if (typeof v === "string") v = { seba: v };
+  if (!v || typeof v !== "object") v = {};
+  v[canal] = at;
+  store.leido[username] = v;
+}
+// No leídos de un canal = mensajes de OTRO autor, en ese canal, posteriores al "visto".
+function inicioNoLeidos(store, username, canal) {
+  const desde = inicioLeidoDe(store, username, canal);
+  return (store.mensajes || []).filter((m) => inicioCanalDeMsg(m) === canal && m.autor !== username && String(m.at) > desde).length;
 }
 // Tareas de antes del multi-asignado guardaban .para como string único (""
 // para "sin asignar", ya no permitido en tareas nuevas). Normaliza a array
@@ -369,6 +371,21 @@ function ingresosExtraDelMes(mes, dolarValor) {
     total += ingresoNSShare(g, dolarValor);
   }
   return total;
+}
+// Detalle de los ingresos extra del mes, con su estado de cobrado — para que el
+// Resumen los trate igual que las facturas (checkbox, cuentan solo si están cobrados).
+function ingresosExtraDetalle(mes, dolarValor) {
+  const store = loadIngresos();
+  return store.ingresos
+    .filter((g) => String(g.mes || "") === mes)
+    .map((g) => ({
+      id: g.id,
+      name: g.descripcion || "Ingreso extra",
+      monto: ingresoNSShare(g, dolarValor),
+      cobrado: !!g.cobrado,
+      fechaCobro: g.fechaCobro || "",
+      extra: true,
+    }));
 }
 // Cotización del dólar oficial (venta), cacheada 3h para no golpear la API.
 let _DOLAR_CACHE = { valor: 0, fecha: "", ts: 0 };
@@ -4686,73 +4703,116 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/inicio" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
+    const canal = inicioCanalNorm(url.searchParams.get("canal"));
+    if (!puedeCanalInicio(me, canal)) return json(res, 403, { error: "No tenés acceso a este canal." });
     const store = loadInicio();
+    const esAdmin = me.role === "admin";
     // Asignables de una tarea: admins + operadores activos (un admin le puede
     // asignar una tarea a Javi igual que a otro admin).
     const asignables = usuariosAsignablesTareas();
-    const esAdmin = me.role === "admin";
     const todasNormalizadas = (store.tareas || []).map(normalizarTareaPara);
+    const noLeidos = {};
+    inicioCanalesVisibles(me).forEach((c) => { noLeidos[c] = inicioNoLeidos(store, me.username, c); });
     return json(res, 200, {
       yo: me.username,
       esAdmin,
+      canal,
+      canales: inicioCanalesVisibles(me),
       admins: asignables,
-      mensajes: inicioMensajesPara(store, me).slice(-200),
+      mensajes: (store.mensajes || []).filter((m) => inicioCanalDeMsg(m) === canal).slice(-200),
       // El admin ve todas las tareas; un operador solo ve las suyas (donde
       // figura como asignado) - puede crear, ver y resolver las propias, pero
       // no las de otro admin/operador.
       tareas: esAdmin ? todasNormalizadas : todasNormalizadas.filter((t) => t.para.includes(me.username)),
-      unread: inicioNoLeidos(store, me.username, !esAdmin),
-      compartidoOperadores: !!store.compartidoOperadores,
+      noLeidos,
+      unread: noLeidos[canal] || 0,
     });
   }
-  // Solo el contador de no leídos (para la campana; más liviano que traer todo).
+  // No leídos POR CANAL (para la campana). Total + desglose por canal.
   if (p === "/api/inicio/no-leidos" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin" && me.role !== "operador") return json(res, 200, { unread: 0 });
-    return json(res, 200, { unread: inicioNoLeidos(loadInicio(), me.username, me.role !== "admin") });
+    const store = loadInicio();
+    const porCanal = {}; let total = 0;
+    inicioCanalesVisibles(me).forEach((c) => { const n = inicioNoLeidos(store, me.username, c); porCanal[c] = n; total += n; });
+    return json(res, 200, { unread: total, porCanal });
   }
   if (p === "/api/inicio/mensajes" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
-    const body = await readBody(req);
-    const texto = String((body && body.texto) || "").trim().slice(0, 4000);
-    if (!texto) return json(res, 400, { error: "El mensaje está vacío." });
+    // JSON (solo texto) o multipart (texto + un adjunto: foto/archivo).
+    const ct = String(req.headers["content-type"] || "");
+    let texto = "", canal = "seba", adjunto = null;
+    const MIME = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+      ".webp": "image/webp", ".bmp": "image/bmp", ".heic": "image/heic", ".pdf": "application/pdf",
+      ".doc": "application/msword", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xls": "application/vnd.ms-excel", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".txt": "text/plain", ".csv": "text/csv", ".zip": "application/zip" };
+    if (ct.indexOf("multipart/form-data") >= 0) {
+      const raw = await readBuffer(req, 30 * 1024 * 1024);
+      const mp = extractMultipartFiles(raw, ct);
+      texto = String((mp.fields && mp.fields.texto) || "").trim().slice(0, 4000);
+      canal = inicioCanalNorm(mp.fields && mp.fields.canal);
+      if (!puedeCanalInicio(me, canal)) return json(res, 403, { error: "No tenés acceso a este canal." });
+      if (mp.files && mp.files.length) {
+        const f = mp.files[0];
+        const ext = path.extname(f.filename || "").toLowerCase().slice(0, 12);
+        const id = crypto.randomBytes(8).toString("hex");
+        const stored = id + ext;
+        fs.mkdirSync(inicioAdjuntosDir, { recursive: true });
+        fs.writeFileSync(path.join(inicioAdjuntosDir, stored), f.data);
+        adjunto = { id, filename: String(f.filename || "archivo").slice(0, 200), stored,
+          tipo: MIME[ext] || "application/octet-stream", size: f.data.length };
+      }
+    } else {
+      const body = await readBody(req);
+      texto = String((body && body.texto) || "").trim().slice(0, 4000);
+      canal = inicioCanalNorm(body && body.canal);
+      if (!puedeCanalInicio(me, canal)) return json(res, 403, { error: "No tenés acceso a este canal." });
+    }
+    if (!texto && !adjunto) return json(res, 400, { error: "El mensaje está vacío." });
     const store = loadInicio();
-    // Un mensaje de operador siempre es visible para operadores (es suyo). Uno
-    // de admin queda visible solo si el interruptor "compartir" está prendido
-    // en este momento - cambiar el interruptor después no lo modifica.
-    const visibleOperadores = me.role === "operador" ? true : !!store.compartidoOperadores;
-    const msg = { id: crypto.randomUUID(), autor: me.username, autorNombre: me.name || me.username, texto, at: new Date().toISOString(), visibleOperadores };
+    const msg = { id: crypto.randomUUID(), canal, autor: me.username, autorNombre: me.name || me.username, texto, at: new Date().toISOString() };
+    if (adjunto) msg.adjunto = adjunto;
     store.mensajes.push(msg);
-    store.mensajes = store.mensajes.slice(-500);
-    store.leido[me.username] = msg.at; // el que escribe ya vio todo hasta acá
+    store.mensajes = store.mensajes.slice(-800);
+    inicioSetLeido(store, me.username, canal, msg.at);
     saveInicio(store);
     return json(res, 201, { ok: true, mensaje: msg });
   }
-  // Marcar como leídos (al abrir el Inicio): mueve el "visto" del usuario a ahora.
+  // Servir un adjunto: solo si el usuario ve el canal del mensaje.
+  const inicioAdjMatch = p.match(/^\/api\/inicio\/adjuntos\/([a-f0-9]{6,})$/);
+  if (inicioAdjMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const store = loadInicio();
+    const msg = (store.mensajes || []).find((m) => m.adjunto && m.adjunto.id === inicioAdjMatch[1]);
+    if (!msg || !msg.adjunto) return json(res, 404, { error: "No encontrado." });
+    if (!puedeCanalInicio(me, inicioCanalDeMsg(msg))) return json(res, 403, { error: "forbidden" });
+    const file = path.join(inicioAdjuntosDir, msg.adjunto.stored);
+    if (!fs.existsSync(file)) return json(res, 404, { error: "Archivo no encontrado." });
+    const data = fs.readFileSync(file);
+    const esImg = String(msg.adjunto.tipo || "").indexOf("image/") === 0;
+    res.writeHead(200, {
+      "Content-Type": msg.adjunto.tipo || "application/octet-stream",
+      "Content-Disposition": (esImg ? "inline" : "attachment") + '; filename="' + encodeURIComponent(msg.adjunto.filename) + '"',
+      "Content-Length": data.length,
+      "Cache-Control": "private, max-age=86400",
+    });
+    res.end(data);
+    return;
+  }
+  // Marcar como leídos un canal (al abrirlo): mueve el "visto" del usuario a ahora.
   if (p === "/api/inicio/mensajes/leidos" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
+    const body = await readBody(req);
+    const canal = inicioCanalNorm(body && body.canal);
+    if (!puedeCanalInicio(me, canal)) return json(res, 403, { error: "No tenés acceso a este canal." });
     const store = loadInicio();
-    store.leido[me.username] = new Date().toISOString();
+    inicioSetLeido(store, me.username, canal, new Date().toISOString());
     saveInicio(store);
     return json(res, 200, { ok: true, unread: 0 });
-  }
-  // Prender/apagar si los operadores ven, DE ACÁ EN MÁS, los mensajes que
-  // escriban los admins (solo admin puede tocar este interruptor).
-  if (p === "/api/inicio/compartir" && req.method === "POST") {
-    const me = getSessionUser(req);
-    if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
-    const body = await readBody(req);
-    const store = loadInicio();
-    store.compartidoOperadores = !!(body && body.on);
-    saveInicio(store);
-    return json(res, 200, { ok: true, compartidoOperadores: store.compartidoOperadores });
   }
   if (p === "/api/inicio/tareas" && req.method === "POST") {
     const me = getSessionUser(req);
@@ -5536,6 +5596,19 @@ const server = http.createServer(async (req, res) => {
     saveFacturas(store);
     return json(res, 200, { ok: true });
   }
+  // Marcar un ingreso extra como cobrado / no cobrado (misma lógica que las facturas).
+  if (p === "/api/ingresos/cobrado" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const id = String((b && b.id) || "").trim();
+    const store = loadIngresos();
+    const g = store.ingresos.find((x) => x.id === id);
+    if (!g) return json(res, 404, { error: "Ingreso no encontrado." });
+    g.cobrado = !!(b && b.cobrado);
+    saveIngresos(store);
+    return json(res, 200, { ok: true });
+  }
   // Borrar un registro de factura.
   const facturaDelMatch = p.match(/^\/api\/facturas\/([^/]+)$/);
   if (facturaDelMatch && req.method === "DELETE") {
@@ -5748,6 +5821,7 @@ const server = http.createServer(async (req, res) => {
       bolsilloSeba: del.ingresoSeba + extraMitad - gastosMitad,
       facturasContadas: del.facturasContadas,
       detalle: del.detalle,
+      extras: ingresosExtraDetalle(mes, dolar.valor),
       serie,
     });
   }
