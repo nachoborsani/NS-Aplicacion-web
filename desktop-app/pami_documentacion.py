@@ -3046,6 +3046,7 @@ class PamiDocumentacionController:
         self.headless = headless
         self._sesion: SesionDocumentacion | None = None
         self._sesion_thread_id: int | None = None
+        self._ultimo_dialogo = ""  # último alert/confirm nativo de PAMI (ej. "afiliado inactivo")
         self.cancel_event = None
         self.rango_turno_fallback: tuple[str, str] | None = None
 
@@ -3101,6 +3102,10 @@ class PamiDocumentacionController:
                 viewport={"width": 1280, "height": 900},
             )
             page = context.new_page()
+            # Capturar los diálogos nativos de PAMI ("pe.pami.org.ar dice…"), que
+            # Playwright descartaría en silencio. Guardamos el texto para poder
+            # reportar el motivo real (ej. afiliado inactivo al transmitir).
+            page.on("dialog", self._on_dialog)
             page.set_default_timeout(20000)
             page.set_default_navigation_timeout(45000)
             page.goto(
@@ -4583,7 +4588,34 @@ class PamiDocumentacionController:
         except Exception:
             pass
 
+    def _on_dialog(self, dialog) -> None:
+        # PAMI muestra alerts nativos ("pe.pami.org.ar dice…"). Guardamos el texto
+        # y aceptamos (un alert solo tiene OK; y ya forzamos confirm=true igual).
+        try:
+            self._ultimo_dialogo = dialog.message or ""
+        except Exception:
+            self._ultimo_dialogo = ""
+        # Descartar (no aceptar): es lo que hacía Playwright por defecto sin
+        # handler, así no cambiamos el comportamiento de ningún confirm nativo.
+        try:
+            dialog.dismiss()
+        except Exception:
+            try:
+                dialog.accept()
+            except Exception:
+                pass
+
+    def _dialogo_afiliado_inactivo(self) -> bool:
+        # ¿El último diálogo de PAMI dice que el afiliado no estaba activo en el
+        # padrón a la fecha de la práctica? (motivo real por el que no transmite).
+        m = str(self._ultimo_dialogo or "").lower()
+        m = m.translate(str.maketrans("áéíóú", "aeiou"))
+        return ("no se encontraba activa" in m or "no se encuentra activa" in m
+                or "activa en el padron" in m
+                or ("padron" in m and "activa" in m))
+
     def _transmitir_orden(self, page: Page, nro_orden: str, documentacion_confirmada: bool = False) -> None:
+        self._ultimo_dialogo = ""  # limpiar antes de transmitir esta OME
         elegible = self._estado_transmision_orden(page, nro_orden)
         self._log(f"Estado transmision detectado para OME {nro_orden}: {elegible}")
         if elegible.get("transmitida"):
@@ -5005,6 +5037,8 @@ class PamiDocumentacionController:
             if estado:
                 self._log(f"Transmision confirmada en PAMI para OME {nro_orden}.")
                 return
+            if self._dialogo_afiliado_inactivo():
+                raise RuntimeError("Afiliado inactivo en el padron del INSSJP a la fecha de la practica: PAMI no permite transmitir.")
             raise RuntimeError("Documentacion cargada, pero la OME sigue sin figurar transmitida.")
         self._log(f"Transmision confirmada en PAMI para OME {nro_orden}.")
 
