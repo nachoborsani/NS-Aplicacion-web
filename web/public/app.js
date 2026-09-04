@@ -5131,10 +5131,19 @@ async function aplicarDebitosPami(){
     else { r.debitType = tipo; r.debitAmount = 0; }
   }
   var rows = CLIENT_REPORT_ROWS || [];
-  // La validación real REEMPLAZA la proyección automática: limpiamos primero los
-  // débitos que puso la regla, y contamos si había acertado.
-  var reglaAntes = 0, reglaAcerto = 0;
-  rows.forEach(function(r){ if (r.debitSource === 'regla'){ reglaAntes++; r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0; r.autoDebit = false; r.debitSource = ''; } });
+  // Pegar la validación de PAMI es un REEMPLAZO TOTAL: el listado pegado es la
+  // verdad completa, así que lo que NO está en él no vino debitado. Limpiamos
+  // TODO débito anterior —la proyección automática de la regla y también los que
+  // se pegaron antes— y después aplicamos solo el listado nuevo.
+  var reglaAntes = 0, pegadosAntes = 0;
+  rows.forEach(function(r){
+    if (r.debitSource === 'regla') reglaAntes++;
+    else if (r.manualDebit || r.debitSource) pegadosAntes++;
+    if (r.manualDebit || r.debitSource){
+      r.manualDebit = false; r.debitType = 'total'; r.debitAmount = 0;
+      r.autoDebit = false; r.debitSource = ''; r.debitMotivo = '';
+    }
+  });
   var used = {}, aplicados = 0, sinMatch = [], umbralAplicados = 0;
   items.forEach(function(it){
     var afN = it.afiliado.replace(/\D/g, '');
@@ -5157,9 +5166,19 @@ async function aplicarDebitosPami(){
   saveClientReportDraft();
   // Mensaje de éxito (verde) — deja claro que se cargaron.
   var msg = '✓ Débitos cargados: se aplicaron ' + aplicados + ' de ' + items.length + ' fila' + (items.length !== 1 ? 's' : '') + ' detectada' + (items.length !== 1 ? 's' : '') + '. Quedan confirmados al guardar el reporte.';
-  if (reglaAntes) msg += ' (La regla automática había proyectado ' + reglaAntes + '; ahora manda la validación de PAMI.)';
+  if (reglaAntes || pegadosAntes){
+    var limpiados = [];
+    if (reglaAntes) limpiados.push(reglaAntes + ' de la regla automática');
+    if (pegadosAntes) limpiados.push(pegadosAntes + ' pegado' + (pegadosAntes !== 1 ? 's' : '') + ' antes');
+    msg += ' (Reemplazo total: se limpiaron ' + limpiados.join(' y ') + '; ahora manda solo lo que pegaste.)';
+  }
   if (sinMatch.length) msg += ' Sin match (' + sinMatch.length + '): ' + sinMatch.slice(0, 8).join(', ') + (sinMatch.length > 8 ? '…' : '');
-  resEl.textContent = aplicados ? msg : 'No se aplicó ningún débito (ninguna fila matcheó con la bandeja).';
+  // Si no matcheó nada pero se limpiaron débitos anteriores (reemplazo total),
+  // avisar fuerte: quedó sin débitos. Si el pegado era el equivocado, NO guardar.
+  var msgVacio = (reglaAntes || pegadosAntes)
+    ? '⚠ No matcheó ninguna fila del listado con la bandeja, y se limpiaron los ' + (reglaAntes + pegadosAntes) + ' débitos anteriores: el reporte quedó SIN débitos. Si el listado era el equivocado, cerrá sin guardar el reporte.'
+    : 'No se aplicó ningún débito (ninguna fila matcheó con la bandeja).';
+  resEl.textContent = aplicados ? msg : msgVacio;
   resEl.className = aplicados ? 'pami-ok' : 'msg err';
   // Botones: dejar claro que ya se aplicó.
   var applyBtn = document.getElementById('pamiDebitApply');
