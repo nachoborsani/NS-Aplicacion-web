@@ -175,6 +175,9 @@
   .side-collapse:hover{background:rgba(255,255,255,.22);color:#fff}
   body.sidebar-collapsed .sidebar{width:var(--sidebar-wc)}
   body.sidebar-collapsed .main{margin-left:var(--sidebar-wc)}
+  /* Laboratorio: menú mínimo — logo + Inicio (primer item del nav) + pie del sidebar.
+     Se esconde el resto del nav para tener el espacio limpio del sistema paralelo. */
+  body.lab-mode .nav > *:not(:first-child){display:none}
   body.sidebar-collapsed .sidebar .brand{padding:6px 6px 14px}
   body.sidebar-collapsed .logo-side{width:42px}
   body.sidebar-collapsed .side-collapse{right:0;left:0;margin:0 auto}
