@@ -191,11 +191,17 @@ def tarea_subir(web, slug, payload, tlog):
             continue
         if len(omes) > 1:
             tlog(f"{it.get('filename','')[:24]} cubre {len(omes)} OMEs → se sube a cada una")
+        # El turno define el rango de fechas con que el bot filtra el panel de
+        # Transmisión. Sin turno, PAMI filtra por defecto (mes actual) y no
+        # aparecen las OMEs de meses anteriores → "No se encontró la OME". Lo
+        # tomamos del match (prestación de la bandeja) o de la fecha del informe.
+        turno = p.get("turno") or ex.get("fecha") or ""
         for ome in omes:
             items.append({
                 "archivo": str(dest), "filename": it.get("filename", ""),
                 "prestacion": {"n_orden": ome, "beneficio": p.get("beneficio") or ex.get("beneficio") or "",
-                               "nombre": ex.get("nombre", ""), "practica": ex.get("practica", "")},
+                               "nombre": ex.get("nombre", ""), "practica": ex.get("practica", ""),
+                               "turno": turno},
             })
     if not items:
         return {"total": 0, "subidos": 0, "detalle": []}
