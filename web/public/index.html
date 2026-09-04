@@ -264,13 +264,48 @@
                 <button class="btn btn-primary btn-sm" id="opSend" onclick="opEnviarMsg()">Enviar</button>
               </div>
             </section>
-            <section class="card ini-card op-panel-accesos">
-              <div class="ini-head"><span class="ini-ic">⚡</span><div><h2>Accesos rápidos</h2></div></div>
-              <div class="ini-empty">Próximamente.</div>
-            </section>
             <section class="card ini-card op-panel-pendientes">
               <div class="ini-head"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2><div class="ini-meta" id="opPendMeta">—</div></div></div>
-              <ul class="ini-pendop-list ini-pendop-list-wide" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
+              <ul class="ini-pendop-list ini-pendop-list-cortita" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
+              <!-- Tareas propias: mismo mecanismo que las de los admins (título +
+                   fecha opcional, se resuelven o se reprograman si se vencen),
+                   pero acá Javi se las crea a sí mismo, sin elegir a quién. -->
+              <div class="op-tareas">
+                <div class="op-tareas-head">Tareas</div>
+                <div class="ini-addbar">
+                  <input id="opTask" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();opAgregarTarea();}">
+                  <div class="ini-addrow">
+                    <span class="ini-lbl">vence</span>
+                    <input type="date" id="opTaskVence" class="ini-vence-in" title="Fecha de vencimiento (opcional)">
+                    <button class="btn btn-primary btn-sm" id="opAddTask" style="margin-left:auto" onclick="opAgregarTarea()">+ Agregar</button>
+                  </div>
+                </div>
+                <div class="ini-tasks">
+                  <ul class="ini-list" id="opTasksOpen"></ul>
+                  <div class="ini-donewrap closed" id="opTasksDoneWrap">
+                    <div class="ini-donehead" onclick="document.getElementById('opTasksDoneWrap').classList.toggle('closed')">
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      Hechas <span class="ini-donecnt">(<span id="opTasksDoneCnt">0</span>)</span>
+                    </div>
+                    <ul class="ini-list" id="opTasksDone"></ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <!-- Accesos rápidos: mismo catálogo/editor que en el Inicio del admin
+                 (ver iniAccesos* en app.js), con ids propios porque las 2 vistas
+                 conviven en el DOM (una queda oculta, no se destruye). -->
+            <section class="card ini-card op-panel-accesos">
+              <div class="ini-head">
+                <span class="ini-ic">⚡</span>
+                <div><h2>Accesos rápidos</h2></div>
+                <button class="btn btn-ghost btn-sm" id="opAccesosEditBtn" onclick="iniAccesosToggleEditor('op')">Editar</button>
+              </div>
+              <div class="ini-accesos-grid" id="opAccesosGrid"></div>
+              <div class="ini-accesos-editor" id="opAccesosEditor" style="display:none">
+                <div class="ini-meta" id="opAccesosContador">0 / 9 elegidos</div>
+                <div class="ini-accesos-catalogo" id="opAccesosCatalogo"></div>
+              </div>
             </section>
           </div>
         </section>

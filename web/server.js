@@ -109,6 +109,19 @@ function normalizarTareaPara(t) {
   const para = Array.isArray(t.para) ? t.para : (t.para ? [t.para] : []);
   return Object.assign({}, t, { para });
 }
+// ¿Esta tarea tiene a `username` como asignado? (soporta el .para viejo, de
+// antes del multi-asignado, guardado como string único).
+function tareaEsDe(t, username) {
+  const para = Array.isArray(t.para) ? t.para : (t.para ? [t.para] : []);
+  return para.includes(username);
+}
+// A quién se le puede asignar una tarea: admins + operadores activos (hoy
+// Javi es el único operador, pensado para más).
+function usuariosAsignablesTareas() {
+  return (loadUsers() || [])
+    .filter((u) => (u.role === "admin" || u.role === "operador") && u.active !== false)
+    .map((u) => ({ username: u.username, nombre: u.name || u.username }));
+}
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -4669,26 +4682,26 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
-  // ==================== INICIO: mensajes (admin + operador) y tareas (solo admin) ====================
+  // ==================== INICIO: mensajes (admin + operador) y tareas ====================
   if (p === "/api/inicio" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const store = loadInicio();
-    const admins = (loadUsers() || [])
-      .filter((u) => u.role === "admin" && u.active !== false)
-      .map((u) => ({ username: u.username, nombre: u.name || u.username }));
+    // Asignables de una tarea: admins + operadores activos (un admin le puede
+    // asignar una tarea a Javi igual que a otro admin).
+    const asignables = usuariosAsignablesTareas();
     const esAdmin = me.role === "admin";
+    const todasNormalizadas = (store.tareas || []).map(normalizarTareaPara);
     return json(res, 200, {
       yo: me.username,
       esAdmin,
-      admins,
+      admins: asignables,
       mensajes: inicioMensajesPara(store, me).slice(-200),
-      // Tareas siguen siendo un panel solo-admin (no se le manda nada a un operador).
-      // .para se normaliza a array acá: tareas viejas (de antes del multi-asignado)
-      // lo tenían como string único ("" = sin asignar, hoy ya no permitido para
-      // tareas nuevas) - normalizar solo en la salida no reescribe el archivo.
-      tareas: esAdmin ? (store.tareas || []).map(normalizarTareaPara) : [],
+      // El admin ve todas las tareas; un operador solo ve las suyas (donde
+      // figura como asignado) - puede crear, ver y resolver las propias, pero
+      // no las de otro admin/operador.
+      tareas: esAdmin ? todasNormalizadas : todasNormalizadas.filter((t) => t.para.includes(me.username)),
       unread: inicioNoLeidos(store, me.username, !esAdmin),
       compartidoOperadores: !!store.compartidoOperadores,
     });
@@ -4744,17 +4757,24 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/inicio/tareas" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const body = await readBody(req);
     const titulo = String((body && body.titulo) || "").trim().slice(0, 300);
-    // Una tarea siempre tiene que quedar asignada a 1 o a los 2 admins - nunca
-    // "sin asignar" (a diferencia de las tareas viejas, que sí lo permitían).
-    const adminsValidos = new Set((loadUsers() || []).filter((u) => u.role === "admin" && u.active !== false).map((u) => u.username));
-    const paraCruda = Array.isArray(body && body.para) ? body.para : (body && body.para ? [body.para] : []);
-    const para = [...new Set(paraCruda.map((v) => String(v || "").trim()).filter((v) => adminsValidos.has(v)))];
+    // Una tarea siempre tiene que quedar asignada a alguien - nunca "sin
+    // asignar" (a diferencia de las tareas viejas, que sí lo permitían). Un
+    // admin puede asignarla a cualquier admin/operador activo; un operador
+    // solo se la crea a sí mismo (no delega en nadie más).
+    let para;
+    if (me.role === "operador") {
+      para = [me.username];
+    } else {
+      const asignablesValidos = new Set(usuariosAsignablesTareas().map((u) => u.username));
+      const paraCruda = Array.isArray(body && body.para) ? body.para : (body && body.para ? [body.para] : []);
+      para = [...new Set(paraCruda.map((v) => String(v || "").trim()).filter((v) => asignablesValidos.has(v)))];
+    }
     const vence = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.vence) || "")) ? String(body.vence) : "";
     if (!titulo) return json(res, 400, { error: "La tarea está vacía." });
-    if (!para.length) return json(res, 400, { error: "Asigná la tarea a Ignacio y/o Sebastian." });
+    if (!para.length) return json(res, 400, { error: "Asigná la tarea a alguien." });
     const store = loadInicio();
     const tarea = { id: crypto.randomUUID(), titulo, para, creadaPor: me.username, creadaPorNombre: me.name || me.username, hecha: false, at: new Date().toISOString(), hechaAt: "", vence };
     store.tareas.unshift(tarea);
@@ -4763,30 +4783,34 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { ok: true, tarea });
   }
   // Tildar/destildar una tarea. (POST /api/inicio/tareas/<id>/toggle)
+  // Un admin puede tildar cualquiera; un operador solo las que tiene asignadas.
   if (p.startsWith("/api/inicio/tareas/") && p.endsWith("/toggle") && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const id = p.slice("/api/inicio/tareas/".length, -"/toggle".length);
     const store = loadInicio();
     const t = (store.tareas || []).find((x) => x.id === id);
     if (!t) return json(res, 404, { error: "Tarea no encontrada." });
+    if (me.role === "operador" && !tareaEsDe(t, me.username)) return json(res, 403, { error: "Esa tarea no es tuya." });
     t.hecha = !t.hecha;
     t.hechaAt = t.hecha ? new Date().toISOString() : "";
     saveInicio(store);
     return json(res, 200, { ok: true, tarea: t });
   }
   // Poner / cambiar / quitar la fecha de vencimiento. (POST .../tareas/<id>/vence)
+  // Mismo criterio que toggle: un operador solo reprograma lo suyo.
   if (p.startsWith("/api/inicio/tareas/") && p.endsWith("/vence") && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const id = p.slice("/api/inicio/tareas/".length, -"/vence".length);
     const body = await readBody(req);
     const vence = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.vence) || "")) ? String(body.vence) : "";
     const store = loadInicio();
     const t = (store.tareas || []).find((x) => x.id === id);
     if (!t) return json(res, 404, { error: "Tarea no encontrada." });
+    if (me.role === "operador" && !tareaEsDe(t, me.username)) return json(res, 403, { error: "Esa tarea no es tuya." });
     t.vence = vence;
     saveInicio(store);
     return json(res, 200, { ok: true, tarea: t });

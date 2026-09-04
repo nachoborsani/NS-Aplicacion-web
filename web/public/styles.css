@@ -294,7 +294,10 @@
      operador + accesos rápidos - grid 2x2 fijo (antes eran 2 tarjetas de alto
      libre en una sola fila, que con muchos mensajes/tareas crecían sin límite
      y no dejaba lugar para las 2 tarjetas nuevas de abajo). */
-  .ini-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;align-items:start;margin-top:18px}
+  /* align-items normal (stretch): las 2 tarjetas de cada fila quedan del mismo
+     alto - antes (align-items:start) la más corta se cortaba a su propio
+     contenido y dejaba un hueco vacío al lado de la más alta. */
+  .ini-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;margin-top:18px}
   .ini-panel-msg{grid-column:1;grid-row:1}
   .ini-panel-tareas{grid-column:2;grid-row:1}
   .ini-panel-pendop{grid-column:1;grid-row:2}
@@ -332,16 +335,14 @@
   .ini-switch input:checked::before{transform:translateX(13px)}
   /* Badge de visibilidad por mensaje (solo lo ve un admin, junto al nombre) */
   .ini-vis-badge{margin-left:6px;font-size:10px;opacity:.8}
-  /* Panel de operador (Inicio): rojo=chat, azul=accesos (ocupa las 2 filas de
-     la derecha), verde=pendientes - mismo espíritu del boceto que nos pasó
-     el usuario. */
+  /* Panel de operador (Inicio): chat arriba a la izquierda, Pendientes arriba
+     a la derecha (lista corta, 1 fila por cliente - no necesita ancho
+     completo) y Accesos rápidos abajo ocupando las 2 columnas (con hasta 9
+     atajos de a 3 por fila, ahí sí aprovecha el ancho). */
   .op-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;margin-top:18px}
   .op-panel-chat{grid-column:1;grid-row:1}
-  .op-panel-accesos{grid-column:2;grid-row:1}
-  /* Pendientes ocupa el ancho completo de la fila de abajo (no solo la
-     columna izquierda) - así entra la lista de TODOS los centros del
-     operador sin quedar amontonada en una columna angosta. */
-  .op-panel-pendientes{grid-column:1/3;grid-row:2}
+  .op-panel-pendientes{grid-column:2;grid-row:1}
+  .op-panel-accesos{grid-column:1/3;grid-row:2}
   @media(max-width:860px){
     .op-grid{grid-template-columns:1fr}
     .op-panel-chat,.op-panel-accesos,.op-panel-pendientes{grid-column:1;grid-row:auto}
@@ -406,7 +407,9 @@
 
   /* Pendientes del operador: una fila por cliente, con badges numéricos estilo
      notificación de celular - el color ya avisa la urgencia, sin texto de más. */
-  .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:300px}
+  /* Un poco más alta que antes (300->420): que entren todos los clientes con
+     pendientes sin achicharrarse a los primeros 5-6. */
+  .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:420px}
   .ini-pendop-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px}
   .ini-pendop-row:hover{background:var(--hover)}
   .ini-pendop-nombre{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -414,10 +417,13 @@
   .ini-pendop-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
   .ini-pendop-badge.pend{background:var(--warning)}
   .ini-pendop-badge.transm{background:var(--error)}
-  /* Variante ancha (Inicio del operador, ocupa el ancho completo): 2 columnas
-     para que entren más centros sin que la lista quede eterna hacia abajo. */
-  .ini-pendop-list-wide{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:2px 14px;max-height:340px}
-  @media(max-width:640px){ .ini-pendop-list-wide{grid-template-columns:1fr} }
+  /* Variante recortada (Inicio del operador): esta tarjeta ahora comparte
+     lugar con "Tareas" abajo, así que la lista de centros pendientes queda
+     más baja que en la del admin. */
+  .ini-pendop-list-cortita{max-height:130px}
+  /* Tareas propias del operador, dentro de la misma tarjeta de Pendientes. */
+  .op-tareas{border-top:1px solid var(--border)}
+  .op-tareas-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);padding:10px 15px 0}
 
   /* Accesos rápidos: grilla de hasta 9 atajos elegidos por el usuario + editor
      desplegable con el catálogo completo (todas las vistas + todos los clientes). */

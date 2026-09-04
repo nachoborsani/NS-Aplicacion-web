@@ -994,6 +994,8 @@ async function cargarInicio(marcarLeido){
     }
     iniRenderMensajesEn('opFeed');
     iniCargarMisPendientes();
+    iniAccesosRender('op');
+    opRenderTareas();
   }
   iniActualizarBell();
 }
@@ -1095,10 +1097,13 @@ function iniRenderTareas(){
   var vc=document.getElementById('iniVencCnt');
   if (vc) vc.innerHTML = vencidas ? ' · <b class="ini-venc-cnt">'+vencidas+' vencida'+(vencidas>1?'s':'')+'</b>' : '';
 }
-function iniTareaHTML(t){
+function iniTareaHTML(t, opts){
+  opts = opts || {};
   var paraArr = Array.isArray(t.para) ? t.para : (t.para ? [t.para] : []);
   var paraNombres = paraArr.map(function(u){ return String(iniNombreDe(u)||'').split(' ')[0]; }).join(' y ');
-  var chip = paraNombres ? '<span class="ini-chip">para '+esc(paraNombres)+'</span>' : '';
+  // En la lista propia del operador no hace falta decir "para Javier" en cada
+  // tarea - son todas suyas, sería ruido repetido.
+  var chip = (!opts.sinPara && paraNombres) ? '<span class="ini-chip">para '+esc(paraNombres)+'</span>' : '';
   var meta = t.hecha ? 'hecha' : ('creada por '+esc(String(t.creadaPorNombre||'').split(' ')[0]));
   var est = iniVenceEstado(t);
   var txt = t.vence
@@ -1125,7 +1130,8 @@ function iniTareaHTML(t){
     + '<div class="ini-tmeta">'+chip+due+'<span>'+meta+'</span>'
     + (t.hecha?'<button class="ini-link" onclick="iniToggleTarea(\''+esc(t.id)+'\')">reabrir</button>':'')
     + '</div>'+urgente+'</div>'
-    + '<button class="ini-del" onclick="iniBorrarTarea(\''+esc(t.id)+'\')" title="Borrar">🗑</button></li>';
+    + (opts.sinBorrar ? '' : '<button class="ini-del" onclick="iniBorrarTarea(\''+esc(t.id)+'\')" title="Borrar">🗑</button>')
+    + '</li>';
 }
 async function iniAgregarTarea(){
   var inp = document.getElementById('iniTask'); if(!inp) return;
@@ -1142,19 +1148,22 @@ async function iniAgregarTarea(){
   inp.value=''; if(vi) vi.value=''; INICIO.assign=[]; iniRenderAssign();
   INICIO.tareas.unshift(res.data.tarea); iniRenderTareas();
 }
+// Repinta la lista de tareas que corresponda: la del admin o la propia del
+// operador (comparten INICIO.tareas, cada uno la ve con su propia pinta).
+function iniRenderTareasSegunRol(){ iniEsAdmin() ? iniRenderTareas() : opRenderTareas(); }
 async function iniSetVence(id, val){
   var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/vence', { vence: val||'' });
   if (!res.ok){ alert(res.data.error || 'No se pudo guardar la fecha.'); return; }
   var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
   if(t) t.vence = res.data.tarea.vence;
-  iniRenderTareas();
+  iniRenderTareasSegunRol();
 }
 async function iniToggleTarea(id){
   var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/toggle', {});
   if (!res.ok){ alert(res.data.error || 'No se pudo actualizar la tarea.'); return; }
   var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
   if(t){ t.hecha=res.data.tarea.hecha; t.hechaAt=res.data.tarea.hechaAt; }
-  iniRenderTareas();
+  iniRenderTareasSegunRol();
 }
 async function iniBorrarTarea(id){
   if (!confirm('¿Borrar esta tarea?')) return;
@@ -1187,6 +1196,31 @@ async function iniRenderPendientesEn(listId, metaId){
 function iniCargarPendientesOperador(){ return iniRenderPendientesEn('iniPendOpList', 'iniPendOpMeta'); }
 function iniCargarMisPendientes(){ return iniRenderPendientesEn('opPendList', 'opPendMeta'); }
 
+// ===== Tareas propias del operador (Inicio de Javi) - mismo mecanismo que
+// las de los admins (INICIO.tareas ya viene filtrada por el servidor a solo
+// las suyas), pero sin elegir asignado (se las crea a sí mismo) y sin poder
+// borrarlas (eso sigue siendo cosa de un admin). =====
+function opRenderTareas(){
+  var open = document.getElementById('opTasksOpen'), done = document.getElementById('opTasksDone');
+  if(!open||!done) return;
+  var abiertas = (INICIO.tareas||[]).filter(function(t){return !t.hecha;});
+  var hechas = (INICIO.tareas||[]).filter(function(t){return t.hecha;});
+  abiertas.sort(function(a,b){ var av=a.vence||'9999', bv=b.vence||'9999'; return av<bv?-1:(av>bv?1:0); });
+  var opts = { sinBorrar:true, sinPara:true };
+  open.innerHTML = abiertas.length ? abiertas.map(function(t){ return iniTareaHTML(t, opts); }).join('') : '<div class="ini-empty">No tenés tareas pendientes 🎉</div>';
+  done.innerHTML = hechas.map(function(t){ return iniTareaHTML(t, opts); }).join('');
+  var dc=document.getElementById('opTasksDoneCnt'); if(dc) dc.textContent = hechas.length;
+}
+async function opAgregarTarea(){
+  var inp = document.getElementById('opTask'); if(!inp) return;
+  var v = inp.value.trim(); if(!v) return;
+  var vi = document.getElementById('opTaskVence');
+  var res = await api('/api/inicio/tareas', { titulo:v, vence: (vi&&vi.value)||'' });
+  if (!res.ok){ alert(res.data.error || 'No se pudo agregar la tarea.'); return; }
+  inp.value=''; if(vi) vi.value='';
+  INICIO.tareas.unshift(res.data.tarea); opRenderTareas();
+}
+
 // ===== Inicio (admin): "Accesos rápidos" - catálogo configurable de atajos.
 // Guardado en localStorage por usuario (conveniencia de este dispositivo, no
 // dato compartido). Catálogo = vistas generales + un acceso directo por cliente. =====
@@ -1206,6 +1240,15 @@ function iniAccesosCatalogo(){
   });
   return items;
 }
+// Los ids de DOM cambian según de qué Inicio se trate (admin u operador) -
+// las 2 vistas conviven siempre en el DOM (una queda oculta, no se destruye),
+// así que no pueden compartir id. El resto de la lógica (catálogo, guardado,
+// render) es exactamente la misma para las 2.
+function iniAccesosIds(scope){
+  return scope === 'op'
+    ? { grid:'opAccesosGrid', editor:'opAccesosEditor', contador:'opAccesosContador', catalogo:'opAccesosCatalogo', editBtn:'opAccesosEditBtn' }
+    : { grid:'iniAccesosGrid', editor:'iniAccesosEditor', contador:'iniAccesosContador', catalogo:'iniAccesosCatalogo', editBtn:'iniAccesosEditBtn' };
+}
 function iniAccesosKey(){ return 'ns_accesos_rapidos_' + (ME && ME.username || ''); }
 function iniAccesosElegidos(){
   try{ var v = JSON.parse(localStorage.getItem(iniAccesosKey())||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; }
@@ -1213,8 +1256,9 @@ function iniAccesosElegidos(){
 function iniAccesosGuardar(ids){
   try{ localStorage.setItem(iniAccesosKey(), JSON.stringify(ids)); }catch(e){}
 }
-async function iniAccesosRender(){
-  var grid = document.getElementById('iniAccesosGrid'); if (!grid) return;
+async function iniAccesosRender(scope){
+  var ids = iniAccesosIds(scope);
+  var grid = document.getElementById(ids.grid); if (!grid) return;
   // El catálogo incluye un acceso por cliente - si todavía no se cargó la
   // lista (recién entrando a Inicio, sin haber abierto nunca "Clientes"), la
   // traemos acá para que los accesos elegidos aparezcan desde el principio.
@@ -1222,47 +1266,48 @@ async function iniAccesosRender(){
   var catalogo = iniAccesosCatalogo();
   var elegidos = iniAccesosElegidos();
   var tiles = elegidos.map(function(id){ return catalogo.find(function(it){ return it.id===id; }); }).filter(Boolean);
-  window.__iniAccesosCat = catalogo; // para que los onclick de los tiles encuentren el .run
   grid.innerHTML = tiles.length ? tiles.map(function(it, i){
     return '<button type="button" class="ini-acceso-tile" onclick="iniAccesosIr('+i+')"><span class="ic">'+it.ic+'</span><span class="tx">'+esc(it.tx)+'</span></button>';
   }).join('') : '<div class="ini-empty">Elegí hasta 9 accesos con "Editar".</div>';
-  window.__iniAccesosTiles = tiles;
-  iniAccesosRenderEditor();
+  window.__iniAccesosTiles = tiles; // un solo usuario ve un solo Inicio por sesión, alcanza compartido
+  iniAccesosRenderEditor(scope);
 }
 function iniAccesosIr(i){ var t = (window.__iniAccesosTiles||[])[i]; if (t) t.run(); }
-function iniAccesosToggleEditor(){
-  var ed = document.getElementById('iniAccesosEditor'); if (!ed) return;
+function iniAccesosToggleEditor(scope){
+  var ids = iniAccesosIds(scope);
+  var ed = document.getElementById(ids.editor); if (!ed) return;
   var abierto = ed.style.display !== 'none';
   ed.style.display = abierto ? 'none' : '';
-  document.getElementById('iniAccesosEditBtn').textContent = abierto ? 'Editar' : 'Listo';
+  document.getElementById(ids.editBtn).textContent = abierto ? 'Editar' : 'Listo';
 }
-function iniAccesosRenderEditor(){
-  var cont = document.getElementById('iniAccesosCatalogo'); if (!cont) return;
+function iniAccesosRenderEditor(scope){
+  var ids = iniAccesosIds(scope);
+  var cont = document.getElementById(ids.catalogo); if (!cont) return;
   var catalogo = iniAccesosCatalogo();
   var elegidos = iniAccesosElegidos();
-  var cnt = document.getElementById('iniAccesosContador'); if (cnt) cnt.textContent = elegidos.length + ' / 9 elegidos';
+  var cnt = document.getElementById(ids.contador); if (cnt) cnt.textContent = elegidos.length + ' / 9 elegidos';
   var lleno = elegidos.length >= 9;
   var htmlGeneral = catalogo.filter(function(it){ return it.grupo!=='clientes'; }).map(function(it){
-    return iniAccesoOptHtml(it, elegidos, lleno);
+    return iniAccesoOptHtml(it, elegidos, lleno, scope);
   }).join('');
   var clientesCat = catalogo.filter(function(it){ return it.grupo==='clientes'; });
   var htmlClientes = clientesCat.length ? '<div class="ini-acceso-grupo">Clientes</div>' + clientesCat.map(function(it){
-    return iniAccesoOptHtml(it, elegidos, lleno);
+    return iniAccesoOptHtml(it, elegidos, lleno, scope);
   }).join('') : '';
   cont.innerHTML = htmlGeneral + htmlClientes;
 }
-function iniAccesoOptHtml(it, elegidos, lleno){
+function iniAccesoOptHtml(it, elegidos, lleno, scope){
   var on = elegidos.indexOf(it.id) >= 0;
   var disabled = (!on && lleno) ? ' disabled' : '';
-  return '<label class="ini-acceso-opt'+(!on&&lleno?' disabled':'')+'"><input type="checkbox"'+(on?' checked':'')+disabled+' onchange="iniAccesosToggle(\''+esc(it.id)+'\', this.checked)">'+it.ic+' '+esc(it.tx)+'</label>';
+  return '<label class="ini-acceso-opt'+(!on&&lleno?' disabled':'')+'"><input type="checkbox"'+(on?' checked':'')+disabled+' onchange="iniAccesosToggle(\''+esc(it.id)+'\', this.checked, \''+(scope||'')+'\')">'+it.ic+' '+esc(it.tx)+'</label>';
 }
-function iniAccesosToggle(id, on){
+function iniAccesosToggle(id, on, scope){
   var elegidos = iniAccesosElegidos();
   var i = elegidos.indexOf(id);
   if (on && i<0){ if (elegidos.length>=9) return; elegidos.push(id); }
   else if (!on && i>=0){ elegidos.splice(i,1); }
   iniAccesosGuardar(elegidos);
-  iniAccesosRender();
+  iniAccesosRender(scope);
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
