@@ -2004,6 +2004,10 @@ function renderClientList(){
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
+  // Un operador por ahora solo trabaja con Med. Cabecera - se le oculta
+  // Consultorios entero (no por falta de datos, es una decisión de alcance).
+  var consGroup = document.getElementById('navGroupConsultorios');
+  if (consGroup) consGroup.style.display = (ME && ME.role === 'operador') ? 'none' : '';
   if (pot) pot.innerHTML = potenciales.map(itemHtml).join('');
   if (potGroup) potGroup.style.display = potenciales.length ? '' : 'none';
   var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
