@@ -204,10 +204,10 @@
             <section class="card ini-card ini-panel-tareas">
               <div class="ini-head">
                 <span class="ini-ic">✅</span>
-                <div><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
+                <div class="ini-head-tit"><h2>Tareas</h2><div class="ini-meta"><span id="iniOpenCnt">0</span> pendientes<span id="iniVencCnt"></span></div></div>
+                <input id="iniTask" class="ini-task-head" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
               </div>
               <div class="ini-addbar">
-                <input id="iniTask" placeholder="Nueva tarea…  (ej. revisar bandeja de UOM)" onkeydown="if(event.key==='Enter'){event.preventDefault();iniAgregarTarea();}">
                 <div class="ini-addrow">
                   <span class="ini-lbl">para</span>
                   <div class="ini-assign" id="iniAssign"></div>

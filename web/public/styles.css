@@ -373,7 +373,13 @@
   .ini-adjp .ini-adjp-x{margin-left:auto;border:none;background:transparent;color:var(--text-2);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:6px}
   .ini-adjp .ini-adjp-x:hover{background:var(--surface);color:var(--error)}
   /* tareas */
-  .ini-addbar{padding:13px 15px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:9px;background:var(--surface-2)}
+  /* Panel de Tareas: el input "Nueva tarea" va en el header (llena el hueco al lado
+     del título y ahorra una fila). Abajo queda solo para/vence/Agregar. */
+  .ini-panel-tareas .ini-head{gap:10px}
+  .ini-panel-tareas .ini-head-tit{flex:0 0 auto}
+  .ini-task-head{flex:1;min-width:120px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;padding:8px 11px;outline:none}
+  .ini-task-head:focus{border-color:var(--turq)}
+  .ini-addbar{padding:11px 15px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:9px;background:var(--surface-2)}
   .ini-addbar input{border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:inherit;font-size:13.5px;padding:9px 11px;outline:none}
   .ini-addbar input:focus{border-color:var(--turq)}
   .ini-addrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
