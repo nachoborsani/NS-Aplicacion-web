@@ -360,7 +360,7 @@ async function handleLab(ctx) {
         items = lista.filter((x) => {
           const nom = [x.apellido, x.nombre].filter(Boolean).join(" ").toLowerCase();
           return nom.includes(q) || (qd && soloDigitos(x.documento).includes(qd)) ||
-            (qd && soloDigitos(x.celular).includes(qd)) || soloDigitos(x.nroAfiliado).includes(qd);
+            (qd && soloDigitos(x.celular).includes(qd)) || (qd && soloDigitos(x.nroAfiliado).includes(qd));
         });
       }
       return json(res, 200, { items: items.slice(0, 50), total: lista.length }), true;
