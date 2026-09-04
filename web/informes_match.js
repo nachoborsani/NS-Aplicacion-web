@@ -8,6 +8,18 @@
 // Todo lo dudoso queda marcado para revisión manual (nunca se matchea en silencio).
 
 function soloDigitos(v) { return String(v == null ? "" : v).replace(/\D+/g, ""); }
+// ¿Dos beneficios son el mismo, tolerando el GP del final? El informe a veces trae el
+// beneficio SIN los dígitos del grupo poblacional (12 en vez de 14: "110951956404" vs
+// "11095195640400"). Se aceptan como el mismo si uno es PREFIJO del otro y la diferencia
+// es a lo sumo 2 dígitos (el GP). El de 10+ dígitos evita matchear números cortos sueltos.
+function beneficioCompatible(a, b) {
+  a = soloDigitos(a); b = soloDigitos(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const corto = a.length <= b.length ? a : b;
+  const largo = a.length <= b.length ? b : a;
+  return corto.length >= 10 && largo.startsWith(corto) && (largo.length - corto.length) <= 2;
+}
 function norm(v) {
   return String(v == null ? "" : v)
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -255,13 +267,23 @@ function matchInforme(informe, bandeja, padronCliente) {
     // deduplica: si no, una práctica que matchea esa OME repetida se cuenta como
     // "ambigua" (2 candidatos) y encima aparece dos veces en la lista.
     const _vistos = new Set();
-    const delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio).filter((p) => {
+    const _dedup = (p) => {
       const k = soloDigitos(p.nOrden);
       if (!k) return true;
       if (_vistos.has(k)) return false;
       _vistos.add(k);
       return true;
-    });
+    };
+    let delPaciente = bandeja.filter((p) => soloDigitos(p.beneficio) === beneficio).filter(_dedup);
+    // Si el beneficio del informe vino cortado (sin el GP) y no hubo match exacto, se
+    // acepta el prefijo — PERO solo si pega contra UN único beneficio completo. Si son
+    // varios (familiares con distinto GP), es ambiguo y se deja para revisión manual:
+    // cruzar pacientes es un error grave.
+    if (!delPaciente.length) {
+      const compat = bandeja.filter((p) => beneficioCompatible(p.beneficio, beneficio));
+      const benefsDistintos = new Set(compat.map((p) => soloDigitos(p.beneficio)));
+      if (benefsDistintos.size === 1) delPaciente = compat.filter(_dedup);
+    }
     if (delPaciente.length) {
       // Si TODAS las prácticas del paciente en el período ya están transmitidas,
       // no hay nada para subir sea cual sea la que corresponde: aunque no se pueda
