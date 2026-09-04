@@ -993,6 +993,7 @@ async function cargarInicio(marcarLeido){
       }
     }
     iniRenderMensajesEn('opFeed');
+    iniCargarMisPendientes();
   }
   iniActualizarBell();
 }
@@ -1162,10 +1163,12 @@ async function iniBorrarTarea(id){
   INICIO.tareas = (INICIO.tareas||[]).filter(function(x){return x.id!==id;}); iniRenderTareas();
 }
 
-// ===== Inicio (admin): "Pendientes de Javi" - informes sin resolver y sin
-// transmitir por cliente, para los clientes que ve el/los operador/es activos. =====
-async function iniCargarPendientesOperador(){
-  var list = document.getElementById('iniPendOpList'), meta = document.getElementById('iniPendOpMeta');
+// ===== Pendientes por cliente: informes sin resolver y sin transmitir.
+// Mismo endpoint y mismo render para las 2 vistas - el admin ve el agregado
+// de todos los operadores ("Pendientes de Javi"), un operador ve solo lo
+// suyo (así se entera él mismo, no solo el admin que lo mira). =====
+async function iniRenderPendientesEn(listId, metaId){
+  var list = document.getElementById(listId), meta = document.getElementById(metaId);
   if (!list) return;
   var res = await api('/api/inicio/pendientes-operador');
   if (!res.ok){ list.innerHTML = '<li class="ini-empty">No se pudo cargar.</li>'; return; }
@@ -1181,6 +1184,8 @@ async function iniCargarPendientesOperador(){
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }
+function iniCargarPendientesOperador(){ return iniRenderPendientesEn('iniPendOpList', 'iniPendOpMeta'); }
+function iniCargarMisPendientes(){ return iniRenderPendientesEn('opPendList', 'opPendMeta'); }
 
 // ===== Inicio (admin): "Accesos rápidos" - catálogo configurable de atajos.
 // Guardado en localStorage por usuario (conveniencia de este dispositivo, no

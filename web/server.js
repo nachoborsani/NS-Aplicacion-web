@@ -4804,21 +4804,24 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, borrada: antes !== store.tareas.length });
   }
 
-  // Panel "Pendientes de Javi" (Inicio del admin): por cada cliente que un
-  // operador puede ver, cuántos informes recibidos todavía necesitan trabajo.
-  // "pendientes" = ni resueltos ni desestimados (falta matchear/resolver);
-  // "sinTransmitir" = ya resueltos pero con la OME todavía sin transmitir en
-  // PAMI - mismo criterio que ya usa Informes recibidos (estadoInforme). Se
-  // agrega a TODOS los operadores activos (hoy solo Javi, pensado para más).
+  // Pendientes por cliente (informes recibidos sin resolver / resueltos sin
+  // transmitir - mismo criterio que ya usa Informes recibidos, estadoInforme):
+  // el admin ve el agregado de TODOS los operadores activos ("Pendientes de
+  // Javi" en su Inicio); un operador ve exactamente lo mismo pero solo de SUS
+  // propios clientes visibles (su propio Inicio - así se entera él mismo, no
+  // solo el admin).
   if (p === "/api/inicio/pendientes-operador" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
-    const operadores = (loadUsers() || []).filter((u) => u.role === "operador" && u.active !== false);
-    if (!operadores.length) return json(res, 200, { clientes: [], totalPendientes: 0, totalSinTransmitir: 0 });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
     const todosClientes = loadClientsStore();
     const slugsVisibles = new Set();
-    for (const op of operadores) clientesVisiblesPara(op, todosClientes).forEach((c) => slugsVisibles.add(c.slug));
+    if (me.role === "admin") {
+      const operadores = (loadUsers() || []).filter((u) => u.role === "operador" && u.active !== false);
+      for (const op of operadores) clientesVisiblesPara(op, todosClientes).forEach((c) => slugsVisibles.add(c.slug));
+    } else {
+      clientesVisiblesPara(me, todosClientes).forEach((c) => slugsVisibles.add(c.slug));
+    }
     const informes = loadInformes();
     const filas = [];
     let totalPendientes = 0, totalSinTransmitir = 0;
