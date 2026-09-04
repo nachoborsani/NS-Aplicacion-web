@@ -297,11 +297,13 @@
      operador + accesos rápidos - grid 2x2 fijo (antes eran 2 tarjetas de alto
      libre en una sola fila, que con muchos mensajes/tareas crecían sin límite
      y no dejaba lugar para las 2 tarjetas nuevas de abajo). */
-  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto;gap:16px;align-items:start;margin-top:18px}
-  .ini-panel-msg{grid-column:1;grid-row:1}
+  /* Chat a toda la columna izquierda; a la derecha se apilan Tareas + Pendientes +
+     Accesos, así el alto del chat se llena sin dejar huecos al costado. */
+  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;align-items:start;margin-top:18px}
+  .ini-panel-msg{grid-column:1;grid-row:1 / span 3}
   .ini-panel-tareas{grid-column:2;grid-row:1}
-  .ini-panel-pendop{grid-column:1;grid-row:2}
-  .ini-panel-accesos{grid-column:2;grid-row:2}
+  .ini-panel-pendop{grid-column:2;grid-row:2}
+  .ini-panel-accesos{grid-column:2;grid-row:3}
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
     .ini-panel-msg,.ini-panel-tareas,.ini-panel-pendop,.ini-panel-accesos{grid-column:1;grid-row:auto}
