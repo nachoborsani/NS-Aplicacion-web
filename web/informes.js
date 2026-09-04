@@ -254,14 +254,18 @@ const MODELOS = {
   // ===================== ORL / Otorrinolaringología =====================
   // Mismo layout que cardiología (sin caja técnica). Cambia el servicio y, en
   // algunas prácticas, se elige el lado (el texto del preset cambia según el lado).
+  // El texto de este preset siempre incluye "SE REALIZA OTOMICROSCOPIA" como
+  // paso previo a la extracción - es una práctica propia (717122), no solo
+  // una frase descriptiva. Son 3 códigos en juego cuando además se combina
+  // con el tratamiento químico (ver orl-combinado), no 2.
   "orl-cerumen": {
-    label: "Extracción tapón de cerumen / cuerpo extraño (717111)",
+    label: "Extracción tapón de cerumen / cuerpo extraño + otomicroscopia (717111 + 717122)",
     short: "Cerumen",
-    practica: "717111 - Extracción de tapón de cerumen / cuerpo extraño",
+    practica: "717111 + 717122 - Extracción de tapón de cerumen / cuerpo extraño + otomicroscopia",
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
-    codigoPractica: "717111",
-    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN",
+    codigoPractica: "717111 + 717122",
+    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN + OTOMICROSCOPIA",
     estudioArchivo: "Extraccion tapon cerumen",
     textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA.",
     requiereLado: true,
@@ -277,14 +281,16 @@ const MODELOS = {
     estudioArchivo: "Tratamiento quimico ORL",
     textoDefault: "SE REALIZA TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTO BIEN TOLERADO.",
   },
+  // Mismo motivo que orl-cerumen: el texto también informa la otomicroscopia
+  // (717122) además de las otras 2 - son 3 códigos, no 2.
   "orl-combinado": {
-    label: "Cerumen + Tratamiento químico (717111 + 717125)",
+    label: "Cerumen + Otomicroscopia + Tratamiento químico (717111 + 717122 + 717125)",
     short: "Combinado",
-    practica: "717111 + 717125 - Cerumen + Tratamiento químico (combinado)",
+    practica: "717111 + 717122 + 717125 - Cerumen + Otomicroscopia + Tratamiento químico (combinado)",
     servicio: "SERVICIO DE OTORRINOLARINGOLOGÍA",
     especialidad: "Otorrinolaringología",
-    codigoPractica: "717111 + 717125",
-    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN + TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
+    codigoPractica: "717111 + 717122 + 717125",
+    estudio: "EXTRACCIÓN DE CUERPO EXTRAÑO EN OÍDO + EXTRACCIÓN DE TAPÓN DE CERUMEN + OTOMICROSCOPIA + TRATAMIENTO DE LESIONES OTORRINOLARINGOLÓGICAS POR MEDIOS FÍSICOS O QUÍMICOS",
     estudioArchivo: "Cerumen y tratamiento quimico",
     textoDefault: "SE REALIZA OTOMICROSCOPIA. SE EVIDENCIA TAPÓN DE CERUMEN EN CONDUCTO AUDITIVO EXTERNO, EL CUAL SE EXTRAE EN SU TOTALIDAD. POSTERIOR AL PROCEDIMIENTO SE CONSTATA CONDUCTO AUDITIVO PERMEABLE, CON MEMBRANA TIMPÁNICA NORMOLÚCIDA. SE REALIZA ADEMÁS TRATAMIENTO QUÍMICO DE LESIÓN ANGIOMATOSA EN REGIÓN ANTERIOR SEPTAL, POR EPÍSTAXIS ANTERIOR RECURRENTE. PROCEDIMIENTOS BIEN TOLERADOS.",
     requiereLado: true,

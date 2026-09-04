@@ -2184,10 +2184,16 @@ var PLAN_SALUD_USUARIOS = ['seba', 'nacho'];
 // consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
-  // El operador ve del cliente SOLO la información básica: nada de dashboards,
-  // adjuntar reporte, honorarios ni usuarios médicos.
-  if (ME && ME.role === 'operador') return ['basica'];
+  var esOperador = (ME && ME.role === 'operador');
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
+  // El operador ve, de un médico de cabecera (Scheffelaar/Dubesarky), lo
+  // mismo que un admin salvo OSDOP (facturación, no es su trabajo) - es una
+  // lista propia, no "la del admin menos algo": si mañana se suma OTRA
+  // herramienta especial de algún médico puntual, no le llega sola por
+  // heredar la lista del admin. De un consultorio normal sigue viendo SOLO
+  // la información básica: nada de dashboards, adjuntar reporte, honorarios
+  // ni usuarios médicos.
+  if (esOperador) return esMC ? ['general', 'basica'] : ['basica'];
   if (esMC) {
     var seccionesMC = ['general', 'basica'];
     // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
@@ -5987,9 +5993,13 @@ function switchNomTab(which){
 }
 function calcWire(){
   if(CALC.wired) return; CALC.wired=true;
-  document.getElementById('calcMod').addEventListener('change', calcFillCods);
+  document.getElementById('calcMod').addEventListener('change', function(){
+    var f=document.getElementById('calcCodFiltro'); if(f) f.value='';   // módulo nuevo, filtro limpio
+    calcFillCods();
+  });
   document.getElementById('calcCod').addEventListener('change', calcPreview);
   document.getElementById('calcSoloPract').addEventListener('change', calcFillCods);
+  document.getElementById('calcCodFiltro').addEventListener('input', calcFillCods);
   document.getElementById('calcAdd').addEventListener('click', calcAdd);
   ['calcPctIB','calcPctGan','calcPctOtros','calcIB','calcGan','calcOtros'].forEach(function(id){
     var el=document.getElementById(id); el.addEventListener('input',calcCalc); el.addEventListener('change',calcCalc);
@@ -6068,7 +6078,13 @@ function calcFillCods(){
   var m=calcModObj(), s=document.getElementById('calcCod'); s.innerHTML='';
   var vs=calcVisibles(m);
   var all=document.createElement('option'); all.value='__all__'; all.textContent='★ Agregar TODAS las prácticas del módulo ('+vs.length+')'; s.appendChild(all);
-  vs.forEach(function(p){ var o=document.createElement('option'); o.value=p.cod; o.textContent=p.cod+' · '+p.desc+(p.excluye&&p.excluye.length?'  ⚠ excluyente':''); s.appendChild(o); });
+  // Filtro dentro del módulo (algunos tienen 40+ prácticas): "Agregar TODAS"
+  // arriba sigue contando el módulo entero - el filtro solo achica cuáles se
+  // listan abajo para elegir una puntual más rápido.
+  var qEl=document.getElementById('calcCodFiltro'), q=qEl?calcNorm(qEl.value.trim()):'';
+  var listadas=q?vs.filter(function(p){ return calcNorm(p.cod+' '+p.desc).indexOf(q)>=0; }):vs;
+  listadas.forEach(function(p){ var o=document.createElement('option'); o.value=p.cod; o.textContent=p.cod+' · '+p.desc+(p.excluye&&p.excluye.length?'  ⚠ excluyente':''); s.appendChild(o); });
+  if(q && !listadas.length){ var vacio=document.createElement('option'); vacio.disabled=true; vacio.textContent='(sin resultados para "'+qEl.value.trim()+'")'; s.appendChild(vacio); }
   calcPreview();
 }
 function calcPracActual(){ var m=calcModObj(); var c=document.getElementById('calcCod').value; return m&&m.practicas.filter(function(p){return p.cod===c;})[0]; }
