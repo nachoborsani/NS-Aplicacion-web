@@ -2389,36 +2389,52 @@ function renderClientGeneral(){
   if (esMC) cargarCupInforme();
 }
 // ===== Informe del CUP (médico de cabecera): sube a mano el Excel del Panel de
-// prestaciones de PAMI. Cae en la misma bandeja que ya usa "Informes recibidos"
-// y "Pendientes de Javi", así que alimenta todo eso sin ningún cambio más. =====
-function cupInformeResumenHTML(d){
-  if (!d || !d.uploadedAt) return '<p class="nom-muted">Todavía no se subió ningún informe del CUP para este médico.</p>';
-  var fecha = new Date(d.uploadedAt).toLocaleString('es-AR');
-  return '<p><b>Última carga:</b> ' + esc(d.archivo || '') + ' · ' + esc(d.monthLabel || '') + '</p>'
-    + '<p class="nom-muted">' + fecha + ' · ' + esc(d.uploadedBy || '') + ' · ' + (d.count||0) + ' filas</p>'
-    + '<div class="ini-pendop-badges" style="margin-top:8px">'
+// prestaciones de PAMI, UN mes por vez (no se pisan entre sí). El mes más nuevo
+// del historial es el que queda "en vivo" y sigue alimentando el match de
+// "Informes recibidos" y "Pendientes de Javi" (misma bandeja de siempre). =====
+function cupInformeBadges(d){
+  return '<div class="ini-pendop-badges" style="margin-top:4px">'
     + ((d.pendienteValidar||0) ? '<span class="ini-pendop-badge pend" title="Pendiente validar">'+d.pendienteValidar+' por validar</span>' : '')
     + ((d.pendienteTransmitir||0) ? '<span class="ini-pendop-badge cup" title="Pendiente transmitir">'+d.pendienteTransmitir+' por transmitir</span>' : '')
     + ((d.listas||0) ? '<span class="ini-pendop-badge transm" style="background:var(--success)" title="Validadas y transmitidas">'+d.listas+' listas</span>' : '')
     + '</div>';
 }
+function cupInformeHistorialHTML(historial){
+  if (!historial || !historial.length) return '<p class="nom-muted">Todavía no se subió ningún informe del CUP para este médico.</p>';
+  return historial.map(function(d){
+    var fecha = new Date(d.uploadedAt).toLocaleString('es-AR');
+    return '<div class="cup-historial-item">'
+      + '<b>' + esc(d.monthLabel || d.month) + '</b>' + (d.live ? '<span class="cup-live">EN USO</span>' : '') + '<br>'
+      + '<span class="nom-muted">' + esc(d.archivo || '') + ' · ' + fecha + ' · ' + esc(d.uploadedBy || '') + ' · ' + (d.count||0) + ' filas</span>'
+      + cupInformeBadges(d)
+      + '</div>';
+  }).join('');
+}
+function cupInformeMesPorDefecto(){
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
 async function cargarCupInforme(){
   var box = document.getElementById('cupInformeEstado');
+  var mesInput = document.getElementById('cupInformeMes');
+  if (mesInput && !mesInput.value) mesInput.value = cupInformeMesPorDefecto();
   if (!box || !ACTIVE_CLIENT) return;
   box.innerHTML = 'Cargando…';
   var r = await api('/api/clientes/' + ACTIVE_CLIENT.slug + '/bandeja/archivo');
   if (!r.ok){ box.innerHTML = '<span class="msg err">No se pudo cargar el estado.</span>'; return; }
-  box.innerHTML = cupInformeResumenHTML((r.data || {}).bandeja);
+  box.innerHTML = cupInformeHistorialHTML((r.data || {}).historial);
 }
 async function subirCupInforme(files){
   if (!files || !files[0] || !ACTIVE_CLIENT) return;
   var box = document.getElementById('cupInformeEstado');
+  var mesInput = document.getElementById('cupInformeMes');
+  var mes = (mesInput && mesInput.value) || cupInformeMesPorDefecto();
   if (box) box.innerHTML = 'Procesando informe del CUP…';
-  var fd = new FormData(); fd.append('file', files[0]);
+  var fd = new FormData(); fd.append('file', files[0]); fd.append('month', mes);
   var r = await fetch('/api/clientes/' + ACTIVE_CLIENT.slug + '/bandeja/archivo', { method:'POST', body: fd });
   var data = {}; try { data = await r.json(); } catch(e){}
   if (!r.ok){ if (box) box.innerHTML = '<span class="msg err">' + esc(data.error || 'No se pudo procesar el archivo.') + '</span>'; return; }
-  if (box) box.innerHTML = cupInformeResumenHTML(data);
+  await cargarCupInforme();
   iniCargarPendientesOperador();
   iniCargarMisPendientes();
 }

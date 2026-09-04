@@ -481,6 +481,13 @@
   .ini-pendop-badge.pend{background:var(--warning)}
   .ini-pendop-badge.transm{background:var(--error)}
   .ini-pendop-badge.cup{background:var(--info)}
+  .cup-informe-upload{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:10px 0}
+  .cup-informe-upload .field-inline{display:flex;flex-direction:column;gap:4px;font-size:12px}
+  .cup-informe-upload .field-inline input{width:170px}
+  .cup-historial-item{padding:10px 0;border-bottom:1px solid var(--line)}
+  .cup-historial-item:last-child{border-bottom:none}
+  .cup-historial-item .ini-pendop-badge{font-size:11.5px;padding:0 8px}
+  .cup-historial-item .cup-live{background:var(--turq);color:#fff;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:6px;letter-spacing:.02em}
   /* Variante recortada (Inicio del operador): esta tarjeta ahora comparte
      lugar con "Tareas" abajo, así que la lista de centros pendientes queda
      más baja que en la del admin. */
