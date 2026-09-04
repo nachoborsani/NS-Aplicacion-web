@@ -101,6 +101,14 @@ function inicioMensajesPara(store, me) {
   if (me.role === "admin") return todos;
   return todos.filter((m) => m.visibleOperadores || m.autor === me.username);
 }
+// Tareas de antes del multi-asignado guardaban .para como string único (""
+// para "sin asignar", ya no permitido en tareas nuevas). Normaliza a array
+// solo para la respuesta - no reescribe el archivo, así una tarea vieja sin
+// asignar sigue viéndose igual (sin chip) en vez de asignarse sola a alguien.
+function normalizarTareaPara(t) {
+  const para = Array.isArray(t.para) ? t.para : (t.para ? [t.para] : []);
+  return Object.assign({}, t, { para });
+}
 const clientBandejasFile = path.join(dataDir, "client_bandejas.json");
 // Bandeja "hacia adelante" (turnos futuros del mes: mañana → fin de mes), para
 // detectar posibles débitos por adelantado. Separada de la del mes en curso.
@@ -4677,7 +4685,10 @@ const server = http.createServer(async (req, res) => {
       admins,
       mensajes: inicioMensajesPara(store, me).slice(-200),
       // Tareas siguen siendo un panel solo-admin (no se le manda nada a un operador).
-      tareas: esAdmin ? (store.tareas || []) : [],
+      // .para se normaliza a array acá: tareas viejas (de antes del multi-asignado)
+      // lo tenían como string único ("" = sin asignar, hoy ya no permitido para
+      // tareas nuevas) - normalizar solo en la salida no reescribe el archivo.
+      tareas: esAdmin ? (store.tareas || []).map(normalizarTareaPara) : [],
       unread: inicioNoLeidos(store, me.username, !esAdmin),
       compartidoOperadores: !!store.compartidoOperadores,
     });
@@ -4736,9 +4747,14 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const titulo = String((body && body.titulo) || "").trim().slice(0, 300);
-    const para = String((body && body.para) || "").trim().slice(0, 40);
+    // Una tarea siempre tiene que quedar asignada a 1 o a los 2 admins - nunca
+    // "sin asignar" (a diferencia de las tareas viejas, que sí lo permitían).
+    const adminsValidos = new Set((loadUsers() || []).filter((u) => u.role === "admin" && u.active !== false).map((u) => u.username));
+    const paraCruda = Array.isArray(body && body.para) ? body.para : (body && body.para ? [body.para] : []);
+    const para = [...new Set(paraCruda.map((v) => String(v || "").trim()).filter((v) => adminsValidos.has(v)))];
     const vence = /^\d{4}-\d{2}-\d{2}$/.test(String((body && body.vence) || "")) ? String(body.vence) : "";
     if (!titulo) return json(res, 400, { error: "La tarea está vacía." });
+    if (!para.length) return json(res, 400, { error: "Asigná la tarea a Ignacio y/o Sebastian." });
     const store = loadInicio();
     const tarea = { id: crypto.randomUUID(), titulo, para, creadaPor: me.username, creadaPorNombre: me.name || me.username, hecha: false, at: new Date().toISOString(), hechaAt: "", vence };
     store.tareas.unshift(tarea);
@@ -4786,6 +4802,42 @@ const server = http.createServer(async (req, res) => {
     store.tareas = (store.tareas || []).filter((x) => x.id !== id);
     saveInicio(store);
     return json(res, 200, { ok: true, borrada: antes !== store.tareas.length });
+  }
+
+  // Panel "Pendientes de Javi" (Inicio del admin): por cada cliente que un
+  // operador puede ver, cuántos informes recibidos todavía necesitan trabajo.
+  // "pendientes" = ni resueltos ni desestimados (falta matchear/resolver);
+  // "sinTransmitir" = ya resueltos pero con la OME todavía sin transmitir en
+  // PAMI - mismo criterio que ya usa Informes recibidos (estadoInforme). Se
+  // agrega a TODOS los operadores activos (hoy solo Javi, pensado para más).
+  if (p === "/api/inicio/pendientes-operador" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const operadores = (loadUsers() || []).filter((u) => u.role === "operador" && u.active !== false);
+    if (!operadores.length) return json(res, 200, { clientes: [], totalPendientes: 0, totalSinTransmitir: 0 });
+    const todosClientes = loadClientsStore();
+    const slugsVisibles = new Set();
+    for (const op of operadores) clientesVisiblesPara(op, todosClientes).forEach((c) => slugsVisibles.add(c.slug));
+    const informes = loadInformes();
+    const filas = [];
+    let totalPendientes = 0, totalSinTransmitir = 0;
+    for (const slug of slugsVisibles) {
+      const items = (informes[slug] || {}).items || [];
+      let pendientes = 0, sinTransmitir = 0;
+      for (const it of items) {
+        const e = estadoInforme(it);
+        if (e !== "ya_transmitido" && e !== "desestimado") pendientes += 1;
+        if (e === "ok") sinTransmitir += 1;
+      }
+      if (pendientes || sinTransmitir) {
+        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir });
+        totalPendientes += pendientes;
+        totalSinTransmitir += sinTransmitir;
+      }
+    }
+    filas.sort((a, b) => (b.pendientes + b.sinTransmitir) - (a.pendientes + a.sinTransmitir));
+    return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
