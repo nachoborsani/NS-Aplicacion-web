@@ -726,23 +726,32 @@
         return '<tr data-id="' + o.id + '"><td><input class="lab-in cat-nombre" value="' + esc(o.nombre) + '"></td>' +
           '<td style="width:140px"><button class="lab-btn xs cat-save">Guardar</button> <button class="lab-btn xs ghost danger cat-del">✕</button></td></tr>';
       }).join("") || '<tr><td class="lab-muted" style="padding:12px">Vacío.</td></tr>') + "</tbody></table></div>";
-    document.getElementById("cat-add").onclick = async function () {
-      var v = document.getElementById("cat-new").value.trim(); if (!v) return;
+    async function agregarCat() {
+      var inp = document.getElementById("cat-new");
+      var v = (inp.value || "").trim();
+      if (!v) { inp.focus(); return; }
       var rr = await api("/api/lab/" + recurso, { nombre: v });
-      if (rr.ok) { await cargarBootstrap(); viewCatalogo(c, recurso, titulo); }
-    };
+      if (rr.ok) { inp.value = ""; toast("Agregado ✓"); await cargarBootstrap(); viewCatalogo(c, recurso, titulo); }
+      else { toast((rr.data && rr.data.error) || "No se pudo agregar.", true); }
+    }
+    document.getElementById("cat-add").onclick = agregarCat;
+    document.getElementById("cat-new").addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); agregarCat(); }
+    });
     c.querySelectorAll(".cat-save").forEach(function (b) {
       b.onclick = async function () {
         var tr = b.closest("tr");
-        await req("PUT", "/api/lab/" + recurso + "/" + tr.getAttribute("data-id"), { nombre: tr.querySelector(".cat-nombre").value });
-        toast("Guardado ✓"); await cargarBootstrap();
+        var rr = await req("PUT", "/api/lab/" + recurso + "/" + tr.getAttribute("data-id"), { nombre: tr.querySelector(".cat-nombre").value });
+        if (rr.ok) { toast("Guardado ✓"); await cargarBootstrap(); }
+        else { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); }
       };
     });
     c.querySelectorAll(".cat-del").forEach(function (b) {
       b.onclick = async function () {
         if (!confirm("¿Eliminar?")) return;
-        await req("DELETE", "/api/lab/" + recurso + "/" + b.closest("tr").getAttribute("data-id"));
-        await cargarBootstrap(); viewCatalogo(c, recurso, titulo);
+        var rr = await req("DELETE", "/api/lab/" + recurso + "/" + b.closest("tr").getAttribute("data-id"));
+        if (rr.ok) { await cargarBootstrap(); viewCatalogo(c, recurso, titulo); }
+        else { toast((rr.data && rr.data.error) || "No se pudo eliminar.", true); }
       };
     });
   }
