@@ -3426,7 +3426,7 @@ var MESCURSO_MODULOS = [];          // desglose por módulo del mes en curso
 var MESCURSO_MODULOS_JULIO = [];    // ... del reporte "sin cerrar"
 var MESCURSO_MODULOS_CERRADO = [];  // ... del mes cerrado
 // Normaliza el desglose por módulo (mes en curso trae gross; los reportes traen net).
-function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)) }; }); }
+function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), sinValor:m.sinValor||0 }; }); }
 var MESCURSO_POSIBLES_DEBITOS_ADELANTE = []; // posibles débitos de turnos futuros (hacia adelante)
 var MESCURSO_FUTUROS = [];   // meses futuros (sep, oct…) con sus posiblesDebitosRows
 var MESCURSO_POSIBLES_DEBITOS_FUTURO = []; // el mes futuro que se está viendo en el panel
@@ -3780,7 +3780,15 @@ function mesCursoTogglePanel(tipo){
     var modCols = ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
     var mapMod = function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.monto)]; };
     var copiaMod = tipo === 'modulos' ? 'copiarModulos' : (tipo === 'modulos-julio' ? 'copiarModulosJulio' : 'copiarModulosCerrado');
-    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo) : mesCursoVacioHtml('Cantidades por módulo', '');
+    // Aviso ⚠ cuando un módulo tiene prácticas SIN VALORIZAR (código que no está en el
+    // nomenclador → cuenta pero suma $0). Es plata que no se está facturando.
+    var accModulos = function(idx){
+      var mm = md[idx];
+      if (mm && mm.sinValor > 0) return '<span class="mc-sinvalor" title="' + mm.sinValor + ' sin valorizar: el código no figura en el nomenclador, no suma a la facturación. Cargalo en Nomencladores para que se valorice.">⚠ ' + mm.sinValor + ' sin valorizar</span>';
+      return '';
+    };
+    var haySinValor = md.some(function(m){ return m.sinValor > 0; });
+    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null) : mesCursoVacioHtml('Cantidades por módulo', '');
   } else if (tipo === 'debitos-adelante'){
     var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
     html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante') : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');

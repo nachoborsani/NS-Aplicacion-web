@@ -1428,6 +1428,9 @@
   .mescurso-panel.error .mescurso-panel-head b{color:var(--error)}
   .mescurso-panel.warn .mescurso-panel-head b{color:var(--warning)}
   .mescurso-panel .table-scroll{max-height:340px;overflow:auto}
+  /* Aviso "sin valorizar" en la tabla de módulos: chip ámbar con el conteo. */
+  .mc-sinvalor{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#b45309;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.35);border-radius:999px;padding:1px 8px;white-space:nowrap;cursor:help}
+  [data-theme="dark"] .mc-sinvalor{color:#fbbf24}
   /* Tabla al 100%: las columnas cortas (width:1% + nowrap) pegan al contenido y
      las de texto (.mc-exp) absorben el ancho sobrante → sin huecos entre columnas
      ni bloque vacío a la derecha. La práctica/cruce envuelven si no entran. */

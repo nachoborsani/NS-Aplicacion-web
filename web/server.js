@@ -3330,9 +3330,10 @@ function buildBandejaResumen(slug) {
     const modCode = String((nomRow && nomRow.moduleCode) || "");
     const modKey = modCode || "sin";
     let modAgr = moduloAgr.get(modKey);
-    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0 }; moduloAgr.set(modKey, modAgr); }
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0, sinValor: 0 }; moduloAgr.set(modKey, modAgr); }
     if (esConsulta) modAgr.consultations++; else modAgr.practices++;
     modAgr.gross += valueGross;
+    if (!nomRow) modAgr.sinValor++;   // el código no está en el nomenclador → suma $0 pero cuenta
     if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
       benef: String(row[kBenef] || "").trim(),
       nombre: String(row[kNombre] || "").trim(),
@@ -3697,6 +3698,7 @@ function addRowToDashboardPeriod(target, row) {
       consultations: 0,
       practices: 0,
       gross: 0,
+      sinValor: 0,
       debit: 0,
       net: 0,
       rows: [],
@@ -3706,6 +3708,7 @@ function addRowToDashboardPeriod(target, row) {
   if (consultation) module.consultations += 1;
   else module.practices += 1;
   module.gross += gross;
+  if (!row.matchFound) module.sinValor += 1;   // código sin match en el nomenclador → $0
   module.debit += debit;
   module.net += net;
   module.rows.push({
