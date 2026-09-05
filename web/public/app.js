@@ -2898,8 +2898,13 @@ function renderFacturas(){
   var q = (qEl ? qEl.value : '').toLowerCase().trim();
   var activos = FACTURAS.periodos.slice().reverse();   // más nuevo arriba
   var arch = FACTURAS.archivados.slice().reverse();
+  var verArchEl = document.getElementById('facVerArch');
+  var verArch = !!(verArchEl && verArchEl.checked);
+  // El checkbox "Ver archivados" solo tiene sentido si hay archivados.
+  var lbl = document.getElementById('facVerArchLabel'); if (lbl) lbl.style.display = arch.length ? '' : 'none';
   var actMostrar = q ? activos.filter(function(p){ return p.toLowerCase().indexOf(q) >= 0; }) : activos;
-  var archMostrar = q ? arch.filter(function(p){ return p.toLowerCase().indexOf(q) >= 0; }) : [];
+  // Los archivados se muestran si están tildados en "Ver archivados" o si el nombre coincide con la búsqueda.
+  var archMostrar = (verArch || q) ? arch.filter(function(p){ return !q || p.toLowerCase().indexOf(q) >= 0; }) : [];
   FAC_RENDER = actMostrar.concat(archMostrar);
   var html;
   if (!FAC_RENDER.length){
@@ -2908,7 +2913,7 @@ function renderFacturas(){
   } else {
     html = FAC_RENDER.map(function(_, i){ return facturaPeriodoSection(i); }).join('');
   }
-  if (!q && arch.length) html += '<div class="fac-archivados-info">📦 ' + arch.length + ' período(s) archivado(s). Buscalos por nombre arriba.</div>';
+  if (!q && !verArch && arch.length) html += '<div class="fac-archivados-info">📦 ' + arch.length + ' período(s) archivado(s). Tildá “Ver archivados” arriba para mostrarlos.</div>';
   box.innerHTML = html;
 }
 function facturaPeriodoSection(pIdx){

@@ -1427,6 +1427,7 @@
             <div class="fac-topbar">
               <input class="inp mini" id="facBuscar" placeholder="🔎 Buscar período…" oninput="renderFacturas()" style="max-width:220px">
               <label class="factura-cfg" title="Se resta del bruto antes de aplicar la retención (Ganancias)">Mín. Ganancias <input class="inp mini" id="facMinimo" inputmode="decimal" onchange="saveMinimo()" style="width:100px"></label>
+              <label class="factura-cfg" id="facVerArchLabel" style="display:none;cursor:pointer" title="Mostrar también los períodos archivados"><input type="checkbox" id="facVerArch" onchange="renderFacturas()" style="margin-right:6px;vertical-align:-1px">📦 Ver archivados</label>
               <div class="sp" style="flex:1"></div>
               <button class="btn btn-primary btn-sm" type="button" onclick="agregarPeriodo()">+ Período</button>
             </div>
