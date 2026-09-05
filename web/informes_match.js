@@ -25,7 +25,25 @@ function norm(v) {
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
     .toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 }
-function tokens(v) { return norm(v).split(" ").filter((t) => t.length >= 2); }
+// Partículas de apellido que en Argentina suelen ir pegadas o separadas indistinto
+// ("DE FELICE" == "DEFELICE", "DE LA CRUZ" == "DELACRUZ", "SAN MARTIN" == "SANMARTIN").
+// Se unen con el token siguiente para que el matcheo por nombre no falle por el espacio.
+const _PARTICULAS = new Set(["DE", "DEL", "DI", "DA", "LA", "LAS", "LOS", "LE", "LO", "SAN", "SANTA", "SANTO", "MC", "MAC", "VAN", "VON", "DELLA", "DOS", "SANT"]);
+function tokens(v) {
+  const raw = norm(v).split(" ").filter(Boolean);
+  const out = [];
+  for (let i = 0; i < raw.length; i++) {
+    // Une una (o varias) partículas seguidas con el token siguiente: DE+LA+CRUZ -> DELACRUZ.
+    if (_PARTICULAS.has(raw[i]) && i + 1 < raw.length) {
+      let junta = raw[i];
+      while (i + 1 < raw.length && _PARTICULAS.has(raw[i]) ) { junta += raw[i + 1]; i++; }
+      out.push(junta);
+    } else {
+      out.push(raw[i]);
+    }
+  }
+  return out.filter((t) => t.length >= 2);
+}
 
 // ¿Dos tokens están a lo sumo a UN error de tipeo (una sustitución, inserción o
 // borrado)? Sirve para typos de una letra en apellidos: CECHINI ≈ CECCHINI,
