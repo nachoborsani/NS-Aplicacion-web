@@ -88,6 +88,9 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
+  // Colaborador (solo lectura): por ahora solo Inicio y los dashboards de sus
+  // clientes. Cualquier otra vista lo devuelve al Inicio.
+  if (ME && ME.role === 'colaborador' && ['dash', 'clientes'].indexOf(v) < 0){ go('dash'); return; }
   // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
   if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
@@ -886,7 +889,7 @@ function initials(name){
   return (name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
 }
 function roleLabel(r){
-  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración' }[r] || r;
+  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración', colaborador:'Colaborador' }[r] || r;
 }
 var ROLE = {
   admin:    { chip:'admin', label:'Admin',    bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
@@ -894,14 +897,19 @@ var ROLE = {
   medico:   { chip:'med',   label:'Médico',   bg:'linear-gradient(135deg,#3B82C4,#2a5f96)' },
   clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
   demo:     { chip:'demo',  label:'Demo',     bg:'linear-gradient(135deg,#667085,#475467)' },
+  colaborador: { chip:'colab', label:'Colaborador', bg:'linear-gradient(135deg,#C77D3A,#9a5c26)' },
 };
+// Roles de SOLO LECTURA: ven datos reales pero no escriben nada (el backend se los
+// bloquea, no alcanza con esconder botones). Mismo criterio que server.js.
+var SOLO_LECTURA = ['demo', 'colaborador'];
+function esSoloLectura(u){ return !!(u && SOLO_LECTURA.indexOf(u.role) >= 0); }
 // Visibilidad de clientes restringida a una lista puntual (u.clientes) - mismo
-// criterio que el servidor (tieneClientesRestringidos en server.js): demo
-// siempre, operador SOLO si se le cargó una lista (si no, ve todos, como
-// siempre vio). No es un rol aparte - un operador sin lista sigue igual.
+// criterio que el servidor (tieneClientesRestringidos en server.js): demo y
+// colaborador siempre, operador SOLO si se le cargó una lista (si no, ve todos,
+// como siempre vio). No es un rol aparte - un operador sin lista sigue igual.
 function tieneClientesRestringidos(u){
   if (!u) return false;
-  if (u.role === 'demo') return true;
+  if (esSoloLectura(u)) return true;
   if (u.role === 'operador') return Array.isArray(u.clientes) && u.clientes.length > 0;
   return false;
 }
@@ -979,9 +987,34 @@ function iniNombreDe(username){
   return a ? a.nombre : username;
 }
 function iniPuedeVerInicio(){ return !!(ME && (ME.role === 'admin' || ME.role === 'operador')); }
+// Inicio del colaborador: no tiene chat ni tareas (todavía), así que en vez de
+// dejarle la pantalla en blanco le mostramos sus centros para entrar de un clic.
+async function cargarInicioColaborador(){
+  var cont = document.getElementById('colabPaneles');
+  if (cont) cont.style.display = '';
+  var grid = document.getElementById('colabCentros');
+  if (!grid) return;
+  if (!CLIENTS || !CLIENTS.length){ var r = await api('/api/clientes'); if (r.ok) CLIENTS = r.data.clients || []; }
+  var lista = CLIENTS || [];
+  var meta = document.getElementById('colabMeta');
+  if (meta) meta.textContent = lista.length === 1 ? '1 centro' : (lista.length + ' centros');
+  grid.innerHTML = lista.length
+    ? lista.map(function(c){
+        return '<button type="button" class="ini-acceso-tile" onclick="go(\'clientes\'); selectClientWhenReady(\'' + esc(c.slug) + '\')">'
+          + '<span class="ic">🏥</span><span class="tx">' + esc(c.name || c.slug) + '</span></button>';
+      }).join('')
+    : '<div class="ini-empty">Todavía no tenés centros asignados.</div>';
+}
 async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
   var op = document.getElementById('operadorPaneles');
+  var colab = document.getElementById('colabPaneles');
+  if (ME && ME.role === 'colaborador'){
+    if (pl) pl.style.display = 'none';
+    if (op) op.style.display = 'none';
+    return cargarInicioColaborador();
+  }
+  if (colab) colab.style.display = 'none';
   if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; return; }
   if (!INICIO.canal) INICIO.canal = iniCanalDefault();
   var res = await api('/api/inicio?canal=' + encodeURIComponent(INICIO.canal));
@@ -2190,6 +2223,10 @@ function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
   var esOperador = (ME && ME.role === 'operador');
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
+  // Colaborador (socio externo, solo lectura): por ahora SOLO los dashboards.
+  // Es una lista propia y corta a propósito: los módulos se le van sumando de a
+  // uno acá, no hereda nada por estar en la misma rama que otro rol.
+  if (ME && ME.role === 'colaborador') return esMC ? ['general'] : ['mescurso', 'dashboard'];
   // El operador ve, de un médico de cabecera (Scheffelaar/Dubesarky), lo
   // mismo que un admin salvo OSDOP (facturación, no es su trabajo) - es una
   // lista propia, no "la del admin menos algo": si mañana se suma OTRA
@@ -6496,11 +6533,12 @@ function umPintarClientes(sel){
 function umToggleClientes(){
   var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
-  if (f) f.style.display = (role === 'demo' || role === 'operador') ? '' : 'none';
+  if (f) f.style.display = (role === 'demo' || role === 'operador' || role === 'colaborador') ? '' : 'none';
   var hint = document.getElementById('umClientesHint');
-  if (hint) hint.textContent = role === 'operador'
-    ? 'Opcional. Si no tildás ninguno, el operador ve todos los clientes (como siempre). Si tildás alguno, pasa a ver SOLO esos - ni se entera de que existen los demás, ni puede elegirlos para generar un informe.'
-    : 'Solo ve estos clientes. Puede mirar todo y descargar, pero no modificar nada.';
+  if (!hint) return;
+  if (role === 'operador') hint.textContent = 'Opcional. Si no tildás ninguno, el operador ve todos los clientes (como siempre). Si tildás alguno, pasa a ver SOLO esos - ni se entera de que existen los demás, ni puede elegirlos para generar un informe.';
+  else if (role === 'colaborador') hint.textContent = 'Obligatorio. De estos clientes ve por ahora SOLO los dashboards (mes en curso y reportes). No modifica nada y nunca ve los accesos de PAMI.';
+  else hint.textContent = 'Solo ve estos clientes. Puede mirar todo y descargar, pero no modificar nada.';
 }
 function umClientesElegidos(){
   return [].slice.call(document.querySelectorAll('#umClientes input:checked')).map(function(i){ return i.value; });
@@ -7658,8 +7696,17 @@ function aplicarUsuario(u){
   // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
   var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
   // Nomencladores: por ahora un operador no lo necesita - se le oculta (mismo
-  // criterio de alcance que Consultorios).
-  var nn = document.getElementById('navNomencladores'); if (nn) nn.style.display = (u.role === 'operador') ? 'none' : '';
+  // criterio de alcance que Consultorios). El colaborador tampoco.
+  var esColaborador = (u.role === 'colaborador');
+  var nn = document.getElementById('navNomencladores'); if (nn) nn.style.display = (u.role === 'operador' || esColaborador) ? 'none' : '';
+  // Colaborador: por ahora entra SOLO a los dashboards de sus clientes, así que
+  // del menú le queda Inicio + la lista de clientes. Cuando se le sumen módulos,
+  // se habilitan de a uno acá y en clientSeccionesPermitidas().
+  if (esColaborador) {
+    ['navInformes', 'navPadron', 'navCabina', 'navCruzas', 'navNomencladores'].forEach(function(id){
+      var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+  }
   // Configuración general (usuarios, débitos): alguien con clientes restringidos
   // no debe entrar ahí - un operador sin restringir sí, como siempre.
   var ngen = document.getElementById('navGeneral'); if (ngen) ngen.style.display = tieneClientesRestringidos(u) ? 'none' : '';
