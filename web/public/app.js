@@ -105,6 +105,7 @@ function go(v, el){
   document.getElementById('pageTitle').textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
+  document.body.classList.toggle('dash-view', v === 'dash');
   // Laboratorio: menú mínimo (logo + Inicio + pie), se esconde el resto del nav.
   document.body.classList.toggle('lab-mode', v === 'lab');
   if (v === 'lab' && window.labInit) window.labInit();
