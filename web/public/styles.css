@@ -226,6 +226,9 @@
   .topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:30}
   .hamb{display:none;background:transparent;border:0;color:var(--text);padding:6px}
   .topbar h2{font-size:16px;margin:0;font-weight:700}
+  /* El título/saludo nunca parte en dos líneas ni empuja los íconos: una sola
+     línea, y si no entra, se recorta con puntos suspensivos. */
+  #pageTitle{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .top-client-meta{display:none;align-items:center;gap:12px;min-width:0}
   .topbar.client-mode #pageTitle{display:none}
   .topbar.client-mode .top-client-meta{display:flex}
@@ -636,6 +639,10 @@
     .page-head h1{font-size:18px}
     .rowbtn{padding:7px 10px}
     .row-actions,.cab-actions{gap:8px}
+    /* En celular el saludo va sin el "Buenas tardes," (queda "Ignacio 👋") para
+       que entre en una línea al lado de los íconos. */
+    .hi-pre{display:none}
+    #pageTitle{font-size:15px}
   }
   /* fila de encabezado con acción a la derecha */
   .head-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
