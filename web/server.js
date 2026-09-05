@@ -1902,10 +1902,13 @@ function emptyWorkerState() {
 function loadWorkerState() {
   try {
     const parsed = JSON.parse(fs.readFileSync(workerStateFile, "utf8"));
+    // Si todavía no hay un `schedule` guardado (estado previo a esta feature), usar
+    // el default COMPLETO — no validarSchedule({}), que daría Scheffelaar vacío.
+    const tieneSched = parsed && parsed.schedule && typeof parsed.schedule === "object";
     return {
       workers: parsed && typeof parsed.workers === "object" && !Array.isArray(parsed.workers) ? parsed.workers : {},
       tasks: Array.isArray(parsed && parsed.tasks) ? parsed.tasks : [],
-      schedule: validarSchedule(parsed && parsed.schedule),
+      schedule: tieneSched ? validarSchedule(parsed.schedule) : defaultSchedule(),
       scheduleVersion: Number(parsed && parsed.scheduleVersion) || 1,
     };
   } catch {
