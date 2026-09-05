@@ -6830,6 +6830,107 @@ async function saveDelete(){
 
 function showModal(id, scrimId){ document.getElementById(scrimId).classList.add('show'); document.getElementById(id).classList.add('show'); }
 function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remove('show'); document.getElementById(id).classList.remove('show'); }
+
+// ================= Estado del server (worker + automatización) =================
+// La web ya recibe el heartbeat del worker (cada ~5s) en /api/admin/worker/status.
+// Con eso mostramos si el server está vivo, qué está haciendo y las últimas tareas,
+// sin necesidad de entrar por SSH. Solo admin.
+var SRV_POLL = null;       // refresco mientras el modal está abierto
+var SRV_DOT_POLL = null;   // refresco de fondo del puntito del botón
+var SRV_TIPO_LABEL = { 'healthcheck':'Prueba', 'auditar-informes':'Auditar informes', 'subir-informes':'Subir informe', 'bandeja-sync':'Sincronizar bandeja' };
+
+function srvRelativo(iso){
+  if(!iso) return '—';
+  var t = Date.parse(iso); if(isNaN(t)) return '—';
+  var s = Math.max(0, Math.round((Date.now()-t)/1000));
+  if(s<60) return 'hace '+s+'s';
+  var m=Math.round(s/60); if(m<60) return 'hace '+m+' min';
+  var h=Math.floor(m/60); if(h<24) return 'hace '+h+' h';
+  return 'hace '+Math.floor(h/24)+' d';
+}
+function srvOnline(w){ return !!(w && w.lastSeenAt) && (Date.now()-Date.parse(w.lastSeenAt)) < 45000; }
+function srvIconTarea(s){ return s==='done'?'✅':s==='error'?'❌':s==='running'?'⏳':s==='pending'?'🕓':'•'; }
+
+async function srvCargarEstado(){
+  var r = await fetch('/api/admin/worker/status', { credentials:'same-origin' });
+  if(!r.ok) throw new Error('http '+r.status);
+  return r.json();
+}
+function srvSetDot(online){ var d=document.getElementById('srvDot'); if(d) d.style.background = online ? '#16a34a' : '#dc2626'; }
+async function srvRefrescarDot(){
+  try{ var st=await srvCargarEstado(); srvSetDot((st.workers||[]).some(srvOnline)); }
+  catch(e){ srvSetDot(false); }
+}
+
+function srvRender(st){
+  var body=document.getElementById('srvBody'); if(!body) return;
+  var ws=(st.workers||[]);
+  var online = ws.some(srvOnline);
+  srvSetDot(online);
+  var w = ws.slice().sort(function(a,b){ return String(b.lastSeenAt||'').localeCompare(String(a.lastSeenAt||'')); })[0];
+  var h='';
+  // Cabecera: vivo / sin conexión
+  h += '<div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-radius:12px;background:'+(online?'rgba(22,163,74,.10)':'rgba(220,38,38,.10)')+';margin-bottom:16px">';
+  h += '<span style="width:12px;height:12px;border-radius:50%;flex:none;background:'+(online?'#16a34a':'#dc2626')+';box-shadow:0 0 0 4px '+(online?'rgba(22,163,74,.18)':'rgba(220,38,38,.18)')+'"></span>';
+  h += '<div style="min-width:0"><div style="font-weight:800;color:var(--text)">'+(online?'Server en línea':'Sin conexión con el server')+'</div>';
+  h += '<div style="font-size:12px;color:var(--text-2)">'+ (w ? ((w.hostname||w.workerId||'server')+' · visto '+srvRelativo(w.lastSeenAt)) : 'nunca reportó') +'</div></div></div>';
+
+  // Qué está haciendo ahora
+  var tasks=(st.tasks||[]);
+  var corriendo = tasks.filter(function(t){ return t.status==='running'; })[0];
+  h += '<div style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px">Ahora</div>';
+  if(corriendo){
+    var lblC = SRV_TIPO_LABEL[corriendo.type]||corriendo.type;
+    h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text)">⏳ '+lblC+(corriendo.clientSlug?' · '+corriendo.clientSlug:'')+'</div>';
+  } else {
+    h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text-2)">Inactivo — esperando tareas</div>';
+  }
+
+  // Últimas tareas
+  h += '<div style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px">Últimas tareas</div>';
+  if(!tasks.length){
+    h += '<div style="color:var(--text-2);padding:4px 2px 16px">Sin tareas todavía.</div>';
+  } else {
+    h += '<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:16px">';
+    tasks.slice(0,6).forEach(function(t){
+      var lbl=SRV_TIPO_LABEL[t.type]||t.type;
+      var cuando = t.finishedAt||t.startedAt||t.createdAt;
+      var err = (t.status==='error' && t.error) ? ' <span style="color:#dc2626">('+String(t.error).slice(0,55)+')</span>' : '';
+      h += '<div style="display:flex;align-items:center;gap:8px;font-size:13px">'
+         + '<span style="flex:none">'+srvIconTarea(t.status)+'</span>'
+         + '<span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+lbl+(t.clientSlug?' · '+t.clientSlug:'')+err+'</span>'
+         + '<span style="flex:none;color:var(--text-2);font-size:11px;white-space:nowrap">'+srvRelativo(cuando)+'</span>'
+         + '</div>';
+    });
+    h += '</div>';
+  }
+
+  // Automatización programada (horario fijo de los timers del server)
+  h += '<div style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px">Automatización programada</div>';
+  h += '<div style="font-size:12.5px;color:var(--text-2);line-height:1.75">'
+     + '• Refresco de bandeja <b>20:00</b> · reintentos <b>22:00</b><br>'
+     + '• "Actualizar ahora" <b>cada 10 min</b><br>'
+     + '• Cadena Scheffelaar: <b>Lun/Mar 17 y 19:30</b> · <b>Mié/Vie 12, 17 y 19:30</b>'
+     + '</div>';
+
+  body.innerHTML = h;
+}
+
+async function srvTick(){
+  try{ srvRender(await srvCargarEstado()); }
+  catch(e){ var b=document.getElementById('srvBody'); if(b) b.innerHTML='<div style="padding:18px;color:#dc2626">No pude leer el estado ('+(e&&e.message||e)+').</div>'; srvSetDot(false); }
+}
+function abrirEstadoServer(){
+  showModal('srvModal','srvScrim');
+  srvTick();
+  if(SRV_POLL) clearInterval(SRV_POLL);
+  SRV_POLL = setInterval(srvTick, 5000);
+}
+function cerrarEstadoServer(){
+  hideModal('srvModal','srvScrim');
+  if(SRV_POLL){ clearInterval(SRV_POLL); SRV_POLL=null; }
+}
+
 // ===== Padrón de afiliados (admin) =====
 var PADRON_SEARCH_TIMER = null;
 async function loadPadronView(){
@@ -7945,6 +8046,8 @@ function aplicarUsuario(u){
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
   var lb = document.getElementById('labBtn'); if (lb) lb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Laboratorio (martillo), solo admin
+  var sb = document.getElementById('srvBtn'); if (sb) sb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Estado del server, solo admin
+  if (u.role === 'admin') { srvRefrescarDot(); if (SRV_DOT_POLL) clearInterval(SRV_DOT_POLL); SRV_DOT_POLL = setInterval(srvRefrescarDot, 60000); }
   // Padrón (Afiliados) e Informes recibidos: admin y operador (los USAN); el usuario
   // de demostración los VE pero no puede ejecutar acciones (el backend se las bloquea).
   var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');
