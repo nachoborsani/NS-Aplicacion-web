@@ -94,6 +94,15 @@ class Cola:
         except Exception:  # noqa: BLE001
             pass
 
+    def captura(self, tid, png_b64, ome="", estado="", motivo=""):
+        """Sube a la web la captura de pantalla del error (para verla sin la PC)."""
+        try:
+            r = self._req("POST", f"/api/worker/tasks/{urllib.parse.quote(tid)}/captura",
+                          {"pngB64": png_b64, "ome": str(ome)[:40], "estado": str(estado)[:40], "motivo": str(motivo)[:300]})
+            return bool(r and r.get("ok"))
+        except Exception:  # noqa: BLE001
+            return False
+
 
 # --- Datos desde la web (sesión admin) -------------------------------------
 def _informes(web, slug, ids):
@@ -169,7 +178,7 @@ def tarea_auditar(web, slug, payload, tlog):
     return {"total": len(res), "con_doc": con_doc, "detalle": detalle}
 
 
-def tarea_subir(web, slug, payload, tlog):
+def tarea_subir(web, slug, payload, tlog, cola=None, tid=None):
     infos = _informes(web, slug, payload.get("informeIds"))
     user, clave = _creds(web, slug)
     if not user or not clave:
@@ -214,9 +223,22 @@ def tarea_subir(web, slug, payload, tlog):
         ctrl.cerrar()
     ok = sum(1 for r in res if r.get("estado") in ("transmitido", "ya_transmitido"))
     detalle = []
+    subidas = 0
     for r in res:
-        d = {"filename": r.get("filename", ""), "ome": (r.get("prestacion") or {}).get("n_orden", ""),
-             "estado": r.get("estado"), "motivo": r.get("motivo", "")}
+        ome = (r.get("prestacion") or {}).get("n_orden", "")
+        estado = r.get("estado")
+        motivo = r.get("motivo", "")
+        # Si el bot capturó la pantalla del error, la subimos a la web (máx. 5 por tarea
+        # para no abusar) y la sacamos del result (no viaja en 'complete').
+        b64 = r.pop("captura_b64", None)
+        tiene_captura = False
+        if b64 and cola and tid and subidas < 5:
+            if cola.captura(tid, b64, ome=ome, estado=estado, motivo=motivo):
+                tiene_captura = True
+                subidas += 1
+        d = {"filename": r.get("filename", ""), "ome": ome, "estado": estado, "motivo": motivo}
+        if tiene_captura:
+            d["captura"] = True
         tlog(f"{d['filename'][:24]:24} OME {d['ome']} → {d['estado']} ({d['motivo']})")
         detalle.append(d)
     return {"total": len(items), "subidos": ok, "detalle": detalle}
@@ -238,7 +260,7 @@ def dispatch(task, web, cola):
     if tipo == "auditar-informes":
         return tarea_auditar(web, slug, payload, tlog)
     if tipo == "subir-informes":
-        return tarea_subir(web, slug, payload, tlog)
+        return tarea_subir(web, slug, payload, tlog, cola, tid)
     raise RuntimeError(f"Tipo de tarea no soportado por este worker: {tipo}")
 
 

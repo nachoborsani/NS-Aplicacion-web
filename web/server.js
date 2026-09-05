@@ -145,6 +145,7 @@ const clientPracticeValuesFile = path.join(dataDir, "client_practice_values.json
 const pamiExclusionPairsFile = path.join(__dirname, "pami_exclusion_pairs.json");
 const workerStateFile = path.join(dataDir, "worker_state.json");
 const workerTokenFile = path.join(dataDir, "worker_api_token");
+const workerCapturasDir = path.join(dataDir, "worker_capturas");
 
 // Secreto para firmar la cookie de sesion. Si no viene por env, se guarda uno
 // en el volumen y se reutiliza: asi las sesiones (y el "Recordarme") sobreviven
@@ -1888,6 +1889,9 @@ function publicWorkerTask(t) {
     error: String(t.error || ""),
     result: t.result && typeof t.result === "object" ? t.result : null,
     logs: Array.isArray(t.logs) ? t.logs.slice(-100) : [],
+    capturas: Array.isArray(t.capturas)
+      ? t.capturas.map((c) => ({ ome: String(c.ome || ""), estado: String(c.estado || ""), motivo: String(c.motivo || ""), at: String(c.at || "") }))
+      : [],
   };
 }
 function appendWorkerTaskLog(task, level, message) {
@@ -4672,6 +4676,47 @@ const server = http.createServer(async (req, res) => {
     }
     return json(res, 200, { ok: true, task: publicWorkerTask(task) });
   }
+  // El worker sube la captura de pantalla de PAMI en el momento de un error (para
+  // verla desde la web sin abrir la PC). PNG en base64; se guarda como archivo y
+  // en la tarea queda solo la metadata (OME/estado/motivo). Máx. 5 por tarea.
+  const workerCapturaMatch = p.match(/^\/api\/worker\/tasks\/([^/]+)\/captura$/);
+  if (workerCapturaMatch && req.method === "POST") {
+    if (!isWorkerAuth(req)) return json(res, 401, { error: "worker-auth" });
+    const body = await readBody(req);
+    const state = loadWorkerState();
+    const taskId = decodeURIComponent(workerCapturaMatch[1]);
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (!task) return json(res, 404, { error: "task-not-found" });
+    let buf = null;
+    try { buf = Buffer.from(String((body && body.pngB64) || ""), "base64"); } catch { buf = null; }
+    const esPng = buf && buf.length > 8 && buf.slice(0, 8).toString("latin1") === "\x89PNG\r\n\x1a\n";
+    if (!esPng) return json(res, 400, { error: "png-invalido" });
+    if (buf.length > 4 * 1024 * 1024) return json(res, 413, { error: "captura-muy-grande" });
+    if (!Array.isArray(task.capturas)) task.capturas = [];
+    if (task.capturas.length >= 5) return json(res, 200, { ok: true, skipped: "max" });
+    const idx = task.capturas.length;
+    try {
+      const dir = path.join(workerCapturasDir, taskId);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, idx + ".png"), buf);
+    } catch { return json(res, 500, { error: "no-pude-guardar" }); }
+    task.capturas.push({
+      ome: String((body && body.ome) || "").slice(0, 40),
+      estado: String((body && body.estado) || "").slice(0, 40),
+      motivo: String((body && body.motivo) || "").slice(0, 300),
+      at: new Date().toISOString(),
+    });
+    saveWorkerState(state);
+    // Prune: borrar carpetas de captura de tareas que ya no están en el estado
+    // (las tareas se recortan a 500), para que el volumen no crezca sin control.
+    try {
+      const vivos = new Set(state.tasks.map((t) => t.id));
+      for (const name of fs.readdirSync(workerCapturasDir)) {
+        if (!vivos.has(name)) fs.rmSync(path.join(workerCapturasDir, name), { recursive: true, force: true });
+      }
+    } catch { /* si no existe el dir aún, nada que podar */ }
+    return json(res, 200, { ok: true });
+  }
 
   // ---- API ----
   if (p === "/api/me") {
@@ -4763,6 +4808,23 @@ const server = http.createServer(async (req, res) => {
       tasks,
     });
   }
+  // Sirve la captura de error de una tarea (PNG) al admin, para verla desde el
+  // panel de estado del server. Solo admin; el path se valida dentro del dir.
+  const capServeMatch = p.match(/^\/api\/admin\/worker\/capturas\/([^/]+)\/(\d+)$/);
+  if (capServeMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const taskId = decodeURIComponent(capServeMatch[1]);
+    const idx = parseInt(capServeMatch[2], 10);
+    const file = path.resolve(path.join(workerCapturasDir, taskId, idx + ".png"));
+    if (!file.startsWith(path.resolve(workerCapturasDir) + path.sep)) return json(res, 400, { error: "path" });
+    let buf;
+    try { buf = fs.readFileSync(file); } catch { return json(res, 404, { error: "no-existe" }); }
+    res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
+    return res.end(buf);
+  }
+
   // Diagnóstico de disco (admin, solo lectura): qué está ocupando el volumen.
   // Para decidir qué limpiar cuando el volumen se acerca al tope.
   if (p === "/api/admin/_storage" && req.method === "GET") {

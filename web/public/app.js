@@ -6906,6 +6906,17 @@ function srvRender(st){
          + '<span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+lbl+(t.clientSlug?' · '+t.clientSlug:'')+err+'</span>'
          + '<span style="flex:none;color:var(--text-2);font-size:11px;white-space:nowrap">'+srvRelativo(cuando)+'</span>'
          + '</div>';
+      // Capturas de pantalla del error en PAMI (si el bot las sacó): links para verlas.
+      if (t.capturas && t.capturas.length){
+        h += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:1px 0 3px 24px">';
+        t.capturas.forEach(function(c, ci){
+          var tip = (c.motivo ? String(c.motivo) : 'Ver captura del error').replace(/"/g,'&quot;');
+          h += '<a href="/api/admin/worker/capturas/'+encodeURIComponent(t.id)+'/'+ci+'" target="_blank" rel="noopener" '
+             + 'style="font-size:11px;color:#2563eb;text-decoration:none;border:1px solid rgba(37,99,235,.35);border-radius:6px;padding:1px 7px" '
+             + 'title="'+tip+'">📷 '+(c.ome ? 'OME '+esc(c.ome) : 'ver error')+'</a>';
+        });
+        h += '</div>';
+      }
     });
     h += '</div>';
   }

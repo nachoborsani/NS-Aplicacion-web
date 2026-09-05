@@ -1,3 +1,4 @@
+import base64
 import re
 import shutil
 import subprocess
@@ -3291,8 +3292,23 @@ class PamiDocumentacionController:
                     estado = "ya_transmitido"
                 elif "no esta validada" in motivo_key or "no figura validada" in motivo_key or "transmision excepcional" in motivo_key:
                     estado = "no_validada"
-                resultados.append({**item, "estado": estado, "motivo": motivo})
+                res_item = {**item, "estado": estado, "motivo": motivo}
+                # Captura de la pantalla de PAMI en el momento del error, para poder
+                # ver "el recorrido" del problema desde la web sin abrir la PC.
+                if estado not in ("transmitido", "ya_transmitido"):
+                    png = self._captura_png(page)
+                    if png:
+                        res_item["captura_b64"] = base64.b64encode(png).decode("ascii")
+                resultados.append(res_item)
         return resultados
+
+    def _captura_png(self, page):
+        """PNG de la pantalla actual de PAMI (para ver el error desde la web).
+        Nunca lanza: si no se puede sacar, devuelve None."""
+        try:
+            return page.screenshot(type="png")
+        except Exception:  # noqa: BLE001
+            return None
 
     def verificar_lote_en_pami(
         self,
