@@ -2362,6 +2362,10 @@ function setClientSection(section){
   // La bandeja (puede ser grande) se carga recién al abrir su solapa, no en cada
   // cambio de cliente.
   if (CLIENT_SECTION === 'mescurso') loadClientMesCurso();
+  // Igual que la bandeja: si alguien dejó este cliente abierto y mientras tanto
+  // se cerró/subió un reporte nuevo (o se confirmaron débitos), al volver a esta
+  // solapa había que salir y reentrar al cliente para verlo — ahora se repide.
+  if (CLIENT_SECTION === 'dashboard') loadClientDashboard();
   if (CLIENT_SECTION === 'general') renderClientGeneral();
   if (CLIENT_SECTION === 'medicos') loadClientMedicos();
   if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
