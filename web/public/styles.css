@@ -209,6 +209,20 @@
   body.sidebar-collapsed .side-config a .chip,
   body.sidebar-collapsed .side-user .who{display:none}
   body.sidebar-collapsed .side-user{justify-content:center;padding:8px}
+  /* --- Menú de cuenta que cuelga del avatar (arriba a la derecha) --- */
+  .avatar-wrap{position:relative;flex:0 0 auto}
+  button.avatar{border:0;cursor:pointer;font-family:inherit}
+  button.avatar:hover{filter:brightness(1.08)}
+  .avatar-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:212px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(11,31,58,.18);padding:6px;z-index:60}
+  [data-theme="dark"] .avatar-menu{box-shadow:0 12px 32px rgba(0,0,0,.5)}
+  .avatar-menu-head{padding:8px 10px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
+  .avatar-menu-head .nm{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .avatar-menu-head .rl{font-size:11px;color:var(--text-2);margin-top:1px}
+  .avatar-menu a{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+  .avatar-menu a svg{width:16px;height:16px;flex:0 0 auto;opacity:.7}
+  .avatar-menu a:hover{background:var(--hover)}
+  .avatar-menu a.logout{color:var(--error)}
+  .avatar-menu a.logout:hover{background:var(--error-bg)}
   .topbar{height:60px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px;position:sticky;top:0;z-index:30}
   .hamb{display:none;background:transparent;border:0;color:var(--text);padding:6px}
   .topbar h2{font-size:16px;margin:0;font-weight:700}
