@@ -919,6 +919,10 @@ var SVG_EDIT  = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5
 var SVG_KEY   = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M10.85 12.15L20 3M17 6l2.5 2.5M14 9l2.5 2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 var SVG_POWER = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3v9M6.4 6.4a8 8 0 1011.2 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 var SVG_TRASH = '<svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// Ícono de "Actividad" (reloj): solo aparece en la fila de un operador, y lleva
+// al detalle de sus horas conectado + log de ingresos. Ni se muestra para los
+// demás roles ni el operador tiene manera de llegar a esa pantalla.
+var SVG_CLOCK = '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 async function renderUsers(){
   var body = document.getElementById('usersBody');
@@ -937,6 +941,9 @@ async function renderUsers(){
     var un = esc(u.username);
     var acts = '<button class="rowbtn" title="Editar" onclick="openUserModal(\'edit\',\'' + un + '\')">' + SVG_EDIT + '</button>'
              + '<button class="rowbtn" title="Clave" onclick="openReset(\'' + un + '\')">' + SVG_KEY + '</button>';
+    if (u.role === 'operador'){
+      acts += '<button class="rowbtn" title="Ver actividad" onclick="abrirActividadModal(\'' + un + '\')">' + SVG_CLOCK + '</button>';
+    }
     if (!self){
       acts += '<button class="rowbtn" title="' + (u.active ? 'Desactivar' : 'Activar') + '" onclick="toggleActive(\'' + un + '\',' + (u.active ? 'false' : 'true') + ')">' + SVG_POWER + '</button>'
             + '<button class="rowbtn danger" title="Eliminar" onclick="openDel(\'' + un + '\')">' + SVG_TRASH + '</button>';
@@ -951,6 +958,81 @@ async function renderUsers(){
   var dc = document.getElementById('dashUsersCount'), ds = document.getElementById('dashUsersSub');
   if (dc) dc.textContent = users.length;
   if (ds){ var pend = users.filter(function(u){ return u.mustChange || !u.active; }).length; ds.textContent = (users.length - pend) + ' activos · ' + pend + ' pendientes'; }
+}
+
+// ============ Actividad de operadores (solo admin) ============
+// "Horas de hoy" que suma en vivo (se repolla cada 60s mientras Inicio está
+// abierto) + un ícono por operador para ver el detalle (log de ingresos y
+// horas por día). El operador nunca ve esto: la tarjeta vive en el Inicio del
+// admin (ver cargarInicio) y el detalle sale de /api/admin/actividad, que el
+// backend le devuelve 403 a cualquiera que no sea admin.
+var ACTIVIDAD_OP_TIMER = null;
+function actHorasFmt(seg){
+  seg = Math.max(0, Math.round(seg || 0));
+  var h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60);
+  if (!h && !m) return '0 min';
+  return (h ? h + 'h ' : '') + (m ? m + 'min' : (h ? '' : '0min'));
+}
+async function cargarActividadOperadores(){
+  var card = document.getElementById('actividadOpCard');
+  var list = document.getElementById('actividadOpList');
+  if (!card || !list) return;
+  var res = await api('/api/admin/actividad');
+  if (!res.ok){ list.innerHTML = '<li class="ini-empty">No se pudo cargar.</li>'; return; }
+  var operadores = res.data.operadores || [];
+  if (!operadores.length){ list.innerHTML = '<li class="ini-empty">No hay operadores cargados.</li>'; return; }
+  list.innerHTML = operadores.map(function(o){
+    var un = esc(o.username);
+    return '<li class="acted-row">'
+      + '<span class="acted-dot' + (o.conectadoAhora ? ' on' : '') + '" title="' + (o.conectadoAhora ? 'Conectado ahora' : 'Sin conexión') + '"></span>'
+      + '<span class="acted-nombre">' + esc(o.name) + '</span>'
+      + '<span class="acted-horas">' + esc(actHorasFmt(o.hoySegundos)) + ' hoy</span>'
+      + '<button class="rowbtn" title="Ver detalle" onclick="abrirActividadModal(\'' + un + '\')">' + SVG_CLOCK + '</button>'
+      + '</li>';
+  }).join('');
+}
+// Se llama una sola vez (desde cargarInicio, rama admin) para dejar el
+// repollo de "Horas de hoy" andando mientras la pestaña esté visible.
+function actividadOpArrancarPolling(){
+  if (ACTIVIDAD_OP_TIMER) return;
+  ACTIVIDAD_OP_TIMER = setInterval(function(){
+    if (document.visibilityState !== 'hidden' && iniEsAdmin()) cargarActividadOperadores();
+  }, 60000);
+}
+async function abrirActividadModal(username){
+  var res = await api('/api/admin/actividad/' + encodeURIComponent(username));
+  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo cargar la actividad.'); return; }
+  var u = findUser(username);
+  document.getElementById('actModalTitle').textContent = 'Actividad de ' + (u ? u.name : username);
+  var dias = res.data.dias || [];
+  var diasBox = document.getElementById('actModalDias');
+  var maxSeg = Math.max.apply(null, dias.map(function(d){ return d.segundos; }).concat([1]));
+  diasBox.innerHTML = dias.length
+    ? dias.map(function(d){
+        var pct = Math.max(2, Math.round((d.segundos / maxSeg) * 100));
+        return '<div class="act-dia-row"><span class="act-dia-fecha">' + esc(diaFmtCorto(d.dia)) + '</span>'
+          + '<span class="act-dia-barwrap"><span class="act-dia-bar" style="width:' + pct + '%"></span></span>'
+          + '<span class="act-dia-val">' + esc(actHorasFmt(d.segundos)) + '</span></div>';
+      }).join('')
+    : '<div class="ini-empty">Todavía no hay horas registradas.</div>';
+  var sesiones = res.data.sesiones || [];
+  var body = document.getElementById('actModalSesiones');
+  body.innerHTML = sesiones.length
+    ? sesiones.map(function(s){
+        var d = new Date(s.loginAt);
+        var fecha = isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-AR');
+        var hora = isNaN(d.getTime()) ? '' : d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+        return '<tr><td>' + esc(fecha) + '</td><td>' + esc(hora) + '</td><td>' + esc(s.ip || '—') + '</td></tr>';
+      }).join('')
+    : '<tr><td colspan="3" class="muted-cell">Sin ingresos registrados todavía.</td></tr>';
+  showModal('actModal', 'actScrim');
+}
+function closeActividadModal(){ hideModal('actModal', 'actScrim'); }
+// "2026-09-05" -> "05/09". Evita el corrimiento de un día que da new
+// Date("2026-09-05") al interpretarse como UTC medianoche.
+function diaFmtCorto(yyyyMmDd){
+  var p = String(yyyyMmDd || '').split('-');
+  return p.length === 3 ? (p[2] + '/' + p[1]) : String(yyyyMmDd || '');
 }
 
 // Tile de "Clientes activos" en Inicio.
@@ -1009,13 +1091,15 @@ async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
   var op = document.getElementById('operadorPaneles');
   var colab = document.getElementById('colabPaneles');
+  var actCard0 = document.getElementById('actividadOpCard');
   if (ME && ME.role === 'colaborador'){
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = 'none';
+    if (actCard0) actCard0.style.display = 'none';
     return cargarInicioColaborador();
   }
   if (colab) colab.style.display = 'none';
-  if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; return; }
+  if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; if(actCard0) actCard0.style.display='none'; return; }
   if (!INICIO.canal) INICIO.canal = iniCanalDefault();
   var res = await api('/api/inicio?canal=' + encodeURIComponent(INICIO.canal));
   if (!res.ok){
@@ -1039,9 +1123,15 @@ async function cargarInicio(marcarLeido){
     iniCargarPendientesOperador();
     iniAccesosRender();
     iniPanelesAplicar('admin'); iniPanelesWireDrag('admin'); iniAjustarAltoObservar('admin');
+    var actCard = document.getElementById('actividadOpCard');
+    if (actCard) actCard.style.display = '';
+    cargarActividadOperadores();
+    actividadOpArrancarPolling();
   } else {
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = '';
+    var actCard2 = document.getElementById('actividadOpCard');
+    if (actCard2) actCard2.style.display = 'none';
     if (!INICIO.wiredOperador){ INICIO.wiredOperador = true; iniWireComposer('opMsg', opEnviarMsg, opSetAdjunto); }
     iniRenderMensajesEn('opFeed');
     iniRenderAdjunto('opAdjPreview', INICIO.adjuntoOp, 'opQuitarAdjunto');
@@ -7681,7 +7771,22 @@ async function toggleReclamar(id, esta){
 var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
 var ME_REAL = null;    // usuario realmente logueado (siempre el admin real)
 var ESPEJO = false;    // modo espejo activo (solo lectura)
-function setUser(u){ ME_REAL = u; aplicarUsuario(u); }
+function setUser(u){ ME_REAL = u; aplicarUsuario(u); actividadArrancarHeartbeat(); }
+// ---------- Actividad (heartbeat de horas conectado) ----------
+// Solo tiene efecto real en el backend para el rol "operador" (ver
+// ROLES_MONITOREADOS en server.js); para cualquier otro rol el ping no hace
+// nada, así que ni lo mandamos. Usa SIEMPRE ME_REAL (la sesión real), no ME
+// (que puede estar "espejado" por un admin viendo como otro usuario) - lo que
+// se mide es cuánto tiempo pasa conectado el que realmente inició sesión.
+var ACTIVIDAD_HB_WIRED = false;
+function actividadArrancarHeartbeat(){
+  if (ACTIVIDAD_HB_WIRED) return;
+  if (!ME_REAL || ME_REAL.role !== 'operador') return;
+  ACTIVIDAD_HB_WIRED = true;
+  var enviar = function(){ if (document.visibilityState !== 'hidden') req('POST', '/api/actividad/ping'); };
+  enviar();
+  setInterval(enviar, 60000);
+}
 // Aplica la UI (menú, sidebar, saludo) para un usuario dado.
 function aplicarUsuario(u){
   ME = u;

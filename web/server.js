@@ -5312,6 +5312,63 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
+  // ---- Actividad (heartbeat de tiempo conectado) ----
+  // Lo llama el front cada ~60s mientras la pestaña está abierta y visible.
+  // Solo suma algo para los roles en ROLES_MONITOREADOS (ver arriba); para
+  // cualquier otro usuario responde ok sin registrar nada.
+  if (p === "/api/actividad/ping" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (ROLES_MONITOREADOS.has(me.role)) {
+      try { registrarPing(me.username); } catch {}
+    }
+    return json(res, 200, { ok: true });
+  }
+
+  // ---- Actividad de operadores (solo admin) ----
+  // Resumen para el widget de "Inicio": horas de hoy por operador + si está
+  // conectado ahora mismo. Javi (el operador) NUNCA tiene acceso a esto: son
+  // rutas /api/admin/*, y más abajo el gate general ya exige rol admin.
+  if (p === "/api/admin/actividad" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const state = loadActividad();
+    const hoy = actividadDiaKey(new Date());
+    const users = (loadUsers() || []).filter((u) => ROLES_MONITOREADOS.has(u.role));
+    const operadores = users.map((u) => {
+      const reg = state.users[u.username] || { sessions: [], dias: {}, lastPingAt: 0 };
+      const ultimaSesion = reg.sessions.length ? reg.sessions[reg.sessions.length - 1] : null;
+      return {
+        username: u.username,
+        name: u.name,
+        active: !!u.active,
+        hoySegundos: reg.dias[hoy] || 0,
+        ultimoIngreso: ultimaSesion ? ultimaSesion.loginAt : null,
+        conectadoAhora: !!(reg.lastPingAt && (Date.now() - reg.lastPingAt) <= ACTIVIDAD_PING_GAP_MAX_MS),
+      };
+    });
+    return json(res, 200, { hoy, operadores });
+  }
+
+  // Detalle de un operador puntual: últimos ingresos (log) y horas por día.
+  const mActividadUser = p.match(/^\/api\/admin\/actividad\/([^/]+)$/);
+  if (mActividadUser && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const username = decodeURIComponent(mActividadUser[1]);
+    const state = loadActividad();
+    const reg = state.users[username] || { sessions: [], dias: {} };
+    const dias = Object.keys(reg.dias || {})
+      .sort()
+      .reverse()
+      .slice(0, 30)
+      .map((dia) => ({ dia, segundos: reg.dias[dia] }));
+    const sesiones = (reg.sessions || []).slice(-50).reverse();
+    return json(res, 200, { username, dias, sesiones });
+  }
+
   // ---- Clientes ----
   if (p === "/api/clientes" && req.method === "GET") {
     const me = getSessionUser(req);
