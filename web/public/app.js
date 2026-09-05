@@ -3505,10 +3505,17 @@ function faltanInformesDe(panelId){
   return [];
 }
 // Botón por fila: sólo aparece si hay un modelo para esa práctica.
+var MESCURSO_OMES_GEN = {}; // OMEs que ya tienen informe generado (para no crear/subir de nuevo)
 function accionCrearInforme(panelId){
   return function(idx){
     var x = faltanInformesDe(panelId)[idx];
     if (!x || !modeloParaPracticaRow(x.practica)) return '';
+    // Si ya generamos un informe para esa OME (aunque la bandeja no lo refleje
+    // todavía), no ofrecemos crear/subir de nuevo: evita duplicar.
+    var omeDig = String(x.ome || '').replace(/\D/g, '');
+    if (omeDig && MESCURSO_OMES_GEN[omeDig]) {
+      return '<span class="mc-generado" style="color:#16a34a;font-weight:600;font-size:12px;white-space:nowrap" title="Ya se generó un informe para esta OME (subiéndose o subido). Cuando la bandeja se refresque, sale de la lista.">✅ Generado</span>';
+    }
     var btn = '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
     // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
     if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
@@ -3574,6 +3581,7 @@ async function ejecutarCrearYSubir(payload, x, btn){
   try {
     var r = await api('/api/informes/generar-y-subir', payload);
     if (!r.ok) throw new Error((r.data && r.data.error) || ('No se pudo (HTTP ' + r.status + ').'));
+    if (x && x.ome) MESCURSO_OMES_GEN[String(x.ome).replace(/\D/g, '')] = 1; // ya generado: no ofrecer de nuevo
     if (btn){ btn.textContent = '⏳ En cola'; btn.disabled = true; btn.title = 'Informe generado; esperando que el worker lo suba a PAMI'; }
     var taskId = r.data && r.data.taskId;
     if (taskId && btn) seguirSubidaInforme(taskId, btn);
@@ -4300,6 +4308,12 @@ async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
   var slug = ACTIVE_CLIENT.slug;
+  // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
+  // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.
+  MESCURSO_OMES_GEN = {};
+  api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas').then(function(r){
+    if (r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
+  }).catch(function(){});
   // El mes anterior es SIEMPRE el calendario anterior a hoy (Agosto -> Julio), no
   // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
   // cartel de "falta reporte" (no se cae a un mes más viejo).

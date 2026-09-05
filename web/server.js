@@ -7525,6 +7525,25 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", resumen, items });
   }
 
+  // OMEs que ya tienen un informe GENERADO desde "Crear y subir" (aunque la
+  // bandeja todavía no lo refleje). Sirve para no ofrecer crear/subir de nuevo.
+  const informeOmesGen = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/omes-generadas$/);
+  if (informeOmesGen && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const slug = informeOmesGen[1];
+    const items = (loadInformes()[slug] || {}).items || [];
+    const set = new Set();
+    for (const it of items) {
+      if (it.origen !== "generado") continue;
+      const r = it.resuelto || {};
+      const omes = Array.isArray(r.omes) ? r.omes : (r.ome ? [r.ome] : []);
+      omes.forEach((o) => { const d = cabinaLib.digs(o); if (d) set.add(d); });
+    }
+    return json(res, 200, { omes: [...set] });
+  }
+
   // Servir el archivo original de un informe (para verlo en la cabina).
   const informeArch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/archivo$/);
   if (informeArch && req.method === "GET") {
