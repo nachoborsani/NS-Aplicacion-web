@@ -7761,6 +7761,23 @@ function cabIdsParaTarea(tipo){
   }
   return vis.map(function(it){return it.id;});
 }
+// Subir UN informe suelto a PAMI (botón 📤 de la fila) — misma cola que el masivo,
+// pero con un solo informeId.
+async function subirInformeUno(id){
+  var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
+  var it=(CAB_ITEMS||[]).find(function(x){ return x.id===id; });
+  var nom=(it&&it.extract&&it.extract.nombre)||'este informe';
+  var omesArr=(it&&it.resuelto&&(it.resuelto.omes||(it.resuelto.ome?[it.resuelto.ome]:[])))||(it&&it.match&&it.match.ome?[it.match.ome]:[]);
+  var ome=omesArr.join(', ');
+  if(!confirm('Vas a SUBIR a PAMI:\n\n'+nom+(ome?('  ·  OME '+ome):'')+'\n\nEs real e irreversible. ¿Confirmás?')) return;
+  var est=document.getElementById('cabTareaEstado'); if(est) est.textContent='Creando tarea…';
+  try{
+    var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
+    var d=await r.json();
+    if(!r.ok){ if(est) est.textContent=''; alert(d.error||'No se pudo crear la tarea.'); return; }
+    seguirTarea(d.task.id,'subir-informes');
+  }catch(e){ if(est) est.textContent=''; alert('Error de red al crear la tarea.'); }
+}
 async function tareaCabina(tipo){
   var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
   var ids=cabIdsParaTarea(tipo);
@@ -7996,6 +8013,7 @@ function renderCabinaRows(slug, items){
       + '<td>'+(ome?('<b>'+esc(ome)+'</b>'):'—')+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
+        + ((cabEstadoDe(it)==='ok'||cabEstadoDe(it)==='resuelto') ? '<button class="rowbtn" title="Subir este a PAMI" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
         + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
         + '<button class="rowbtn" title="'+(it.reclamado?'Soltar (volvió del centro)':'Reclamar al centro')+'" onclick="toggleReclamar(\''+esc(it.id)+'\','+(it.reclamado?'true':'false')+')">'+(it.reclamado?'↩️':'📮')+'</button>'
         + '<button class="rowbtn" title="'+(it.desestimado?'Reactivar':'Desestimar (no subir)')+'" onclick="toggleDesestimar(\''+esc(it.id)+'\','+(it.desestimado?'true':'false')+')">'+(it.desestimado?'↩️':'🚫')+'</button>'
