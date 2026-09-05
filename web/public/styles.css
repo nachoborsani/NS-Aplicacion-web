@@ -246,10 +246,9 @@
   .icon-btn:disabled{opacity:.4;cursor:not-allowed;filter:none}
   .content{padding:22px 20px 40px;flex:1}
   body.client-view .content{padding-top:12px}
-  /* Inicio: barra más finita + saludo pegado arriba + espacios ajustados. */
-  body.dash-view .topbar{height:48px}
-  body.dash-view .content{padding-top:8px}
-  body.dash-view .page-head{margin-bottom:10px}
+  /* Inicio: el saludo es el título de la barra (no hay bloque de saludo abajo),
+     así que los paneles arrancan arriba con un poco de aire. */
+  body.dash-view .content{padding-top:16px}
   body.dash-view .ini-grid,
   body.dash-view .op-grid{margin-top:0;gap:14px}
   .page-head{margin-bottom:18px}

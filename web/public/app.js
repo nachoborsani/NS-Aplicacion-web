@@ -61,6 +61,12 @@ function expandSidebar(){
 })();
 
 var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
+// En Inicio, el título de la barra ES el saludo (no "Inicio", que es redundante).
+function saludoDe(u){
+  var h = new Date().getHours();
+  var s = h < 6 ? 'Buenas noches' : (h < 13 ? 'Buen día' : (h < 20 ? 'Buenas tardes' : 'Buenas noches'));
+  return s + ', ' + ((u && u.name ? u.name.split(' ')[0] : '')) + ' 👋';
+}
 // Grupo "Pagos" del menú: si estás en el sidebar colapsado o fuera de la vista,
 // entra a Facturas; si ya estás, solo colapsa/expande el desplegable.
 // ¿El menú está en modo cajón (celular/tablet)? Lo decide el mismo media query que
@@ -102,7 +108,7 @@ function go(v, el){
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
   ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
-  document.getElementById('pageTitle').textContent = titles[v];
+  document.getElementById('pageTitle').textContent = (v === 'dash' && ME) ? saludoDe(ME) : titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
   document.body.classList.toggle('client-view', v === 'clientes');
   document.body.classList.toggle('dash-view', v === 'dash');
@@ -8216,9 +8222,10 @@ function aplicarUsuario(u){
   var sa = document.getElementById('sideAvatar'), ta = document.getElementById('topAvatar');
   if (u.role === 'clinica'){ if (sa) sa.innerHTML = cruzSalud; if (ta) ta.innerHTML = cruzSalud; }
   else { if (sa) sa.textContent = ini; if (ta) ta.textContent = ini; }
-  var _h = new Date().getHours();
-  var _saludo = _h < 6 ? 'Buenas noches' : (_h < 13 ? 'Buen día' : (_h < 20 ? 'Buenas tardes' : 'Buenas noches'));
-  document.getElementById('dashHello').textContent = _saludo + ', ' + (u.name.split(' ')[0]) + ' 👋';
+  // El saludo vive en la barra de arriba (título de Inicio). Si al entrar la vista
+  // visible es el dashboard, lo ponemos ya (el login normal no pasa por go('dash')).
+  var _vdTit = document.getElementById('view-dash');
+  if (_vdTit && getComputedStyle(_vdTit).display !== 'none') document.getElementById('pageTitle').textContent = saludoDe(u);
   // El acceso "Ver como…" solo lo ve el admin real.
   var vc = document.getElementById('verComoLink'); if (vc) vc.style.display = (ME_REAL && ME_REAL.role === 'admin') ? '' : 'none';
   // Rol clínica: solo su centro (oculta lo interno de NS por CSS) y sin "Adjuntar reporte".
