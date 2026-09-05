@@ -4085,18 +4085,24 @@ function mesCursoLabelPeriodo(period){
   var nombre = MESCURSO_MESES[(+mm[2]) - 1] || '';
   return nombre.replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + mm[1];
 }
+// Botón "Actualizar" reutilizable (mes en curso y mes sin cerrar). Un solo pedido
+// de refresco baja TODAS las bandejas (mira 2 meses atrás), así que sirve para las
+// dos cards. Sin id: pedirRefrescoBandejas usa el botón clickeado, no getElementById.
+function mesCursoBotonRefresco(){
+  if (!(ME && (ME.role === 'admin' || ME.role === 'operador'))) return '';
+  return REFRESCO_ACTIVO
+    ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
+    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>';
+}
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 function mesCursoCardMesEnCurso(r, estado){
   var chip = (r && r.label) || mesCursoMesActualLabel();
   // Rango de días que abarca la bandeja (ej. "01/08 al 18/08"), por las dudas.
   var abarca = (r && r.coversFrom && r.coversTo) ? (r.coversFrom + ' al ' + r.coversTo) : '';
-  var puedeRefrescar = ME && (ME.role === 'admin' || ME.role === 'operador');
   var head = '<div class="mescurso-head"><span class="mescurso-title">Mes en curso'
     + (abarca ? ' <span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</span>'
     + '<span class="mescurso-chip">' + esc(chip) + '</span>'
-    + (puedeRefrescar ? (REFRESCO_ACTIVO
-        ? '<button class="btn btn-sm" type="button" disabled title="La PC lo está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
-        : '<button class="btn btn-sm" type="button" id="btnRefrescoBandejas" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>') : '')
+    + mesCursoBotonRefresco()
     + '</div>';
   if (!r){
     if (estado && estado.ok === false){
@@ -4250,7 +4256,9 @@ function mesCursoCardSinCerrar(current, reporte){
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
-    + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span></div>'
+    + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span>'
+    + mesCursoBotonRefresco()
+    + '</div>'
     + '<div class="mescurso-val-lbl">Facturación</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
     + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
