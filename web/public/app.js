@@ -70,13 +70,9 @@ function esMenuMovil(){
   return !!(h && getComputedStyle(h).display !== 'none');
 }
 function togglePagosGroup(el){
+  // "Administración" SOLO despliega/cierra el submenú; no abre ninguna pantalla
+  // por su cuenta. El usuario elige después Resumen de cuenta o Facturas.
   var group = document.getElementById('navGroupPagos');
-  // En celular el padre SOLO despliega (como los grupos de clientes); el usuario
-  // elige después Resumen o Facturas. En escritorio mantiene el atajo a Facturas.
-  if (esMenuMovil()){ if (group) group.classList.toggle('open'); return; }
-  var enFacturas = document.getElementById('view-facturas').style.display !== 'none';
-  var colapsado = document.body.classList.contains('sidebar-collapsed');
-  if (!enFacturas || colapsado){ go('facturas', el); return; }
   if (group) group.classList.toggle('open');
 }
 function go(v, el){
