@@ -339,21 +339,27 @@
      entrar SU contenido (más mensajes = fila más alta = el feed crece de
      nuevo => crecimiento sin fin al escribir). El .ini-feed de abajo vuelve a
      tener un tope fijo en px con scroll interno - real, no infinito. */
-  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;align-items:start;margin-top:18px}
-  /* La UBICACIÓN de cada tarjeta vive en estas 4 clases "slot" (a/b/c/d), no
-     en la clase de identidad (.ini-panel-msg, etc., que sigue existiendo para
-     estilos propios de cada una). iniPanelesAplicar() en app.js le pone a
-     cada tarjeta el slot que le toque según el orden guardado - arrastrar una
-     tarjeta sobre otra intercambia sus slots (ver iniPanelesWireDrag). Así el
-     usuario puede reacomodarlas sin necesitar un layout que se auto-acomode
-     solo (de más para 4 tarjetas de tamaño fijo). */
-  .ini-slot-a{grid-column:1;grid-row:1 / span 3}
-  .ini-slot-b{grid-column:2;grid-row:1}
-  .ini-slot-c{grid-column:2;grid-row:2}
-  .ini-slot-d{grid-column:2;grid-row:3}
+  /* grid-auto-flow:dense + una altura de fila FIJA (no "auto"): el propio
+     motor de grilla del navegador acomoda las tarjetas sin que se pisen ni
+     dejen huecos, sin necesitar detección de colisiones a mano. Es clave que
+     sea fija (no derivada del contenido) - así align-items:stretch es segura
+     acá (no es lo mismo que el bug de crecimiento infinito de antes: ahí la
+     fila se agrandaba CON el contenido y eso realimentaba el stretch; acá la
+     fila mide siempre 210px, pase lo que pase adentro - el contenido que no
+     entra scrollea, ver .ini-feed/.ini-tasks/.ini-pendop-list). */
+  .ini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:210px;grid-auto-flow:row dense;align-items:stretch;gap:16px;margin-top:18px}
+  /* El TAMAÑO de cada tarjeta es una de estas 4 clases - el usuario lo elige
+     con el botón ⤢ del header (cicla s→m→w→l). El ORDEN es la posición real
+     de la tarjeta en el DOM: iniPanelesAplicar() en app.js reordena los nodos
+     según lo guardado y el auto-flow dense las va acomodando solo a partir de
+     ahí (ver iniPanelesWireDrag para el arrastre). */
+  .ini-size-s{grid-column:span 1;grid-row:span 1}
+  .ini-size-m{grid-column:span 1;grid-row:span 2}
+  .ini-size-w{grid-column:span 2;grid-row:span 1}
+  .ini-size-l{grid-column:span 2;grid-row:span 2}
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
-    .ini-slot-a,.ini-slot-b,.ini-slot-c,.ini-slot-d{grid-column:1;grid-row:auto}
+    .ini-size-s,.ini-size-m,.ini-size-w,.ini-size-l{grid-column:1 !important}
   }
   /* Arrastrar para reordenar: se agarra desde el header (.ini-drag-handle),
      no desde cualquier punto de la tarjeta, para no pisar clicks en botones/
@@ -362,6 +368,12 @@
   [data-panel].ini-dragging{opacity:.45}
   [data-panel].ini-drop-target{outline:2px dashed var(--turq);outline-offset:-2px}
   .ini-card{display:flex;flex-direction:column;overflow:hidden;padding:0}
+  /* Botón de tamaño (⤢) inyectado por JS en cada header - cicla chico/mediano/
+     ancho/grande. Es un <button> real así que un click no dispara el arrastre
+     del header (los navegadores ya evitan que un elemento interactivo anidado
+     inicie drag). margin-left:auto lo manda al extremo derecho del header. */
+  .ini-size-btn{margin-left:auto;flex:0 0 auto;width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1}
+  .ini-size-btn:hover{border-color:var(--turq);color:var(--turq)}
   .ini-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
   .ini-head .ini-ic{font-size:20px;line-height:1}
   .ini-head h2{margin:0;font-size:15px;font-weight:800}
@@ -369,7 +381,10 @@
   .ini-unread{margin-left:auto;background:var(--error);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
   /* mensajes - mismo tamaño para el chat del admin y el del operador (el de
      Javi quedó bien así, "esa está perfecta" - no llevan tope propio). */
-  .ini-feed{max-height:420px;min-height:210px;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+  /* flex:1 + min-height:0 = llena lo que le toque a la tarjeta segun su tamaño
+     (.ini-size-*), sin medirlo a mano: crece o achica con el tamaño elegido y
+     lo que no entra scrollea (overflow-y:auto), nunca empuja a nadie. */
+  .ini-feed{flex:1;min-height:0;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
   /* Scrollbar del feed de mensajes: mismo celeste/turquesa que ya usa el menú
      lateral (.nav), para que se vea igual en vez del gris nativo del navegador. */
   .ini-feed{scrollbar-width:thin;scrollbar-color:var(--turq) transparent}
@@ -395,18 +410,14 @@
   .ini-switch input:checked::before{transform:translateX(13px)}
   /* Badge de visibilidad por mensaje (solo lo ve un admin, junto al nombre) */
   .ini-vis-badge{margin-left:6px;font-size:10px;opacity:.8}
-  /* Panel de operador (Inicio): chat arriba a la izquierda, Pendientes arriba
-     a la derecha (lista corta, 1 fila por cliente - no necesita ancho
-     completo) y Accesos rápidos abajo ocupando las 2 columnas (con hasta 9
-     atajos de a 3 por fila, ahí sí aprovecha el ancho). */
-  .op-grid{display:grid;grid-template-columns:1.15fr .85fr;grid-template-rows:auto auto;gap:16px;margin-top:18px}
-  /* Mismo mecanismo de slots que .ini-grid arriba (ver ese comentario). */
-  .op-slot-a{grid-column:1;grid-row:1}
-  .op-slot-b{grid-column:2;grid-row:1}
-  .op-slot-c{grid-column:1/3;grid-row:2}
+  /* Panel de operador (Inicio): mismo mecanismo que .ini-grid arriba (dense +
+     fila fija + clases .ini-size-*), así el usuario mueve y redimensiona sus
+     3 tarjetas igual que el admin. Default: chat mediano, pendientes chico,
+     accesos ancho (ver iniPanelesTamDefault en app.js). */
+  .op-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:210px;grid-auto-flow:row dense;align-items:stretch;gap:16px;margin-top:18px}
   @media(max-width:860px){
     .op-grid{grid-template-columns:1fr}
-    .op-slot-a,.op-slot-b,.op-slot-c{grid-column:1;grid-row:auto}
+    .op-grid .ini-size-s,.op-grid .ini-size-m,.op-grid .ini-size-w,.op-grid .ini-size-l{grid-column:1 !important}
   }
   [data-theme="dark"] .ini-msg.me .ini-txt{color:#dff8f7}
   .ini-empty{color:var(--text-2);font-size:13px;text-align:center;padding:26px 10px}
@@ -448,7 +459,7 @@
   /* Una tarea siempre tiene que quedar asignada a alguien - se puede tildar a
      Ignacio y/o Sebastian a la vez (multi), pero no queda "sin asignar". */
   .ini-task-err{font-size:11.5px;color:var(--error);font-weight:600}
-  .ini-tasks{max-height:300px;overflow-y:auto;padding:6px 10px 8px}
+  .ini-tasks{flex:1;min-height:0;overflow-y:auto;padding:6px 10px 8px}
   .ini-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
   .ini-task{display:flex;align-items:flex-start;gap:10px;padding:9px 8px;border-radius:10px}
   .ini-task:hover{background:var(--hover)}
@@ -493,7 +504,7 @@
      notificación de celular - el color ya avisa la urgencia, sin texto de más. */
   /* Un poco más alta que antes (300->420): que entren todos los clientes con
      pendientes sin achicharrarse a los primeros 5-6. */
-  .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;max-height:420px}
+  .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1;min-height:0}
   .ini-pendop-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px}
   .ini-pendop-row:hover{background:var(--hover)}
   .ini-pendop-nombre{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -512,7 +523,9 @@
   /* Variante recortada (Inicio del operador): esta tarjeta ahora comparte
      lugar con "Tareas" abajo, así que la lista de centros pendientes queda
      más baja que en la del admin. */
-  .ini-pendop-list-cortita{max-height:130px}
+  /* .ini-pendop-list-cortita ya no hace falta: con flex:1 en .ini-pendop-list
+     (arriba), la lista le cede sola el lugar que necesite a .op-tareas
+     (alto natural, ver abajo) - no hay que taparle un alto fijo a mano. */
   /* Actividad de operadores (Inicio del admin): horas conectado hoy + ícono
      de detalle. Mismo lenguaje visual que .ini-pendop-* de arriba. */
   .acted-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px}
