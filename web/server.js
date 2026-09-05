@@ -41,6 +41,7 @@ const ASSET_VER = assetVersion();
 const dataDir = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
 const usersFile = path.join(dataDir, "users.json");
 const clientesFile = path.join(dataDir, "clientes.json");
+const actividadFile = path.join(dataDir, "actividad.json");
 const legacyNomencladorFile = path.join(dataDir, "nomenclador.json");
 const nomencladoresFile = path.join(dataDir, "nomencladores.json");
 const clientReportsFile = path.join(dataDir, "client_reports.json");
@@ -1721,9 +1722,14 @@ function esOperativo(me) { return !!(me && (me.role === "admin" || me.role === "
 //   operadora1) sigue viendo todos los clientes como hasta ahora - no romper
 //   ese comportamiento por defecto es la razon de que esto sea condicional
 //   y no un rol aparte.
+// Roles de solo lectura: ven datos reales pero no escriben nada. Los dos exigen
+// lista de clientes (un usuario de estos SIN clientes no vería nada, por eso se
+// pide al crearlo). "colaborador" es un socio/colaborador externo (ej. el dueño de
+// un centro que además mira otros): arranca viendo solo los dashboards.
+const SOLO_LECTURA = new Set(["demo", "colaborador"]);
 function tieneClientesRestringidos(me) {
   if (!me) return false;
-  if (me.role === "demo") return true;
+  if (SOLO_LECTURA.has(me.role)) return true;
   if (me.role === "operador") return Array.isArray(me.clientes) && me.clientes.length > 0;
   return false;
 }
@@ -1751,6 +1757,77 @@ function setSessionCookie(res, username, remember) {
 }
 function clearSessionCookie(res) {
   res.setHeader("Set-Cookie", "ns_session=; HttpOnly; Path=/; Max-Age=0");
+}
+
+// ---------- Actividad (logs de ingreso + horas por día) ----------
+// Solo se registra para estos roles: por ahora "operador" (ej. Javi), que es
+// personal de NS que no es admin. El admin ve esto desde "Inicio"; el
+// operador nunca tiene acceso a estos endpoints (son /api/admin/*).
+const ROLES_MONITOREADOS = new Set(["operador"]);
+// Si pasan más de esto entre dos pings, se asume que cerró la pestaña/apagó la
+// compu y volvió más tarde: no se suma ese hueco a las horas (el heartbeat del
+// front pinguea cada 60s, así que 3 minutos da margen de sobra sin sumar de más).
+const ACTIVIDAD_PING_GAP_MAX_MS = 3 * 60 * 1000;
+const ACTIVIDAD_DIAS_MAX = 120; // cuántos días de historial de horas se conservan por usuario
+const ACTIVIDAD_SESIONES_MAX = 200; // cuántos ingresos (logs) se conservan por usuario
+function clientIp(req) {
+  const xf = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return xf || (req.socket && req.socket.remoteAddress) || "";
+}
+// Clave de día en horario de Argentina (el server puede correr en UTC en
+// Railway; sin esto la "hora de hoy" se cortaría a las 21hs hora local).
+function actividadDiaKey(d) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(d || new Date());
+}
+function emptyActividad() {
+  return { users: {} };
+}
+function loadActividad() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(actividadFile, "utf8"));
+    return { users: parsed && typeof parsed.users === "object" && !Array.isArray(parsed.users) ? parsed.users : {} };
+  } catch {
+    return emptyActividad();
+  }
+}
+function saveActividad(state) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(actividadFile, JSON.stringify(state || emptyActividad(), null, 2));
+}
+function actividadRegistroDe(state, username) {
+  if (!state.users[username]) state.users[username] = { sessions: [], dias: {}, lastPingAt: 0 };
+  const reg = state.users[username];
+  if (!Array.isArray(reg.sessions)) reg.sessions = [];
+  if (!reg.dias || typeof reg.dias !== "object") reg.dias = {};
+  return reg;
+}
+// Log de ingreso: un renglón por login exitoso (para el detalle "quién entró y cuándo").
+function registrarIngreso(username, ip, ua) {
+  const state = loadActividad();
+  const reg = actividadRegistroDe(state, username);
+  reg.sessions.push({ loginAt: new Date().toISOString(), ip: String(ip || ""), ua: String(ua || "").slice(0, 200) });
+  if (reg.sessions.length > ACTIVIDAD_SESIONES_MAX) reg.sessions = reg.sessions.slice(-ACTIVIDAD_SESIONES_MAX);
+  saveActividad(state);
+}
+// Heartbeat: el front pinguea cada ~60s mientras la pestaña está abierta y
+// visible. Cada ping sabe cuánto pasó desde el ping anterior y lo suma al día
+// de HOY, salvo que el hueco sea demasiado grande (pestaña cerrada / dormida).
+function registrarPing(username) {
+  const state = loadActividad();
+  const reg = actividadRegistroDe(state, username);
+  const now = Date.now();
+  if (reg.lastPingAt && now > reg.lastPingAt && (now - reg.lastPingAt) <= ACTIVIDAD_PING_GAP_MAX_MS) {
+    const hoy = actividadDiaKey(new Date(now));
+    const elapsedSec = Math.round((now - reg.lastPingAt) / 1000);
+    reg.dias[hoy] = (reg.dias[hoy] || 0) + elapsedSec;
+  }
+  reg.lastPingAt = now;
+  // Recorte de historial: solo se guardan los últimos ACTIVIDAD_DIAS_MAX días.
+  const claves = Object.keys(reg.dias).sort();
+  if (claves.length > ACTIVIDAD_DIAS_MAX) {
+    for (const k of claves.slice(0, claves.length - ACTIVIDAD_DIAS_MAX)) delete reg.dias[k];
+  }
+  saveActividad(state);
 }
 
 // ---------- Worker Linux / servidor externo ----------
@@ -1878,7 +1955,7 @@ function publicUser(u) {
 // "demo": usuario de demostración (para mostrar la app sin poder usarla). Ve las
 // herramientas con datos reales y puede descargar, pero NO escribe nada y solo
 // accede a los clientes de su lista (u.clientes).
-const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo"]);
+const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo", "colaborador"]);
 const DEFAULT_CLIENTS = [
   {
     slug: "sala-millon",
@@ -4641,13 +4718,13 @@ const server = http.createServer(async (req, res) => {
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
 
-    // --- Gate del rol "demo" (usuario de demostración): SOLO LECTURA.
-    // Ve las herramientas con datos reales y puede descargar, pero no crea, no
-    // modifica y no borra NADA; y solo entra a los clientes de su lista.
+    // --- Gate de los roles de SOLO LECTURA ("demo" y "colaborador").
+    // Ven los datos reales y pueden descargar, pero no crean, no modifican y no
+    // borran NADA; y solo entran a los clientes de su lista.
     // Es fail-closed a propósito: se permite lo que está listado y todo lo demás se
     // niega. Así no depende de acordarse de proteger cada endpoint nuevo — el que
     // decide es el backend, esconder el botón en la pantalla no es proteger.
-    if (meGate && meGate.role === "demo") {
+    if (meGate && SOLO_LECTURA.has(meGate.role)) {
       const esGet = (req.method === "GET" || !req.method);
       const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
       const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
@@ -4666,7 +4743,7 @@ const server = http.createServer(async (req, res) => {
       if (!permitido) {
         return json(res, 403, { error: (mCli && !suCliente)
           ? "Tu usuario no tiene acceso a ese cliente."
-          : "Te faltan permisos. Este es un usuario de demostración: podés ver todo, pero no modificar." });
+          : "Te faltan permisos: tu usuario es de solo lectura (podés ver y descargar, pero no modificar)." });
       }
     }
   }
@@ -5099,10 +5176,10 @@ const server = http.createServer(async (req, res) => {
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
     // El rol "clinica" (dueño del centro) DEBE estar atado a un centro existente.
     if (rl === "clinica" && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece el usuario clínica." });
-    // El rol "demo" DEBE tener al menos un cliente asignado (si no, no ve nada).
-    // Un operador con lista vacía queda SIN restringir (ve todos, como siempre);
-    // si se le carga al menos un cliente, pasa a ver solo esos.
-    if (rl === "demo" && !cls.length) return json(res, 400, { error: "Elegí qué clientes puede ver el usuario de demostración." });
+    // Los roles de solo lectura (demo/colaborador) DEBEN tener al menos un cliente
+    // asignado (si no, no ven nada). Un operador con lista vacía queda SIN restringir
+    // (ve todos, como siempre); si se le carga al menos un cliente, ve solo esos.
+    if (SOLO_LECTURA.has(rl) && !cls.length) return json(res, 400, { error: "Elegí qué clientes puede ver este usuario." });
     if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
     if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
     const users = loadUsers() || [];
@@ -5173,10 +5250,10 @@ const server = http.createServer(async (req, res) => {
       if (users[idx].role === "clinica" && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
         return json(res, 400, { error: "El usuario clínica tiene que estar atado a un centro válido." });
       }
-      // El usuario de demostración siempre debe tener al menos un cliente asignado
-      // (un operador con lista vacía es válido: significa "sin restringir").
-      if (users[idx].role === "demo" && !(users[idx].clientes || []).length) {
-        return json(res, 400, { error: "El usuario de demostración tiene que tener al menos un cliente asignado." });
+      // Un usuario de solo lectura (demo/colaborador) siempre debe tener al menos un
+      // cliente asignado (un operador con lista vacía es válido: "sin restringir").
+      if (SOLO_LECTURA.has(users[idx].role) && !(users[idx].clientes || []).length) {
+        return json(res, 400, { error: "Un usuario de solo lectura tiene que tener al menos un cliente asignado." });
       }
       saveUsers(users);
       return json(res, 200, { ok: true });
@@ -5208,6 +5285,9 @@ const server = http.createServer(async (req, res) => {
     }
     limpiarLoginFallido(uname);
     setSessionCookie(res, u.username, !!remember);
+    if (ROLES_MONITOREADOS.has(u.role)) {
+      try { registrarIngreso(u.username, clientIp(req), req.headers["user-agent"]); } catch {}
+    }
     return json(res, 200, { user: publicUser(u) });
   }
 
