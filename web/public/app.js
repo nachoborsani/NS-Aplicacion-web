@@ -3553,12 +3553,40 @@ async function crearYSubirInforme(panelId, idx, btn){
   try {
     var r = await api('/api/informes/generar-y-subir', payload);
     if (!r.ok) throw new Error((r.data && r.data.error) || ('No se pudo (HTTP ' + r.status + ').'));
-    if (btn){ btn.textContent = '📤 Encolado'; }
-    alert('Informe generado y encolado para subir a PAMI (OME ' + x.ome + ').\n\nLo sube el worker de la app. Revisá en un rato en "Informes recibidos" / la campana si subió OK.');
+    if (btn){ btn.textContent = '⏳ En cola'; btn.disabled = true; btn.title = 'Informe generado; esperando que el worker lo suba a PAMI'; }
+    var taskId = r.data && r.data.taskId;
+    if (taskId && btn) seguirSubidaInforme(taskId, btn);
   } catch (e){
     alert(e && e.message ? e.message : 'No se pudo crear/subir el informe.');
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
+}
+// Sigue el estado de la subida (la corre el worker de la app) y va actualizando
+// el botón: En cola → Subiendo… → Subido ✓ (o el motivo si falla). Polea cada 5s.
+function seguirSubidaInforme(taskId, btn){
+  var intentos = 0;
+  var timer = setInterval(async function(){
+    intentos++;
+    if (intentos > 48){ clearInterval(timer); if (btn) btn.title = 'Sigue en proceso; revisá en Informes recibidos.'; return; }
+    var r = await api('/api/admin/worker/tasks');
+    if (!r.ok || !r.data) return;
+    var t = (r.data.tasks || []).find(function(x){ return x.id === taskId; });
+    if (!t) return;
+    if (t.status === 'pending'){ btn.textContent = '⏳ En cola'; return; }
+    if (t.status === 'running'){ btn.textContent = '⏳ Subiendo…'; return; }
+    if (t.status === 'done' || t.status === 'error'){
+      clearInterval(timer);
+      var det = (t.result && t.result.detalle && t.result.detalle[0]) || null;
+      var subido = t.result && Number(t.result.subidos) > 0;
+      if (subido){
+        btn.textContent = '✅ Subido'; btn.disabled = true;
+        btn.title = 'Subido y transmitido a PAMI'; btn.style.color = '#16a34a';
+      } else {
+        btn.textContent = '✗ No subió'; btn.disabled = false;
+        btn.title = (det && det.motivo) || t.error || 'No se pudo subir'; btn.style.color = '#dc2626';
+      }
+    }
+  }, 5000);
 }
 async function crearInformeDirecto(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
