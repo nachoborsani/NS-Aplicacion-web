@@ -3517,37 +3517,58 @@ function accionCrearInforme(panelId){
 }
 // Arma el payload de generación a partir de la fila del faltante + su modelo.
 // Devuelve null (con alert) si falta el médico del modelo.
-function payloadInformeDeFila(x){
+// Preset (texto por defecto) y valores para un modelo, eligiendo el preset por
+// índice (para cuando el modelo tiene varios resultados).
+function payloadInformeDeFila(x, opts){
+  opts = opts || {};
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ alert('No hay un modelo cargado para esa práctica.'); return null; }
-  var medicoId = loteMedicoParaModelo(m.key);
+  var medicoId = opts.medicoId || loteMedicoParaModelo(m.key);
   if (!medicoId){ alert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
-  var preset = (INFORMES_CFG.descripciones || []).find(function(d){ return scopeAplica(d.modelos, m.key); });
+  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
+  var preset = (opts.presetId ? presets.find(function(d){ return d.id === opts.presetId; }) : null) || presets[0];
   var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
+  var valores = Object.assign({}, (preset && preset.valores) || {}, opts.valores || {});
   return {
     modelo: m.key,
     clienteSlug: (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '',
     paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '' },
     textoInforme: (preset && preset.texto) || '',
     estudio: m.estudio || '',
-    valores: (preset && preset.valores) || {},
+    valores: valores,
     medicoId: medicoId,
     _modelo: m
   };
 }
-// Crear + subir a PAMI en un clic (con confirmación). Encola la subida en el worker.
+// ¿El modelo obliga a elegir algo antes de generar? (varios resultados, campos
+// requeridos como sexo, o hay que elegir médico). Devuelve las opciones.
+function opcionesModelo(m){
+  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
+  var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key); });
+  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // sin médico propio → ofrecer todos
+  var camposReq = (m.campos || []).filter(function(c){ return c.requerido; });
+  return { presets: presets, medicos: medicos, camposReq: camposReq,
+    haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 };
+}
+// Crear + subir a PAMI. Si el modelo tiene opciones, abre el modal para elegir.
 async function crearYSubirInforme(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
   if (!x) return;
   if (!x.ome){ alert('Esta práctica no tiene OME en la bandeja, no se puede subir.'); return; }
+  var m = modeloParaPracticaRow(x.practica);
+  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return; }
+  var op = opcionesModelo(m);
+  if (op.haceFalta){ modalOpcionesInforme(x, m, op, true, btn); return; }
   var payload = payloadInformeDeFila(x);
   if (!payload) return;
-  var m = payload._modelo; delete payload._modelo;
-  payload.ome = x.ome;
-  payload.practicaTexto = x.practica || '';
+  delete payload._modelo;
+  payload.ome = x.ome; payload.practicaTexto = x.practica || '';
   if (!confirm('Vas a CREAR y SUBIR a PAMI este informe:\n\n' +
       (x.nombre || '') + '\n' + (x.practica || '') + '\nOME ' + x.ome + '\nModelo: ' + (m.label || m.key) +
-      '\n\nEsto es real e irreversible (se genera el informe estándar y se sube a la OME). ¿Confirmás?')) return;
+      '\n\nEsto es real e irreversible. ¿Confirmás?')) return;
+  ejecutarCrearYSubir(payload, x, btn);
+}
+async function ejecutarCrearYSubir(payload, x, btn){
   var prev = btn ? btn.textContent : '';
   if (btn){ btn.disabled = true; btn.textContent = '…'; }
   try {
@@ -3593,19 +3614,15 @@ async function crearInformeDirecto(panelId, idx, btn){
   if (!x) return;
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ alert('No hay un modelo cargado para esa práctica.'); return; }
-  var medicoId = loteMedicoParaModelo(m.key);
-  if (!medicoId){ alert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return; }
-  var preset = (INFORMES_CFG.descripciones || []).find(function(d){ return scopeAplica(d.modelos, m.key); });
-  var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
-  var payload = {
-    modelo: m.key,
-    clienteSlug: (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '',
-    paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '' },
-    textoInforme: (preset && preset.texto) || '',
-    estudio: m.estudio || '',
-    valores: (preset && preset.valores) || {},
-    medicoId: medicoId
-  };
+  var op = opcionesModelo(m);
+  if (op.haceFalta){ modalOpcionesInforme(x, m, op, false, btn); return; }
+  var payload = payloadInformeDeFila(x);
+  if (!payload) return;
+  delete payload._modelo;
+  ejecutarCrear(payload, x, btn);
+}
+// Genera el PDF y lo descarga (sin subir).
+async function ejecutarCrear(payload, x, btn){
   var prev = btn ? btn.textContent : '';
   if (btn){ btn.disabled = true; btn.textContent = '…'; }
   try {
@@ -3614,12 +3631,88 @@ async function crearInformeDirecto(panelId, idx, btn){
     var blob = await r.blob();
     var cd = r.headers.get('content-disposition') || '';
     var mm = cd.match(/filename="([^"]+)"/);
-    bajarBlob(blob, mm ? mm[1] : ('informe_' + String(x.nombre || 'paciente').replace(/[^a-z0-9]+/gi, '_') + '.pdf'));
-    if (btn){ btn.textContent = '✓ Listo'; }
+    bajarBlob(blob, mm ? mm[1] : ('informe_' + String((x && x.nombre) || 'paciente').replace(/[^a-z0-9]+/gi, '_') + '.pdf'));
+    if (btn){ btn.textContent = '✓ Listo'; btn.disabled = false; }
   } catch (e){
     alert(e && e.message ? e.message : 'No se pudo generar el informe.');
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
+}
+// ---- Modal "elegir opciones" para crear (y subir) un informe --------------
+function mcEnsureModalCss(){
+  if (document.getElementById('mc-inf-css')) return;
+  var s = document.createElement('style'); s.id = 'mc-inf-css';
+  s.textContent = [
+    '.mc-inf-scrim{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px}',
+    '.mc-inf-box{background:var(--card,#fff);color:var(--text,#0f172a);border-radius:16px;width:100%;max-width:440px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden}',
+    '.mc-inf-head{padding:16px 18px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff}',
+    '.mc-inf-head b{font-size:16px}.mc-inf-head .mc-inf-sub{display:block;font-size:12px;opacity:.9;margin-top:2px}',
+    '.mc-inf-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}',
+    '.mc-inf-field label{display:block;font-size:12px;font-weight:600;color:var(--text-2,#64748b);margin-bottom:4px}',
+    '.mc-inf-field select,.mc-inf-field input{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:var(--bg,#fff);color:var(--text,#0f172a);font-size:14px}',
+    '.mc-inf-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px}',
+    '.mc-inf-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#0f172a);font-weight:600;cursor:pointer;font-size:14px}',
+    '.mc-inf-btn.primary{background:#2563eb;color:#fff;border-color:transparent}',
+    '.mc-inf-btn.subir{background:#16a34a;color:#fff;border-color:transparent}',
+  ].join('\n');
+  document.head.appendChild(s);
+}
+function modalOpcionesInforme(x, m, op, subir, btn){
+  mcEnsureModalCss();
+  var medDef = loteMedicoParaModelo(m.key) || (op.medicos[0] && op.medicos[0].id) || '';
+  var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
+  var medOpts = op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
+  var camposHtml = op.camposReq.map(function(c){
+    var inp;
+    if (c.tipo === 'select'){
+      inp = '<select data-campo="' + esc(c.key) + '"><option value="">— Elegir —</option>' +
+        (c.opciones || []).map(function(o){ return '<option' + (o === c.default ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    } else {
+      inp = '<input data-campo="' + esc(c.key) + '" value="' + esc(c.default || '') + '">';
+    }
+    return '<div class="mc-inf-field"><label>' + esc(c.label || c.key) + ' *</label>' + inp + '</div>';
+  }).join('');
+  var scrim = document.createElement('div'); scrim.className = 'mc-inf-scrim';
+  scrim.innerHTML =
+    '<div class="mc-inf-box">' +
+      '<div class="mc-inf-head"><b>' + (subir ? 'Crear y subir informe' : 'Crear informe') + '</b>' +
+        '<span class="mc-inf-sub">' + esc(x.nombre || '') + ' · ' + esc((x.practica || '').split(' - ').slice(-1)[0]) + (subir ? ' · OME ' + esc(x.ome || '') : '') + '</span></div>' +
+      '<div class="mc-inf-body">' +
+        (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
+        '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
+        camposHtml +
+      '</div>' +
+      '<div class="mc-inf-foot"><button class="mc-inf-btn" id="mc-inf-cancel">Cancelar</button>' +
+        '<button class="mc-inf-btn ' + (subir ? 'subir' : 'primary') + '" id="mc-inf-ok">' + (subir ? '📤 Crear y subir' : '📝 Crear') + '</button></div>' +
+    '</div>';
+  document.body.appendChild(scrim);
+  function cerrar(){ scrim.remove(); }
+  scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(); });
+  scrim.querySelector('#mc-inf-cancel').onclick = cerrar;
+  scrim.querySelector('#mc-inf-ok').onclick = function(){
+    var presetSel = scrim.querySelector('#mc-inf-preset');
+    var medicoId = scrim.querySelector('#mc-inf-medico').value;
+    if (!medicoId){ alert('Elegí el médico que firma.'); return; }
+    var valores = {};
+    var falta = null;
+    op.camposReq.forEach(function(c){
+      var el = scrim.querySelector('[data-campo="' + c.key + '"]');
+      var v = el ? String(el.value || '').trim() : '';
+      if (!v) falta = c.label || c.key;
+      valores[c.key] = v;
+    });
+    if (falta){ alert('Completá: ' + falta); return; }
+    var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
+    if (!payload) return;
+    delete payload._modelo;
+    cerrar();
+    if (subir){
+      payload.ome = x.ome; payload.practicaTexto = x.practica || '';
+      ejecutarCrearYSubir(payload, x, btn);
+    } else {
+      ejecutarCrear(payload, x, btn);
+    }
+  };
 }
 // Abre/cierra debajo de los cuadros el detalle copiable.
 function mesCursoTogglePanel(tipo){
