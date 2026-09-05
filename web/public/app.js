@@ -8225,6 +8225,10 @@ function aplicarUsuario(u){
   document.body.classList.toggle('role-clinica', u.role === 'clinica');
   document.body.classList.toggle('role-demo', u.role === 'demo');
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
+  // El login normal NO pasa por go('dash') (el dashboard se ve por defecto), así que
+  // marcamos la clase de la vista de inicio acá según qué sección está visible.
+  var _vd = document.getElementById('view-dash');
+  document.body.classList.toggle('dash-view', !!(_vd && getComputedStyle(_vd).display !== 'none'));
   iniArrancar();   // campana de mensajes del Inicio (solo admin)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
