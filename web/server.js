@@ -6667,6 +6667,28 @@ const server = http.createServer(async (req, res) => {
       rows,
     };
     const store = loadClientReportsStore();
+    // Guardia anti-duplicado: el período se calcula por las FECHAS de los turnos, no
+    // por el título. Si este reporte cae en un mes que YA tiene un reporte CONFIRMADO
+    // (con débitos), avisamos antes de crear un duplicado que lo tape (le pasó a DBAIME:
+    // una bandeja de julio cerrada como "Agosto" tapó los débitos confirmados de julio).
+    // force=1 para crear igual (ej. quincenas legítimas del mismo mes).
+    const forceDup = ["1", "true", "si"].includes(String(url.searchParams.get("force") || "").toLowerCase());
+    const nuevoPeriod = reportDashboardPeriod(report);
+    const confirmadoExistente = (store.items || []).find((it) =>
+      it.clientSlug === slug && reportDashboardPeriod(it) === nuevoPeriod && it.debitStatus === "confirmado");
+    if (confirmadoExistente && !forceDup) {
+      return json(res, 409, {
+        error: "duplicado-periodo",
+        avisoDuplicado: {
+          period: nuevoPeriod, periodLabel: periodLabel(nuevoPeriod),
+          existente: {
+            id: confirmadoExistente.id, title: confirmadoExistente.title,
+            debito: money((confirmadoExistente.rows || []).reduce((a, r) => a + reportRowDebit(r), 0)),
+          },
+          nuevoTitulo: report.title,
+        },
+      });
+    }
     store.items = [report, ...(store.items || [])];
     saveClientReportsStore(store);
     return json(res, 200, { report: reportListItem(report) });

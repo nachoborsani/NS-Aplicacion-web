@@ -6292,8 +6292,16 @@ async function saveClientReport(){
     method = 'PUT';
   }
   var res = await req(method, path, payload);
+  // Guardia anti-duplicado: si el período (por las fechas) ya tiene un reporte
+  // confirmado con débitos, avisar antes de crear un duplicado que lo tape.
+  if (!res.ok && res.data && res.data.avisoDuplicado){
+    var a = res.data.avisoDuplicado;
+    var seguir = confirm('⚠ ATENCIÓN\n\nYa hay un reporte CONFIRMADO de ' + a.periodLabel + ' con débitos por ' + moneyFmt(a.existente.debito) + '\n("' + a.existente.title + '").\n\nEste reporte que estás cerrando tiene datos de ESE MISMO mes (por las fechas de los turnos). Si lo cerrás igual, va a quedar como DUPLICADO y puede TAPAR los débitos confirmados del otro en el dashboard.\n\n¿Cerrar igual de todas formas?');
+    if (!seguir){ if (st) st.textContent = 'Cancelado: ya hay un reporte confirmado de ' + a.periodLabel + '.'; updateClientReportSummary(); return; }
+    res = await req(method, path + (path.indexOf('?') >= 0 ? '&' : '?') + 'force=1', payload);
+  }
   if (!res.ok){
-    if (st) st.textContent = res.data.error || 'No se pudo guardar el reporte.';
+    if (st) st.textContent = (res.data && res.data.error) || 'No se pudo guardar el reporte.';
     updateClientReportSummary();
     return;
   }
