@@ -1069,23 +1069,11 @@ function iniNombreDe(username){
   return a ? a.nombre : username;
 }
 function iniPuedeVerInicio(){ return !!(ME && (ME.role === 'admin' || ME.role === 'operador')); }
-// Inicio del colaborador: no tiene chat ni tareas (todavía), así que en vez de
-// dejarle la pantalla en blanco le mostramos sus centros para entrar de un clic.
-async function cargarInicioColaborador(){
+// Inicio del colaborador: por ahora solo el cartel de "en desarrollo" (entra a
+// los clientes por el menú). Los módulos se van sumando a este panel.
+function cargarInicioColaborador(){
   var cont = document.getElementById('colabPaneles');
   if (cont) cont.style.display = '';
-  var grid = document.getElementById('colabCentros');
-  if (!grid) return;
-  if (!CLIENTS || !CLIENTS.length){ var r = await api('/api/clientes'); if (r.ok) CLIENTS = r.data.clients || []; }
-  var lista = CLIENTS || [];
-  var meta = document.getElementById('colabMeta');
-  if (meta) meta.textContent = lista.length === 1 ? '1 centro' : (lista.length + ' centros');
-  grid.innerHTML = lista.length
-    ? lista.map(function(c){
-        return '<button type="button" class="ini-acceso-tile" onclick="go(\'clientes\'); selectClientWhenReady(\'' + esc(c.slug) + '\')">'
-          + '<span class="ic">🏥</span><span class="tx">' + esc(c.name || c.slug) + '</span></button>';
-      }).join('')
-    : '<div class="ini-empty">Todavía no tenés centros asignados.</div>';
 }
 async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
@@ -2244,6 +2232,7 @@ function renderClientList(){
   // filtro va también acá para que la vista previa muestre exactamente lo que
   // va a ver esa persona.
   var restringido = tieneClientesRestringidos(ME);
+  var esColaborador = !!(ME && ME.role === 'colaborador');
   var VISIBLES = CLIENTS;
   if (restringido){
     var permitidos = (ME && ME.clientes) || [];
@@ -2251,9 +2240,10 @@ function renderClientList(){
   }
   var consultorios = VISIBLES.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
   var medCab = VISIBLES.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
-  // Potenciales clientes: alguien con clientes restringidos no debe verlos
-  // NUNCA, tenga o no alguno "en análisis" dentro de su propia lista.
-  var potenciales = restringido ? [] : VISIBLES.filter(function(c){ return c.enAnalisis; });
+  // Potenciales clientes: el usuario de DEMOSTRACIÓN no los ve nunca (no le
+  // mostramos a un prospecto el pipeline comercial). El colaborador sí, pero
+  // solo los que estén dentro de su propia lista asignada.
+  var potenciales = (restringido && !esColaborador) ? [] : VISIBLES.filter(function(c){ return c.enAnalisis; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
@@ -2263,8 +2253,10 @@ function renderClientList(){
   if (consGroup) consGroup.style.display = (ME && ME.role === 'operador') ? 'none' : '';
   if (pot) pot.innerHTML = potenciales.map(itemHtml).join('');
   if (potGroup) potGroup.style.display = potenciales.length ? '' : 'none';
+  // Para el colaborador la separación interna de NS (consultorios vs médicos de
+  // cabecera) no significa nada: para él son, simplemente, los clientes.
   var consHdr = document.querySelector('#navGroupConsultorios .nav-parent span');
-  if (consHdr) consHdr.textContent = 'Consultorios';
+  if (consHdr) consHdr.textContent = esColaborador ? 'Clientes' : 'Consultorios';
   var medHdr = document.querySelector('#navGroupMedCab .nav-parent span');
   if (medHdr) medHdr.textContent = 'Med. Cabecera';
   document.querySelectorAll('#clientNavListConsultorios [data-client-slug], #clientNavListMedCab [data-client-slug], #clientNavListPotenciales [data-client-slug]').forEach(function(button){
