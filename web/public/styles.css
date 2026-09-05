@@ -342,27 +342,32 @@
   /* Layout de Inicio: Mensajes (columna alta izq), Tareas a lo ancho arriba-der,
      y abajo-der Pendientes de Javi + Accesos rápidos LADO A LADO (listas cortas,
      no necesitan ancho completo — así no desperdician espacio). */
-  .ini-grid{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:14px;align-items:start;margin-top:18px}
+  .ini-grid{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:14px;align-items:start;margin-top:18px}
   /* La UBICACIÓN de cada tarjeta vive en estas 4 clases "slot" (a/b/c/d), no
      en la clase de identidad (.ini-panel-msg, etc., que sigue existiendo para
      estilos propios de cada una). iniPanelesAplicar() en app.js le pone a
      cada tarjeta el slot que le toque según el orden guardado - arrastrar una
      tarjeta sobre otra intercambia sus slots (ver iniPanelesWireDrag). */
+  /* 2x2 a la derecha: Tareas | Pendientes arriba, Accesos | Actividad abajo.
+     Mensajes (slot-a) ocupa la columna izquierda, alta. */
   .ini-slot-a{grid-column:1;grid-row:1 / span 2}
-  .ini-slot-b{grid-column:2 / span 2;grid-row:1}
-  .ini-slot-c{grid-column:2;grid-row:2}
-  .ini-slot-d{grid-column:3;grid-row:2}
-  /* Pantallas medianas: volvemos a 2 columnas apiladas a la derecha. */
+  .ini-slot-b{grid-column:2;grid-row:1}
+  .ini-slot-c{grid-column:3;grid-row:1}
+  .ini-slot-d{grid-column:2;grid-row:2}
+  .ini-actividad{grid-column:3;grid-row:2}
+  /* Pantallas medianas: 2 columnas, la derecha apilada (Tareas, Pendientes,
+     Accesos, Actividad una debajo de otra). */
   @media(max-width:1150px){
-    .ini-grid{grid-template-columns:minmax(0,520px) minmax(0,1fr);grid-template-rows:auto auto auto}
-    .ini-slot-a{grid-column:1;grid-row:1 / span 3}
+    .ini-grid{grid-template-columns:minmax(0,520px) minmax(0,1fr);grid-template-rows:auto auto auto auto}
+    .ini-slot-a{grid-column:1;grid-row:1 / span 4}
     .ini-slot-b{grid-column:2;grid-row:1}
     .ini-slot-c{grid-column:2;grid-row:2}
     .ini-slot-d{grid-column:2;grid-row:3}
+    .ini-actividad{grid-column:2;grid-row:4}
   }
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
-    .ini-slot-a,.ini-slot-b,.ini-slot-c,.ini-slot-d{grid-column:1;grid-row:auto}
+    .ini-slot-a,.ini-slot-b,.ini-slot-c,.ini-slot-d,.ini-actividad{grid-column:1;grid-row:auto}
   }
   /* Arrastrar para reordenar: se agarra desde el header (.ini-drag-handle),
      no desde cualquier punto de la tarjeta, para no pisar clicks en botones/
