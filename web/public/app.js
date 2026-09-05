@@ -555,9 +555,16 @@ function infClienteEsMedCab(slug){
 function onCentroChange(keep){
   var slug = (document.getElementById('infCentro') || {}).value || '';
   var esMedCab = infClienteEsMedCab(slug);
-  var aviso = document.getElementById('infMedCabAviso'), layout = document.getElementById('infGenLayout');
+  var aviso = document.getElementById('infMedCabAviso');
+  var resto = document.getElementById('infFormResto');
+  var preview = document.getElementById('infPreviewLive');
   if (aviso) aviso.style.display = esMedCab ? '' : 'none';
-  if (layout) layout.style.display = esMedCab ? 'none' : '';
+  // El Cliente vive dentro del form (arriba de Especialidad). Para médico de
+  // cabecera escondemos SOLO el resto del form y la vista previa, no el layout,
+  // así el selector Cliente sigue visible para poder cambiarlo.
+  if (resto) resto.style.display = esMedCab ? 'none' : '';
+  // preview: '' limpia el inline y deja que la media query (oculto en mobile) mande.
+  if (preview) preview.style.display = esMedCab ? 'none' : '';
   if (esMedCab) return;
   // El Cliente ahora vive fuera de #infFormCard (queda visible siempre), así
   // que cambiarlo ya no dispara programarPreviewVivo() por burbujeo - se llama

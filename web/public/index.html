@@ -1292,12 +1292,6 @@
           <!-- El Cliente queda SIEMPRE visible (fuera del bloque que se oculta
                para médico de cabecera): si no, elegir Scheffelaar/Dubesarky
                dejaba sin forma de volver a elegir otro cliente. -->
-          <div class="card" id="infClienteCard" style="margin-bottom:16px">
-            <div class="field" style="max-width:420px">
-              <label>Cliente</label>
-              <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
-            </div>
-          </div>
           <!-- Médico de cabecera (Scheffelaar/Dubesarky): no es una clínica, la
                cascada Especialidad/Práctica de abajo no le aplica - todavía no
                hay un flujo de informes propio para este tipo de cliente. -->
@@ -1306,6 +1300,11 @@
           </div>
           <div class="inf-gen-layout" id="infGenLayout">
           <div class="card" id="infFormCard" oninput="programarPreviewVivo()" onchange="programarPreviewVivo()">
+            <div class="field">
+              <label>Cliente</label>
+              <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
+            </div>
+            <div id="infFormResto">
             <div class="field">
               <label>Especialidad</label>
               <select class="inp" id="infEspecialidad" onchange="onEspecialidadChange()"></select>
@@ -1360,6 +1359,7 @@
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Descargar PDF
             </button>
+            </div>
           </div>
           <div class="inf-preview-live" id="infPreviewLive">
             <div class="inf-preview-bar">Vista previa <span>en vivo</span></div>
