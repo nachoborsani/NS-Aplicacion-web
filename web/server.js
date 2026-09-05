@@ -4749,6 +4749,36 @@ const server = http.createServer(async (req, res) => {
         avisarTelegram(txt).catch(() => {});
       } catch { /* un aviso que falla no puede tumbar el complete */ }
     }
+    // Marcar como transmitidos los informes subidos OK: salen de "Listo para subir"
+    // al instante (sin esperar el refresco de la bandeja) y no se re-suben. El worker
+    // igual nunca re-transmite (chequea antes de subir); esto es para reflejarlo en la UI.
+    if (task.type === "subir-informes" && ok) {
+      try {
+        const r = task.result || {};
+        const det = Array.isArray(r.detalle) ? r.detalle : [];
+        const okOmes = new Set(det
+          .filter((d) => d && ["transmitido", "ya_transmitido"].includes(d.estado))
+          .map((d) => String(d.ome || "").replace(/\D+/g, "")).filter(Boolean));
+        const ids = new Set((task.payload && Array.isArray(task.payload.informeIds) ? task.payload.informeIds : []).map(String));
+        if (okOmes.size && ids.size) {
+          const slug = task.clientSlug || "";
+          const store = loadInformes();
+          const items = (store[slug] && store[slug].items) || [];
+          let cambios = 0;
+          for (const it of items) {
+            if (!ids.has(String(it.id))) continue;
+            const omes = ((it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []))
+              .map((o) => String(o).replace(/\D+/g, "")).filter(Boolean);
+            if (!omes.length) continue;
+            if (omes.every((o) => okOmes.has(o))) {
+              it.resuelto = Object.assign({ ome: omes[0], omes, por: "subida", at: new Date().toISOString() }, it.resuelto || {}, { todoTransmitido: true });
+              cambios++;
+            }
+          }
+          if (cambios) saveInformes(store);
+        }
+      } catch { /* si el marcado falla, el refresco de la bandeja lo corrige igual */ }
+    }
     return json(res, 200, { ok: true, task: publicWorkerTask(task) });
   }
   // El worker sube la captura de pantalla de PAMI en el momento de un error (para
