@@ -339,18 +339,27 @@
      entrar SU contenido (más mensajes = fila más alta = el feed crece de
      nuevo => crecimiento sin fin al escribir). El .ini-feed de abajo vuelve a
      tener un tope fijo en px con scroll interno - real, no infinito. */
-  .ini-grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);grid-template-rows:auto auto auto;gap:16px;align-items:start;margin-top:18px}
+  /* Layout de Inicio: Mensajes (columna alta izq), Tareas a lo ancho arriba-der,
+     y abajo-der Pendientes de Javi + Accesos rápidos LADO A LADO (listas cortas,
+     no necesitan ancho completo — así no desperdician espacio). */
+  .ini-grid{display:grid;grid-template-columns:minmax(0,480px) minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto;gap:14px;align-items:start;margin-top:18px}
   /* La UBICACIÓN de cada tarjeta vive en estas 4 clases "slot" (a/b/c/d), no
      en la clase de identidad (.ini-panel-msg, etc., que sigue existiendo para
      estilos propios de cada una). iniPanelesAplicar() en app.js le pone a
      cada tarjeta el slot que le toque según el orden guardado - arrastrar una
-     tarjeta sobre otra intercambia sus slots (ver iniPanelesWireDrag). Así el
-     usuario puede reacomodarlas sin necesitar un layout que se auto-acomode
-     solo (de más para 4 tarjetas de tamaño fijo). */
-  .ini-slot-a{grid-column:1;grid-row:1 / span 3}
-  .ini-slot-b{grid-column:2;grid-row:1}
+     tarjeta sobre otra intercambia sus slots (ver iniPanelesWireDrag). */
+  .ini-slot-a{grid-column:1;grid-row:1 / span 2}
+  .ini-slot-b{grid-column:2 / span 2;grid-row:1}
   .ini-slot-c{grid-column:2;grid-row:2}
-  .ini-slot-d{grid-column:2;grid-row:3}
+  .ini-slot-d{grid-column:3;grid-row:2}
+  /* Pantallas medianas: volvemos a 2 columnas apiladas a la derecha. */
+  @media(max-width:1150px){
+    .ini-grid{grid-template-columns:minmax(0,520px) minmax(0,1fr);grid-template-rows:auto auto auto}
+    .ini-slot-a{grid-column:1;grid-row:1 / span 3}
+    .ini-slot-b{grid-column:2;grid-row:1}
+    .ini-slot-c{grid-column:2;grid-row:2}
+    .ini-slot-d{grid-column:2;grid-row:3}
+  }
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
     .ini-slot-a,.ini-slot-b,.ini-slot-c,.ini-slot-d{grid-column:1;grid-row:auto}
