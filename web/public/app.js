@@ -93,6 +93,13 @@ function go(v, el){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
+  // Operador Clínica (empleado del centro, no el dueño): mismo encierro que
+  // clínica, pero aterriza en "Datos del centro" - no tiene ninguna pantalla
+  // con plata ni gráficas habilitada todavía (ver PDF "Empleado Cliente").
+  if (ME && ME.role === 'operador_clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0){
+    if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'pendientes'); }
+    return;
+  }
   // Colaborador (solo lectura): por ahora solo Inicio y los dashboards de sus
   // clientes. Cualquier otra vista lo devuelve al Inicio.
   if (ME && ME.role === 'colaborador' && ['dash', 'clientes'].indexOf(v) < 0){ go('dash'); return; }
@@ -399,7 +406,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general'].indexOf(section) >= 0) setClientSection(section);
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -411,7 +418,11 @@ window.addEventListener('hashchange', function(){
   if (document.body.classList.contains('authed')) applyRoute();  // back/forward
 });
 
-function openDrawer(){ document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); iniRenderDrawer(); if (typeof iniRefrescarBell==='function') iniRefrescarBell().then(function(){ iniRenderDrawer(); }); }
+function openDrawer(){
+  document.getElementById('drawer').classList.add('show'); document.getElementById('scrim').classList.add('show'); iniRenderDrawer();
+  var refrescar = (ME && ME.role === 'operador_clinica') ? opClinicaRefrescarBell : iniRefrescarBell;
+  if (typeof refrescar === 'function') refrescar().then(function(){ iniRenderDrawer(); });
+}
 function closeDrawer(){ document.getElementById('drawer').classList.remove('show'); document.getElementById('scrim').classList.remove('show'); }
 
 // ---------- Informes: generar PDF de un paciente y descargarlo ----------
@@ -903,7 +914,7 @@ function initials(name){
   return (name || '?').split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
 }
 function roleLabel(r){
-  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración', colaborador:'Colaborador' }[r] || r;
+  return { admin:'Administrador', operador:'Operador', medico:'Médico', clinica:'Clínica', demo:'Demostración', colaborador:'Colaborador', operador_clinica:'Operador Clínica' }[r] || r;
 }
 var ROLE = {
   admin:    { chip:'admin', label:'Admin',    bg:'linear-gradient(135deg,#3a3f8f,#5a60c0)' },
@@ -912,6 +923,7 @@ var ROLE = {
   clinica:  { chip:'clin',  label:'Clínica',  bg:'linear-gradient(135deg,#7a4fd0,#5a37a0)' },
   demo:     { chip:'demo',  label:'Demo',     bg:'linear-gradient(135deg,#667085,#475467)' },
   colaborador: { chip:'colab', label:'Colaborador', bg:'linear-gradient(135deg,#C77D3A,#9a5c26)' },
+  operador_clinica: { chip:'opcli', label:'Op. Clínica', bg:'linear-gradient(135deg,#4f8a5a,#356240)' },
 };
 // Roles de SOLO LECTURA: ven datos reales pero no escriben nada (el backend se los
 // bloquea, no alcanza con esconder botones). Mismo criterio que server.js.
@@ -1650,6 +1662,18 @@ async function iniRefrescarBell(){
 }
 function iniRenderDrawer(){
   var body = document.getElementById('drawerBody'); if(!body) return;
+  // Operador Clínica: la campana no avisa de mensajes del Inicio (no los ve),
+  // avisa de lo que el centro tiene pendiente con Javi - mismo número que la
+  // pantalla "Pendientes" del menú izquierdo.
+  if (ME && ME.role === 'operador_clinica'){
+    var np = OPCLI_PEND_TOTAL || 0;
+    body.innerHTML = np>0
+      ? '<div class="drawer-item" onclick="closeDrawer();go(\'clientes\');selectClientWhenReady(ME.centro,\'pendientes\')">'
+        + '<div class="di-ic">🔔</div><div class="di-tx"><b>' + np + ' pendiente' + (np>1?'s':'') + ' con Javi</b>'
+        + '<span>Tocá para ver el detalle.</span></div></div>'
+      : '<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>No hay notificaciones</b><span>Cuando tengas algo pendiente con Javi, te va a aparecer acá.</span></div>';
+    return;
+  }
   var n = iniTotalNoLeidos();
   if (iniPuedeVerInicio() && n>0){
     body.innerHTML = '<div class="drawer-item" onclick="closeDrawer();go(\'dash\',navElFor(\'dash\'))">'
@@ -1659,7 +1683,25 @@ function iniRenderDrawer(){
     body.innerHTML = '<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>No hay notificaciones</b><span>Cuando Seba o Nacho dejen un mensaje en el Inicio, te va a aparecer acá.</span></div>';
   }
 }
+// Campana del Operador Clínica: mismo número que la pantalla "Pendientes"
+// (ver loadClientPendientesCentro), consultado aparte porque esta campana
+// puede sonar sin haber entrado nunca a esa pantalla.
+var OPCLI_PEND_TOTAL = 0;
+async function opClinicaRefrescarBell(){
+  if (!(ME && ME.role === 'operador_clinica' && ME.centro)) return;
+  var dot = document.getElementById('bellDot');
+  var res = await api('/api/clientes/' + encodeURIComponent(ME.centro) + '/pendientes-centro');
+  if (!res.ok || !res.data){ OPCLI_PEND_TOTAL = 0; if (dot) dot.style.display = 'none'; return; }
+  var d = res.data;
+  OPCLI_PEND_TOTAL = (d.pendientes||0) + (d.sinTransmitir||0) + (d.cup||0);
+  if (dot) dot.style.display = OPCLI_PEND_TOTAL>0 ? '' : 'none';
+}
 function iniArrancar(){
+  if (ME && ME.role === 'operador_clinica'){
+    opClinicaRefrescarBell();
+    if (!INICIO.pollTimer) INICIO.pollTimer = setInterval(function(){ if(document.visibilityState!=='hidden') opClinicaRefrescarBell(); }, 60000);
+    return;
+  }
   if (!iniPuedeVerInicio()){ iniActualizarBell(); return; }
   iniRefrescarBell();
   if (!INICIO.pollTimer){
@@ -2233,6 +2275,31 @@ function renderClientList(){
     });
     return;
   }
+  // --- Operador Clínica: mismo mecanismo que clínica (menú = secciones de su
+  // propio centro), pero lista propia y corta a propósito - por ahora una sola
+  // pantalla, sin plata ni gráficas. Se le suman de a una a medida que se
+  // construyen (ver PDF "Empleado Cliente"), nunca heredando de la de clínica. ---
+  if (ME && ME.role === 'operador_clinica' && ME.centro){
+    var centroOpCli = CLIENTS.filter(function(c){ return c.slug === ME.centro; })[0];
+    var hdrOpCli = document.querySelector('#navGroupConsultorios .nav-parent span');
+    if (hdrOpCli) hdrOpCli.textContent = centroOpCli ? centroOpCli.name : 'Mi centro';
+    var SECC_OPCLINICA = [
+      { key: 'pendientes', label: 'Pendientes' },
+      { key: 'basica', label: 'Datos del centro' },
+    ];
+    cons.innerHTML = SECC_OPCLINICA.map(function(s){
+      var active = (ACTIVE_CLIENT && CLIENT_SECTION === s.key) ? ' active' : '';
+      return '<button class="client-nav-item' + active + '" type="button" data-cli-section="' + s.key + '">' + s.label + '</button>';
+    }).join('');
+    if (med) med.innerHTML = '';
+    if (medGroup) medGroup.style.display = 'none';
+    cons.querySelectorAll('[data-cli-section]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();
+      });
+    });
+    return;
+  }
   var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
     return '<a class="client-nav-item' + active + '" href="#clientes/' + esc(client.slug) + '" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</a>';
@@ -2306,7 +2373,10 @@ var CLIENT_SECTIONS = [
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' },
   { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' },
-  { key:'plansalud', sec:'client-section-plansalud', tab:'clientTabPlanSalud',crumb:'Plan Salud' }
+  { key:'plansalud', sec:'client-section-plansalud', tab:'clientTabPlanSalud',crumb:'Plan Salud' },
+  // Sin pestaña propia todavía (nadie más que operador_clinica la usa, que
+  // navega por el menú izquierdo, no por pestañas - ver renderClientList).
+  { key:'pendientes',sec:'client-section-pendientes',tab:'',                  crumb:'Pendientes' }
 ];
 // Plan Salud (CIMA): módulo en desarrollo por etapas, visible SOLO para estos
 // usuarios puntuales (no es un tema de rol — ni "Dube" ni ningún otro admin
@@ -2323,6 +2393,10 @@ function clientSeccionesPermitidas(){
   // Es una lista propia y corta a propósito: los módulos se le van sumando de a
   // uno acá, no hereda nada por estar en la misma rama que otro rol.
   if (ME && ME.role === 'colaborador') return esMC ? ['general'] : ['mescurso', 'dashboard'];
+  // Operador Clínica (empleado del centro): Información básica + Pendientes
+  // (mismo contador que ve Javi de este centro). Cero plata, cero gráficas.
+  // Lista propia y corta, igual criterio que arriba.
+  if (ME && ME.role === 'operador_clinica') return ['basica', 'pendientes'];
   // El operador ve, de un médico de cabecera (Scheffelaar/Dubesarky), lo
   // mismo que un admin salvo OSDOP (facturación, no es su trabajo) - es una
   // lista propia, no "la del admin menos algo": si mañana se suma OTRA
@@ -2385,6 +2459,28 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
   if (CLIENT_SECTION === 'osdop') renderOsdop();
   if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
+  if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentro();
+}
+// Pendientes del centro (operador_clinica): mismos 3 números que ve Javi de
+// este cliente en su Inicio ("Pendientes de Javi"), sin plata ni detalle de
+// pacientes - eso sigue viviendo en la Cabina de informes, que no es de acá.
+async function loadClientPendientesCentro(){
+  var box = document.getElementById('centroPendCard');
+  if (!box || !ACTIVE_CLIENT) return;
+  box.innerHTML = '<p class="nom-muted">Cargando…</p>';
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pendientes-centro');
+  if (!res.ok || !res.data){ box.innerHTML = '<p class="nom-muted">No se pudo cargar.</p>'; return; }
+  var d = res.data;
+  var total = (d.pendientes||0) + (d.sinTransmitir||0) + (d.cup||0);
+  if (!total){ box.innerHTML = '<p class="nom-muted">Sin pendientes 🎉 Javi no te está esperando nada por ahora.</p>'; return; }
+  var filas = [];
+  if (d.pendientes) filas.push({ n:d.pendientes, tx:'informe' + (d.pendientes===1?'':'s') + ' en gestión con Javi' });
+  if (d.sinTransmitir) filas.push({ n:d.sinTransmitir, tx:'informe' + (d.sinTransmitir===1?'':'s') + ' resuelto' + (d.sinTransmitir===1?'':'s') + ', falta transmitir' });
+  if (d.cup) filas.push({ n:d.cup, tx:'pendiente' + (d.cup===1?'':'s') + ' de validar o transmitir' });
+  box.innerHTML = filas.map(function(f){
+    return '<div class="ini-pendop-row" style="padding:10px 0;border-bottom:1px solid var(--border)">'
+      + '<span class="ini-pendop-badge pend">' + f.n + '</span> <span>' + esc(f.tx) + '</span></div>';
+  }).join('');
 }
 // Plan Salud (CIMA): etapa 1, todavía en desarrollo. Por ahora solo confirma
 // qué archivo se eligió — el parseo real se suma cuando tengamos un reporte
@@ -6822,6 +6918,7 @@ function openUserModal(mode, un){
   document.getElementById('umPwdField').style.display = isEdit ? 'none' : '';
   document.getElementById('umActiveField').style.display = isEdit ? 'flex' : 'none';
   umPintarClientes(u && u.clientes);
+  umPintarCentro(u && u.centro);
   umToggleClientes();
   showModal('userModal','umScrim');
   document.getElementById('umName').focus();
@@ -6836,10 +6933,25 @@ function umPintarClientes(sel){
     return '<label class="module-edit-option"><input type="checkbox" value="' + esc(c.slug) + '"' + ck + '><span>' + esc(c.name) + '</span></label>';
   }).join('') || '<div class="hint">No hay clientes cargados.</div>';
 }
+// Selector de centro para los roles atados a UNO solo (clinica, operador_clinica).
+function umPintarCentro(sel){
+  var cont = document.getElementById('umCentro');
+  if (!cont) return;
+  cont.innerHTML = (CLIENTS || []).map(function(c){
+    return '<option value="' + esc(c.slug) + '">' + esc(c.name) + '</option>';
+  }).join('') || '<option value="">No hay clientes cargados.</option>';
+  cont.value = sel || '';
+}
 function umToggleClientes(){
   var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
   if (f) f.style.display = (role === 'demo' || role === 'operador' || role === 'colaborador') ? '' : 'none';
+  var cf = document.getElementById('umCentroField');
+  if (cf) cf.style.display = (role === 'clinica' || role === 'operador_clinica') ? '' : 'none';
+  var chint = document.getElementById('umCentroHint');
+  if (chint) chint.textContent = (role === 'operador_clinica')
+    ? 'A qué centro pertenece. Por ahora este perfil no ve gráficas ni valores, solo Datos del centro.'
+    : 'A qué centro pertenece este usuario. Solo va a ver y hacer lo que corresponda a ese centro.';
   var hint = document.getElementById('umClientesHint');
   if (!hint) return;
   if (role === 'operador') hint.textContent = 'Opcional. Si no tildás ninguno, el operador ve todos los clientes (como siempre). Si tildás alguno, pasa a ver SOLO esos - ni se entera de que existen los demás, ni puede elegirlos para generar un informe.';
@@ -6856,14 +6968,15 @@ async function saveUser(){
   var name = document.getElementById('umName').value.trim();
   var role = document.getElementById('umRole').value;
   var email = document.getElementById('umEmail').value.trim();
+  var centro = document.getElementById('umCentro').value;
   var res;
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, clientes: umClientesElegidos() });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos() });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, clientes: umClientesElegidos() });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos() });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
@@ -8313,7 +8426,7 @@ function aplicarUsuario(u){
   // mostramos una cruz de salud. Los usuarios internos de NS mantienen sus iniciales.
   var cruzSalud = '<svg viewBox="0 0 24 24" style="width:20px;height:20px" aria-hidden="true"><path d="M9.5 3h5a1 1 0 011 1v4.5H20a1 1 0 011 1v5a1 1 0 01-1 1h-4.5V20a1 1 0 01-1 1h-5a1 1 0 01-1-1v-4.5H4a1 1 0 01-1-1v-5a1 1 0 011-1h4.5V4a1 1 0 011-1z" fill="currentColor"/></svg>';
   var sa = document.getElementById('sideAvatar'), ta = document.getElementById('topAvatar');
-  if (u.role === 'clinica'){ if (sa) sa.innerHTML = cruzSalud; if (ta) ta.innerHTML = cruzSalud; }
+  if (u.role === 'clinica' || u.role === 'operador_clinica'){ if (sa) sa.innerHTML = cruzSalud; if (ta) ta.innerHTML = cruzSalud; }
   else { if (sa) sa.textContent = ini; if (ta) ta.textContent = ini; }
   // El saludo vive en la barra de arriba (título de Inicio). Si al entrar la vista
   // visible es el dashboard, lo ponemos ya (el login normal no pasa por go('dash')).
@@ -8324,12 +8437,14 @@ function aplicarUsuario(u){
   // Rol clínica: solo su centro (oculta lo interno de NS por CSS) y sin "Adjuntar reporte".
   document.body.classList.toggle('role-clinica', u.role === 'clinica');
   document.body.classList.toggle('role-demo', u.role === 'demo');
+  // Operador Clínica: mismo encierro visual que clínica (oculta lo interno de NS).
+  document.body.classList.toggle('role-operador_clinica', u.role === 'operador_clinica');
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
   // El login normal NO pasa por go('dash') (el dashboard se ve por defecto), así que
   // marcamos la clase de la vista de inicio acá según qué sección está visible.
   var _vd = document.getElementById('view-dash');
   document.body.classList.toggle('dash-view', !!(_vd && getComputedStyle(_vd).display !== 'none'));
-  iniArrancar();   // campana de mensajes del Inicio (solo admin)
+  iniArrancar();   // campana: mensajes del Inicio (admin/operador) o pendientes del centro (operador_clinica)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
 var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina','cruzas'];
