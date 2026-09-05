@@ -1253,6 +1253,15 @@
           </div>
         </div>
 
+        <!-- ===== Modal: Configuración de horarios del server (solo admin) ===== -->
+        <div class="scrim" id="srvCfgScrim" onclick="cerrarConfigServer()"></div>
+        <div class="modal" id="srvCfgModal" role="dialog" aria-modal="true" style="max-width:560px">
+          <div class="modal-head"><h3>Horarios de la automatización</h3><button class="x" onclick="cerrarConfigServer()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" id="srvCfgBody" style="padding:18px">
+            <div style="padding:20px;text-align:center;color:var(--text-2)">Cargando…</div>
+          </div>
+        </div>
+
         <div class="scrim" id="cabinaScrim" onclick="cerrarCabinaModal()"></div>
         <div class="modal cab-modal" id="cabinaModal" role="dialog" aria-modal="true">
           <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>

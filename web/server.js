@@ -1856,8 +1856,48 @@ function isWorkerAuth(req) {
   const b = Buffer.from(WORKER_TOKEN);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+// Horario por defecto de la automatización del server. Coincide EXACTO con los
+// timers systemd que ya están puestos, así el server, al reaplicar por primera vez,
+// no cambia nada. Editable desde la web (POST /api/admin/worker/schedule).
+function defaultSchedule() {
+  return {
+    bandejaRefresh: "20:00",
+    bandejaRetry: "22:00",
+    pollerCadaMin: 10,
+    // Cadena Scheffelaar: por día, la lista de horas a las que corre (vacío = no corre).
+    scheffelaarCadena: {
+      Mon: ["17:00", "19:30"], Tue: ["17:00", "19:30"], Wed: ["12:00", "17:00", "19:30"],
+      Thu: [], Fri: ["12:00", "17:00", "19:30"], Sat: [], Sun: [],
+    },
+    scheffelaarBenef: { dias: ["Mon", "Tue", "Wed", "Fri"], hora: "19:00" },
+  };
+}
+const DIAS_SEMANA = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Deja el horario en una forma SIEMPRE segura para convertir en unidades systemd:
+// horas HH:MM válidas, días de un vocabulario fijo, poller 1..60. Descarta lo demás.
+function validarSchedule(s) {
+  s = (s && typeof s === "object") ? s : {};
+  const okTime = (t) => typeof t === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+  const limpiarHoras = (arr) => Array.isArray(arr) ? Array.from(new Set(arr.filter(okTime))).sort().slice(0, 8) : [];
+  const cad = {};
+  const srcCad = (s.scheffelaarCadena && typeof s.scheffelaarCadena === "object") ? s.scheffelaarCadena : {};
+  DIAS_SEMANA.forEach((d) => { cad[d] = limpiarHoras(srcCad[d]); });
+  const b = (s.scheffelaarBenef && typeof s.scheffelaarBenef === "object") ? s.scheffelaarBenef : {};
+  let poller = parseInt(s.pollerCadaMin, 10);
+  if (!(poller >= 1 && poller <= 60)) poller = 10;
+  return {
+    bandejaRefresh: okTime(s.bandejaRefresh) ? s.bandejaRefresh : "20:00",
+    bandejaRetry: okTime(s.bandejaRetry) ? s.bandejaRetry : "22:00",
+    pollerCadaMin: poller,
+    scheffelaarCadena: cad,
+    scheffelaarBenef: {
+      dias: Array.isArray(b.dias) ? DIAS_SEMANA.filter((d) => b.dias.includes(d)) : [],
+      hora: okTime(b.hora) ? b.hora : "19:00",
+    },
+  };
+}
 function emptyWorkerState() {
-  return { workers: {}, tasks: [] };
+  return { workers: {}, tasks: [], schedule: defaultSchedule(), scheduleVersion: 1 };
 }
 function loadWorkerState() {
   try {
@@ -1865,6 +1905,8 @@ function loadWorkerState() {
     return {
       workers: parsed && typeof parsed.workers === "object" && !Array.isArray(parsed.workers) ? parsed.workers : {},
       tasks: Array.isArray(parsed && parsed.tasks) ? parsed.tasks : [],
+      schedule: validarSchedule(parsed && parsed.schedule),
+      scheduleVersion: Number(parsed && parsed.scheduleVersion) || 1,
     };
   } catch {
     return emptyWorkerState();
@@ -4807,6 +4849,26 @@ const server = http.createServer(async (req, res) => {
       workers,
       tasks,
     });
+  }
+  // Horario de la automatización del server (editable). El server lo lee cada pocos
+  // minutos y reaplica sus timers systemd. GET para el editor; POST para guardar.
+  if (p === "/api/admin/worker/schedule" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const state = loadWorkerState();
+    return json(res, 200, { ok: true, schedule: state.schedule, version: state.scheduleVersion });
+  }
+  if (p === "/api/admin/worker/schedule" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const state = loadWorkerState();
+    state.schedule = validarSchedule(body && body.schedule);
+    state.scheduleVersion = Number(state.scheduleVersion || 1) + 1;
+    saveWorkerState(state);
+    return json(res, 200, { ok: true, schedule: state.schedule, version: state.scheduleVersion });
   }
   // Sirve la captura de error de una tarea (PNG) al admin, para verla desde el
   // panel de estado del server. Solo admin; el path se valida dentro del dir.

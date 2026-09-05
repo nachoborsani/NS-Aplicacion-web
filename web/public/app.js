@@ -6925,12 +6925,13 @@ function srvRender(st){
     h += '</div>';
   }
 
-  // Automatización programada (horario fijo de los timers del server)
-  h += '<div style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px">Automatización programada</div>';
+  // Automatización programada (horario real; editable con el botón)
+  h += '<div style="display:flex;align-items:center;gap:8px;margin:0 2px 6px">'
+     + '<span style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px">Automatización programada</span>'
+     + '<button type="button" onclick="abrirConfigServer()" class="btn btn-sm" style="margin-left:auto;padding:2px 10px;font-size:11.5px">⚙ Editar horarios</button>'
+     + '</div>';
   h += '<div style="font-size:12.5px;color:var(--text-2);line-height:1.75">'
-     + '• Refresco de bandeja <b>20:00</b> · reintentos <b>22:00</b><br>'
-     + '• "Actualizar ahora" <b>cada 10 min</b><br>'
-     + '• Cadena Scheffelaar: <b>Lun/Mar 17 y 19:30</b> · <b>Mié/Vie 12, 17 y 19:30</b>'
+     + (SRV_SCHEDULE ? srvFormatSchedule(SRV_SCHEDULE) : 'Cargando horarios…')
      + '</div>';
 
   body.innerHTML = h;
@@ -6943,12 +6944,122 @@ async function srvTick(){
 function abrirEstadoServer(){
   showModal('srvModal','srvScrim');
   srvTick();
+  srvCargarSchedule();   // trae el horario real para mostrarlo (y re-renderiza)
   if(SRV_POLL) clearInterval(SRV_POLL);
   SRV_POLL = setInterval(srvTick, 5000);
 }
 function cerrarEstadoServer(){
   hideModal('srvModal','srvScrim');
   if(SRV_POLL){ clearInterval(SRV_POLL); SRV_POLL=null; }
+}
+
+// ---- Horario de la automatización (ver + editar) ----
+var SRV_SCHEDULE = null;
+var SRV_DIAS_ORDEN = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+var SRV_DIA_LBL = { Mon:'Lun', Tue:'Mar', Wed:'Mié', Thu:'Jue', Fri:'Vie', Sat:'Sáb', Sun:'Dom' };
+
+async function srvCargarSchedule(){
+  try{
+    var r = await fetch('/api/admin/worker/schedule', { credentials:'same-origin' });
+    if(!r.ok) return;
+    var d = await r.json();
+    if(d && d.schedule){ SRV_SCHEDULE = d.schedule; if(document.getElementById('srvModal').classList.contains('show')) srvTick(); }
+  }catch(e){}
+}
+function srvFormatSchedule(s){
+  if(!s) return 'Cargando horarios…';
+  var out = [];
+  out.push('• Refresco de bandeja <b>'+esc(s.bandejaRefresh)+'</b> · reintentos <b>'+esc(s.bandejaRetry)+'</b>');
+  out.push('• "Actualizar ahora" <b>cada '+esc(String(s.pollerCadaMin))+' min</b>');
+  var cad = s.scheffelaarCadena || {};
+  var partes = SRV_DIAS_ORDEN.filter(function(d){ return (cad[d]||[]).length; })
+     .map(function(d){ return SRV_DIA_LBL[d]+' '+cad[d].join(', '); });
+  out.push('• Cadena Scheffelaar: ' + (partes.length ? '<b>'+partes.join('</b> · <b>')+'</b>' : '<i>no corre</i>'));
+  var b = s.scheffelaarBenef || {};
+  var bd = (b.dias||[]).map(function(d){ return SRV_DIA_LBL[d]; }).join('/');
+  out.push('• Barrido benef: ' + (bd ? '<b>'+bd+' '+esc(b.hora)+'</b>' : '<i>no corre</i>'));
+  return out.join('<br>');
+}
+
+function abrirConfigServer(){
+  cerrarEstadoServer();          // cerramos el panel (que se auto-refresca) para editar tranquilo
+  showModal('srvCfgModal','srvCfgScrim');
+  var body = document.getElementById('srvCfgBody');
+  if(body) body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-2)">Cargando…</div>';
+  fetch('/api/admin/worker/schedule', { credentials:'same-origin' })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ SRV_SCHEDULE = (d && d.schedule) || SRV_SCHEDULE; renderConfigServer(SRV_SCHEDULE); })
+    .catch(function(){ if(body) body.innerHTML = '<div style="padding:18px;color:#dc2626">No pude leer los horarios.</div>'; });
+}
+function cerrarConfigServer(){ hideModal('srvCfgModal','srvCfgScrim'); }
+
+function renderConfigServer(s){
+  s = s || {};
+  var body = document.getElementById('srvCfgBody'); if(!body) return;
+  var cad = s.scheffelaarCadena || {};
+  var benefDias = (s.scheffelaarBenef && s.scheffelaarBenef.dias) || [];
+  var lbl = 'style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.4px;margin:14px 2px 6px;display:block"';
+  var row = 'style="display:flex;align-items:center;gap:8px;margin-bottom:6px"';
+  var h = '';
+  h += '<div style="font-size:12.5px;color:var(--text-2);margin-bottom:6px">Los cambios los toma el server solo, en unos minutos.</div>';
+
+  h += '<span '+lbl+'>Bandejas</span>';
+  h += '<div '+row+'><span style="width:150px">Refresco (bajar bandeja)</span><input type="time" id="cfgRefresh" class="inp mini" value="'+esc(s.bandejaRefresh||'20:00')+'"></div>';
+  h += '<div '+row+'><span style="width:150px">Reintentar con error</span><input type="time" id="cfgRetry" class="inp mini" value="'+esc(s.bandejaRetry||'22:00')+'"></div>';
+  h += '<div '+row+'><span style="width:150px">"Actualizar ahora"</span>cada <input type="number" id="cfgPoller" class="inp mini" min="1" max="60" value="'+esc(String(s.pollerCadaMin||10))+'" style="width:64px"> min</div>';
+
+  h += '<span '+lbl+'>Cadena Scheffelaar — horas por día (separadas por coma)</span>';
+  SRV_DIAS_ORDEN.forEach(function(d){
+    var val = (cad[d]||[]).join(', ');
+    h += '<div '+row+'><span style="width:44px">'+SRV_DIA_LBL[d]+'</span>'
+       + '<input type="text" id="cfgCad_'+d+'" class="inp mini" placeholder="ej: 17:00, 19:30" value="'+esc(val)+'" style="flex:1"></div>';
+  });
+
+  h += '<span '+lbl+'>Barrido de beneficiarios</span>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">';
+  SRV_DIAS_ORDEN.forEach(function(d){
+    var ck = benefDias.indexOf(d) >= 0 ? ' checked' : '';
+    h += '<label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="cfgBenef_'+d+'"'+ck+'>'+SRV_DIA_LBL[d]+'</label>';
+  });
+  h += '</div>';
+  h += '<div '+row+'><span style="width:150px">Hora</span><input type="time" id="cfgBenefHora" class="inp mini" value="'+esc((s.scheffelaarBenef&&s.scheffelaarBenef.hora)||'19:00')+'"></div>';
+
+  h += '<div id="cfgMsg" style="margin-top:10px;font-size:12.5px"></div>';
+  h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+     + '<button class="btn btn-sm" type="button" onclick="cerrarConfigServer()">Cancelar</button>'
+     + '<button class="btn btn-primary btn-sm" type="button" id="cfgGuardar" onclick="guardarConfigServer()">Guardar horarios</button>'
+     + '</div>';
+  body.innerHTML = h;
+}
+
+function _cfgHoras(id){
+  var el = document.getElementById(id); if(!el) return [];
+  return String(el.value||'').split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+}
+async function guardarConfigServer(){
+  var cad = {};
+  SRV_DIAS_ORDEN.forEach(function(d){ cad[d] = _cfgHoras('cfgCad_'+d); });
+  var benefDias = SRV_DIAS_ORDEN.filter(function(d){ var c=document.getElementById('cfgBenef_'+d); return c && c.checked; });
+  var schedule = {
+    bandejaRefresh: (document.getElementById('cfgRefresh')||{}).value || '20:00',
+    bandejaRetry: (document.getElementById('cfgRetry')||{}).value || '22:00',
+    pollerCadaMin: parseInt((document.getElementById('cfgPoller')||{}).value, 10) || 10,
+    scheffelaarCadena: cad,
+    scheffelaarBenef: { dias: benefDias, hora: (document.getElementById('cfgBenefHora')||{}).value || '19:00' },
+  };
+  var btn = document.getElementById('cfgGuardar'); if(btn){ btn.disabled = true; btn.textContent = 'Guardando…'; }
+  var msg = document.getElementById('cfgMsg');
+  try{
+    var r = await fetch('/api/admin/worker/schedule', { method:'POST', headers:{'content-type':'application/json'}, credentials:'same-origin', body: JSON.stringify({ schedule: schedule }) });
+    var d = await r.json();
+    if(!r.ok || !d.ok){ throw new Error((d && d.error) || ('http '+r.status)); }
+    SRV_SCHEDULE = d.schedule;   // el server devuelve el horario ya validado/limpio
+    if(msg){ msg.style.color = '#16a34a'; msg.textContent = '✅ Guardado. El server lo va a tomar en unos minutos.'; }
+    setTimeout(function(){ cerrarConfigServer(); abrirEstadoServer(); }, 900);
+  }catch(e){
+    if(btn){ btn.disabled = false; btn.textContent = 'Guardar horarios'; }
+    if(msg){ msg.style.color = '#dc2626'; msg.textContent = 'No se pudo guardar ('+(e&&e.message||e)+').'; }
+  }
 }
 
 // ===== Padrón de afiliados (admin) =====
