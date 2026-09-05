@@ -3433,7 +3433,7 @@ var MESCURSO_MODULOS = [];          // desglose por módulo del mes en curso
 var MESCURSO_MODULOS_JULIO = [];    // ... del reporte "sin cerrar"
 var MESCURSO_MODULOS_CERRADO = [];  // ... del mes cerrado
 // Normaliza el desglose por módulo (mes en curso trae gross; los reportes traen net).
-function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), sinValor:m.sinValor||0 }; }); }
+function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
 var MESCURSO_POSIBLES_DEBITOS_ADELANTE = []; // posibles débitos de turnos futuros (hacia adelante)
 var MESCURSO_FUTUROS = [];   // meses futuros (sep, oct…) con sus posiblesDebitosRows
 var MESCURSO_POSIBLES_DEBITOS_FUTURO = []; // el mes futuro que se está viendo en el panel
@@ -3791,7 +3791,7 @@ function mesCursoTogglePanel(tipo){
     // nomenclador → cuenta pero suma $0). Es plata que no se está facturando.
     var accModulos = function(idx){
       var mm = md[idx];
-      if (mm && mm.sinValor > 0) return '<span class="mc-sinvalor" title="' + mm.sinValor + ' sin valorizar: el código no figura en el nomenclador, no suma a la facturación. Cargalo en Nomencladores para que se valorice.">⚠ ' + mm.sinValor + ' sin valorizar</span>';
+      if (mm && mm.sinValor > 0) return '<button type="button" class="mc-sinvalor" onclick="event.stopPropagation();mesCursoAbrirSinValor(\'' + tipo + '\',' + idx + ')" title="' + mm.sinValor + ' sin valorizar: el código no figura en el nomenclador, no suma a la facturación. Clic para asignarle valor.">⚠ ' + mm.sinValor + ' sin valorizar</button>';
       return '';
     };
     var haySinValor = md.some(function(m){ return m.sinValor > 0; });
@@ -3958,6 +3958,54 @@ function copiarFaltanInformesJulio(btn){
 function copiarFaltanInformesCerrado(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
     (MESCURSO_FALTAN_INFORMES_CERRADO || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, x.valor]; }));
+}
+// ===== Asignar valor a códigos "sin valorizar" de un módulo (desde el chip ⚠) =====
+var SV_ASIGNO = false;
+function mesCursoAbrirSinValor(tipo, idx){
+  var arr = tipo === 'modulos' ? MESCURSO_MODULOS : (tipo === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
+  var m = arr[idx]; if (!m) return;
+  SV_ASIGNO = false;
+  var codes = m.sinValorCodigos || [];
+  var tit = document.getElementById('svModalTitle');
+  if (tit) tit.textContent = (m.code ? m.code + ' - ' : '') + m.desc + ' — sin valorizar';
+  var h = '<div style="font-size:12.5px;color:var(--text-2);margin-bottom:12px">Estos códigos aparecen en la bandeja pero <b>no están en el nomenclador</b>: cuentan pero suman $0. Asignales el valor PAMI y se valorizan en todos los clientes y en las próximas bandejas.</div>';
+  if (!codes.length){ h += '<div class="nom-muted">No hay códigos sin valorizar en este módulo.</div>'; }
+  else {
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
+    codes.forEach(function(c){
+      h += '<div class="sv-row" data-code="' + esc(c.code) + '" data-desc="' + esc(c.desc || '') + '" data-mc="' + esc(m.code || '') + '" data-md="' + esc(m.desc || '') + '">'
+        + '<div class="sv-info"><div><span class="nom-code">' + esc(c.code) + '</span> ' + esc(c.desc || '') + '</div><div class="nom-muted" style="font-size:12px">' + (c.count || 0) + ' ' + ((c.count || 0) === 1 ? 'vez' : 'veces') + ' en el período</div></div>'
+        + '<input class="inp" type="number" step="0.01" min="0" placeholder="Valor $" onkeydown="if(event.key===\'Enter\')this.nextElementSibling.click()">'
+        + '<button class="btn btn-primary btn-sm" onclick="mesCursoAsignarValor(this)">Asignar</button>'
+        + '</div>';
+    });
+    h += '</div><div id="svMsg" style="margin-top:12px;font-size:12.5px"></div>';
+  }
+  document.getElementById('svModalBody').innerHTML = h;
+  showModal('svModal', 'svScrim');
+}
+function cerrarSinValor(){
+  hideModal('svModal', 'svScrim');
+  // Si se asignó algún valor, recargamos el dashboard para que se re-valorice.
+  if (SV_ASIGNO && typeof loadClientMesCurso === 'function' && ACTIVE_CLIENT){ SV_ASIGNO = false; loadClientMesCurso(ACTIVE_CLIENT.slug); }
+}
+async function mesCursoAsignarValor(btn){
+  if (!ACTIVE_CLIENT) return;
+  var rowEl = btn.closest('.sv-row');
+  var input = rowEl.querySelector('input');
+  var total = Number(String(input.value).replace(',', '.'));
+  var msg = document.getElementById('svMsg');
+  if (!(total > 0)){ input.focus(); if (msg){ msg.style.color = '#dc2626'; msg.textContent = 'Ingresá un valor mayor a 0.'; } return; }
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/practice-values', {
+    code: rowEl.getAttribute('data-code'), total: total,
+    practiceDescription: rowEl.getAttribute('data-desc'),
+    moduleCode: rowEl.getAttribute('data-mc'), moduleDescription: rowEl.getAttribute('data-md')
+  });
+  if (!res.ok){ btn.disabled = false; btn.textContent = 'Asignar'; if (msg){ msg.style.color = '#dc2626'; msg.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; } return; }
+  SV_ASIGNO = true;
+  rowEl.classList.add('sv-done'); input.disabled = true; btn.textContent = '✓ Asignado';
+  if (msg){ msg.style.color = '#16a34a'; msg.textContent = '✅ Guardado. Al cerrar se actualiza la facturación.'; }
 }
 function copiarPosiblesDebitos(btn){
   mesCursoCopiar(btn, ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO'],

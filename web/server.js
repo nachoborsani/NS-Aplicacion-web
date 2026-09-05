@@ -3264,6 +3264,18 @@ function buildBandejaResumen(slug) {
       if (c && !byCode.has(c)) byCode.set(c, r);
     }
   }
+  // Valores asignados a mano (globales / por-cliente) para códigos que no están en
+  // el nomenclador: se incluyen acá para que el mes en curso los valorice igual que
+  // los reportes (si no, "darle valor" desde el chip no se reflejaba hasta un reporte).
+  const _pv = loadClientPracticeValues();
+  const _pvMerge = { ...(_pv["__global__"] || {}), ...(_pv[slug] || {}) };
+  for (const c of Object.keys(_pvMerge)) {
+    const code = cleanIdentifier(c);
+    const ov = _pvMerge[c];
+    if (code && ov && Number(ov.total) > 0 && !byCode.has(code)) {
+      byCode.set(code, { practiceCode: code, practiceDescription: ov.practiceDescription || "", moduleCode: ov.moduleCode || "", moduleDescription: ov.moduleDescription || "", total: Number(ov.total) });
+    }
+  }
   const keys = Object.keys(bandeja.rows[0] || {});
   const findKey = (re) => keys.find((k) => re.test(normalizeText(k))) || "";
   const kPrac = findKey(/PRACTICA/);
@@ -3330,10 +3342,15 @@ function buildBandejaResumen(slug) {
     const modCode = String((nomRow && nomRow.moduleCode) || "");
     const modKey = modCode || "sin";
     let modAgr = moduloAgr.get(modKey);
-    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0, sinValor: 0 }; moduloAgr.set(modKey, modAgr); }
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
     if (esConsulta) modAgr.consultations++; else modAgr.practices++;
     modAgr.gross += valueGross;
-    if (!nomRow) modAgr.sinValor++;   // el código no está en el nomenclador → suma $0 pero cuenta
+    if (!nomRow) {   // el código no está en el nomenclador → suma $0 pero cuenta
+      modAgr.sinValor++;
+      const svc = code || "?";
+      if (!modAgr._sv[svc]) modAgr._sv[svc] = { code: svc, desc: (pracRaw.split(" - ").slice(1).join(" - ") || pracRaw).trim(), count: 0 };
+      modAgr._sv[svc].count++;
+    }
     if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
       benef: String(row[kBenef] || "").trim(),
       nombre: String(row[kNombre] || "").trim(),
@@ -3465,7 +3482,7 @@ function buildBandejaResumen(slug) {
     missingInformeRows, ausentesRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
-    modules: [...moduloAgr.values()].map((m) => ({ ...m, gross: money(m.gross) })).sort((a, b) => b.gross - a.gross),
+    modules: [...moduloAgr.values()].map((m) => { const { _sv, ...rest } = m; return { ...rest, gross: money(m.gross), sinValorCodigos: Object.values(_sv || {}) }; }).sort((a, b) => b.gross - a.gross),
     coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
     coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
     nomencladorPeriod: nom ? (nom.period || "") : "",
@@ -3699,6 +3716,7 @@ function addRowToDashboardPeriod(target, row) {
       practices: 0,
       gross: 0,
       sinValor: 0,
+      _sv: {},
       debit: 0,
       net: 0,
       rows: [],
@@ -3708,7 +3726,12 @@ function addRowToDashboardPeriod(target, row) {
   if (consultation) module.consultations += 1;
   else module.practices += 1;
   module.gross += gross;
-  if (!row.matchFound) module.sinValor += 1;   // código sin match en el nomenclador → $0
+  if (!row.matchFound) {   // código sin match en el nomenclador → $0
+    module.sinValor += 1;
+    const c = String(row.practiceCode || "?");
+    if (!module._sv[c]) module._sv[c] = { code: c, desc: row.practiceDescription || row.practiceText || "", count: 0 };
+    module._sv[c].count += 1;
+  }
   module.debit += debit;
   module.net += net;
   module.rows.push({
@@ -3741,13 +3764,17 @@ function finalizeDashboardPeriod(target) {
   target.nextPeriodCutoff = money(target.nextPeriodCutoff);
   target.missingInformeAmount = money(target.missingInformeAmount);
   target.modules = Object.values(target._modules || {})
-    .map((module) => ({
-      ...module,
-      gross: money(module.gross),
-      debit: money(module.debit),
-      net: money(module.net),
-      rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
-    }))
+    .map((module) => {
+      const { _sv, ...rest } = module;
+      return {
+        ...rest,
+        gross: money(module.gross),
+        debit: money(module.debit),
+        net: money(module.net),
+        sinValorCodigos: Object.values(_sv || {}),
+        rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
+      };
+    })
     .sort((a, b) => b.net - a.net || String(a.moduleCode).localeCompare(String(b.moduleCode)));
   delete target._modules;
   return target;

@@ -1249,6 +1249,13 @@
           </div>
         </div>
 
+        <!-- ===== Modal: asignar valor a códigos "sin valorizar" de un módulo ===== -->
+        <div class="scrim" id="svScrim" onclick="cerrarSinValor()"></div>
+        <div class="modal" id="svModal" role="dialog" aria-modal="true" style="max-width:600px">
+          <div class="modal-head"><h3 id="svModalTitle">Sin valorizar</h3><button class="x" onclick="cerrarSinValor()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" id="svModalBody" style="padding:18px"></div>
+        </div>
+
         <!-- ===== Modal: Configuración de horarios del server (solo admin) ===== -->
         <div class="scrim" id="srvCfgScrim" onclick="cerrarConfigServer()"></div>
         <div class="modal" id="srvCfgModal" role="dialog" aria-modal="true" style="max-width:560px">
