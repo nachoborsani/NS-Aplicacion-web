@@ -7787,6 +7787,33 @@ function actividadArrancarHeartbeat(){
   enviar();
   setInterval(enviar, 60000);
 }
+// ---------- Menú de cuenta (cuelga del avatar de arriba a la derecha) ----------
+// Las acciones de la PERSONA (cambiar clave, salir) viven acá; lo del sistema
+// (Configuración general, Ver como…) sigue en la barra lateral.
+function toggleAvatarMenu(ev){
+  if (ev) ev.stopPropagation();
+  var m = document.getElementById('avatarMenu'); if (!m) return;
+  if (m.hidden) abrirAvatarMenu(); else cerrarAvatarMenu();
+}
+function abrirAvatarMenu(){
+  var m = document.getElementById('avatarMenu'); if (!m) return;
+  m.hidden = false;
+  var btn = document.getElementById('topAvatar'); if (btn) btn.setAttribute('aria-expanded', 'true');
+}
+function cerrarAvatarMenu(){
+  var m = document.getElementById('avatarMenu'); if (!m || m.hidden) return;
+  m.hidden = true;
+  var btn = document.getElementById('topAvatar'); if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+// Se cierra al hacer clic afuera o con Escape, como cualquier menú del sistema.
+document.addEventListener('click', function(e){
+  var m = document.getElementById('avatarMenu');
+  if (!m || m.hidden) return;
+  var btn = document.getElementById('topAvatar');
+  if (!m.contains(e.target) && !(btn && btn.contains(e.target))) cerrarAvatarMenu();
+});
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarAvatarMenu(); });
+
 // Aplica la UI (menú, sidebar, saludo) para un usuario dado.
 function aplicarUsuario(u){
   ME = u;
@@ -7818,6 +7845,11 @@ function aplicarUsuario(u){
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);
+  // Mismo dato en la cabecera del menú del avatar (que es de dónde ahora salen
+  // "Cambiar contraseña" y "Cerrar sesión").
+  var amN = document.getElementById('avatarMenuName'); if (amN) amN.textContent = u.name;
+  var amR = document.getElementById('avatarMenuRole'); if (amR) amR.textContent = roleLabel(u.role);
+  cerrarAvatarMenu();
   // Para la clínica, en vez de iniciales (que salen feas, ej. "CIMA (centro)" → "C(")
   // mostramos una cruz de salud. Los usuarios internos de NS mantienen sus iniciales.
   var cruzSalud = '<svg viewBox="0 0 24 24" style="width:20px;height:20px" aria-hidden="true"><path d="M9.5 3h5a1 1 0 011 1v4.5H20a1 1 0 011 1v5a1 1 0 01-1 1h-4.5V20a1 1 0 01-1 1h-5a1 1 0 01-1-1v-4.5H4a1 1 0 01-1-1v-5a1 1 0 011-1h4.5V4a1 1 0 011-1z" fill="currentColor"/></svg>';

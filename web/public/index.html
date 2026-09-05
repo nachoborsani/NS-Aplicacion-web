@@ -141,9 +141,7 @@
         <div class="side-config">
           <a id="navGeneral" class="ns-only" onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>General</a>
           <a id="verComoLink" onclick="abrirVerComo()" style="display:none"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Ver como…</a>
-          <a onclick="openChange()"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="11" width="16" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cambiar contraseña</a>
-          <a class="logout" onclick="doLogout()"><svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Cerrar sesión</a>
-        </div>
+        </div><!-- Cambiar contraseña y Cerrar sesión se movieron al menú del avatar (arriba a la derecha) -->
       </div>
     </aside>
 
@@ -174,7 +172,20 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="dot" id="bellDot" style="display:none"></span>
         </button>
-        <div class="avatar" id="topAvatar" style="width:38px;height:38px">NS</div>
+        <!-- Menú de la cuenta: cuelga del avatar con las iniciales. Acá viven las
+             acciones de la persona (cambiar clave, salir); lo del sistema sigue
+             en la barra lateral. -->
+        <div class="avatar-wrap">
+          <button class="avatar" id="topAvatar" style="width:38px;height:38px" onclick="toggleAvatarMenu(event)" title="Tu cuenta" aria-haspopup="menu" aria-expanded="false">NS</button>
+          <div class="avatar-menu" id="avatarMenu" role="menu" hidden>
+            <div class="avatar-menu-head">
+              <div class="nm" id="avatarMenuName">—</div>
+              <div class="rl" id="avatarMenuRole">—</div>
+            </div>
+            <a role="menuitem" onclick="cerrarAvatarMenu(); openChange()"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="11" width="16" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Cambiar contraseña</a>
+            <a role="menuitem" class="logout" onclick="cerrarAvatarMenu(); doLogout()"><svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Cerrar sesión</a>
+          </div>
+        </div>
       </header>
 
       <div class="content">
