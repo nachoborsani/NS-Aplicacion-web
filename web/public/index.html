@@ -264,6 +264,19 @@
             </section>
           </div>
 
+          <!-- Actividad de operadores (solo admin): horas conectado HOY, sumando en
+               vivo, y un ícono por operador para ver el detalle (log de ingresos +
+               historial de horas por día). El operador (ej. Javi) nunca ve esta
+               tarjeta - no está en su panel (operadorPaneles) y el endpoint que la
+               alimenta es /api/admin/*, bloqueado para cualquier rol que no sea admin. -->
+          <div class="card ini-card" id="actividadOpCard" style="display:none;margin-top:14px">
+            <div class="ini-head">
+              <span class="ini-ic">🕒</span>
+              <div><h2>Actividad de operadores</h2><div class="ini-meta">Horas conectado hoy</div></div>
+            </div>
+            <ul class="acted-list" id="actividadOpList"><li class="ini-empty">Cargando…</li></ul>
+          </div>
+
           <!-- Panel de operador (Javi por ahora): chat con los admins, accesos
                rápidos configurables, y pendientes por cliente. -->
           <div class="op-grid" id="operadorPaneles" style="display:none">
@@ -1608,6 +1621,25 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeDelModal()">Cancelar</button>
         <button class="btn btn-danger" id="delSave" onclick="saveDelete()">Sí, eliminar</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: detalle de actividad de un operador (solo admin) ===== -->
+    <div class="scrim" id="actScrim" onclick="closeActividadModal()"></div>
+    <div class="modal wide" id="actModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="actModalTitle">Actividad</h3><button class="x" onclick="closeActividadModal()" aria-label="Cerrar">×</button></div>
+      <div class="modal-body">
+        <div class="act-dias" id="actModalDias"></div>
+        <h4 class="act-subtit">Últimos ingresos</h4>
+        <div class="tablecard">
+          <table>
+            <thead><tr><th>Fecha</th><th>Hora</th><th>IP</th></tr></thead>
+            <tbody id="actModalSesiones"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeActividadModal()">Cerrar</button>
       </div>
     </div>
 

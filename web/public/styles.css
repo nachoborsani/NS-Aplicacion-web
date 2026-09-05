@@ -494,6 +494,24 @@
      lugar con "Tareas" abajo, así que la lista de centros pendientes queda
      más baja que en la del admin. */
   .ini-pendop-list-cortita{max-height:130px}
+  /* Actividad de operadores (Inicio del admin): horas conectado hoy + ícono
+     de detalle. Mismo lenguaje visual que .ini-pendop-* de arriba. */
+  .acted-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px}
+  .acted-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px}
+  .acted-row:hover{background:var(--hover)}
+  .acted-dot{width:8px;height:8px;border-radius:999px;background:var(--border);flex:0 0 auto}
+  .acted-dot.on{background:var(--success)}
+  .acted-nombre{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acted-horas{font-size:12.5px;font-weight:700;color:var(--text-2);white-space:nowrap}
+  .acted-row .rowbtn{flex:0 0 auto}
+  /* Detalle (modal): barra de horas por día + tabla de ingresos. */
+  .act-dias{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;max-height:220px;overflow-y:auto}
+  .act-dia-row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .act-dia-fecha{flex:0 0 78px;color:var(--text-2)}
+  .act-dia-barwrap{flex:1;background:var(--surface-2);border-radius:6px;overflow:hidden;height:8px}
+  .act-dia-bar{height:100%;background:var(--turq);border-radius:6px}
+  .act-dia-val{flex:0 0 54px;text-align:right;font-weight:700;color:var(--text)}
+  .act-subtit{margin:0 0 8px;font-size:13px;font-weight:800;color:var(--text)}
   /* Tareas propias del operador, dentro de la misma tarjeta de Pendientes. */
   .op-tareas{border-top:1px solid var(--border)}
   .op-tareas-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);padding:10px 15px 0}
