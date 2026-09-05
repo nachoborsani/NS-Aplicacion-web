@@ -31,6 +31,13 @@ Todo `enabled` (arranca solo con el server):
 | `ns-scheffelaar-cadena.timer` | `pipeline_scheffelaar.py` (benef→credencial→OME) | Lun/Mar 17:00 y 19:30 · Mié/Vie 12:00, 17:00 y 19:30 |
 | `ns-scheffelaar-benef.timer` | `benef_sweep.py` | Lun/Mar/Mié/Vie 19:00 |
 
+**Los horarios ahora se editan desde la web** (panel "Estado del server" → ⚙ Editar
+horarios, solo admin). La web guarda el horario y el timer `ns-schedule-apply` (cada 5 min)
+corre `apply_schedule.py`, que **regenera los `.timer` de arriba** con validación estricta.
+⚠️ **No edites los `.timer` a mano**: en la próxima corrida de apply se sobreescriben con
+lo que diga la web. Para cambiar un horario, editá en la web. `apply_schedule.py` solo
+reescribe si cambió la versión (guarda la última en `desktop-app/.schedule_version`).
+
 El worker se identifica en la web como `WORKER_ID = hostname` del server.
 El código vive en `/opt/NS-Aplicacion-web` (clone del repo). El venv en
 `desktop-app/.venv` (**sin `customtkinter`**, que es solo GUI). El Chromium de Playwright
