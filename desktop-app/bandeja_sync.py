@@ -429,6 +429,9 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         # viejos no (si no hay reporte, se saltean).
         for pos, (pperiod, plabel, exp_pas) in enumerate(exported_pasados):
             try:
+                rows_pas, cols_pas = parse_bandeja_excel(exp_pas)
+                web.upload_bandeja_historial(slug, pperiod, rows_pas, columns=cols_pas,
+                                             month_label=plabel, generated_at=date.today().isoformat())
                 r = web.actualizar_reporte_cerrado(slug, pperiod, exp_pas, crear_si_falta=(pos == 0))
                 antes = (r.get("antes") or {}).get("faltan")
                 despues = (r.get("despues") or {}).get("faltan")

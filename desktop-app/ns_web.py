@@ -291,6 +291,22 @@ class NSWebClient:
             },
         )
 
+    def upload_bandeja_historial(self, slug: str, month: str, rows: list[dict],
+                                 columns: list[str] | None = None, month_label: str = "",
+                                 generated_at: str = "") -> dict:
+        """Guarda una bandeja CUP histórica para Liberar cupo sin pisar la actual."""
+        return self._request(
+            "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/historial",
+            body={
+                "month": month,
+                "monthLabel": month_label,
+                "generatedAt": generated_at,
+                "columns": columns or [],
+                "rows": rows,
+                "origen": "auto-pasado",
+            },
+        )
+
     def actualizar_reporte_cerrado(self, slug: str, period: str, excel_path: str,
                                    crear_si_falta: bool = False) -> dict:
         """Refresca EN EL LUGAR el reporte de un mes cerrado con la bandeja fresca.

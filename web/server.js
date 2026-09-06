@@ -453,6 +453,14 @@ function saveClientBandejasCup(store) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(clientBandejasCupFile, JSON.stringify(store, null, 2));
 }
+function saveClientBandejaCupEntry(slug, entry) {
+  const month = normalizePeriod(entry && entry.month);
+  if (!slug || !month) return;
+  const store = loadClientBandejasCup();
+  if (!store[slug] || typeof store[slug] !== "object" || Array.isArray(store[slug])) store[slug] = {};
+  store[slug][month] = { ...entry, month };
+  saveClientBandejasCup(store);
+}
 // Padrón de afiliados por cliente: { [slug]: { [dni]: {dni, beneficio, nombre, tramite, ...} } }.
 // Se alimenta subiendo turneras. Es la base para matchear informes por número exacto.
 const padronFile = path.join(dataDir, "padron.json");
@@ -3388,6 +3396,7 @@ function buildBandejaResumen(slug) {
       practica: pracRaw,
       turno: String(row[kTurno] || "").trim(),
       valor: money(valueGross),
+      ome,
     });
     if (esTransmitida) grossTransmitido += valueGross;
     else if (!esValidada) grossTurno += valueGross; // el caso validada+sin-transmitir va a missingInformeAmount
@@ -3533,6 +3542,7 @@ function getLiberarCupoBandeja(slug, periodInput) {
   const live = loadClientBandejas()[slug] || null;
   if (period && hist && hist[period]) return hist[period];
   if (period && live && normalizePeriod(live.month) === period) return live;
+  if (period) return null;
   if (!period && live && Array.isArray(live.rows) && live.rows.length) return live;
   const latest = Object.keys(hist || {}).sort().reverse()[0];
   return latest ? hist[latest] : live;
@@ -3548,6 +3558,13 @@ function liberarCupoBandejaPeriods(slug) {
   if (live && live.month) {
     const p = normalizePeriod(live.month) || String(live.month || "");
     map.set(p, { period: p, label: live.monthLabel || periodLabel(p), count: live.count || ((live.rows || []).length), uploadedAt: live.uploadedAt || "", live: true });
+  }
+  const reports = (loadClientReportsStore().items || []).filter((report) => report.clientSlug === slug);
+  for (const report of reports) {
+    const p = reportDashboardPeriod(report);
+    if (!p || map.has(p)) continue;
+    const count = reportRows(report).filter((r) => r && r.absent && cleanIdentifier(r.order)).length;
+    if (count) map.set(p, { period: p, label: periodLabel(p), count, uploadedAt: report.updatedAt || report.closedAt || "", live: false, source: "reportes" });
   }
   return [...map.values()].sort((a, b) => String(b.period).localeCompare(String(a.period)));
 }
@@ -3565,12 +3582,85 @@ function nomencladorRowsByCode(period) {
   }
   return { byCode, periodo: payload ? (payload.period || "") : "", label: payload ? (payload.label || periodLabel(payload.period)) : "" };
 }
+function buildLiberarCupoCandidatesFromReports(slug, client, period, opts, periods) {
+  const selectedPeriod = normalizePeriod(period) || (periods[0] && periods[0].period) || "";
+  const reports = (loadClientReportsStore().items || [])
+    .filter((report) => report.clientSlug === slug && reportDashboardPeriod(report) === selectedPeriod)
+    .sort((a, b) => String(a.closedAt || "").localeCompare(String(b.closedAt || "")));
+  const rowsByKey = new Map();
+  for (const report of reports) {
+    for (const row of reportRows(report)) rowsByKey.set(dashboardRowKey(row), row);
+  }
+  const desde = isoDateFromBandejaValue(opts.desde);
+  const hasta = isoDateFromBandejaValue(opts.hasta);
+  const moduleFilter = String(opts.module || "").trim();
+  const codeFilters = String(opts.code || "").split(/[,\s;]+/).map(cleanIdentifier).filter(Boolean);
+  const q = normalizeText(opts.q || "");
+  const all = [];
+  const moduleMap = new Map();
+  for (const row of rowsByKey.values()) {
+    const order = cleanIdentifier(row.order);
+    if (!order || !row.absent) continue;
+    const turnoIso = String(row.appointmentAt || "").slice(0, 10) || isoDateFromBandejaValue(row.appointmentLabel);
+    if (desde && (!turnoIso || turnoIso < desde)) continue;
+    if (hasta && (!turnoIso || turnoIso > hasta)) continue;
+    const moduleCode = String(row.moduleCode || "").trim();
+    const moduleDescription = String(row.moduleDescription || "").trim();
+    const moduleKey = moduleCode || moduleDescription || "sin";
+    if (!moduleMap.has(moduleKey)) moduleMap.set(moduleKey, { value: moduleKey, label: `${moduleCode || "-"} - ${moduleDescription || "Sin modulo"}`, count: 0 });
+    moduleMap.get(moduleKey).count += 1;
+    const practica = row.practiceText || [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - ");
+    all.push({
+      n_orden: order,
+      turno: String(row.appointmentLabel || row.appointmentAt || "").trim(),
+      turnoIso,
+      beneficio: cleanIdentifier(row.benefit),
+      nombre: String(row.patientName || "").trim(),
+      practica,
+      practiceCode: cleanIdentifier(row.practiceCode),
+      practiceDescription: String(row.practiceDescription || "").trim(),
+      moduleCode,
+      moduleDescription,
+      estado: "No validada",
+      transmitida: "",
+      f_vencimiento: "",
+      source: "reporte",
+    });
+  }
+  let filtered = all;
+  if (moduleFilter) filtered = filtered.filter((r) => (r.moduleCode || r.moduleDescription || "sin") === moduleFilter);
+  if (codeFilters.length) {
+    const wanted = new Set(codeFilters);
+    filtered = filtered.filter((r) => wanted.has(cleanIdentifier(r.practiceCode)));
+  }
+  if (q) {
+    filtered = filtered.filter((r) => normalizeText([r.n_orden, r.beneficio, r.nombre, r.practica, r.moduleCode, r.moduleDescription].join(" ")).includes(q));
+  }
+  filtered.sort((a, b) => String(a.turnoIso || "").localeCompare(String(b.turnoIso || "")) || String(a.nombre || "").localeCompare(String(b.nombre || "")));
+  return {
+    client,
+    period: selectedPeriod,
+    label: periodLabel(selectedPeriod) || "",
+    periods,
+    rows: filtered.slice(0, 3000),
+    total: all.length,
+    totalFiltrado: filtered.length,
+    modules: [...moduleMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    uploadedAt: reports[reports.length - 1] ? (reports[reports.length - 1].updatedAt || reports[reports.length - 1].closedAt || "") : "",
+    source: "reportes",
+    nomencladorPeriod: "",
+    nomencladorLabel: "",
+  };
+}
 function buildLiberarCupoCandidates(slug, opts = {}) {
   const client = loadClientsStore().find((item) => item.slug === slug);
   if (!client) return null;
   const bandeja = getLiberarCupoBandeja(slug, opts.period);
   const periods = liberarCupoBandejaPeriods(slug);
   if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) {
+    if (periods.some((p) => p.source === "reportes")) {
+      return buildLiberarCupoCandidatesFromReports(slug, client, opts.period, opts, periods);
+    }
     return { client, period: "", label: "", periods, rows: [], total: 0, totalFiltrado: 0, modules: [], uploadedAt: "" };
   }
   const period = normalizePeriod(bandeja.month) || normalizePeriod(opts.period) || "";
@@ -3972,6 +4062,7 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
       practica: r.practiceText || [r.practiceCode, r.practiceDescription].filter(Boolean).join(" - "),
       turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
       valor: money(r.valueGross),
+      ome: cleanIdentifier(r.order),
     });
     item.ausentesRows = periodRows.filter((r) => r.absent && !r.outsideCutoff).slice(0, 2000).map(detalleFila);
     // Prácticas que se facturan en el CORTE SIGUIENTE (transmitidas después del corte).
@@ -6662,7 +6753,7 @@ const server = http.createServer(async (req, res) => {
     const columns = Array.isArray(body.columns) && body.columns.length
       ? body.columns.map(String)
       : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
-    store[slug] = {
+    const entry = {
       month: String(body.month || "").trim(),
       monthLabel: String(body.monthLabel || "").trim(),
       generatedAt: String(body.generatedAt || "").trim(),
@@ -6671,9 +6762,46 @@ const server = http.createServer(async (req, res) => {
       count: rows.length,
       columns,
       rows,
+      origen: "auto",
     };
+    store[slug] = entry;
     saveClientBandejas(store);
+    saveClientBandejaCupEntry(slug, entry);
     return json(res, 200, { ok: true, count: rows.length });
+  }
+
+  // La app del server sube acá las bandejas CUP históricas (julio/agosto/etc.)
+  // que siguen abiertas para liberar cupo. No reemplaza la bandeja "en vivo"
+  // usada por Informes recibidos; solo alimenta el selector de Liberar cupo.
+  const clientBandejaHistorialMatch = p.match(/^\/api\/clientes\/([^/]+)\/bandeja\/historial$/);
+  if (clientBandejaHistorialMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(clientBandejaHistorialMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const month = normalizePeriod(body.month);
+    if (!month) return json(res, 400, { error: "Falta el mes de la bandeja." });
+    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 20000) : [];
+    const columns = Array.isArray(body.columns) && body.columns.length
+      ? body.columns.map(String)
+      : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
+    const entry = {
+      month,
+      monthLabel: String(body.monthLabel || periodLabel(month)).trim(),
+      generatedAt: String(body.generatedAt || "").trim(),
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: me.username,
+      count: rows.length,
+      columns,
+      rows,
+      origen: String(body.origen || "auto-historial").slice(0, 40),
+    };
+    saveClientBandejaCupEntry(slug, entry);
+    return json(res, 200, { ok: true, count: rows.length, month, monthLabel: entry.monthLabel });
   }
 
   // Bandeja subida A MANO desde la web (Excel tal cual se baja del CUP de PAMI):

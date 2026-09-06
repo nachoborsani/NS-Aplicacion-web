@@ -3614,6 +3614,9 @@ var MESCURSO_AUSENTES = [];          // detalle de ausentes (con turno pero sin 
 var MESCURSO_AUSENTES_JULIO = [];    // ausentes del reporte "sin cerrar"
 var MESCURSO_AUSENTES_CERRADO = [];  // ausentes del mes cerrado
 var MESCURSO_FUERACORTE_JULIO = [];  // prácticas a facturar fuera de corte (reporte "sin cerrar")
+var MESCURSO_PERIODO_ACTUAL = '';
+var MESCURSO_PERIODO_JULIO = '';
+var MESCURSO_PERIODO_CERRADO = '';
 var MESCURSO_PANEL_ABIERTO = '';    // '' | 'informes' | 'debitos' | 'informes-julio' | 'debitos-julio' | 'debitos-adelante' | 'ausentes'
 function mesCursoSetCaret(id, abierto){ var c = document.getElementById(id); if (c) c.textContent = abierto ? '▾' : '▸'; }
 function toggleFaltanInformes(){ mesCursoTogglePanel('informes'); }
@@ -3713,6 +3716,51 @@ function accionCrearInforme(panelId){
     if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
     return btn;
   };
+}
+function ausentesDePanel(panelId){
+  if (panelId === 'ausentes') return MESCURSO_AUSENTES || [];
+  if (panelId === 'ausentes-julio') return MESCURSO_AUSENTES_JULIO || [];
+  if (panelId === 'ausentes-cerrado') return MESCURSO_AUSENTES_CERRADO || [];
+  return [];
+}
+function periodoAusentesPanel(panelId, fila){
+  var turno = String((fila && fila.turno) || '');
+  var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(turno);
+  if (m) return m[3] + '-' + m[2];
+  if (panelId === 'ausentes') return MESCURSO_PERIODO_ACTUAL || '';
+  if (panelId === 'ausentes-julio') return MESCURSO_PERIODO_JULIO || '';
+  if (panelId === 'ausentes-cerrado') return MESCURSO_PERIODO_CERRADO || '';
+  return '';
+}
+function fechaAusenteIso(fila){
+  var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String((fila && fila.turno) || ''));
+  return m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
+}
+function accionLiberarCupoAusente(panelId){
+  return function(idx){
+    var x = ausentesDePanel(panelId)[idx];
+    if (!x) return '';
+    return '<button class="btn btn-ghost mc-crear" type="button" title="Liberar cupo" onclick="irALiberarCupoAusente(\'' + panelId + '\',' + idx + ',this)">🚫 Cupo</button>';
+  };
+}
+function irALiberarCupoAusente(panelId, idx, btn){
+  var x = ausentesDePanel(panelId)[idx];
+  if (!x || !ACTIVE_CLIENT) return;
+  var fecha = fechaAusenteIso(x);
+  var period = periodoAusentesPanel(panelId, x);
+  var q = String(x.ome || x.orden || x.n_orden || x.benef || x.nombre || '').trim();
+  try {
+    sessionStorage.setItem('ns-liberar-cupo-preset', JSON.stringify({
+      clientSlug: ACTIVE_CLIENT.slug,
+      period: period,
+      desde: fecha,
+      hasta: fecha,
+      q: q,
+      ome: String(x.ome || x.orden || x.n_orden || '').trim()
+    }));
+  } catch(e){}
+  if (btn) btn.disabled = true;
+  go('liberarcupo', navElFor('liberarcupo'));
 }
 // Arma el payload de generación a partir de la fila del faltante + su modelo.
 // Devuelve null (con alert) si falta el médico del modelo.
@@ -3980,13 +4028,13 @@ function mesCursoTogglePanel(tipo){
     html = MESCURSO_POSIBLES_DEBITOS_FUTURO.length ? mesCursoTablaHtml(tituloFut + ' · ' + MESCURSO_POSIBLES_DEBITOS_FUTURO.length, 'warn', 'copiarPosiblesDebitosFuturo', debCols, MESCURSO_POSIBLES_DEBITOS_FUTURO.map(mapDebitos), tipo) : mesCursoVacioHtml(tituloFut, 'warn');
   } else if (tipo === 'ausentes'){
     var au = MESCURSO_AUSENTES || [];
-    html = au.length ? mesCursoTablaHtml('Ausentes · ' + au.length, 'warn', 'copiarAusentes', cols, au.map(mapInformes), 'ausentes') : mesCursoVacioHtml('Ausentes', 'warn');
+    html = au.length ? mesCursoTablaHtml('Ausentes · ' + au.length, 'warn', 'copiarAusentes', cols, au.map(mapInformes), 'ausentes', accionLiberarCupoAusente('ausentes')) : mesCursoVacioHtml('Ausentes', 'warn');
   } else if (tipo === 'ausentes-julio'){
     var auj = MESCURSO_AUSENTES_JULIO || [];
-    html = auj.length ? mesCursoTablaHtml('Ausentes sin activar (mes anterior) · ' + auj.length, 'warn', 'copiarAusentesJulio', cols, auj.map(mapInformes), 'ausentes-julio') : mesCursoVacioHtml('Ausentes sin activar (mes anterior)', 'warn');
+    html = auj.length ? mesCursoTablaHtml('Ausentes sin activar (mes anterior) · ' + auj.length, 'warn', 'copiarAusentesJulio', cols, auj.map(mapInformes), 'ausentes-julio', accionLiberarCupoAusente('ausentes-julio')) : mesCursoVacioHtml('Ausentes sin activar (mes anterior)', 'warn');
   } else if (tipo === 'ausentes-cerrado'){
     var auc = MESCURSO_AUSENTES_CERRADO || [];
-    html = auc.length ? mesCursoTablaHtml('Ausentes sin activar (mes cerrado) · ' + auc.length, 'warn', 'copiarAusentesCerrado', cols, auc.map(mapInformes), 'ausentes-cerrado') : mesCursoVacioHtml('Ausentes sin activar (mes cerrado)', 'warn');
+    html = auc.length ? mesCursoTablaHtml('Ausentes sin activar (mes cerrado) · ' + auc.length, 'warn', 'copiarAusentesCerrado', cols, auc.map(mapInformes), 'ausentes-cerrado', accionLiberarCupoAusente('ausentes-cerrado')) : mesCursoVacioHtml('Ausentes sin activar (mes cerrado)', 'warn');
   } else if (tipo === 'fueracorte-julio'){
     var fcj = MESCURSO_FUERACORTE_JULIO || [];
     html = fcj.length ? mesCursoTablaHtml('A facturar fuera de corte (mes anterior) · ' + fcj.length, 'warn', 'copiarFueraCorteJulio', cols, fcj.map(mapInformes), 'fueracorte-julio') : mesCursoVacioHtml('A facturar fuera de corte (mes anterior)', 'warn');
@@ -4593,11 +4641,13 @@ async function loadClientMesCurso(){
   MESCURSO_AUSENTES = (resumen && resumen.ausentesRows) || [];
   MESCURSO_POSIBLES_DEBITOS = (resumen && resumen.posiblesDebitosRows) || [];
   MESCURSO_MODULOS = mescMods(resumen && resumen.modules);
+  MESCURSO_PERIODO_ACTUAL = (resumen && resumen.period) || '';
   MESCURSO_POSIBLES_DEBITOS_ADELANTE = (adelante && adelante.posiblesDebitosRows) || [];
   MESCURSO_FUTUROS = futuros || [];
   MESCURSO_PANEL_ABIERTO = '';
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
+  MESCURSO_PERIODO_JULIO = (current && current.period) || prev;
   MESCURSO_FALTAN_INFORMES_JULIO = (current && current.missingInformeRows) || [];
   MESCURSO_POSIBLES_DEBITOS_JULIO = (current && current.posiblesDebitosRows) || [];
   MESCURSO_AUSENTES_JULIO = (current && current.ausentesRows) || [];
@@ -4615,6 +4665,7 @@ async function loadClientMesCurso(){
   // mes. Deja ver dos meses cerrados de un vistazo (útil para evaluar potenciales).
   var dash2 = (results[4] && results[4].ok && results[4].data) ? results[4].data : null;
   var current2 = dash2 && dash2.current ? dash2.current : null;
+  MESCURSO_PERIODO_CERRADO = (current2 && current2.period) || prev2;
   MESCURSO_DEBITOS_CERRADO = (current2 && current2.posiblesDebitosRows) || [];   // detalle de la card "Cerrado"
   MESCURSO_AUSENTES_CERRADO = (current2 && current2.ausentesRows) || [];
   MESCURSO_FALTAN_INFORMES_CERRADO = (current2 && current2.missingInformeRows) || [];
@@ -8017,6 +8068,32 @@ function seguirTarea(id, tipo){
 // ===== Liberar cupo PAMI =====
 var LC_ROWS = [];
 var LC_TASK_TIMER = null;
+function lcPeriodoLabel(p){ return typeof mesCursoLabelPeriodo === 'function' ? mesCursoLabelPeriodo(p) : p; }
+function lcApplyIncomingPreset(){
+  var raw = '';
+  try { raw = sessionStorage.getItem('ns-liberar-cupo-preset') || ''; sessionStorage.removeItem('ns-liberar-cupo-preset'); } catch(e){}
+  if (!raw) return;
+  var preset = null;
+  try { preset = JSON.parse(raw); } catch(e){ preset = null; }
+  if (!preset) return;
+  var cli = document.getElementById('lcCliente');
+  if (cli && preset.clientSlug && Array.prototype.some.call(cli.options, function(o){ return o.value === preset.clientSlug; })) {
+    cli.value = preset.clientSlug;
+    try { localStorage.setItem('ns-liberar-cupo-cliente', preset.clientSlug); } catch(e){}
+  }
+  [['lcDesde','desde'],['lcHasta','hasta'],['lcBuscar','q'],['lcCodigo','code']].forEach(function(x){
+    var el = document.getElementById(x[0]);
+    if (el && preset[x[1]] != null) el.value = String(preset[x[1]] || '');
+  });
+  var per = document.getElementById('lcPeriodo');
+  if (per && preset.period) {
+    var p = String(preset.period || '');
+    if (!Array.prototype.some.call(per.options, function(o){ return o.value === p; })) {
+      per.innerHTML = '<option value="' + esc(p) + '">' + esc(lcPeriodoLabel(p)) + '</option>';
+    }
+    per.value = p;
+  }
+}
 async function loadLiberarCupoView(){
   var sel = document.getElementById('lcCliente');
   if (sel && !sel.options.length){
@@ -8031,6 +8108,7 @@ async function loadLiberarCupoView(){
       } catch(e){}
     } catch(e){}
   }
+  lcApplyIncomingPreset();
   ['lcDesde','lcHasta','lcModulo','lcCodigo','lcBuscar','lcPeriodo'].forEach(function(id){
     var el = document.getElementById(id);
     if (el && !el._lcHooked){ el._lcHooked = true; el.addEventListener(id === 'lcBuscar' || id === 'lcCodigo' ? 'input' : 'change', lcQueueRefresh); }
@@ -8074,7 +8152,7 @@ async function refreshLiberarCupo(){
     lcRenderPeriodos(d.periods || [], d.period || '');
     lcRenderModulos(d.modules || []);
     if (title) title.textContent = 'OMEs no validadas';
-    if (meta) meta.textContent = (d.totalFiltrado || 0) + ' visible(s) de ' + (d.total || 0) + ' detectada(s)' + (d.label ? ' · ' + d.label : '');
+    if (meta) meta.textContent = (d.totalFiltrado || 0) + ' visible(s) de ' + (d.total || 0) + ' detectada(s)' + (d.label ? ' · ' + d.label : '') + (d.source === 'reportes' ? ' · desde reporte guardado' : '');
     var st = document.getElementById('lcStatusText');
     if (st) st.innerHTML = '<b>Liberar cupo</b><span>Seleccioná ausentes/no validadas desde la bandeja guardada y enviá la cancelación al worker PAMI.</span>';
     renderLiberarCupoRows();
@@ -8088,7 +8166,7 @@ async function refreshLiberarCupo(){
 function lcRenderPeriodos(periods, selected){
   var sel = document.getElementById('lcPeriodo'); if (!sel) return;
   var current = sel.value || selected || '';
-  var html = (periods || []).map(function(p){ return '<option value="' + esc(p.period) + '">' + esc(p.label || p.period) + (p.live ? ' (actual)' : '') + '</option>'; }).join('');
+  var html = (periods || []).map(function(p){ return '<option value="' + esc(p.period) + '">' + esc(p.label || p.period) + (p.live ? ' (actual)' : (p.source === 'reportes' ? ' (reporte)' : '')) + '</option>'; }).join('');
   sel.innerHTML = html || '<option value="">Sin bandejas</option>';
   if (current && Array.prototype.some.call(sel.options, function(o){ return o.value === current; })) sel.value = current;
   else if (selected) sel.value = selected;
