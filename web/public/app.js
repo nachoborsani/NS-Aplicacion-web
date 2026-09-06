@@ -1583,7 +1583,7 @@ function iniPanelesTamDefault(scope){
   // "pendientes" y "tareas" del operador son tarjetas simples (como pendop/
   // tareas del admin) desde que se separaron - antes "pendientes" traía la
   // sección de Tareas adentro y por eso necesitaba el doble de alto.
-  return scope === 'op' ? { chat:'m', pendientes:'s', tareas:'s', accesos:'w' } : { msg:'m', tareas:'s', pendop:'s', actividad:'s', accesos:'s' };
+  return scope === 'op' ? { chat:'m', pendientes:'s', tareas:'s', accesos:'w' } : { msg:'m', tareas:'m', pendop:'s', actividad:'s', accesos:'s' };
 }
 var INI_TAMANOS = ['s', 'm', 'w', 'l'];
 var INI_TAMANOS_LABEL = { s:'Chico', m:'Alto', w:'Ancho', l:'Grande' };

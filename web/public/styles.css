@@ -353,7 +353,7 @@
      operadores es una tarjeta más de este mismo sistema (no un slot fijo
      aparte): cualquier elemento nuevo que se sume a Inicio entra así, con
      data-panel + un tamaño por defecto en iniPanelesTamDefault (app.js). */
-  .ini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:210px;grid-auto-flow:row dense;align-items:stretch;gap:16px;margin-top:18px}
+  .ini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:210px;grid-auto-flow:row dense;align-items:stretch;gap:16px;margin-top:18px}
   /* El TAMAÑO de cada tarjeta es una de estas 4 clases - el usuario lo elige
      con el botón ⤢ del header (cicla s→m→w→l). El ORDEN es la posición real
      de la tarjeta en el DOM: iniPanelesAplicar() en app.js reordena los nodos
@@ -363,6 +363,10 @@
   .ini-size-m{grid-column:span 1;grid-row:span 2}
   .ini-size-w{grid-column:span 2;grid-row:span 1}
   .ini-size-l{grid-column:span 2;grid-row:span 2}
+  /* Pantallas medianas (laptops): 2 columnas para que no queden angostas. */
+  @media(max-width:1250px){
+    .ini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
   @media(max-width:860px){
     .ini-grid{grid-template-columns:1fr}
     .ini-size-s,.ini-size-m,.ini-size-w,.ini-size-l{grid-column:1 !important}
