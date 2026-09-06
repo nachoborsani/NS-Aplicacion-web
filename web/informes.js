@@ -151,6 +151,51 @@ const FLUJO_CAMPOS = [
   { key: "tiempoDescenso", label: "Tiempo de descenso", default: "" },
   { key: "tiempoEntrePausas", label: "Tiempo entre pausas", default: "" },
 ];
+// Campos del Estudio urodinámico completo (507313, ECUD / Urología Caballito).
+// Ficha + preparación + fase de llenado + fase de vaciado. Los presets (M1-M8 /
+// F1-F8) pisan estos valores; el operador los revisa/edita antes de firmar. Las
+// unidades van en el valor (ej. "165 ml"), no en el label, para que las
+// validaciones puedan leer el número con parseFloat y el PDF quede limpio.
+const URODINAMIA_CAMPOS = [
+  { key: "sexo", label: "Sexo", default: "", tipo: "select", opciones: ["Masculino", "Femenino"], requerido: true },
+  { key: "edad", label: "Edad", default: "" },
+  { key: "operador", label: "Operador", default: "Lisandro I. Veliz", wide: true },
+  { key: "equipo", label: "Equipo utilizado", default: "ECUD" },
+  { key: "diagClinico", label: "Diagnóstico clínico", default: "", wide: true },
+  { key: "antecedentes", label: "Antecedentes", default: "", wide: true },
+  // Preparación (toggles editables; NO se asume nada por defecto).
+  { key: "urocultivo", label: "Urocultivo", default: "No informado", tipo: "select", opciones: ["Negativo", "Positivo", "No informado"] },
+  { key: "profilaxis", label: "Profilaxis antibiótica", default: "No informado", tipo: "select", opciones: ["Sí", "No", "No informado"] },
+  { key: "cateteres", label: "Catéteres", default: "Catéteres uretrales para medición de Pdet e infusión; balón rectal para medición de presión abdominal (Pabd).", wide: true },
+  // ---- Fase de llenado ----
+  { key: "sensibilidad", label: "Sensibilidad propioceptiva", default: "", tipo: "select", opciones: ["Conservada", "Aumentada", "Disminuida", "Alterada"] },
+  { key: "primerDeseo", label: "Primer deseo miccional", default: "" },
+  { key: "deseoHabitual", label: "Deseo miccional habitual", default: "" },
+  { key: "deseoMaximo", label: "Deseo miccional máximo", default: "" },
+  { key: "detrusorLlenado", label: "Detrusor (llenado)", default: "", tipo: "select", opciones: ["Estable", "Hiperactivo", "Hipoactivo", "Acontráctil"] },
+  { key: "contraccInvol", label: "Contracciones involuntarias", default: "", tipo: "select", opciones: ["No", "Sí"] },
+  { key: "iou", label: "IOU (incontinencia de urgencia)", default: "", tipo: "select", opciones: ["No", "Sí"] },
+  { key: "iouDesde", label: "Volumen de aparición de IOU", default: "" },
+  { key: "pdetCI", label: "Pdet máx. en contracción involuntaria", default: "" },
+  { key: "ioe", label: "Incontinencia de esfuerzo (Valsalva)", default: "", tipo: "select", opciones: ["No", "Sí"] },
+  { key: "vlpp", label: "VLPP", default: "" },
+  { key: "capacidad", label: "Capacidad cistométrica máxima", default: "" },
+  { key: "acomodacion", label: "Acomodación vesical", default: "", tipo: "select", opciones: ["Conservada", "Disminuida"] },
+  { key: "obsLlenado", label: "Observaciones de llenado", default: "", wide: true },
+  // ---- Fase de vaciado ----
+  { key: "contraccVaciado", label: "Contracción del detrusor (vaciado)", default: "", tipo: "select", opciones: ["Voluntaria", "Débil", "Hipoactiva", "Acontráctil"] },
+  { key: "pdetMax", label: "Pdet máxima", default: "" },
+  { key: "pdetQmax", label: "PdetQmax", default: "" },
+  { key: "flujo", label: "Flujo miccional", default: "", tipo: "select", opciones: ["Continuo", "Intermitente", "Reducido", "Ausente"] },
+  { key: "curva", label: "Curva", default: "", tipo: "select", opciones: ["Normal", "Aplanada", "Bifásica", "Irregular", "Baja amplitud", "Sin curva"] },
+  { key: "qmax", label: "Qmax", default: "" },
+  { key: "qprom", label: "Q promedio", default: "" },
+  { key: "volMiccional", label: "Volumen miccional", default: "" },
+  { key: "apoyoAbdominal", label: "Apoyo abdominal", default: "", tipo: "select", opciones: ["No", "Sí"] },
+  { key: "rpm", label: "RPM final", default: "" },
+  { key: "presionApertura", label: "Presión de apertura uretral", default: "" },
+  { key: "flujoLibre", label: "Flujometría libre complementaria", default: "", wide: true },
+];
 // Campos del Ecocardiograma doppler color (página de datos técnicos). Extraídos
 // de la planilla real de referencia de CIMA (Informe de Ecocardio.xlsx). Los
 // valores por defecto son los de un estudio normal, dentro de los rangos de
@@ -415,6 +460,20 @@ const MODELOS = {
     tipo: "flujo",
     campos: FLUJO_CAMPOS,
     textoDefault: "Estudio normal",
+  },
+  // --- Estudio urodinámico completo (507313, ECUD / Urología Caballito) ---
+  // PDF propio de 2 páginas (buildUrodinamiaPdf). Presets M1-M8 / F1-F8 según sexo.
+  "urodinamia": {
+    label: "Estudio urodinámico completo (507313)",
+    short: "Estudio urodinámico completo",
+    practica: "507313 - Estudio urodinámico completo (no incluye insumos ni catéteres)",
+    especialidad: "Urología",
+    codigoPractica: "507313",
+    estudio: "ESTUDIO URODINÁMICO COMPLETO",
+    estudioArchivo: "Estudio urodinamico completo",
+    tipo: "urodinamia",
+    campos: URODINAMIA_CAMPOS,
+    textoDefault: "",
   },
   // --- Tratamiento esclerosante (Flebología / Cirugía vascular) ---
   "esclerosante": {
@@ -758,6 +817,7 @@ async function buildInformePdf(modeloKey, input) {
   if (modelo.tipo === "mapa") return buildMapaPdf(modelo, input || {});
   if (modelo.tipo === "ergo") return buildErgoPdf(modelo, input || {});
   if (modelo.tipo === "flujo") return buildFlujoPdf(modelo, input || {});
+  if (modelo.tipo === "urodinamia") return buildUrodinamiaPdf(modelo, input || {});
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   // El solicitante ya no es un default fijo por modelo: server.js lo completa
@@ -1185,6 +1245,182 @@ async function buildFlujoPdf(modelo, input) {
   T("ECUD", W - M - ew, eY, { font: boldItal, size: eSize, color: blue });
   const sub = "Estudio Computarizado de Urodinamia", ss = 8.5;
   T(sub, W - M - wsize(sub, font, ss), eY - 12, { size: ss });
+
+  return await doc.save();
+}
+
+// ---- Builder propio del Estudio urodinámico completo (ECUD, 2 páginas) ----
+// Pág 1: datos + preparación + fase de llenado + fase de vaciado (tablas).
+// Pág 2: observaciones, referencias, conclusión/resumen (del textarea) y firma.
+async function buildUrodinamiaPdf(modelo, input) {
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
+  const p = input.paciente || {};
+  const v = input.valores || {};
+  const cuerpo = ((input.textoInforme || "")).trim();     // conclusión + resumen (editable)
+  const firmaArchivo = input.firmaArchivo || "";
+  const medicoNombre = (input.medicoNombre || "").trim();
+  const medicoMatricula = (input.medicoMatricula || "").trim();
+  const pieLines = modelo.pie || input.pieLines || [];
+
+  const doc = await PDFDocument.create();
+  const W = 595.28, H = 841.89, M = 46;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ital = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const ink = rgb(0.12, 0.12, 0.12), soft = rgb(0.3, 0.3, 0.3), border = rgb(0.13, 0.13, 0.13);
+  const boxX = M, boxW = W - 2 * M, PADX = 12, LBLX = boxX + PADX;
+
+  let logoImg = null;
+  const logoBuf = readAsset(modelo.logo || input.logoName);
+  if (logoBuf) { try { logoImg = await doc.embedPng(logoBuf); } catch { /* sin logo */ } }
+
+  const T = (page, t, x, y, o = {}) =>
+    page.drawText(String(t == null ? "" : t), { x, y, size: o.size || 10, font: o.font || (o.bold ? bold : font), color: o.color || ink });
+  const centerT = (page, t, y, o = {}) => { const f = o.font || (o.bold ? bold : font), s = o.size || 10; T(page, t, (W - f.widthOfTextAtSize(String(t), s)) / 2, y, o); };
+  const centerIn = (page, t, x1, x2, y, o = {}) => { const f = o.font || (o.bold ? bold : font), s = o.size || 10; T(page, t, x1 + (x2 - x1 - f.widthOfTextAtSize(String(t), s)) / 2, y, o); };
+  const drawBox = (page, topY, h) => page.drawRectangle({ x: boxX, y: topY - h, width: boxW, height: h, borderColor: border, borderWidth: 1 });
+  // Parte un texto respetando saltos de línea y luego envuelve cada línea.
+  const wrapMulti = (t, f, s, maxW) => {
+    const out = [];
+    for (const raw of String(t || "").split(/\r?\n/)) {
+      if (!raw.trim()) { out.push(""); continue; }
+      for (const ln of wrapText(raw, f, s, maxW)) out.push(ln);
+    }
+    return out;
+  };
+
+  const nuevaPagina = () => {
+    const page = doc.addPage([W, H]);
+    page.drawRectangle({ x: 28, y: 28, width: W - 56, height: H - 56, borderColor: border, borderWidth: 1 });
+    return page;
+  };
+  const encabezado = (page, conSub) => {
+    let y = H - 46;
+    if (logoImg) {
+      const { w, h } = encajarImagen(logoImg, modelo.logoW || input.logoW || 90, 66);
+      page.drawImage(logoImg, { x: (W - w) / 2, y: y - h, width: w, height: h });
+      y -= h + 6;
+    }
+    centerT(page, "ESTUDIO URODINÁMICO COMPLETO", y - 14, { bold: true, size: 15, color: border });
+    y -= 29;
+    if (conSub) { centerT(page, "Informe de resultados", y, { font: ital, size: 11, color: soft }); y -= 18; }
+    return y - 6;
+  };
+  // Caja de pares label:valor en 2 columnas (solo no vacíos). Devuelve la nueva y.
+  const seccionKV = (page, titulo, y, pares) => {
+    const items = pares.filter(([, val]) => String(val == null ? "" : val).trim() !== "");
+    if (!items.length) return y;
+    const cols = 2, rows = Math.ceil(items.length / cols), rowH = 15, titleH = 20;
+    const h = titleH + rows * rowH + 6;
+    drawBox(page, y, h);
+    T(page, titulo, LBLX, y - 15, { bold: true, size: 10.5 });
+    const colW = boxW / cols;
+    for (let i = 0; i < items.length; i++) {
+      const r = Math.floor(i / cols), c = i % cols;
+      const cx = boxX + c * colW + 10, cy = y - titleH - r * rowH - 10;
+      const lbl = items[i][0] + ": ";
+      T(page, lbl, cx, cy, { bold: true, size: 8.5 });
+      const lblW = bold.widthOfTextAtSize(lbl, 8.5);
+      let val = String(items[i][1]);
+      const maxVW = colW - 14 - lblW;
+      if (font.widthOfTextAtSize(val, 8.5) > maxVW) {
+        while (val.length > 1 && font.widthOfTextAtSize(val + "…", 8.5) > maxVW) val = val.slice(0, -1);
+        val += "…";
+      }
+      T(page, val, cx + lblW, cy, { size: 8.5 });
+    }
+    return y - h - 10;
+  };
+  // Caja con título y una lista de [label, texto] envueltos (para textos largos).
+  const bloqueTexto = (page, titulo, y, pares) => {
+    const items = pares.filter(([, val]) => String(val == null ? "" : val).trim() !== "");
+    if (!items.length) return y;
+    const size = 9;
+    const lineas = [];
+    for (const [lbl, val] of items) {
+      const w = wrapMulti((lbl ? lbl + ": " : "") + val, font, size, boxW - 2 * PADX);
+      lineas.push(...w);
+    }
+    const titleH = titulo ? 20 : 8;
+    const h = titleH + lineas.length * 12 + 8;
+    drawBox(page, y, h);
+    if (titulo) T(page, titulo, LBLX, y - 15, { bold: true, size: 10.5 });
+    let iy = y - titleH - 8;
+    for (const ln of lineas) { T(page, ln, LBLX, iy, { size }); iy -= 12; }
+    return y - h - 10;
+  };
+
+  // ===================== PÁGINA 1 =====================
+  let page = nuevaPagina();
+  let y = encabezado(page, true);
+
+  y = seccionKV(page, "DATOS DEL ESTUDIO", y, [
+    ["Paciente", p.nombre || "—"], ["Sexo", v.sexo], ["Edad", v.edad], ["Fecha del estudio", p.fecha],
+    ["N° Benef.", p.benef], ["Documento", p.documento],
+    ["Operador", v.operador || "Lisandro I. Veliz"], ["Equipo utilizado", v.equipo || "ECUD"],
+  ]);
+  y = bloqueTexto(page, "PREPARACIÓN Y DATOS CLÍNICOS", y, [
+    ["Diagnóstico clínico", v.diagClinico], ["Antecedentes", v.antecedentes],
+    ["Urocultivo", v.urocultivo], ["Profilaxis antibiótica", v.profilaxis], ["Catéteres", v.cateteres],
+  ]);
+  y = seccionKV(page, "FASE DE LLENADO", y, [
+    ["Sensibilidad", v.sensibilidad], ["Primer deseo", v.primerDeseo],
+    ["Deseo habitual", v.deseoHabitual], ["Deseo máximo", v.deseoMaximo],
+    ["Detrusor", v.detrusorLlenado], ["Contracc. involunt.", v.contraccInvol],
+    ["IOU", v.iou], ["IOU desde", v.iouDesde], ["Pdet máx. CI", v.pdetCI],
+    ["Incont. esfuerzo", v.ioe], ["VLPP", v.vlpp],
+    ["Capacidad cistométrica", v.capacidad], ["Acomodación", v.acomodacion],
+  ]);
+  y = seccionKV(page, "FASE DE VACIADO", y, [
+    ["Contracción detrusor", v.contraccVaciado], ["Pdet máxima", v.pdetMax], ["PdetQmax", v.pdetQmax],
+    ["Flujo", v.flujo], ["Curva", v.curva], ["Qmax", v.qmax], ["Q promedio", v.qprom],
+    ["Volumen miccional", v.volMiccional], ["Apoyo abdominal", v.apoyoAbdominal],
+    ["RPM final", v.rpm], ["Presión apertura", v.presionApertura],
+  ]);
+
+  // ===================== PÁGINA 2 =====================
+  page = nuevaPagina();
+  y = encabezado(page, false);
+
+  y = bloqueTexto(page, "OBSERVACIONES", y, [
+    ["Observaciones de llenado", v.obsLlenado], ["Flujometría libre", v.flujoLibre],
+  ]);
+  y = bloqueTexto(page, "REFERENCIAS", y, [
+    ["", "• Primer deseo miccional: 150–250 ml."],
+    ["", "• Capacidad cistométrica: 350–600 ml."],
+    ["", "• Qmax de referencia: > 15 ml/s.    • RPM normal: < 50 ml."],
+    ["", "• Pdet máx. en vaciado voluntario: 20–60 cm H2O."],
+    ["", "• VLPP > 60 cm H2O: esfínter conservado; < 60: incompetencia esfinteriana intrínseca."],
+  ]);
+  if (cuerpo) y = bloqueTexto(page, "CONCLUSIÓN", y, [["", cuerpo]]);
+
+  // Firma (Veliz u otro médico elegido). Con firma cargada -> imagen; si no, espacio.
+  const fy = Math.min(y - 20, 190);
+  const firmaAreaW = 220, firmaAreaX = W - M - firmaAreaW;
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
+  let firmaImg = null;
+  if (firmaBuf) { try { firmaImg = await doc.embedPng(firmaBuf); } catch { /* sin firma */ } }
+  if (firmaImg) {
+    const { w, h } = encajarImagen(firmaImg, 150, 55);
+    page.drawImage(firmaImg, { x: firmaAreaX + (firmaAreaW - w) / 2, y: fy - 20, width: w, height: h });
+  } else {
+    centerIn(page, "Firma y sello profesional", firmaAreaX, W - M, fy, { bold: true, size: 10.5 });
+    page.drawLine({ start: { x: firmaAreaX + 12, y: fy - 32 }, end: { x: W - M - 12, y: fy - 32 }, thickness: 0.8, color: border });
+  }
+  if (medicoNombre || medicoMatricula) {
+    let my = fy - 44;
+    if (medicoNombre) { centerIn(page, medicoNombre, firmaAreaX, W - M, my, { bold: true, size: 10 }); my -= 13; }
+    if (medicoMatricula) { centerIn(page, medicoMatricula, firmaAreaX, W - M, my, { size: 9.5, color: soft }); }
+  }
+
+  // Pie del centro (abajo).
+  if (pieLines.length) {
+    const top = 96, h = 52;
+    drawBox(page, top, h);
+    let py = top - 18;
+    centerT(page, pieLines[0], py, { bold: true, size: 12 }); py -= 15;
+    for (let i = 1; i < pieLines.length; i++) { centerT(page, pieLines[i], py, { bold: true, size: 10.5 }); py -= 14; }
+  }
 
   return await doc.save();
 }

@@ -1395,6 +1395,62 @@ const FLUJO_SEED_PRESETS = [
     valoresPorSexo: {},
   },
 ];
+// Presets del Estudio urodinámico completo (507313, Caballito). 8 masculinos
+// (M1-M8) + 8 femeninos (F1-F8). Cada uno precarga sus valores técnicos + la
+// conclusión/resumen en el textarea. NO se randomiza: el operador elige uno y
+// revisa/edita todo antes de firmar. `valores.sexo` filtra cuáles se ofrecen.
+const _uroTexto = (hallazgos, resumen) =>
+  "Hallazgos principales:\n" + hallazgos.map((h, i) => (i + 1) + ". " + h).join("\n") + "\n\nResumen:\n" + resumen;
+const URODINAMIA_SEED_PRESETS = [
+  { id: "uro-m1", modelo: "urodinamia", nombre: "M1 · Normal / vaciado eficiente",
+    valores: { sexo: "Masculino", sensibilidad: "Conservada", primerDeseo: "165 ml", detrusorLlenado: "Estable", contraccInvol: "No", iou: "No", ioe: "No", capacidad: "485 ml", acomodacion: "Conservada", contraccVaciado: "Voluntaria", pdetMax: "38 cm H2O", flujo: "Continuo", curva: "Normal", qmax: "29 ml/s", qprom: "9 ml/s", volMiccional: "470 ml", apoyoAbdominal: "No", rpm: "10 ml" },
+    texto: _uroTexto(["Sensibilidad vesical conservada.", "Detrusor estable durante la fase de llenado.", "Vaciado eficiente, sin datos de obstrucción.", "Residuo postmiccional no significativo."], "ESTUDIO URODINÁMICO DENTRO DE PARÁMETROS FUNCIONALES CONSERVADOS. NO SE EVIDENCIA INCONTINENCIA, HIPERACTIVIDAD DETRUSORAL NI OBSTRUCCIÓN SIGNIFICATIVA.") },
+  { id: "uro-m2", modelo: "urodinamia", nombre: "M2 · Hiperactividad detrusora + IOU",
+    valores: { sexo: "Masculino", sensibilidad: "Aumentada", primerDeseo: "105 ml", detrusorLlenado: "Hiperactivo", contraccInvol: "Sí", iou: "Sí", iouDesde: "115 ml", pdetCI: "64 cm H2O", ioe: "No", capacidad: "185 ml", acomodacion: "Conservada", pdetMax: "34 cm H2O", flujo: "Continuo", curva: "Bifásica", qmax: "24 ml/s", qprom: "5 ml/s", volMiccional: "170 ml", rpm: "15 ml" },
+    texto: _uroTexto(["Hiperactividad detrusora con incontinencia de urgencia.", "Capacidad cistométrica disminuida secundaria a la hiperactividad.", "Vaciado vesical conservado."], "VEJIGA INESTABLE CON CONTRACCIONES INVOLUNTARIAS E IOU, CON CAPACIDAD FUNCIONAL REDUCIDA Y VACIADO FINAL EFICIENTE.") },
+  { id: "uro-m3", modelo: "urodinamia", nombre: "M3 · Vejiga hiposensible + OIV leve",
+    valores: { sexo: "Masculino", sensibilidad: "Disminuida", primerDeseo: "285 ml", detrusorLlenado: "Estable", contraccInvol: "No", capacidad: "510 ml", acomodacion: "Conservada", pdetMax: "52 cm H2O", flujo: "Intermitente", curva: "Irregular", qmax: "12.5 ml/s", qprom: "7.5 ml/s", volMiccional: "480 ml", rpm: "20 ml" },
+    texto: _uroTexto(["Sensibilidad propioceptiva disminuida.", "Patrón presión-flujo compatible con obstrucción infravesical leve.", "Vaciado vesical globalmente conservado."], "VEJIGA HIPOSENSIBLE CON PATRÓN OBSTRUCTIVO LEVE Y RESIDUO POSTMICCIONAL ESCASO.") },
+  { id: "uro-m4", modelo: "urodinamia", nombre: "M4 · Hiperactividad de alta presión + OIV",
+    valores: { sexo: "Masculino", sensibilidad: "Alterada", primerDeseo: "120 ml", detrusorLlenado: "Hiperactivo", contraccInvol: "Sí", iou: "Sí", pdetCI: "108 cm H2O", capacidad: "210 ml", acomodacion: "Disminuida", pdetQmax: "76 cm H2O", flujo: "Continuo", curva: "Aplanada", qmax: "10.5 ml/s", qprom: "5 ml/s", volMiccional: "190 ml", rpm: "20 ml" },
+    texto: _uroTexto(["Hiperactividad detrusora de alta presión.", "Acomodación vesical disminuida.", "Incontinencia de urgencia.", "Patrón presión-flujo compatible con obstrucción infravesical."], "HIPERACTIVIDAD DETRUSORA DE ALTA PRESIÓN ASOCIADA A DISMINUCIÓN DE LA ACOMODACIÓN Y PATRÓN OBSTRUCTIVO DURANTE EL VACIADO.") },
+  { id: "uro-m5", modelo: "urodinamia", nombre: "M5 · Detrusor hipoactivo",
+    valores: { sexo: "Masculino", sensibilidad: "Conservada", primerDeseo: "135 ml", detrusorLlenado: "Estable", capacidad: "300 ml", acomodacion: "Conservada", contraccVaciado: "Hipoactiva", pdetQmax: "28 cm H2O", flujo: "Reducido", curva: "Aplanada", qmax: "6.8 ml/s", qprom: "3.8 ml/s", volMiccional: "205 ml", rpm: "90 ml" },
+    texto: _uroTexto(["Hipoactividad detrusora durante la fase de vaciado.", "Flujo miccional disminuido.", "Residuo postmiccional aumentado."], "PATRÓN DE VACIADO INEFICIENTE SECUNDARIO A HIPOACTIVIDAD DETRUSORAL, CON RESIDUO POSTMICCIONAL ELEVADO.") },
+  { id: "uro-m6", modelo: "urodinamia", nombre: "M6 · Detrusor acontráctil / retención",
+    valores: { sexo: "Masculino", sensibilidad: "Disminuida", primerDeseo: "235 ml", detrusorLlenado: "Acontráctil", contraccInvol: "No", capacidad: "420 ml", acomodacion: "Conservada", contraccVaciado: "Acontráctil", pdetQmax: "0", flujo: "Ausente", qmax: "0 ml/s", qprom: "0 ml/s", volMiccional: "0 ml", apoyoAbdominal: "Sí", rpm: "430 ml" },
+    texto: _uroTexto(["Sensibilidad propioceptiva disminuida.", "Acontractilidad detrusoral.", "Incapacidad para vaciado espontáneo efectivo.", "Residuo postmiccional severamente aumentado."], "DETRUSOR ACONTRÁCTIL CON RETENCIÓN URINARIA Y AUSENCIA DE VACIADO ESPONTÁNEO EFECTIVO.") },
+  { id: "uro-m7", modelo: "urodinamia", nombre: "M7 · Vejiga hipotónica de gran capacidad",
+    valores: { sexo: "Masculino", sensibilidad: "Disminuida", primerDeseo: "295 ml", detrusorLlenado: "Estable", capacidad: "710 ml", acomodacion: "Conservada", contraccVaciado: "Hipoactiva", pdetMax: "24 cm H2O", flujo: "Intermitente", curva: "Baja amplitud", qmax: "9.2 ml/s", qprom: "4.2 ml/s", volMiccional: "300 ml", rpm: "410 ml" },
+    texto: _uroTexto(["Sensibilidad propioceptiva disminuida.", "Capacidad cistométrica marcadamente aumentada.", "Hipoactividad detrusora.", "Residuo postmiccional elevado."], "VEJIGA HIPOTÓNICA E HIPOSENSIBLE DE GRAN CAPACIDAD, CON VACIADO INEFICIENTE Y RESIDUO POSTMICCIONAL IMPORTANTE.") },
+  { id: "uro-m8", modelo: "urodinamia", nombre: "M8 · Disfunción neurogénica / HAD + vaciado ineficiente",
+    valores: { sexo: "Masculino", sensibilidad: "Aumentada", primerDeseo: "95 ml", detrusorLlenado: "Hiperactivo", contraccInvol: "Sí", iou: "Sí", pdetCI: "84 cm H2O", capacidad: "275 ml", acomodacion: "Conservada", contraccVaciado: "Hipoactiva", pdetMax: "32 cm H2O", flujo: "Reducido", curva: "Aplanada", qmax: "6.2 ml/s", qprom: "2 ml/s", volMiccional: "160 ml", rpm: "110 ml" },
+    texto: _uroTexto(["Hiperactividad detrusora de alta presión con IOU.", "Capacidad cistométrica disminuida.", "Hipocontractilidad durante el vaciado.", "Residuo postmiccional aumentado."], "PATRÓN COMPATIBLE CON DISFUNCIÓN VESICAL COMPLEJA, CON HIPERACTIVIDAD DURANTE EL LLENADO Y VACIADO DETRUSORAL INEFICIENTE.") },
+  { id: "uro-f1", modelo: "urodinamia", nombre: "F1 · Normal / vaciado eficiente",
+    valores: { sexo: "Femenino", sensibilidad: "Conservada", primerDeseo: "185 ml", detrusorLlenado: "Estable", contraccInvol: "No", iou: "No", ioe: "No", capacidad: "430 ml", acomodacion: "Conservada", pdetMax: "28 cm H2O", flujo: "Continuo", curva: "Normal", qmax: "24 ml/s", qprom: "12 ml/s", volMiccional: "420 ml", rpm: "10 ml" },
+    texto: _uroTexto(["Fase de llenado dentro de parámetros funcionales.", "Sin hiperactividad detrusoral ni incontinencia ante Valsalva.", "Vaciado espontáneo eficiente."], "ESTUDIO URODINÁMICO DENTRO DE PARÁMETROS FUNCIONALES CONSERVADOS.") },
+  { id: "uro-f2", modelo: "urodinamia", nombre: "F2 · Hiperactividad detrusora + IOU / capacidad reducida",
+    valores: { sexo: "Femenino", sensibilidad: "Conservada", primerDeseo: "140 ml", detrusorLlenado: "Hiperactivo", contraccInvol: "Sí", iou: "Sí", iouDesde: "140 ml", pdetCI: "50 cm H2O", capacidad: "160 ml", acomodacion: "Conservada", pdetMax: "21 cm H2O", flujo: "Continuo", curva: "Aplanada", qmax: "10 ml/s", qprom: "4.8 ml/s", volMiccional: "120 ml", rpm: "40 ml" },
+    texto: _uroTexto(["Hiperactividad detrusora con incontinencia de urgencia.", "Capacidad cistométrica disminuida secundaria a la hiperactividad."], "HIPERACTIVIDAD DETRUSORA CON IOU Y CAPACIDAD VESICAL FUNCIONAL REDUCIDA.") },
+  { id: "uro-f3", modelo: "urodinamia", nombre: "F3 · Incontinencia de esfuerzo / insuficiencia esfinteriana",
+    valores: { sexo: "Femenino", sensibilidad: "Conservada", primerDeseo: "190 ml", detrusorLlenado: "Estable", contraccInvol: "No", iou: "No", ioe: "Sí", vlpp: "45 cm H2O", capacidad: "420 ml", acomodacion: "Conservada", pdetMax: "27 cm H2O", flujo: "Continuo", curva: "Normal", qmax: "22 ml/s", qprom: "11 ml/s", volMiccional: "405 ml", rpm: "15 ml" },
+    texto: _uroTexto(["Incontinencia urinaria de esfuerzo objetivada durante maniobras de Valsalva.", "VLPP disminuido, compatible con compromiso esfinteriano.", "Detrusor estable.", "Vaciado eficiente."], "ESTUDIO COMPATIBLE CON INCONTINENCIA URINARIA DE ESFUERZO, SIN HIPERACTIVIDAD DETRUSORAL ASOCIADA.") },
+  { id: "uro-f4", modelo: "urodinamia", nombre: "F4 · Incontinencia mixta",
+    valores: { sexo: "Femenino", sensibilidad: "Aumentada", primerDeseo: "125 ml", detrusorLlenado: "Hiperactivo", contraccInvol: "Sí", iou: "Sí", ioe: "Sí", vlpp: "54 cm H2O", pdetCI: "58 cm H2O", capacidad: "270 ml", acomodacion: "Conservada", pdetMax: "29 cm H2O", flujo: "Continuo", curva: "Bifásica", qmax: "18 ml/s", qprom: "9 ml/s", volMiccional: "245 ml", rpm: "25 ml" },
+    texto: _uroTexto(["Hiperactividad detrusora con IOU.", "Incontinencia urinaria de esfuerzo ante Valsalva.", "Capacidad funcional moderadamente disminuida.", "Vaciado conservado."], "PATRÓN URODINÁMICO COMPATIBLE CON INCONTINENCIA URINARIA MIXTA.") },
+  { id: "uro-f5", modelo: "urodinamia", nombre: "F5 · Capacidad reducida sin hiperactividad",
+    valores: { sexo: "Femenino", sensibilidad: "Aumentada", primerDeseo: "110 ml", detrusorLlenado: "Estable", contraccInvol: "No", iou: "No", ioe: "No", capacidad: "240 ml", acomodacion: "Conservada", pdetMax: "25 cm H2O", flujo: "Continuo", curva: "Normal", qmax: "20 ml/s", qprom: "10 ml/s", volMiccional: "225 ml", rpm: "15 ml" },
+    texto: _uroTexto(["Sensibilidad vesical aumentada.", "Capacidad cistométrica disminuida.", "Detrusor estable.", "Vaciado eficiente."], "CAPACIDAD VESICAL REDUCIDA CON SENSIBILIDAD AUMENTADA, SIN CONTRACCIONES DETRUSORALES INVOLUNTARIAS.") },
+  { id: "uro-f6", modelo: "urodinamia", nombre: "F6 · Detrusor hipoactivo / vaciado incompleto",
+    valores: { sexo: "Femenino", sensibilidad: "Conservada", primerDeseo: "215 ml", detrusorLlenado: "Estable", capacidad: "460 ml", acomodacion: "Conservada", contraccVaciado: "Hipoactiva", pdetQmax: "18 cm H2O", flujo: "Reducido", curva: "Aplanada", qmax: "8.5 ml/s", qprom: "4 ml/s", volMiccional: "330 ml", apoyoAbdominal: "Sí", rpm: "125 ml" },
+    texto: _uroTexto(["Hipoactividad detrusora en fase de vaciado.", "Flujo miccional reducido.", "Utilización de apoyo abdominal.", "Residuo postmiccional elevado."], "VACIADO VESICAL INEFICIENTE SECUNDARIO A HIPOACTIVIDAD DETRUSORAL.") },
+  { id: "uro-f7", modelo: "urodinamia", nombre: "F7 · Vejiga hiposensible de gran capacidad",
+    valores: { sexo: "Femenino", sensibilidad: "Disminuida", primerDeseo: "305 ml", detrusorLlenado: "Estable", capacidad: "650 ml", acomodacion: "Conservada", pdetMax: "23 cm H2O", flujo: "Intermitente", curva: "Baja amplitud", qmax: "12 ml/s", qprom: "6 ml/s", volMiccional: "550 ml", rpm: "95 ml" },
+    texto: _uroTexto(["Sensibilidad propioceptiva disminuida.", "Capacidad vesical aumentada.", "Patrón miccional de bajo flujo.", "Residuo postmiccional aumentado."], "VEJIGA HIPOSENSIBLE DE GRAN CAPACIDAD CON VACIADO PARCIALMENTE INEFICIENTE.") },
+  { id: "uro-f8", modelo: "urodinamia", nombre: "F8 · Disfunción de vaciado / patrón obstructivo funcional",
+    valores: { sexo: "Femenino", sensibilidad: "Conservada", primerDeseo: "175 ml", detrusorLlenado: "Estable", contraccInvol: "No", capacidad: "390 ml", acomodacion: "Conservada", pdetQmax: "38 cm H2O", flujo: "Intermitente", curva: "Irregular", qmax: "9 ml/s", qprom: "4.5 ml/s", volMiccional: "300 ml", apoyoAbdominal: "Sí", rpm: "85 ml" },
+    texto: _uroTexto(["Flujo miccional disminuido e intermitente.", "Patrón de vaciado con aumento relativo de presión y apoyo abdominal.", "Residuo postmiccional aumentado.", "Fase de llenado estable."], "PATRÓN COMPATIBLE CON DISFUNCIÓN DE VACIADO, CON BAJO FLUJO Y RESIDUO POSTMICCIONAL AUMENTADO.") },
+];
 // Presets de Ecografía general / Ecodoppler / Ecocardiograma / Espirometría
 // (CIMA). Un preset "normal" por modelo (mismo texto que el textoDefault del
 // modelo, para que aparezca en el desplegable de Descripciones) más las
@@ -1465,6 +1521,7 @@ function loadInformesConfig() {
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" })),
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
       ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" })),
+      ...URODINAMIA_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
     ];
   }
   // Motivos por los que un informe se desestima (no se sube). Configurables por
@@ -1580,7 +1637,9 @@ function sanitizarValores(obj) {
   if (!obj || typeof obj !== "object") return out;
   for (const k of Object.keys(obj)) {
     if (!/^[a-zA-Z0-9]{1,30}$/.test(k)) continue;
-    const v = String(obj[k] == null ? "" : obj[k]).replace(/\s+/g, " ").trim().slice(0, 60);
+    // 400 (antes 60): la urodinamia tiene campos de texto largos (catéteres,
+    // diagnóstico, observaciones) que iban como `valores`. Los cortos no cambian.
+    const v = String(obj[k] == null ? "" : obj[k]).replace(/\s+/g, " ").trim().slice(0, 400);
     if (v) out[k] = v;
   }
   return out;
@@ -9701,6 +9760,36 @@ function ensureEcoSeed() {
   } catch (e) { console.log("[eco-seed] omitido:", e && e.message); }
 }
 ensureEcoSeed();
+
+// Precarga los 16 presets de urodinamia en configs ya existentes y asigna el
+// modelo "urodinamia" al Dr. Veliz (que ya está dado de alta con firma). Solo
+// agrega lo que falta; no pisa presets que el admin haya editado.
+function ensureUrodinamiaSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of URODINAMIA_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} });
+        cambio = true;
+      }
+    }
+    // Asignar el modelo al Dr. Veliz (dr-veliz) + Caballito. Si por algún motivo
+    // no está, se busca por nombre; si tampoco, no se crea (lo dio de alta el user).
+    if (Array.isArray(cfg.medicos)) {
+      let med = cfg.medicos.find((m) => m.id === "dr-veliz") || cfg.medicos.find((m) => /veliz/i.test(m.nombre || ""));
+      if (med) {
+        med.modelos = Array.isArray(med.modelos) ? med.modelos : [];
+        if (!med.modelos.includes("urodinamia")) { med.modelos.push("urodinamia"); cambio = true; }
+        med.clientes = Array.isArray(med.clientes) ? med.clientes : [];
+        if (!med.clientes.includes("caballito-pediatrico")) { med.clientes.push("caballito-pediatrico"); cambio = true; }
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[urodinamia-seed] omitido:", e && e.message); }
+}
+ensureUrodinamiaSeed();
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`NS Web escuchando en puerto ${port} | datos en ${dataDir}`);
