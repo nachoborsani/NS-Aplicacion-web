@@ -311,28 +311,32 @@
             <section class="card ini-card op-panel-pendientes" data-panel="pendientes">
               <div class="ini-head ini-drag-handle"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2><div class="ini-meta" id="opPendMeta">—</div></div></div>
               <ul class="ini-pendop-list" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
-              <!-- Tareas propias: mismo mecanismo que las de los admins (título +
-                   fecha opcional, se resuelven o se reprograman si se vencen),
-                   pero acá Javi se las crea a sí mismo, sin elegir a quién. -->
-              <div class="op-tareas">
-                <div class="op-tareas-head">Tareas</div>
-                <div class="ini-addbar">
-                  <input id="opTask" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();opAgregarTarea();}">
-                  <div class="ini-addrow">
-                    <span class="ini-lbl">vence</span>
-                    <input type="date" id="opTaskVence" class="ini-vence-in" title="Fecha de vencimiento (opcional)">
-                    <button class="btn btn-primary btn-sm" id="opAddTask" style="margin-left:auto" onclick="opAgregarTarea()">+ Agregar</button>
-                  </div>
+            </section>
+            <!-- Tareas propias: mismo mecanismo que las de los admins (título +
+                 fecha opcional, se resuelven o se reprograman si se vencen), pero
+                 acá Javi se las crea a sí mismo, sin elegir a quién. Tarjeta propia
+                 (antes vivía adentro de "Pendientes", quedaba todo mezclado). -->
+            <section class="card ini-card op-panel-tareas" data-panel="tareas">
+              <div class="ini-head ini-drag-handle">
+                <span class="ini-ic">✅</span>
+                <div class="ini-head-tit"><h2>Tareas</h2><div class="ini-meta"><span id="opTasksOpenCnt">0</span> pendientes</div></div>
+              </div>
+              <div class="ini-addbar">
+                <input id="opTask" placeholder="Nueva tarea…" onkeydown="if(event.key==='Enter'){event.preventDefault();opAgregarTarea();}">
+                <div class="ini-addrow">
+                  <span class="ini-lbl">vence</span>
+                  <input type="date" id="opTaskVence" class="ini-vence-in" title="Fecha de vencimiento (opcional)">
+                  <button class="btn btn-primary btn-sm" id="opAddTask" style="margin-left:auto" onclick="opAgregarTarea()">+ Agregar</button>
                 </div>
-                <div class="ini-tasks">
-                  <ul class="ini-list" id="opTasksOpen"></ul>
-                  <div class="ini-donewrap closed" id="opTasksDoneWrap">
-                    <div class="ini-donehead" onclick="document.getElementById('opTasksDoneWrap').classList.toggle('closed')">
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                      Hechas <span class="ini-donecnt">(<span id="opTasksDoneCnt">0</span>)</span>
-                    </div>
-                    <ul class="ini-list" id="opTasksDone"></ul>
+              </div>
+              <div class="ini-tasks">
+                <ul class="ini-list" id="opTasksOpen"></ul>
+                <div class="ini-donewrap closed" id="opTasksDoneWrap">
+                  <div class="ini-donehead" onclick="document.getElementById('opTasksDoneWrap').classList.toggle('closed')">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Hechas <span class="ini-donecnt">(<span id="opTasksDoneCnt">0</span>)</span>
                   </div>
+                  <ul class="ini-list" id="opTasksDone"></ul>
                 </div>
               </div>
             </section>

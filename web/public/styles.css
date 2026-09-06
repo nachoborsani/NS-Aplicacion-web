@@ -532,12 +532,6 @@
   .cup-historial-item:last-child{border-bottom:none}
   .cup-historial-item .ini-pendop-badge{font-size:11.5px;padding:0 8px}
   .cup-historial-item .cup-live{background:var(--turq);color:#fff;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:6px;letter-spacing:.02em}
-  /* Variante recortada (Inicio del operador): esta tarjeta ahora comparte
-     lugar con "Tareas" abajo, así que la lista de centros pendientes queda
-     más baja que en la del admin. */
-  /* .ini-pendop-list-cortita ya no hace falta: con flex:1 en .ini-pendop-list
-     (arriba), la lista le cede sola el lugar que necesite a .op-tareas
-     (alto natural, ver abajo) - no hay que taparle un alto fijo a mano. */
   /* Actividad de operadores (Inicio del admin): horas conectado hoy + ícono
      de detalle. Mismo lenguaje visual que .ini-pendop-* de arriba. */
   .acted-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow-y:auto}
@@ -556,10 +550,6 @@
   .act-dia-bar{height:100%;background:var(--turq);border-radius:6px}
   .act-dia-val{flex:0 0 54px;text-align:right;font-weight:700;color:var(--text)}
   .act-subtit{margin:0 0 8px;font-size:13px;font-weight:800;color:var(--text)}
-  /* Tareas propias del operador, dentro de la misma tarjeta de Pendientes. */
-  .op-tareas{border-top:1px solid var(--border)}
-  .op-tareas-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);padding:10px 15px 0}
-
   /* Accesos rápidos: grilla de hasta 9 atajos elegidos por el usuario + editor
      desplegable con el catálogo completo (todas las vistas + todos los clientes).
      min-height: sin nada elegido todavía, que la tarjeta no se vea como un

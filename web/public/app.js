@@ -1430,6 +1430,7 @@ function opRenderTareas(){
   var opts = { sinBorrar:true, sinPara:true };
   open.innerHTML = abiertas.length ? abiertas.map(function(t){ return iniTareaHTML(t, opts); }).join('') : '<div class="ini-empty">No tenés tareas pendientes 🎉</div>';
   done.innerHTML = hechas.map(function(t){ return iniTareaHTML(t, opts); }).join('');
+  var oc=document.getElementById('opTasksOpenCnt'); if(oc) oc.textContent = abiertas.length;
   var dc=document.getElementById('opTasksDoneCnt'); if(dc) dc.textContent = hechas.length;
 }
 async function opAgregarTarea(){
@@ -1573,16 +1574,16 @@ function iniAccesosToggle(id, on, scope){
 // "actividad" (Actividad de operadores) solo la ve el admin y siempre está en
 // su lista de paneles - la tarjeta misma se esconde con display:none si no
 // aplica (ver cargarInicio), el grid ni se entera.
-function iniPanelesDefault(scope){ return scope === 'op' ? ['chat','pendientes','accesos'] : ['msg','tareas','pendop','actividad','accesos']; }
+function iniPanelesDefault(scope){ return scope === 'op' ? ['chat','pendientes','tareas','accesos'] : ['msg','tareas','pendop','actividad','accesos']; }
 // Tamaño de arranque de cada panel (el usuario lo cambia después con el
 // botón ⤢, y desde ahí queda guardado). "m" = 1 columna alta (2 filas),
 // "w" = ancho completo (2 columnas, 1 fila) - mismo alto que ya tenía el
 // chat/Accesos rápidos por defecto, para no correr el piso a nadie.
 function iniPanelesTamDefault(scope){
-  // "pendientes" del operador trae ADENTRO la sección de Tareas también (dos
-  // bloques de contenido en una sola tarjeta) - necesita el doble de alto que
-  // una tarjeta simple para que ambos entren sin apretarse.
-  return scope === 'op' ? { chat:'m', pendientes:'m', accesos:'w' } : { msg:'m', tareas:'s', pendop:'s', actividad:'s', accesos:'w' };
+  // "pendientes" y "tareas" del operador son tarjetas simples (como pendop/
+  // tareas del admin) desde que se separaron - antes "pendientes" traía la
+  // sección de Tareas adentro y por eso necesitaba el doble de alto.
+  return scope === 'op' ? { chat:'m', pendientes:'s', tareas:'s', accesos:'w' } : { msg:'m', tareas:'s', pendop:'s', actividad:'s', accesos:'w' };
 }
 var INI_TAMANOS = ['s', 'm', 'w', 'l'];
 var INI_TAMANOS_LABEL = { s:'Chico', m:'Alto', w:'Ancho', l:'Grande' };
