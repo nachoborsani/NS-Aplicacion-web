@@ -8514,13 +8514,14 @@ function cabBadge(it){
 }
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
-  if (!items.length){ body.innerHTML = '<tr><td colspan="6" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; return; }
+  if (!items.length){ body.innerHTML = '<tr><td colspan="7" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
     var ome = omesArr.join(', ');
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
+      + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
       + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
@@ -8535,6 +8536,44 @@ function renderCabinaRows(slug, items){
         + '<button class="rowbtn danger" title="Borrar" onclick="borrarInforme(\''+esc(it.id)+'\')">'+ (typeof SVG_TRASH!=='undefined'?SVG_TRASH:'🗑') +'</button>'
       + '</td></tr>';
   }).join('');
+  cabToggleSel(); // reset de la barra de selección al re-renderizar
+}
+// ===== Selección múltiple para desestimar en lote =====
+function cabToggleSel(){
+  var checks = [].slice.call(document.querySelectorAll('#cabBody .cab-check'));
+  var n = checks.filter(function(c){ return c.checked; }).length;
+  var bar = document.getElementById('cabBulkBar'); var cnt = document.getElementById('cabSelCount');
+  if (cnt) cnt.textContent = n;
+  if (bar) bar.hidden = (n === 0);
+  var all = document.getElementById('cabCheckAll');
+  if (all){ all.checked = checks.length > 0 && n === checks.length; all.indeterminate = n > 0 && n < checks.length; }
+}
+function cabToggleAll(el){
+  [].slice.call(document.querySelectorAll('#cabBody .cab-check')).forEach(function(c){ c.checked = el.checked; });
+  cabToggleSel();
+}
+function cabLimpiarSel(){
+  [].slice.call(document.querySelectorAll('#cabBody .cab-check')).forEach(function(c){ c.checked = false; });
+  cabToggleSel();
+}
+async function cabDesestimarSeleccionados(){
+  var ids = [].slice.call(document.querySelectorAll('#cabBody .cab-check'))
+    .filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+  if (!ids.length) return;
+  if (!confirm('¿Desestimar ' + ids.length + ' informe(s)?\n\nSe dan por cerrados y NO se suben. Salen de la lista de revisar. Se pueden reactivar después uno por uno.')) return;
+  var slug = document.getElementById('cabCliente').value;
+  var bar = document.getElementById('cabBulkBar'); var cnt = document.getElementById('cabSelCount');
+  var okN = 0, errN = 0;
+  for (var i = 0; i < ids.length; i++){
+    if (cnt) cnt.textContent = 'desestimando ' + (i+1) + '/' + ids.length + '…';
+    try {
+      var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(ids[i])+'/desestimar', { desestimar: true });
+      if (res.ok){ okN++; var it=(CAB_ITEMS||[]).find(function(x){return x.id===ids[i];}); if(it) it.desestimado = (res.data && res.data.item && res.data.item.desestimado) || { at:new Date().toISOString() }; }
+      else errN++;
+    } catch(e){ errN++; }
+  }
+  aplicarFiltroCabina();
+  alert('Desestimados: ' + okN + (errN ? (' · ' + errN + ' con error') : '') + '.');
 }
 async function uploadInformes(files){
   if (!files || !files.length) return;

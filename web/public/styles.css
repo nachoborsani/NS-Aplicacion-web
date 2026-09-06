@@ -1866,6 +1866,9 @@
   .cab-ome{cursor:pointer;font-weight:700;user-select:all;border-bottom:1px dashed transparent;transition:color .12s}
   .cab-ome:hover{color:var(--turq-d,#0c7a7a);border-bottom-color:currentColor}
   .cab-ome.copiado{color:#16a34a;font-weight:800;border-bottom-color:transparent}
+  /* Barra de selección múltiple (desestimar en lote). */
+  .cab-bulkbar{display:flex;align-items:center;gap:12px;padding:10px 14px;margin:0 0 4px;background:rgba(20,150,150,.10);border:1px solid rgba(20,150,150,.3);border-radius:10px;font-size:13.5px}
+  .cab-bulkbar b{font-size:15px}
   .cab-badge.ok{background:color-mix(in srgb,#12b3a6 18%,var(--surface));color:#0a7d73}
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}
