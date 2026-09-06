@@ -191,6 +191,13 @@ class NSWebClient:
         """Usuario + clave PAMI del cliente (desencriptada). Requiere sesión admin."""
         return self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/pami/credenciales")
 
+    def client_medico_pami(self, slug: str, medico_id: str) -> dict:
+        """Usuario + clave PAMI del médico especialista (desencriptada). Requiere sesión admin."""
+        return self._request(
+            "GET",
+            f"/api/clientes/{urllib.parse.quote(slug)}/medicos/{urllib.parse.quote(medico_id)}/credenciales",
+        )
+
     # --- Credencial/benef: métodos GENÉRICOS por cred_key (para varios médicos de
     #     cabecera). Los endpoints de la web ya son paramétricos (CRED_CONFIGS). ---
     def faltan_benef(self, cred_key: str = "scheffelaar") -> list[dict]:

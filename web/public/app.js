@@ -7170,7 +7170,7 @@ function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remo
 // sin necesidad de entrar por SSH. Solo admin.
 var SRV_POLL = null;       // refresco mientras el modal está abierto
 var SRV_DOT_POLL = null;   // refresco de fondo del puntito del botón
-var SRV_TIPO_LABEL = { 'healthcheck':'Prueba', 'auditar-informes':'Auditar informes', 'subir-informes':'Subir informe', 'bandeja-sync':'Sincronizar bandeja' };
+var SRV_TIPO_LABEL = { 'healthcheck':'Prueba', 'auditar-informes':'Auditar informes', 'subir-informes':'Subir informe', 'bandeja-sync':'Sincronizar bandeja', 'liberar-cupo':'Liberar cupo', 'crear-ome':'Generar OME' };
 
 function srvRelativo(iso){
   if(!iso) return '—';
@@ -8124,6 +8124,215 @@ function mostrarResultadoTarea(tipo, t){
   showModal('taskResModal','taskResScrim');
 }
 
+// ===== Generar OME especialista =====
+var OME_WEB = { medicos: [], taskTimer: null, searchTimer: null, lastTaskId: '' };
+function omeNotice(kind, title, text){
+  var el = document.getElementById('omeNotice');
+  if (!el) return;
+  var icon = kind === 'ok' ? '✓' : (kind === 'err' ? '!' : (kind === 'warn' ? '!' : 'i'));
+  el.className = 'lc-notice ' + (kind || 'info');
+  el.innerHTML = '<div aria-hidden="true">' + esc(icon) + '</div><div><b>' + esc(title || '') + '</b><span>' + esc(text || '') + '</span></div>';
+  el.style.display = 'flex';
+}
+function omeClearNotice(){
+  var el = document.getElementById('omeNotice');
+  if (!el) return;
+  el.style.display = 'none';
+  el.textContent = '';
+}
+function omeClienteActual(){
+  var slug = (document.getElementById('omeCliente') || {}).value || '';
+  return (CLIENTS || []).find(function(c){ return c.slug === slug; }) || null;
+}
+async function loadOmeWebView(){
+  var sel = document.getElementById('omeCliente');
+  if (sel && !sel.options.length){
+    try {
+      var r = await fetch('/api/clientes');
+      var raw = await r.json();
+      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      sel.innerHTML = list.map(function(c){ return '<option value="' + esc(c.slug) + '">' + esc(c.name || c.slug) + '</option>'; }).join('');
+      try {
+        var last = localStorage.getItem('ns-ome-cliente') || '';
+        if (last && Array.prototype.some.call(sel.options, function(o){ return o.value === last; })) sel.value = last;
+      } catch(e){}
+    } catch(e){}
+  }
+  await onOmeClienteChange(false);
+}
+async function onOmeClienteChange(save){
+  var slug = (document.getElementById('omeCliente') || {}).value || '';
+  if (save !== false) { try { localStorage.setItem('ns-ome-cliente', slug); } catch(e){} }
+  var med = document.getElementById('omeMedico');
+  if (med) med.innerHTML = '<option value="">Cargando...</option>';
+  omeClearNotice();
+  OME_WEB.medicos = [];
+  if (!slug){ if (med) med.innerHTML = '<option value="">Elegí un cliente</option>'; return; }
+  try{
+    var r = await fetch('/api/clientes/' + encodeURIComponent(slug) + '/medicos/publicos');
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudieron cargar los médicos.');
+    OME_WEB.medicos = d.medicos || [];
+    if (med) {
+      med.innerHTML = OME_WEB.medicos.length
+        ? OME_WEB.medicos.map(function(m){
+            return '<option value="' + esc(m.id) + '">' + esc(m.nombre || 'Sin nombre') + (m.especialidad ? ' · ' + esc(m.especialidad) : '') + (m.tieneClave ? '' : ' · sin clave') + '</option>';
+          }).join('')
+        : '<option value="">Sin médicos cargados</option>';
+    }
+  }catch(e){
+    if (med) med.innerHTML = '<option value="">No disponible</option>';
+    omeNotice('err', 'No se pudieron cargar médicos', e.message || String(e));
+  }
+}
+function omeBuscarPracticasDebounced(){
+  if (OME_WEB.searchTimer) clearTimeout(OME_WEB.searchTimer);
+  OME_WEB.searchTimer = setTimeout(omeBuscarPracticas, 260);
+}
+async function omeBuscarPracticas(){
+  var q = ((document.getElementById('omePractica') || {}).value || '').trim();
+  var code = ((document.getElementById('omeCodigo') || {}).value || '').trim();
+  var box = document.getElementById('omeSuggestions');
+  var info = document.getElementById('omeNomInfo');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  if (!q && !code){ if (info) info.textContent = ''; return; }
+  var params = new URLSearchParams();
+  params.set('q', code || q);
+  params.set('limit', '10');
+  var c = omeClienteActual();
+  (c && c.activeModules || []).forEach(function(m){ params.append('module', m.code || m); });
+  if (info) info.textContent = 'Buscando en nomenclador...';
+  try{
+    var r = await fetch('/api/nomencladores/search?' + params.toString());
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo buscar.');
+    var rows = d.rows || [];
+    if (info) info.textContent = rows.length ? (rows.length + ' coincidencia(s)') : 'Sin coincidencias';
+    if (!box || !rows.length) return;
+    window._OME_PRACTICAS = rows;
+    box.innerHTML = rows.map(function(row, i){
+      return '<button type="button" onclick="omeElegirPractica(' + i + ')">'
+        + '<b>' + esc(row.code || '') + '</b>'
+        + '<div>' + esc(row.description || '') + '<span>' + esc([row.moduleCode, row.moduleDescription].filter(Boolean).join(' - ')) + '</span></div>'
+        + '<span>' + esc(moneyFmt(row.total || 0)) + '</span>'
+        + '</button>';
+    }).join('');
+    box.style.display = '';
+  }catch(e){
+    if (info) info.textContent = '';
+    omeNotice('err', 'No se pudo buscar la práctica', e.message || String(e));
+  }
+}
+function omeElegirPractica(i){
+  var row = (window._OME_PRACTICAS || [])[i];
+  if (!row) return;
+  var c = document.getElementById('omeCodigo');
+  var p = document.getElementById('omePractica');
+  if (c) c.value = row.code || '';
+  if (p) p.value = row.description || '';
+  var box = document.getElementById('omeSuggestions'); if (box) box.style.display = 'none';
+  var info = document.getElementById('omeNomInfo'); if (info) info.textContent = [row.moduleCode, row.moduleDescription].filter(Boolean).join(' - ');
+}
+function omePayload(){
+  return {
+    medicoId: (document.getElementById('omeMedico') || {}).value || '',
+    beneficio: ((document.getElementById('omeBenef') || {}).value || '').trim(),
+    dni: ((document.getElementById('omeDni') || {}).value || '').trim(),
+    nombre: ((document.getElementById('omeNombre') || {}).value || '').trim(),
+    diagnostico: ((document.getElementById('omeDiagnostico') || {}).value || '').trim() || 'Z000',
+    codigo: ((document.getElementById('omeCodigo') || {}).value || '').trim(),
+    practica: ((document.getElementById('omePractica') || {}).value || '').trim(),
+    mensaje: ((document.getElementById('omeMensaje') || {}).value || '').trim(),
+  };
+}
+async function crearOmeEspecialista(){
+  var slug = (document.getElementById('omeCliente') || {}).value || '';
+  if (!slug){ omeNotice('warn', 'Elegí un cliente', 'Primero seleccioná el centro desde donde se genera la OME.'); return; }
+  var payload = omePayload();
+  var faltan = [];
+  if (!payload.medicoId) faltan.push('médico');
+  if (!payload.beneficio && !payload.dni) faltan.push('BENEF o DNI');
+  if (!payload.codigo) faltan.push('código');
+  if (!payload.diagnostico) faltan.push('diagnóstico');
+  if (faltan.length){ omeNotice('warn', 'Faltan datos', 'Completá ' + faltan.join(', ') + '.'); return; }
+  var btn = document.getElementById('omeCrearBtn');
+  var meta = document.getElementById('omeTaskMeta');
+  var out = document.getElementById('omeResultado');
+  if (btn) btn.disabled = true;
+  if (meta) meta.textContent = 'Enviando tarea...';
+  if (out) out.innerHTML = '<div class="ome-result-empty">Esperando al worker PAMI...</div>';
+  omeNotice('info', 'Tarea en preparación', 'La web está encolando la generación de la OME.');
+  try{
+    var r = await fetch('/api/clientes/' + encodeURIComponent(slug) + '/ome/especialista', {
+      method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)
+    });
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No se pudo crear la tarea.');
+    if (meta) meta.textContent = 'Tarea enviada. Esperando al worker...';
+    omeNotice('info', 'Tarea enviada', 'El server la va a tomar y devolverá el número de OME o el error de PAMI.');
+    seguirOmeTarea(d.task.id);
+  }catch(e){
+    if (btn) btn.disabled = false;
+    if (meta) meta.textContent = 'No se pudo enviar.';
+    if (out) out.innerHTML = '<div class="ome-result-empty">No hay resultado.</div>';
+    omeNotice('err', 'No se pudo generar la tarea', e.message || String(e));
+  }
+}
+function seguirOmeTarea(id){
+  OME_WEB.lastTaskId = id;
+  if (OME_WEB.taskTimer) clearInterval(OME_WEB.taskTimer);
+  var btn = document.getElementById('omeCrearBtn');
+  var meta = document.getElementById('omeTaskMeta');
+  var out = document.getElementById('omeResultado');
+  var vueltas = 0;
+  OME_WEB.taskTimer = setInterval(async function(){
+    vueltas++;
+    try{
+      var d = await fetch('/api/admin/worker/tasks').then(function(r){ return r.json(); });
+      var t = (d.tasks || []).find(function(x){ return x.id === id; });
+      if (!t) return;
+      if (t.status === 'pending'){
+        if (meta) meta.textContent = 'Esperando al worker' + (vueltas > 8 ? ' (revisá el server)' : '') + '...';
+        return;
+      }
+      if (t.status === 'running'){
+        var lg = (t.logs && t.logs.length) ? t.logs[t.logs.length - 1].message : '';
+        if (meta) meta.textContent = 'Generando... ' + String(lg || '').slice(0, 90);
+        return;
+      }
+      clearInterval(OME_WEB.taskTimer); OME_WEB.taskTimer = null;
+      if (btn) btn.disabled = false;
+      if (t.status === 'done'){
+        var res = t.result || {};
+        var row = res.row || {};
+        var nro = res.nro_ome || row.nro_ome || '';
+        var resultado = res.resultado || row.resultado || '';
+        var ok = !!nro && ['OK','GENERADA','YA_TIENE_OME'].indexOf(String(resultado || '').toUpperCase()) >= 0;
+        if (meta) meta.textContent = 'Finalizada.';
+        if (out) out.innerHTML = '<div class="ome-result-card ' + (ok ? '' : 'err') + '">'
+          + '<div><b>' + esc(ok ? 'OME lista' : 'PAMI respondió con observación') + '</b>'
+          + '<span>' + esc(row.nombre || res.nombre || '') + (resultado ? ' · ' + esc(resultado) : '') + '</span>'
+          + '<span>' + esc(row.practica || res.practica || '') + '</span></div>'
+          + '<code>' + esc(nro || resultado || 'Sin OME') + '</code></div>';
+        omeNotice(ok ? 'ok' : 'warn', ok ? 'OME generada' : 'Tarea terminada sin número de OME', ok ? ('Número: ' + nro) : (resultado || 'Revisá el detalle del server.'));
+      } else {
+        if (meta) meta.textContent = 'Falló.';
+        if (out) out.innerHTML = '<div class="ome-result-card err"><div><b>Error al generar OME</b><span>' + esc(t.error || 'Error del worker') + '</span></div><code>Error</code></div>';
+        omeNotice('err', 'La tarea falló', t.error || 'Error del worker.');
+      }
+    }catch(e){}
+  }, 3000);
+}
+function limpiarOmeForm(){
+  ['omeBenef','omeDni','omeNombre','omeCodigo','omePractica','omeMensaje'].forEach(function(id){ var el = document.getElementById(id); if (el) el.value = ''; });
+  var d = document.getElementById('omeDiagnostico'); if (d) d.value = 'Z000';
+  var out = document.getElementById('omeResultado'); if (out) out.innerHTML = '<div class="ome-result-empty">No hay datos cargados.</div>';
+  var meta = document.getElementById('omeTaskMeta'); if (meta) meta.textContent = 'Todavía no hay una tarea enviada.';
+  var sug = document.getElementById('omeSuggestions'); if (sug) { sug.style.display = 'none'; sug.innerHTML = ''; }
+  var info = document.getElementById('omeNomInfo'); if (info) info.textContent = '';
+  omeClearNotice();
+}
+
 // ===== Liberar cupo PAMI =====
 var LC_ROWS = [];
 var LC_TASK_TIMER = null;
@@ -9017,6 +9226,7 @@ function aplicarUsuario(u){
   var np = document.getElementById('navPadron'); if (np) np.style.display = verHerramientas ? '' : 'none';
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
   var nl = document.getElementById('navLiberarCupo'); if (nl) nl.style.display = (u.role === 'admin' || u.role === 'operador') ? '' : 'none';
+  var no = document.getElementById('navOmeWeb'); if (no) no.style.display = (u.role === 'admin' || u.role === 'operador') ? '' : 'none';
   // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
   var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
   // Nomencladores: por ahora un operador no lo necesita - se le oculta (mismo
@@ -9027,7 +9237,7 @@ function aplicarUsuario(u){
   // del menú le queda Inicio + la lista de clientes. Cuando se le sumen módulos,
   // se habilitan de a uno acá y en clientSeccionesPermitidas().
   if (esColaborador) {
-    ['navInformes', 'navPadron', 'navCabina', 'navLiberarCupo', 'navCruzas', 'navNomencladores'].forEach(function(id){
+    ['navInformes', 'navOmeWeb', 'navPadron', 'navCabina', 'navLiberarCupo', 'navCruzas', 'navNomencladores'].forEach(function(id){
       var el = document.getElementById(id); if (el) el.style.display = 'none';
     });
   }
@@ -9067,7 +9277,7 @@ function aplicarUsuario(u){
   iniArrancar();   // campana: mensajes del Inicio (admin/operador) o pendientes del centro (operador_clinica)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina','liberarcupo','cruzas'];
+var NS_ONLY_VIEWS = ['dash','informes','omeweb','nomencladores','credencial','soon','resumen','facturas','padron','cabina','liberarcupo','cruzas'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

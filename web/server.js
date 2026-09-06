@@ -1987,6 +1987,27 @@ function appendWorkerTaskLog(task, level, message) {
   });
   if (task.logs.length > 300) task.logs = task.logs.slice(-300);
 }
+function enqueueWorkerTask({ type, label, clientSlug, payload, createdBy, initialLog }) {
+  const state = loadWorkerState();
+  const task = {
+    id: crypto.randomUUID(),
+    type: String(type || "").trim().toLowerCase(),
+    label: String(label || type || "Tarea").slice(0, 120),
+    status: "pending",
+    clientSlug: String(clientSlug || "").trim().slice(0, 80),
+    payload: payload && typeof payload === "object" ? payload : {},
+    createdAt: new Date().toISOString(),
+    createdBy: String(createdBy || ""),
+    attempts: 0,
+    logs: [],
+  };
+  appendWorkerTaskLog(task, "info", createdBy ? `Creada por ${createdBy}.` : "Creada desde la web.");
+  if (initialLog) appendWorkerTaskLog(task, "info", initialLog);
+  state.tasks.unshift(task);
+  state.tasks = state.tasks.slice(0, 500);
+  saveWorkerState(state);
+  return task;
+}
 function staleWorkerTask(t, nowMs) {
   if (t.status !== "running") return false;
   const started = Date.parse(t.startedAt || "");
@@ -5310,35 +5331,25 @@ const server = http.createServer(async (req, res) => {
     if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
-    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes", "liberar-cupo"]);
+    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes", "liberar-cupo", "crear-ome"]);
     if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
     // El operador solo dispara tareas de informes (subir/auditar a PAMI); la
     // sincronización de bandeja y las pruebas quedan para el admin.
-    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes" && type !== "liberar-cupo") {
+    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes" && type !== "liberar-cupo" && type !== "crear-ome") {
       return json(res, 403, { error: "Solo un administrador." });
     }
     const LABELS = {
       healthcheck: "Prueba de worker", "bandeja-sync": "Sincronizar bandeja",
       "auditar-informes": "Verificar informes en PAMI", "subir-informes": "Subir informes a PAMI",
-      "liberar-cupo": "Liberar cupo PAMI",
+      "liberar-cupo": "Liberar cupo PAMI", "crear-ome": "Generar OME especialista",
     };
-    const state = loadWorkerState();
-    const task = {
-      id: crypto.randomUUID(),
+    const task = enqueueWorkerTask({
       type,
-      label: String((body && body.label) || LABELS[type] || type).slice(0, 120),
-      status: "pending",
+      label: (body && body.label) || LABELS[type] || type,
       clientSlug: String((body && body.clientSlug) || "").trim().slice(0, 80),
       payload: body && body.payload && typeof body.payload === "object" ? body.payload : {},
-      createdAt: new Date().toISOString(),
       createdBy: me.username,
-      attempts: 0,
-      logs: [],
-    };
-    appendWorkerTaskLog(task, "info", `Creada por ${me.username}.`);
-    state.tasks.unshift(task);
-    state.tasks = state.tasks.slice(0, 500);
-    saveWorkerState(state);
+    });
     return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
@@ -6138,6 +6149,27 @@ const server = http.createServer(async (req, res) => {
     saveClientMedicos(store);
     return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
   }
+  // Listado seguro para operar OME especialista desde la web: no expone usuario ni clave.
+  const clientMedicosPublicosMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/publicos$/);
+  if (clientMedicosPublicosMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(clientMedicosPublicosMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    if (!clientesVisiblesPara(me, [client]).length) return json(res, 403, { error: "No tenés acceso a este cliente." });
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    return json(res, 200, {
+      medicos: lista.map((m) => ({
+        id: String(m.id || ""),
+        nombre: String(m.nombre || ""),
+        especialidad: String(m.especialidad || ""),
+        tieneClave: !!m.claveEnc,
+      })),
+    });
+  }
   // Borrar un médico.
   const clientMedicoDelMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)$/);
   if (clientMedicoDelMatch && req.method === "DELETE") {
@@ -6168,6 +6200,64 @@ const server = http.createServer(async (req, res) => {
     const m = (Array.isArray(lista) ? lista : []).find((x) => x.id === id);
     if (!m) return json(res, 404, { error: "Médico no encontrado." });
     return json(res, 200, { nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", clave: decryptSecret(m.claveEnc), telefono: m.telefono || "" });
+  }
+
+  const clientOmeEspecialistaMatch = p.match(/^\/api\/clientes\/([^/]+)\/ome\/especialista$/);
+  if (clientOmeEspecialistaMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador puede generar OME." });
+    const slug = decodeURIComponent(clientOmeEspecialistaMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    if (!clientesVisiblesPara(me, [client]).length) return json(res, 403, { error: "No tenés acceso a este cliente." });
+
+    const body = await readBody(req);
+    const medicosStore = loadClientMedicos();
+    const medicos = Array.isArray(medicosStore[slug]) ? medicosStore[slug] : [];
+    const medicoId = String(body.medicoId || "").trim();
+    const medico = medicos.find((m) => m.id === medicoId);
+    const codigo = cleanIdentifier(body.codigo || body.practicaCodigo).slice(0, 12);
+    const practica = String(body.practica || "").replace(/\s+/g, " ").trim().slice(0, 220);
+    const diagnostico = String(body.diagnostico || "Z000").replace(/\s+/g, " ").trim().toUpperCase().slice(0, 20);
+    const beneficio = cleanIdentifier(body.beneficio || body.benef || "").slice(0, 18);
+    const dni = cleanIdentifier(body.dni || "").slice(0, 12);
+    const nombre = String(body.nombre || "").replace(/\s+/g, " ").trim().slice(0, 140);
+    const mensaje = String(body.mensaje || "").trim().slice(0, 1000);
+    const modoPedido = String(body.modo || "").trim().toUpperCase();
+    const modo = modoPedido === "DNI" || (!beneficio && dni) ? "DNI" : "BENEF";
+    const afiliado = modo === "DNI" ? dni : beneficio;
+    const faltan = [];
+    if (!medico) faltan.push("el médico especialista");
+    if (medico && !medico.usuario) faltan.push("el usuario PAMI del médico");
+    if (medico && !medico.claveEnc) faltan.push("la clave PAMI del médico");
+    if (!afiliado) faltan.push("BENEF o DNI");
+    if (!diagnostico) faltan.push("el diagnóstico");
+    if (!codigo) faltan.push("el código de práctica");
+    if (faltan.length) return json(res, 400, { error: "Falta completar " + faltan.join(", ") + "." });
+
+    const task = enqueueWorkerTask({
+      type: "crear-ome",
+      label: `Generar OME ${codigo} (${medico.nombre || "médico"})`,
+      clientSlug: slug,
+      createdBy: me.username,
+      initialLog: `Paciente: ${nombre || afiliado}. Práctica: ${codigo}${practica ? " - " + practica : ""}.`,
+      payload: {
+        medicoId,
+        medicoNombre: medico.nombre || "",
+        medicoEspecialidad: medico.especialidad || "",
+        modo,
+        afiliado,
+        beneficio,
+        dni,
+        nombre,
+        diagnostico,
+        codigo,
+        practica,
+        mensaje,
+      },
+    });
+    return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
   // --- Facturas (panel Pagos) — admin-only ---

@@ -10,6 +10,7 @@ Tipos de tarea:
   - auditar-informes   : verifica en PAMI qué informes están cargados/transmitidos.
   - subir-informes     : adjunta el informe a la OME en PAMI (upload real + transmite).
   - liberar-cupo       : cancela aceptaciones de OMEs no validadas para liberar cupo.
+  - crear-ome          : genera una OME especialista con credenciales del médico.
 
 Auth: el token de la cola lo obtiene logueado como admin (/api/admin/worker/token);
 los datos (informes, clave PAMI, archivos) los saca con la sesión admin.
@@ -19,6 +20,7 @@ USO (dejarlo corriendo en la PC, o como tarea de Windows):
 """
 from __future__ import annotations
 
+import csv
 import dataclasses
 import http.client
 import json
@@ -134,6 +136,16 @@ def _omes_de(it):
 def _creds(web, slug):
     cred = web.client_pami(slug)
     return str(cred.get("pamiUser", "")).strip(), str(cred.get("pamiPassword", "") or "")
+
+
+def _medico_creds(web, slug, medico_id):
+    cred = web.client_medico_pami(slug, medico_id)
+    return {
+        "nombre": str(cred.get("nombre", "") or "").strip(),
+        "especialidad": str(cred.get("especialidad", "") or "").strip(),
+        "usuario": str(cred.get("usuario", "") or "").strip(),
+        "clave": str(cred.get("clave", "") or ""),
+    }
 
 
 def _descargar_archivo(web, slug, informe_id, dest: Path):
@@ -260,6 +272,83 @@ def tarea_subir(web, slug, payload, tlog, cola=None, tid=None):
     return {"total": len(items), "subidos": ok, "detalle": detalle}
 
 
+def tarea_crear_ome(web, slug, payload, tlog):
+    from pami_ome_generator import run_batch_sync
+
+    medico_id = str(payload.get("medicoId", "") or "").strip()
+    if not medico_id:
+        raise RuntimeError("No llegó el médico especialista.")
+    cred = _medico_creds(web, slug, medico_id)
+    user, clave = cred["usuario"], cred["clave"]
+    if not user or not clave:
+        raise RuntimeError("El médico seleccionado no tiene usuario/clave PAMI cargados en la web.")
+
+    modo = str(payload.get("modo", "") or "").strip().upper()
+    beneficio = "".join(ch for ch in str(payload.get("beneficio", "") or "") if ch.isdigit())
+    dni = "".join(ch for ch in str(payload.get("dni", "") or "") if ch.isdigit())
+    if modo not in {"BENEF", "DNI"}:
+        modo = "DNI" if not beneficio and dni else "BENEF"
+    afiliado = dni if modo == "DNI" else beneficio
+    diagnostico = str(payload.get("diagnostico", "") or "Z000").strip().upper()
+    codigo = "".join(ch for ch in str(payload.get("codigo", "") or "") if ch.isdigit())
+    practica_desc = str(payload.get("practica", "") or "").strip()
+    nombre = str(payload.get("nombre", "") or "").strip()
+
+    if not afiliado:
+        raise RuntimeError("Falta BENEF o DNI para generar la OME.")
+    if not diagnostico or not codigo:
+        raise RuntimeError("Falta diagnóstico o código de práctica.")
+
+    tmp = Path(tempfile.mkdtemp(prefix="ns_crear_ome_"))
+    input_path = tmp / "ome_input.csv"
+    output_path = tmp / "ome_resultado.csv"
+    with input_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["modo", "afiliado", "beneficio", "dni", "nombre", "diagnostico", "practica"])
+        writer.writeheader()
+        writer.writerow({
+            "modo": modo,
+            "afiliado": afiliado,
+            "beneficio": beneficio,
+            "dni": dni,
+            "nombre": nombre,
+            "diagnostico": diagnostico,
+            "practica": codigo,
+        })
+
+    tlog(f"Generando OME especialista con {cred['nombre'] or user}.")
+    tlog(f"Paciente {nombre or afiliado} · práctica {codigo}{(' - ' + practica_desc) if practica_desc else ''}.")
+    summary = run_batch_sync(
+        input_path=input_path,
+        output_path=output_path,
+        user=user,
+        password=clave,
+        dry_run=False,
+        headless=True,
+        log_callback=lambda m: tlog(str(m)),
+    )
+
+    rows = []
+    if output_path.exists():
+        with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    row = rows[0] if rows else {}
+    resultado = str(row.get("resultado") or "").strip()
+    nro_ome = str(row.get("nro_ome") or "").strip()
+    if nro_ome:
+        tlog(f"OME generada: {nro_ome}.")
+    else:
+        tlog(f"PAMI terminó sin número de OME: {resultado or 'sin resultado'}.")
+    return {
+        "total": int(summary.get("total", len(rows)) or len(rows)),
+        "resultado": resultado,
+        "nro_ome": nro_ome,
+        "nombre": row.get("nombre") or nombre,
+        "practica": practica_desc or codigo,
+        "medico": cred["nombre"],
+        "row": row,
+    }
+
+
 def tarea_liberar_cupo(web, slug, payload, tlog):
     from pami_liberar_cupo import PamiLiberarCupoController
 
@@ -314,6 +403,8 @@ def dispatch(task, web, cola):
         return tarea_auditar(web, slug, payload, tlog)
     if tipo == "subir-informes":
         return tarea_subir(web, slug, payload, tlog, cola, tid)
+    if tipo == "crear-ome":
+        return tarea_crear_ome(web, slug, payload, tlog)
     if tipo == "liberar-cupo":
         return tarea_liberar_cupo(web, slug, payload, tlog)
     raise RuntimeError(f"Tipo de tarea no soportado por este worker: {tipo}")

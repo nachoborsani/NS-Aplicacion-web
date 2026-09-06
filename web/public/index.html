@@ -89,6 +89,7 @@
       <nav class="nav">
         <a class="active ns-only" onclick="go('dash',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio</a>
         <a id="navInformes" class="ns-only" onclick="go('informes',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 3h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V4a1 1 0 011-1zM7.5 14H10l1.5-3 2 5 1.5-2h1.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes</a>
+        <a id="navOmeWeb" class="ns-only" style="display:none" onclick="go('omeweb',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Generar OME</a>
         <a id="navNomencladores" class="ns-only" onclick="go('nomencladores',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2zM9 7h7M9 11h7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Nomencladores</a>
         <a id="navPadron" class="ns-only" style="display:none" onclick="go('padron',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Afiliados</a>
         <a id="navCabina" class="ns-only" style="display:none" onclick="go('cabina',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h11l5 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 4v5h5M8 13l2.5 2.5L16 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Informes recibidos</a>
@@ -1167,6 +1168,7 @@
                   <button class="btn btn-primary btn-sm" onclick="tareaCabina('subir-informes')" title="Subir los informes a PAMI">⬆️ Subir a PAMI</button>
                   <button class="btn btn-ghost btn-sm" onclick="descargarCabina('xlsx')" title="Descargar Excel">📊 Excel</button>
                   <button class="btn btn-ghost btn-sm" onclick="descargarCabina('pdf')" title="Descargar PDF">📄 PDF</button>
+                  <button class="btn btn-ghost btn-sm" onclick="limpiarTransmitidos()" title="Borrar del sistema los informes YA TRANSMITIDOS hasta una fecha, para liberar espacio">🧹 Limpiar transmitidos</button>
                 </span>
                 <span id="cabToolbarSel" class="cab-bulkbar" style="display:none">
                   <span><b id="cabSelCount">0</b> seleccionado(s)</span>
@@ -1178,10 +1180,56 @@
             </div>
             <div class="table-scroll">
               <table class="nom-results-table">
-                <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" id="cabCheckAll" onclick="cabToggleAll(this)" title="Seleccionar todos"></th><th>Archivo</th><th>Paciente</th><th>Práctica</th><th>Estado</th><th>OME</th><th></th></tr></thead>
+                <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" id="cabCheckAll" onclick="cabToggleAll(this)" title="Seleccionar todos"></th><th>Archivo</th><th>Paciente</th><th>Práctica</th><th>Estado</th><th>OME</th><th>Asunto del mail</th><th></th></tr></thead>
                 <tbody id="cabBody"></tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        <section id="view-omeweb" style="display:none">
+          <div class="nom-status card">
+            <div><b>Generar OME especialista</b><span>Completá los datos y enviá la solicitud al worker PAMI.</span></div>
+            <div class="nom-upload">
+              <label class="field" style="min-width:240px">
+                <span>Cliente</span>
+                <select class="inp" id="omeCliente" onchange="onOmeClienteChange()"></select>
+              </label>
+              <label class="field" style="min-width:260px">
+                <span>Médico especialista</span>
+                <select class="inp" id="omeMedico"></select>
+              </label>
+            </div>
+          </div>
+
+          <div class="card ome-card">
+            <div class="client-card-head">
+              <h3>Datos de la orden</h3>
+              <button class="btn btn-primary" id="omeCrearBtn" type="button" onclick="crearOmeEspecialista()">Generar OME</button>
+            </div>
+            <div class="ome-grid">
+              <label class="field"><span>BENEF</span><input class="inp" id="omeBenef" inputmode="numeric" placeholder="Ej: 15000000000000"></label>
+              <label class="field"><span>DNI</span><input class="inp" id="omeDni" inputmode="numeric" placeholder="Opcional si hay BENEF"></label>
+              <label class="field ome-span-2"><span>Paciente</span><input class="inp" id="omeNombre" placeholder="Apellido y nombre"></label>
+              <label class="field"><span>Diagnóstico CIE10</span><input class="inp" id="omeDiagnostico" value="Z000" placeholder="Ej: Z000"></label>
+              <label class="field"><span>Código</span><input class="inp" id="omeCodigo" inputmode="numeric" placeholder="Ej: 820165"></label>
+              <label class="field ome-span-2"><span>Práctica</span><input class="inp" id="omePractica" placeholder="Buscar por código o nombre..." oninput="omeBuscarPracticasDebounced()"></label>
+              <label class="field ome-span-all"><span>Pedido / mensaje</span><textarea class="inp ome-textarea" id="omeMensaje" placeholder="Texto libre para dejar contexto. Más adelante se podrá parsear desde WhatsApp o Telegram."></textarea></label>
+            </div>
+            <div class="ome-actions-row">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="omeBuscarPracticas()">Buscar práctica</button>
+              <span class="nom-muted" id="omeNomInfo"></span>
+            </div>
+            <div class="ome-suggestions" id="omeSuggestions" style="display:none"></div>
+            <div class="lc-notice info" id="omeNotice" style="display:none"></div>
+          </div>
+
+          <div class="tablecard nom-table">
+            <div class="table-head">
+              <div><b>Resultado</b><span id="omeTaskMeta">Todavía no hay una tarea enviada.</span></div>
+              <button class="btn btn-ghost btn-sm" type="button" onclick="limpiarOmeForm()">Limpiar</button>
+            </div>
+            <div id="omeResultado" class="ome-result-empty">No hay datos cargados.</div>
           </div>
         </section>
 
