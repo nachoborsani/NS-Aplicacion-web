@@ -1213,14 +1213,15 @@
               <label class="field ome-span-2"><span>Paciente</span><input class="inp" id="omeNombre" placeholder="Apellido y nombre"></label>
               <label class="field"><span>Diagnóstico CIE10</span><input class="inp" id="omeDiagnostico" value="Z000" placeholder="Ej: Z000"></label>
               <label class="field"><span>Código</span><input class="inp" id="omeCodigo" inputmode="numeric" placeholder="Ej: 820165"></label>
-              <label class="field ome-span-2"><span>Práctica</span><input class="inp" id="omePractica" placeholder="Buscar por código o nombre..." oninput="omeBuscarPracticasDebounced()"></label>
+              <label class="field ome-span-2 ome-practice-field"><span>Práctica</span><input class="inp" id="omePractica" placeholder="Buscar por código o nombre..." oninput="omeBuscarPracticasDebounced()" autocomplete="off">
+                <div class="ome-suggestions" id="omeSuggestions" style="display:none"></div>
+              </label>
               <label class="field ome-span-all"><span>Pedido / mensaje</span><textarea class="inp ome-textarea" id="omeMensaje" placeholder="Texto libre para dejar contexto. Más adelante se podrá parsear desde WhatsApp o Telegram."></textarea></label>
             </div>
             <div class="ome-actions-row">
               <button class="btn btn-ghost btn-sm" type="button" onclick="omeBuscarPracticas()">Buscar práctica</button>
               <span class="nom-muted" id="omeNomInfo"></span>
             </div>
-            <div class="ome-suggestions" id="omeSuggestions" style="display:none"></div>
             <div class="lc-notice info" id="omeNotice" style="display:none"></div>
           </div>
 

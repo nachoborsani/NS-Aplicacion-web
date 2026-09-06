@@ -8151,7 +8151,7 @@ function mostrarResultadoTarea(tipo, t){
 }
 
 // ===== Generar OME especialista =====
-var OME_WEB = { medicos: [], taskTimer: null, searchTimer: null, lastTaskId: '' };
+var OME_WEB = { medicos: [], taskTimer: null, searchTimer: null, lastTaskId: '', closeSearchWired: false };
 function omeNotice(kind, title, text){
   var el = document.getElementById('omeNotice');
   if (!el) return;
@@ -8171,6 +8171,20 @@ function omeClienteActual(){
   return (CLIENTS || []).find(function(c){ return c.slug === slug; }) || null;
 }
 async function loadOmeWebView(){
+  if (!OME_WEB.closeSearchWired) {
+    document.addEventListener('click', function(ev){
+      var box = document.getElementById('omeSuggestions');
+      var field = document.querySelector('.ome-practice-field');
+      if (box && field && !field.contains(ev.target)) box.style.display = 'none';
+    });
+    document.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape') {
+        var box = document.getElementById('omeSuggestions');
+        if (box) box.style.display = 'none';
+      }
+    });
+    OME_WEB.closeSearchWired = true;
+  }
   var sel = document.getElementById('omeCliente');
   if (sel && !sel.options.length){
     try {
@@ -8237,10 +8251,12 @@ async function omeBuscarPracticas(){
     if (!box || !rows.length) return;
     window._OME_PRACTICAS = rows;
     box.innerHTML = rows.map(function(row, i){
+      var practiceCode = row.practiceCode || row.code || '';
+      var practiceDescription = row.practiceDescription || row.description || '';
       return '<button type="button" onclick="omeElegirPractica(' + i + ')">'
-        + '<b>' + esc(row.code || '') + '</b>'
-        + '<div>' + esc(row.description || '') + '<span>' + esc([row.moduleCode, row.moduleDescription].filter(Boolean).join(' - ')) + '</span></div>'
-        + '<span>' + esc(moneyFmt(row.total || 0)) + '</span>'
+        + '<b>' + esc(practiceCode) + '</b>'
+        + '<div><div class="ome-sug-name">' + esc(practiceDescription || '-') + '</div><span class="ome-sug-module">' + esc([row.moduleCode, row.moduleDescription].filter(Boolean).join(' - ')) + '</span></div>'
+        + '<span class="ome-sug-money">' + esc(moneyFmt(row.total || 0)) + '</span>'
         + '</button>';
     }).join('');
     box.style.display = '';
@@ -8254,8 +8270,8 @@ function omeElegirPractica(i){
   if (!row) return;
   var c = document.getElementById('omeCodigo');
   var p = document.getElementById('omePractica');
-  if (c) c.value = row.code || '';
-  if (p) p.value = row.description || '';
+  if (c) c.value = row.practiceCode || row.code || '';
+  if (p) p.value = row.practiceDescription || row.description || '';
   var box = document.getElementById('omeSuggestions'); if (box) box.style.display = 'none';
   var info = document.getElementById('omeNomInfo'); if (info) info.textContent = [row.moduleCode, row.moduleDescription].filter(Boolean).join(' - ');
 }
