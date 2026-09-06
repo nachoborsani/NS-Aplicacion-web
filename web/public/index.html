@@ -1370,6 +1370,28 @@
           <div class="modal-body" id="taskResBody" style="padding:18px"></div>
         </div>
 
+        <!-- ===== Modal: motivo al desestimar un informe ===== -->
+        <div class="scrim" id="desestScrim" onclick="cerrarDesestimar()"></div>
+        <div class="modal" id="desestModal" role="dialog" aria-modal="true" style="max-width:440px">
+          <div class="modal-head"><h3 id="desestTitle">Desestimar informe</h3><button class="x" onclick="cerrarDesestimar()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" style="padding:18px">
+            <p class="nom-muted" id="desestSub" style="margin:0 0 12px">Se da por cerrado y no se sube. Elegí el motivo:</p>
+            <div id="desestMotivos" class="desest-motivos"></div>
+            <label class="field" style="margin-top:12px">
+              <span>Otro motivo (opcional)</span>
+              <input class="inp" id="desestOtro" maxlength="200" placeholder="Escribí un motivo…" oninput="desestOtroInput()">
+            </label>
+            <div id="desestAdmin" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="desestToggleEditar()"><span id="desestEditLbl">⚙️ Editar motivos</span></button>
+              <div id="desestEditor" style="display:none;margin-top:10px"></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+              <button class="btn btn-ghost" type="button" onclick="cerrarDesestimar()">Cancelar</button>
+              <button class="btn btn-primary" type="button" id="desestOk" onclick="desestConfirmar()" disabled>Desestimar</button>
+            </div>
+          </div>
+        </div>
+
         <div class="scrim" id="cabinaScrim" onclick="cerrarCabinaModal()"></div>
         <div class="modal cab-modal" id="cabinaModal" role="dialog" aria-modal="true">
           <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>

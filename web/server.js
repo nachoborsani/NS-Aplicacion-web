@@ -1457,6 +1457,11 @@ function loadInformesConfig() {
       ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" })),
     ];
   }
+  // Motivos por los que un informe se desestima (no se sube). Configurables por
+  // el admin desde la cabina. Se siembran los dos habituales.
+  if (!Array.isArray(cfg.motivosDesestimacion)) {
+    cfg.motivosDesestimacion = ["NO PAMI", "NO CORRESPONDE"];
+  }
   return cfg;
 }
 function saveInformesConfig(cfg) {
@@ -9005,7 +9010,32 @@ const server = http.createServer(async (req, res) => {
       descripciones: (cfg.descripciones || []).map((d) => ({
         id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
       })),
+      motivosDesestimacion: cfg.motivosDesestimacion || [],
     });
+  }
+  // Guardar la lista de motivos de desestimación (solo admin). La usa la cabina
+  // al desestimar un informe.
+  if (p === "/api/informes/motivos-desestimacion" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const crudos = Array.isArray(body.motivos) ? body.motivos : [];
+    const vistos = new Set();
+    const limpia = [];
+    for (const m of crudos) {
+      const txt = String(m || "").trim().slice(0, 60);
+      if (!txt) continue;
+      const k = txt.toUpperCase();
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      limpia.push(txt);
+    }
+    const cfg = loadInformesConfig();
+    cfg.motivosDesestimacion = limpia;
+    saveInformesConfig(cfg);
+    return json(res, 200, { motivosDesestimacion: limpia });
   }
   // Diagnóstico (admin): confirma si la config vive en el volumen persistente
   // y qué scope hay guardado. Sirve para descartar "se borra en cada deploy".

@@ -1869,6 +1869,14 @@
   /* Barra de selección múltiple (desestimar en lote). */
   .cab-bulkbar{align-items:center;gap:8px;padding:3px 8px 3px 10px;background:rgba(20,150,150,.10);border:1px solid rgba(20,150,150,.3);border-radius:8px;font-size:13px;white-space:nowrap}
   .cab-bulkbar b{font-size:14px}
+  /* Modal de motivo al desestimar */
+  .desest-motivos{display:flex;flex-wrap:wrap;gap:8px}
+  .desest-chip{padding:8px 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);font-size:13.5px;cursor:pointer;transition:border-color .12s,background .12s}
+  .desest-chip:hover{border-color:var(--accent,#12b3a6)}
+  .desest-chip.on{background:color-mix(in srgb,#12b3a6 16%,var(--surface));border-color:#12b3a6;color:#0a7d73;font-weight:600}
+  .desest-edit-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:13.5px}
+  .desest-edit-add{display:flex;gap:8px;margin-top:10px}
+  .desest-edit-add .inp{flex:1;min-width:0}
   .cab-badge.ok{background:color-mix(in srgb,#12b3a6 18%,var(--surface));color:#0a7d73}
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}

@@ -8580,18 +8580,120 @@ async function cabSubirSeleccionados(){
     seguirTarea(d.task.id, 'subir-informes');
   }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
 }
+// ===== Motivo al desestimar (modal + motivos configurables) =====
+function motivosDesestActuales(){
+  var m = (typeof INFORMES_CFG === 'object' && INFORMES_CFG && INFORMES_CFG.motivosDesestimacion) || [];
+  return m.length ? m.slice() : ['NO PAMI', 'NO CORRESPONDE'];
+}
+var _desestResolve = null; // resolvedor de la Promise abierta
+var _desestSel = '';       // motivo elegido de la lista
+// Abre el modal y devuelve una Promise que resuelve con el motivo (string) o null si se cancela.
+function pedirMotivoDesest(cantidad){
+  return new Promise(function(resolve){
+    _desestResolve = resolve;
+    _desestSel = '';
+    var t = document.getElementById('desestTitle');
+    if (t) t.textContent = cantidad > 1 ? ('Desestimar ' + cantidad + ' informes') : 'Desestimar informe';
+    var sub = document.getElementById('desestSub');
+    if (sub) sub.textContent = (cantidad > 1 ? ('Se dan por cerrados ' + cantidad + ' informes y no se suben. ') : 'Se da por cerrado y no se sube. ') + 'Elegí el motivo:';
+    var otro = document.getElementById('desestOtro'); if (otro) otro.value = '';
+    var ok = document.getElementById('desestOk'); if (ok) ok.disabled = true;
+    var adm = document.getElementById('desestAdmin'); if (adm) adm.style.display = (ME && ME.role === 'admin') ? '' : 'none';
+    var ed = document.getElementById('desestEditor'); if (ed) ed.style.display = 'none';
+    var lbl = document.getElementById('desestEditLbl'); if (lbl) lbl.textContent = '⚙️ Editar motivos';
+    renderDesestMotivos();
+    showModal('desestModal', 'desestScrim');
+    // Traé la lista real de config (si no estaba cargada) y re-render.
+    ensureInformesCfg(function(){ renderDesestMotivos(); });
+  });
+}
+function renderDesestMotivos(){
+  var cont = document.getElementById('desestMotivos'); if (!cont) return;
+  var lista = motivosDesestActuales();
+  cont.innerHTML = lista.map(function(m, i){
+    return '<button type="button" class="desest-chip' + (_desestSel === m ? ' on' : '') + '" onclick="desestElegirIdx(' + i + ')">' + esc(m) + '</button>';
+  }).join('') || '<span class="nom-muted">No hay motivos cargados. Escribí uno abajo.</span>';
+}
+function desestElegirIdx(i){
+  var lista = motivosDesestActuales();
+  _desestSel = lista[i] || '';
+  var otro = document.getElementById('desestOtro'); if (otro) otro.value = '';
+  var ok = document.getElementById('desestOk'); if (ok) ok.disabled = !_desestSel;
+  renderDesestMotivos();
+}
+function desestOtroInput(){
+  var otro = document.getElementById('desestOtro');
+  var txt = otro ? otro.value.trim() : '';
+  if (txt){ _desestSel = ''; renderDesestMotivos(); }
+  var ok = document.getElementById('desestOk'); if (ok) ok.disabled = !(txt || _desestSel);
+}
+function cerrarDesestimar(){
+  hideModal('desestModal', 'desestScrim');
+  if (_desestResolve){ var r = _desestResolve; _desestResolve = null; r(null); }
+}
+function desestConfirmar(){
+  var otro = document.getElementById('desestOtro');
+  var txt = otro ? otro.value.trim() : '';
+  var motivo = txt || _desestSel || '';
+  if (!motivo) return;
+  hideModal('desestModal', 'desestScrim');
+  if (_desestResolve){ var r = _desestResolve; _desestResolve = null; r(motivo); }
+}
+// --- Edición de motivos (solo admin) ---
+function desestToggleEditar(){
+  var ed = document.getElementById('desestEditor');
+  var lbl = document.getElementById('desestEditLbl');
+  if (!ed) return;
+  var abrir = ed.style.display === 'none';
+  ed.style.display = abrir ? '' : 'none';
+  if (lbl) lbl.textContent = abrir ? '⚙️ Ocultar edición' : '⚙️ Editar motivos';
+  if (abrir) renderDesestEditor();
+}
+function renderDesestEditor(){
+  var ed = document.getElementById('desestEditor'); if (!ed) return;
+  var lista = motivosDesestActuales();
+  ed.innerHTML =
+    lista.map(function(m, i){
+      return '<div class="desest-edit-row"><span>' + esc(m) + '</span>'
+        + '<button type="button" class="rowbtn" title="Quitar" onclick="desestQuitarMotivo(' + i + ')">🗑️</button></div>';
+    }).join('')
+    + '<div class="desest-edit-add"><input class="inp" id="desestNuevo" maxlength="60" placeholder="Nuevo motivo…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();desestAgregarMotivo();}">'
+    + '<button type="button" class="btn btn-sm" onclick="desestAgregarMotivo()">Agregar</button></div>';
+}
+async function guardarMotivosDesest(lista){
+  var res = await api('/api/informes/motivos-desestimacion', { motivos: lista });
+  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo guardar.'); return false; }
+  if (typeof INFORMES_CFG !== 'object' || !INFORMES_CFG) INFORMES_CFG = {};
+  INFORMES_CFG.motivosDesestimacion = (res.data && res.data.motivosDesestimacion) || lista;
+  return true;
+}
+async function desestAgregarMotivo(){
+  var inp = document.getElementById('desestNuevo');
+  var v = inp ? inp.value.trim() : '';
+  if (!v) return;
+  var lista = motivosDesestActuales();
+  if (lista.some(function(x){ return x.toUpperCase() === v.toUpperCase(); })){ if (inp) inp.value = ''; return; }
+  lista.push(v);
+  if (await guardarMotivosDesest(lista)){ renderDesestEditor(); renderDesestMotivos(); }
+}
+async function desestQuitarMotivo(i){
+  var lista = motivosDesestActuales();
+  lista.splice(i, 1);
+  if (await guardarMotivosDesest(lista)){ renderDesestEditor(); renderDesestMotivos(); }
+}
 async function cabDesestimarSeleccionados(){
   var ids = [].slice.call(document.querySelectorAll('#cabBody .cab-check'))
     .filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
   if (!ids.length) return;
-  if (!confirm('¿Desestimar ' + ids.length + ' informe(s)?\n\nSe dan por cerrados y NO se suben. Salen de la lista de revisar. Se pueden reactivar después uno por uno.')) return;
+  var motivo = await pedirMotivoDesest(ids.length);
+  if (motivo === null) return; // canceló
   var slug = document.getElementById('cabCliente').value;
   var cnt = document.getElementById('cabSelCount');
   var okN = 0, errN = 0;
   for (var i = 0; i < ids.length; i++){
     if (cnt) cnt.textContent = 'desestimando ' + (i+1) + '/' + ids.length + '…';
     try {
-      var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(ids[i])+'/desestimar', { desestimar: true });
+      var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(ids[i])+'/desestimar', { desestimar: true, motivo: motivo });
       if (res.ok){ okN++; var it=(CAB_ITEMS||[]).find(function(x){return x.id===ids[i];}); if(it) it.desestimado = (res.data && res.data.item && res.data.item.desestimado) || { at:new Date().toISOString() }; }
       else errN++;
     } catch(e){ errN++; }
@@ -8768,9 +8870,14 @@ async function borrarInforme(id){
 }
 // Desestimar (dar por cerrado sin subir) / reactivar. `esta`=true si ya está desestimado.
 async function toggleDesestimar(id, esta){
-  if (!esta && !confirm('¿Desestimar este informe?\n\nEl operador lo da por cerrado y NO se sube (el estudio no se hizo, no corresponde, etc.). Sale de la lista de revisar. Se puede reactivar después.')) return;
+  var motivo = '';
+  if (!esta){
+    motivo = await pedirMotivoDesest(1);
+    if (motivo === null) return; // canceló
+  }
   var slug = document.getElementById('cabCliente').value;
-  var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/desestimar', { desestimar: !esta });
+  var payload = esta ? { desestimar: false } : { desestimar: true, motivo: motivo };
+  var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/desestimar', payload);
   if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
   var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   if (it){ if (res.data.item && res.data.item.desestimado) it.desestimado = res.data.item.desestimado; else delete it.desestimado; }
