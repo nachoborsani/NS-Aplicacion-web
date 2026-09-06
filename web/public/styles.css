@@ -363,6 +363,13 @@
   .ini-size-m{grid-column:span 1;grid-row:span 2}
   .ini-size-w{grid-column:span 2;grid-row:span 1}
   .ini-size-l{grid-column:span 2;grid-row:span 2}
+  /* En 3 columnas (desktop): Mensajes y Tareas ocupan 3 filas (bien altos) y
+     así llenan sus columnas, empujando los 3 chicos (Pendientes, Actividad,
+     Accesos) a la 3ra columna, apilados. */
+  @media(min-width:1251px){
+    .ini-grid > .ini-panel-msg,
+    .ini-grid > .ini-panel-tareas{grid-row:span 3}
+  }
   /* Pantallas medianas (laptops): 2 columnas para que no queden angostas. */
   @media(max-width:1250px){
     .ini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
