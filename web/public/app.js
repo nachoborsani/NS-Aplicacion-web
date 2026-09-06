@@ -7707,6 +7707,7 @@ function srvFormatSchedule(s){
   out.push('• Refresco de bandeja <b>'+esc(s.bandejaRefresh)+'</b> · reintentos <b>'+esc(s.bandejaRetry)+'</b>');
   out.push('• "Actualizar ahora" <b>cada '+esc(String(s.pollerCadaMin))+' min</b>');
   out.push('• Traer del mail (informes): <b>10:00, 14:00, 16:00, 18:00</b>');
+  out.push('• Resumen de subidas por Telegram: <b>19:00</b>');
   var cad = s.scheffelaarCadena || {};
   var partes = SRV_DIAS_ORDEN.filter(function(d){ return (cad[d]||[]).length; })
      .map(function(d){ return SRV_DIA_LBL[d]+' '+cad[d].join(', '); });
