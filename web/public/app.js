@@ -8556,6 +8556,27 @@ function cabLimpiarSel(){
   [].slice.call(document.querySelectorAll('#cabBody .cab-check')).forEach(function(c){ c.checked = false; });
   cabToggleSel();
 }
+async function cabSubirSeleccionados(){
+  var checks = [].slice.call(document.querySelectorAll('#cabBody .cab-check')).filter(function(c){ return c.checked; });
+  if (!checks.length) return;
+  var ids = [], noListos = 0;
+  checks.forEach(function(c){
+    var it = (CAB_ITEMS||[]).find(function(x){ return x.id===c.value; });
+    var e = it ? cabEstadoDe(it) : '';
+    if (e==='ok' || e==='resuelto') ids.push(c.value); else noListos++;
+  });
+  if (!ids.length){ alert('Ninguno de los seleccionados está "Listo para subir".'); return; }
+  var extra = noListos ? ('\n\n(' + noListos + ' seleccionado(s) no están listos y se omiten.)') : '';
+  if (!confirm('Vas a SUBIR ' + ids.length + ' informe(s) a PAMI.\n\nEs real e irreversible.' + extra + '\n\n¿Confirmás?')) return;
+  var slug = document.getElementById('cabCliente').value;
+  cabEstado('Preparando…','working');
+  try{
+    var r = await fetch('/api/admin/worker/tasks', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ type:'subir-informes', clientSlug: slug, payload:{ informeIds: ids } }) });
+    var d = await r.json();
+    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
+    seguirTarea(d.task.id, 'subir-informes');
+  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
+}
 async function cabDesestimarSeleccionados(){
   var ids = [].slice.call(document.querySelectorAll('#cabBody .cab-check'))
     .filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
