@@ -5278,10 +5278,10 @@ class PamiDocumentacionController:
                           // El input de "Nro. de Orden" no tiene name/id descriptivo: lo ubicamos
                           // por el TEXTO del label y tomamos el input de su misma fila. (Antes caía
                           // a inputs[0] = el campo Afiliado, y metía la OME donde no iba.)
-                          const norm = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                          const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
                           const lbl = Array.from(document.querySelectorAll('label, span, div, td, th'))
                             .filter(visible)
-                            .find((el) => /nro\.?\s*de\s*orden/.test(norm(el.textContent)) && norm(el.textContent).length < 25);
+                            .find((el) => /nro\\.?\\s*de\\s*orden/.test(norm(el.textContent)) && norm(el.textContent).length < 25);
                           if (lbl) {
                             const lb = lbl.getBoundingClientRect();
                             input = inputs.find((el) => {
