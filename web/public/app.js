@@ -8969,6 +8969,11 @@ function renderCabinaRows(slug, items){
   if (!items.length){ body.innerHTML = '<tr><td colspan="8" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
+    // Si está "Falta validar", en la columna OME mostramos SOLO la(s) que falta
+    // validar (el resto del estudio ya se transmitió), no todas las del informe.
+    if (cabEstadoDe(it) === 'falta_validar' && it.resuelto && (it.resuelto.omesFaltaValidar || []).length) {
+      omesArr = it.resuelto.omesFaltaValidar;
+    }
     var ome = omesArr.join(', ');
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
