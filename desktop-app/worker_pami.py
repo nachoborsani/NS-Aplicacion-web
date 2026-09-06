@@ -135,19 +135,33 @@ def _creds(web, slug):
 
 
 def _descargar_archivo(web, slug, informe_id, dest: Path):
-    """Baja el archivo original del informe con la cookie de la sesión admin."""
+    """Baja el archivo original del informe con la cookie de la sesión admin.
+    Reintenta ante 5xx pasajeros (deploy / gateway) y cortes de conexión."""
     host, port, https = _split(web.base_url)
     headers = {"Cookie": web._cookie} if getattr(web, "_cookie", "") else {}
-    conn = (http.client.HTTPSConnection if https else http.client.HTTPConnection)(host, port, timeout=60)
-    try:
-        conn.request("GET", f"/api/clientes/{slug}/informes/{informe_id}/archivo", headers=headers)
-        r = conn.getresponse()
-        body = r.read()
-        if r.status != 200:
-            raise RuntimeError(f"HTTP {r.status} al bajar el archivo")
-        dest.write_bytes(body)
-    finally:
-        conn.close()
+    last = ""
+    for intento in range(3):
+        conn = (http.client.HTTPSConnection if https else http.client.HTTPConnection)(host, port, timeout=60)
+        try:
+            conn.request("GET", f"/api/clientes/{slug}/informes/{informe_id}/archivo", headers=headers)
+            r = conn.getresponse()
+            body = r.read()
+            if r.status >= 500:
+                last = f"HTTP {r.status} al bajar el archivo"
+                if intento < 2:
+                    time.sleep(0.8 * (intento + 1)); continue
+                raise RuntimeError(last)
+            if r.status != 200:
+                raise RuntimeError(f"HTTP {r.status} al bajar el archivo")
+            dest.write_bytes(body)
+            return
+        except (ConnectionResetError, http.client.IncompleteRead) as exc:
+            last = str(exc)
+            if intento < 2:
+                time.sleep(0.8 * (intento + 1)); continue
+            raise RuntimeError(f"No pude bajar el archivo: {last}")
+        finally:
+            conn.close()
 
 
 # --- Tareas ----------------------------------------------------------------

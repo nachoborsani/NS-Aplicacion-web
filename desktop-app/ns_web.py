@@ -138,6 +138,14 @@ class NSWebClient:
                 if set_cookie:
                     self._cookie = set_cookie.split(";", 1)[0]
                 text = resp.read().decode("utf-8") or "{}"
+                # 502/503/504 = gateway caido / la web reiniciandose (deploy). Es pasajero:
+                # se reintenta en vez de tumbar la tarea. Solo GET (idempotente).
+                if resp.status >= 500 and method.upper() == "GET":
+                    last_err = NSWebError(f"HTTP {resp.status}")
+                    if intento < 2:
+                        time.sleep(0.8 * (intento + 1))
+                        continue
+                    raise last_err
                 if resp.status >= 400:
                     try:
                         message = json.loads(text).get("error") or f"HTTP {resp.status}"
@@ -327,6 +335,14 @@ class NSWebClient:
                 conn.request("POST", path, body=data, headers=headers)
                 resp = conn.getresponse()
                 text = resp.read().decode("utf-8") or "{}"
+                # 502/503/504 = gateway caido / la web reiniciandose (deploy). Es pasajero:
+                # se reintenta en vez de tumbar la tarea. Solo GET (idempotente).
+                if resp.status >= 500 and method.upper() == "GET":
+                    last_err = NSWebError(f"HTTP {resp.status}")
+                    if intento < 2:
+                        time.sleep(0.8 * (intento + 1))
+                        continue
+                    raise last_err
                 if resp.status >= 400:
                     try:
                         message = json.loads(text).get("error") or f"HTTP {resp.status}"
