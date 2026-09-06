@@ -4210,6 +4210,13 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
     };
   });
 }
+// Si hay un panel de faltan-informes abierto, lo vuelve a dibujar (para reflejar
+// "Generado"/desestimado cuando llega la data async, tras F5 sin esperar la bandeja).
+function redibujarPanelFaltantesAbierto(){
+  if (typeof MESCURSO_PANEL_ABIERTO === 'string' && /^informes/.test(MESCURSO_PANEL_ABIERTO) && typeof mesCursoTogglePanel === 'function'){
+    var t = MESCURSO_PANEL_ABIERTO; MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(t);
+  }
+}
 // Abre/cierra debajo de los cuadros el detalle copiable.
 function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
@@ -5008,14 +5015,12 @@ async function loadClientMesCurso(){
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
   // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.
+  // OMEs ya generadas y faltantes desestimados: se ESPERAN junto con el resto (no
+  // fire-and-forget), así al dibujar los paneles ya sabemos qué mostrar como
+  // "Generado"/desestimado aunque la bandeja no se haya refrescado. Antes se perdía
+  // al apretar F5 (se dibujaba antes de que llegara la data).
   MESCURSO_OMES_GEN = {};
-  api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas').then(function(r){
-    if (r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
-  }).catch(function(){});
   MESCURSO_FALTANTES_DESEST = {};
-  api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados').then(function(r){
-    if (r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_FALTANTES_DESEST[String(o).replace(/\D/g, '')] = 1; });
-  }).catch(function(){});
   // El mes anterior es SIEMPRE el calendario anterior a hoy (Agosto -> Julio), no
   // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
   // cartel de "falta reporte" (no se cae a un mes más viejo).
@@ -5027,7 +5032,11 @@ async function loadClientMesCurso(){
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
     api('/api/bandeja/refresco/estado'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2)),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados'),
   ]);
+  if (results[5] && results[5].ok && results[5].data) ((results[5].data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
+  if (results[6] && results[6].ok && results[6].data) ((results[6].data.omes) || []).forEach(function(o){ MESCURSO_FALTANTES_DESEST[String(o).replace(/\D/g, '')] = 1; });
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var estadoSync = (results[0].ok && results[0].data) ? results[0].data.estado : null;
