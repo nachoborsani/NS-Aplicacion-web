@@ -7003,6 +7003,19 @@ const server = http.createServer(async (req, res) => {
         },
       });
     }
+    // Complemento de la guardia: si el período ya tiene un reporte (pendiente),
+    // NO duplicar — actualizarlo en el lugar. Cerrar/subir de nuevo un mes es
+    // idempotente (le pasó a CIMA/ST-IGNACIO/UOM: se acumularon 2-3 reportes del
+    // mismo julio, todos pendientes). force=1 permite el duplicado a propósito.
+    const mismoPeriodo = (store.items || []).find((it) =>
+      it.clientSlug === slug && reportDashboardPeriod(it) === nuevoPeriod);
+    if (mismoPeriodo && !forceDup) {
+      const idx = store.items.indexOf(mismoPeriodo);
+      const updated = actualizarReporteEnLugar(mismoPeriodo, rows);
+      store.items[idx] = updated;
+      saveClientReportsStore(store);
+      return json(res, 200, { report: reportListItem(updated), actualizado: true });
+    }
     store.items = [report, ...(store.items || [])];
     saveClientReportsStore(store);
     return json(res, 200, { report: reportListItem(report) });
