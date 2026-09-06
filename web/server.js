@@ -6949,9 +6949,16 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
+    const b = await readBody(req);
     const st = loadBandejaRefresco();
     st.pedidoAt = new Date().toISOString();
     st.pedidoPor = me.username || "";
+    // Alcance opcional del pedido: `slugs` acota a esos clientes (vacío = todas
+    // las bandejas, como el botón del mes en curso); `forzarTransmision` transmite
+    // ya, a cualquier hora (los clientes "en análisis" igual nunca transmiten).
+    st.slugs = Array.isArray(b && b.slugs)
+      ? b.slugs.map((s) => String(s).trim()).filter(Boolean).slice(0, 200) : [];
+    st.forzarTransmision = !!(b && b.forzarTransmision);
     saveBandejaRefresco(st);
     return json(res, 200, { ok: true, pedidoAt: st.pedidoAt });
   }
@@ -6963,6 +6970,8 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, {
       pedidoAt: st.pedidoAt || null, ackAt: st.ackAt || null,
       corriendo: !!st.corriendo, pendiente, terminadoAt: st.terminadoAt || null,
+      slugs: Array.isArray(st.slugs) ? st.slugs : [],
+      forzarTransmision: !!st.forzarTransmision,
     });
   }
   // La PC avisa que arrancó (corriendo=true) o que terminó (ack del pedido).

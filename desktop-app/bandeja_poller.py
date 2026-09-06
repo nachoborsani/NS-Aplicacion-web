@@ -33,14 +33,21 @@ def run(progress=None) -> None:
         return
 
     pedido = st.get("pedidoAt")
-    log(f"refresco pedido ({pedido}) — corriendo la bajada…")
+    # Alcance opcional del pedido (lo manda "Actualizar bandejas" del Inicio):
+    # `slugs` acota a esos clientes (vacío = todas), `forzarTransmision` transmite
+    # a cualquier hora. Sin alcance, se comporta igual que antes.
+    only = [s for s in (st.get("slugs") or []) if s] or None
+    forzar = bool(st.get("forzarTransmision"))
+    alcance = f"{len(only)} cliente(s)" if only else "todas las bandejas"
+    log(f"refresco pedido ({pedido}) — corriendo la bajada… ({alcance}{', transmite ya' if forzar else ''})")
     try:
         web._request("POST", "/api/bandeja/refresco/ack", body={"corriendo": True})
     except Exception:  # noqa: BLE001
         pass
 
     try:
-        resultados = bandeja_sync.sync_all(progress=progress or (lambda m: log("  " + m)))
+        resultados = bandeja_sync.sync_all(only_slugs=only, forzar_transmision=forzar,
+                                           progress=progress or (lambda m: log("  " + m)))
         ok = sum(1 for r in resultados if r.get("ok"))
         log(f"bajada lista: {ok}/{len(resultados)} ok.")
         # Aviso por Telegram (separa clave equivocada de error transitorio).

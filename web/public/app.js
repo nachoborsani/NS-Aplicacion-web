@@ -1563,6 +1563,7 @@ function iniAccesosCatalogo(){
     items.push({ id:'v:cruzas', ic:'🔀', tx:'Cruzas', run:function(){ go('cruzas'); } });
     items.push({ id:'v:resumen', ic:'💰', tx:'Resumen de cuenta', run:function(){ go('resumen'); } });
     items.push({ id:'v:facturas', ic:'🧾', tx:'Facturas', run:function(){ go('facturas'); } });
+    items.push({ id:'a:bandejas', ic:'🔄', tx:'Actualizar bandejas', run:function(){ abrirActualizarBandejas(); } });
   }
   // Configuración general: mismo criterio que navGeneral (oculto si tiene clientes restringidos).
   if (esAdmin || (role === 'operador' && !restringido)) {
@@ -1649,6 +1650,35 @@ function iniAccesosToggle(id, on, scope){
   else if (!on && i>=0){ elegidos.splice(i,1); }
   iniAccesosGuardar(elegidos);
   iniAccesosRender(scope);
+}
+// Acceso rápido "Actualizar bandejas": pregunta qué grupos refrescar y deja el
+// pedido de refresco on-demand (el server del VPS lo levanta en su próximo sondeo).
+// El transmitir/no-transmitir va pegado al grupo: los "en análisis" (Potenciales)
+// nunca transmiten aunque se fuerce; Consultorios y Med. Cabecera sí.
+async function abrirActualizarBandejas(){
+  var html = ''
+    + '<div style="display:flex;flex-direction:column;gap:12px;text-align:left">'
+    + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="actbCons" checked style="width:18px;height:18px"> <span><b>Consultorios</b> <span class="nom-muted">· incluye transmisión</span></span></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="actbMc" checked style="width:18px;height:18px"> <span><b>Med. Cabecera</b> <span class="nom-muted">· incluye transmisión</span></span></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="actbPot" checked style="width:18px;height:18px"> <span><b>Potenciales</b> <span class="nom-muted">· sin transmisión</span></span></label>'
+    + '<div class="nom-muted" style="margin-top:2px;font-size:12px">Se transmite al toque (a cualquier hora) en los grupos que corresponde. El refresco arranca en unos minutos.</div>'
+    + '</div>';
+  var ok = await nsConfirm(null, { cuerpoHtml: html, titulo:'Actualizar bandejas', okLabel:'Actualizar' });
+  if (!ok) return;
+  var cons = !!(document.getElementById('actbCons')||{}).checked;
+  var mc = !!(document.getElementById('actbMc')||{}).checked;
+  var pot = !!(document.getElementById('actbPot')||{}).checked;
+  if (!cons && !mc && !pot){ nsAlert('Elegí al menos un grupo para actualizar.'); return; }
+  if (!CLIENTS || !CLIENTS.length){ var r0 = await api('/api/clientes'); if (r0.ok) CLIENTS = r0.data.clients || []; }
+  var slugs = (CLIENTS||[]).filter(function(c){
+    if (c.enAnalisis) return pot;             // Potenciales (en análisis)
+    if (c.tipo === 'med_cabecera') return mc; // Med. Cabecera
+    return cons;                               // Consultorios (el resto)
+  }).map(function(c){ return c.slug; });
+  if (!slugs.length){ nsAlert('No hay clientes en los grupos elegidos.'); return; }
+  var res = await api('/api/bandeja/refresco/pedir', { slugs: slugs, forzarTransmision: true });
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo pedir el refresco.'); return; }
+  nsAlert('Refresco pedido para ' + slugs.length + ' cliente(s). Arranca en unos minutos.', { titulo:'Actualizar bandejas' });
 }
 
 // ===== Reordenar las tarjetas del Inicio arrastrando una encima de otra.
