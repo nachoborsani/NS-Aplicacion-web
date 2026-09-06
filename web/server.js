@@ -568,7 +568,7 @@ function matchearInforme(slug, extract) {
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
-async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha) {
+async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha, asunto) {
   let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
   let error = null;
   if (informeExtract) {
@@ -583,7 +583,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   }
   const match = matchearInforme(slug, extract);
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
-           storedAt: new Date().toISOString(), fecha: fecha || "", extract, match, resuelto: null, error };
+           storedAt: new Date().toISOString(), fecha: fecha || "", asunto: asunto || "", extract, match, resuelto: null, error };
 }
 // Conjunto de N° de OME TRANSMITIDAS de un cliente (bandeja del mes + reporte del mes
 // anterior, igual que el matcher). Sirve para saber, con la bandeja COMPLETA, si las
@@ -8248,7 +8248,7 @@ const server = http.createServer(async (req, res) => {
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
         fs.writeFileSync(path.join(destDir, stored), f.buffer);
-        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha);
+        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto);
         store[slug].items.unshift(rec);
         nuevos.push(rec);
       }
@@ -8561,6 +8561,38 @@ const server = http.createServer(async (req, res) => {
     try { fs.unlinkSync(path.join(informesDir, slug, it.stored)); } catch {}
     saveInformes(store);
     return json(res, 200, { ok: true });
+  }
+
+  // Limpiar (borrar del sistema) los informes YA TRANSMITIDOS hasta una fecha
+  // (inclusive), para liberar espacio. Solo toca los "ya_transmitido"; lo que falta
+  // subir, lo desestimado, lo reclamado y los que no tienen fecha resoluble no se tocan.
+  const informeLimpiar = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/limpiar-transmitidos$/);
+  if (informeLimpiar && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
+    const slug = informeLimpiar[1];
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const hasta = String(body.hasta || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return json(res, 400, { error: "Fecha inválida (se espera AAAA-MM-DD)." });
+    const store = loadInformes();
+    const cli = store[slug] || { items: [] };
+    const items = cli.items || [];
+    const fechaDe = (it) => String((it && (it.fecha || it.storedAt)) || "").slice(0, 10);
+    let borrados = 0;
+    const quedan = [];
+    for (const it of items) {
+      const f = fechaDe(it);
+      if (estadoInforme(it) === "ya_transmitido" && f && f <= hasta) {
+        try { fs.unlinkSync(path.join(informesDir, slug, it.stored)); } catch {}
+        borrados++;
+      } else {
+        quedan.push(it);
+      }
+    }
+    if (borrados) { cli.items = quedan; store[slug] = cli; saveInformes(store); }
+    return json(res, 200, { borrados });
   }
 
   // ---- Credencial provisoria: consulta en vivo a PAMI y devuelve el PDF ----

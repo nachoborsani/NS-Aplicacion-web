@@ -8041,6 +8041,32 @@ async function tareaCabina(tipo){
     seguirTarea(d.task.id, tipo);
   }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
+// Limpiar (borrar del sistema) los informes YA TRANSMITIDOS hasta una fecha, para
+// liberar espacio. Pide la fecha (inclusive) y confirma con el conteo antes de borrar.
+async function limpiarTransmitidos(){
+  var slug = document.getElementById('cabCliente').value;
+  if (!slug){ nsAlert('Elegí un cliente.'); return; }
+  var hoy = new Date().toISOString().slice(0,10);
+  var hastaDef = (document.getElementById('cabHasta')||{}).value || hoy;
+  var hasta = await nsPrompt('Borrar los YA TRANSMITIDOS con fecha hasta (inclusive):', {
+    titulo: '🧹 Limpiar transmitidos', inputType: 'date', valor: hastaDef, okLabel: 'Seguir' });
+  if (hasta === null || !hasta) return;
+  // Conteo local para avisar antes de borrar (mismo criterio de fecha que la tabla).
+  var aBorrar = (CAB_ITEMS||[]).filter(function(it){
+    return cabEstadoDe(it) === 'ya_transmitido' && cabFecha(it) && cabFecha(it) <= hasta;
+  }).length;
+  if (!aBorrar){ nsAlert('No hay informes ya transmitidos hasta esa fecha.'); return; }
+  if (!await nsConfirm('Se borran ' + aBorrar + ' informe(s) YA TRANSMITIDOS (con fecha hasta ' + hasta + ') y se liberan sus archivos. No afecta a los que faltan subir. No se puede deshacer.', { titulo:'Limpiar transmitidos', okLabel:'Borrar '+aBorrar, peligro:true })) return;
+  cabEstado('Limpiando…','working');
+  try{
+    var r = await fetch('/api/clientes/'+slug+'/informes/limpiar-transmitidos', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ hasta: hasta }) });
+    var d = await r.json();
+    cabEstado('','');
+    if (!r.ok){ nsAlert((d && d.error) || 'No se pudo limpiar.'); return; }
+    await refreshCabina();
+    nsAlert('Listo: se borraron ' + (d.borrados||0) + ' informe(s) ya transmitidos.');
+  }catch(e){ cabEstado('',''); nsAlert('Error de red al limpiar.'); }
+}
 function seguirTarea(id, tipo){
   var accion=(tipo==='subir-informes')?'Subiendo a PAMI':'Auditando en PAMI';
   var vueltas=0;
@@ -8727,12 +8753,13 @@ function cabBadge(it){
 }
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
-  if (!items.length){ body.innerHTML = '<tr><td colspan="7" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
+  if (!items.length){ body.innerHTML = '<tr><td colspan="8" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
     var ome = omesArr.join(', ');
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
+    var asunto = it.asunto ? esc(it.asunto) : '—';
     return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
       + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
@@ -8740,6 +8767,7 @@ function renderCabinaRows(slug, items){
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
       + '<td>'+cabBadge(it)+'</td>'
       + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
+      + '<td class="cab-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
         + ((cabEstadoDe(it)==='ok'||cabEstadoDe(it)==='resuelto') ? '<button class="rowbtn" title="Subir este a PAMI" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
@@ -9114,7 +9142,7 @@ function _nsAskOpen(opts){
     if (_nsAskMode === 'prompt'){
       if (wrap) wrap.style.display = '';
       var lbl = document.getElementById('nsAskInputLabel'); if (lbl) lbl.textContent = opts.inputLabel || '';
-      if (inp){ inp.placeholder = opts.placeholder || ''; inp.value = opts.valor || ''; }
+      if (inp){ inp.type = opts.inputType || 'text'; inp.placeholder = opts.placeholder || ''; inp.value = opts.valor || ''; }
     } else if (wrap){ wrap.style.display = 'none'; }
     var okB = document.getElementById('nsAskOkBtn');
     if (okB){

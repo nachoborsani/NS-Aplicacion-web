@@ -72,6 +72,13 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
     // Fecha del mail (YYYY-MM-DD) para poder filtrar los informes por período.
     let fecha = "";
     try { const d = new Date(Number(msg.data.internalDate)); if (!isNaN(d)) fecha = d.toISOString().slice(0, 10); } catch { /* sin fecha */ }
+    // Asunto del mail (para mostrarlo como columna en la cabina).
+    let asunto = "";
+    try {
+      const hs = (msg.data.payload && msg.data.payload.headers) || [];
+      const h = hs.find((x) => String(x.name || "").toLowerCase() === "subject");
+      asunto = h ? String(h.value || "").trim().slice(0, 300) : "";
+    } catch { /* sin asunto */ }
     for (const part of iterarPartes(msg.data.payload || {})) {
       const filename = String(part.filename || "").trim();
       if (!filename || !TIPOS_ACEPTADOS.has(part.mimeType)) continue;
@@ -88,7 +95,7 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
       }
       if (!data) continue;
       vistos.add(safe);
-      bajados.push({ filename: safe, buffer: Buffer.from(data, "base64"), fecha });
+      bajados.push({ filename: safe, buffer: Buffer.from(data, "base64"), fecha, asunto });
     }
   }
   return bajados;
