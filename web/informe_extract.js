@@ -174,7 +174,7 @@ function practicaDe(fuente) {
 // La misma logica ya vivia en el desktop (`_detectar_obra_social_informe`
 // en pami_documentacion.py). Se porta igual para que las dos puntas
 // digan lo mismo del mismo PDF.
-const OBRAS_NO_PAMI = { osde: "OSDE", privado: "PRIVADO", ospeca: "OSPECA" };
+const OBRAS_NO_PAMI = { osde: "OSDE", privado: "PRIVADO", ospeca: "OSPECA", particular: "PARTICULAR" };
 
 function obraSocialDe(texto) {
   const t = String(texto || "");
@@ -198,6 +198,18 @@ function obraSocialDe(texto) {
     if (!/\b(?:benef|beneficio|afiliado|afiliada)\b/.test(k)) continue;
     for (const [marca, etiqueta] of Object.entries(OBRAS_NO_PAMI)) {
       if (new RegExp("(?:^|\\s)" + marca + "(?:\\s|$)").test(k)) return etiqueta;
+    }
+  }
+  // Caso ECUD/urodinamia: "Paciente: SANTA CRUZ CELSA   PARTICULAR   Fecha: ..." —
+  // la cobertura va como columna en la línea del paciente, sin decir "obra social".
+  // Se toma solo si "PARTICULAR" aparece como palabra suelta (no "en particular")
+  // y en una línea de paciente/cobertura o como token aislado, para no esconder por
+  // error un informe de PAMI que mencione la palabra en la prosa.
+  for (const linea of lineas) {
+    const u = norm(linea).toUpperCase();
+    if (!/\bPARTICULAR\b/.test(u) || /\bEN\s+PARTICULAR\b/.test(u)) continue;
+    if (u === "PARTICULAR" || /\b(PACIENTE|COBERTURA|OBRA\s+SOCIAL|AFILIAD|BENEF)\b/.test(u)) {
+      return "PARTICULAR";
     }
   }
   return "";
