@@ -638,90 +638,102 @@
                     </div>
                   </div>
                 </div>
-                <div class="dashboard-resumen" id="clientDashboardResumen" style="display:none"></div>
-                <div class="dashboard-nomnote" id="clientDashboardNomNote" style="display:none"></div>
-                <div class="dashboard-kpis" id="clientDashboardKpis">
-                  <div><b>$ 0,00</b><span>Facturación neta</span></div>
-                  <div><b>0</b><span>Consultas</span></div>
-                  <div><b>0</b><span>Prácticas / estudios</span></div>
-                  <div><b>$ 0,00</b><span>Débitos</span></div>
-                  <div><b>0</b><span>Ausentes</span></div>
-                </div>
-                <div class="dashboard-compare" id="clientDashboardCompare" style="display:none"></div>
-                <div class="dashboard-ranking" id="clientDashboardRanking" style="display:none"></div>
-                <div class="dashboard-trend" id="clientDashboardTrend" style="display:none"></div>
-                <div class="dashboard-module-wrap">
-                  <div class="dashboard-module-filter" id="clientDashboardModuleFilter">
-                    <div class="dmf-bar">
-                      <button type="button" class="dmf-btn" onclick="toggleDashModuleFilterPop()">
-                        🔎 Filtrar módulos<span class="dmf-count" id="dmfCount" style="display:none"></span>
-                      </button>
-                      <div class="dmf-chips" id="dmfChips"></div>
-                      <button type="button" class="dmf-clear" id="dmfClearBtn" onclick="clearDashModuleFilter()" style="display:none">Ver todos</button>
-                    </div>
-                    <div class="dmf-pop" id="dmfPop" style="display:none">
-                      <div class="dmf-pop-head">
-                        <input type="text" class="inp" id="dmfSearch" placeholder="Buscar módulo..." oninput="renderDashModuleFilterOptions()">
-                        <button type="button" class="dmf-pop-close" onclick="toggleDashModuleFilterPop(false)" aria-label="Cerrar">&times;</button>
-                      </div>
-                      <div class="dmf-pop-list" id="dmfPopList"></div>
-                      <div class="dmf-pop-actions">
-                        <button type="button" class="btn btn-ghost btn-sm" onclick="clearDashModuleFilter()">Limpiar</button>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="toggleDashModuleFilterPop(false)">Listo</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="dashboard-module-sort" id="clientDashboardModuleSort" style="display:none">
-                    <span>Ordenar por</span>
-                    <button type="button" data-sort="neto" onclick="setDashModuleSort('neto')">Facturación</button>
-                    <button type="button" data-sort="suba" onclick="setDashModuleSort('suba')">Mayor suba</button>
-                    <button type="button" data-sort="baja" onclick="setDashModuleSort('baja')">Mayor baja</button>
-                  </div>
-                  <table class="dashboard-module-table">
-                    <thead><tr><th>Módulo</th><th>Consultas</th><th>Prácticas</th><th title="Participación sobre el total del mes, o sobre el total filtrado si hay un filtro de módulos activo">Neto · % part.</th></tr></thead>
-                    <tbody id="clientDashboardModules"><tr><td colspan="4" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="client-nomenclador collapsed" id="clientNomencladorBox">
-                <div class="client-nom-head">
-                  <div>
-                    <h3>Nomenclador del cliente</h3>
-                    <p>Filtrado automaticamente por módulos activos.</p>
-                  </div>
-                  <div class="client-nom-controls">
-                    <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
-                    <input class="inp" id="clientNomQ" placeholder="Buscar prestación o código..." oninput="queueClientNomencladorSearch()">
-                  </div>
-                  <div class="client-nom-actions">
-                    <button class="btn btn-ghost" id="clientNomXlsxBtn" onclick="exportClientNomenclador('xlsx')" type="button" title="Descargar en Excel">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Excel
-                    </button>
-                    <button class="btn btn-ghost" id="clientNomPdfBtn" onclick="exportClientNomenclador('pdf')" type="button" title="Descargar en PDF">
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
-                    </button>
-                    <button class="btn btn-ghost client-nom-toggle" id="clientNomToggleBtn" onclick="toggleClientNomenclador()" type="button" aria-expanded="false">Mostrar</button>
-                  </div>
+                <div class="client-tabs dash-hojas" id="dashHojas">
+                  <button class="active" id="dashTabResumen" type="button" onclick="setDashSection('resumen')">Resumen</button>
+                  <button id="dashTabModulos" type="button" onclick="setDashSection('modulos')">Módulos</button>
+                  <button id="dashTabNomenclador" type="button" onclick="setDashSection('nomenclador')">Nomenclador</button>
                 </div>
 
-                <div class="tablecard nom-table client-nom-body">
-                  <div class="table-head">
-                    <div><b>Resultados</b><span id="clientNomMeta">Todavía no hay búsqueda.</span></div>
+                <div id="dash-sub-resumen">
+                  <div class="dashboard-resumen" id="clientDashboardResumen" style="display:none"></div>
+                  <div class="dashboard-nomnote" id="clientDashboardNomNote" style="display:none"></div>
+                  <div class="dashboard-kpis" id="clientDashboardKpis">
+                    <div><b>$ 0,00</b><span>Facturación neta</span></div>
+                    <div><b>0</b><span>Consultas</span></div>
+                    <div><b>0</b><span>Prácticas / estudios</span></div>
+                    <div><b>$ 0,00</b><span>Débitos</span></div>
+                    <div><b>0</b><span>Ausentes</span></div>
                   </div>
-                  <div class="table-scroll">
-                    <table class="nom-results-table">
-                      <colgroup>
-                        <col class="col-module">
-                        <col class="col-practice">
-                        <col class="col-type">
-                        <col class="col-scope">
-                        <col class="col-total">
-                        <col class="col-auth">
-                      </colgroup>
-                      <thead><tr><th>Módulo</th><th>Prestación</th><th>Tipo</th><th>Ámbito</th><th>Total</th><th>Autorización</th></tr></thead>
-                      <tbody id="clientNomBody"></tbody>
+                  <div class="dashboard-compare" id="clientDashboardCompare" style="display:none"></div>
+                  <div class="dashboard-ranking" id="clientDashboardRanking" style="display:none"></div>
+                  <div class="dashboard-trend" id="clientDashboardTrend" style="display:none"></div>
+                </div>
+
+                <div id="dash-sub-modulos" style="display:none">
+                  <div class="dashboard-module-wrap">
+                    <div class="dashboard-module-filter" id="clientDashboardModuleFilter">
+                      <div class="dmf-bar">
+                        <button type="button" class="dmf-btn" onclick="toggleDashModuleFilterPop()">
+                          🔎 Filtrar módulos<span class="dmf-count" id="dmfCount" style="display:none"></span>
+                        </button>
+                        <div class="dmf-chips" id="dmfChips"></div>
+                        <button type="button" class="dmf-clear" id="dmfClearBtn" onclick="clearDashModuleFilter()" style="display:none">Ver todos</button>
+                      </div>
+                      <div class="dmf-pop" id="dmfPop" style="display:none">
+                        <div class="dmf-pop-head">
+                          <input type="text" class="inp" id="dmfSearch" placeholder="Buscar módulo..." oninput="renderDashModuleFilterOptions()">
+                          <button type="button" class="dmf-pop-close" onclick="toggleDashModuleFilterPop(false)" aria-label="Cerrar">&times;</button>
+                        </div>
+                        <div class="dmf-pop-list" id="dmfPopList"></div>
+                        <div class="dmf-pop-actions">
+                          <button type="button" class="btn btn-ghost btn-sm" onclick="clearDashModuleFilter()">Limpiar</button>
+                          <button type="button" class="btn btn-primary btn-sm" onclick="toggleDashModuleFilterPop(false)">Listo</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="dashboard-module-sort" id="clientDashboardModuleSort" style="display:none">
+                      <span>Ordenar por</span>
+                      <button type="button" data-sort="neto" onclick="setDashModuleSort('neto')">Facturación</button>
+                      <button type="button" data-sort="suba" onclick="setDashModuleSort('suba')">Mayor suba</button>
+                      <button type="button" data-sort="baja" onclick="setDashModuleSort('baja')">Mayor baja</button>
+                    </div>
+                    <table class="dashboard-module-table">
+                      <thead><tr><th>Módulo</th><th>Consultas</th><th>Prácticas</th><th title="Participación sobre el total del mes, o sobre el total filtrado si hay un filtro de módulos activo">Neto · % part.</th></tr></thead>
+                      <tbody id="clientDashboardModules"><tr><td colspan="4" class="muted-cell">Sin reportes guardados.</td></tr></tbody>
                     </table>
+                  </div>
+                </div>
+
+                <div id="dash-sub-nomenclador" style="display:none">
+                  <div class="client-nomenclador" id="clientNomencladorBox">
+                    <div class="client-nom-head">
+                      <div>
+                        <h3>Nomenclador del cliente</h3>
+                        <p>Filtrado automaticamente por módulos activos.</p>
+                      </div>
+                      <div class="client-nom-controls">
+                        <select class="inp" id="clientNomPeriod" onchange="loadClientNomenclador()"><option value="">Sin cargar</option></select>
+                        <input class="inp" id="clientNomQ" placeholder="Buscar prestación o código..." oninput="queueClientNomencladorSearch()">
+                      </div>
+                      <div class="client-nom-actions">
+                        <button class="btn btn-ghost" id="clientNomXlsxBtn" onclick="exportClientNomenclador('xlsx')" type="button" title="Descargar en Excel">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Excel
+                        </button>
+                        <button class="btn btn-ghost" id="clientNomPdfBtn" onclick="exportClientNomenclador('pdf')" type="button" title="Descargar en PDF">
+                          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="tablecard nom-table client-nom-body">
+                      <div class="table-head">
+                        <div><b>Resultados</b><span id="clientNomMeta">Todavía no hay búsqueda.</span></div>
+                      </div>
+                      <div class="table-scroll">
+                        <table class="nom-results-table">
+                          <colgroup>
+                            <col class="col-module">
+                            <col class="col-practice">
+                            <col class="col-type">
+                            <col class="col-scope">
+                            <col class="col-total">
+                            <col class="col-auth">
+                          </colgroup>
+                          <thead><tr><th>Módulo</th><th>Prestación</th><th>Tipo</th><th>Ámbito</th><th>Total</th><th>Autorización</th></tr></thead>
+                          <tbody id="clientNomBody"></tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

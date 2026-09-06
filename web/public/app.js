@@ -1733,7 +1733,7 @@ var ACTIVE_CLIENT = null;
 var CLIENT_NOM_TIMER = null;
 // Última solapa de cliente usada: se recuerda entre clientes y entre recargas.
 var CLIENT_SECTION = (function(){ try { return localStorage.getItem('ns_client_section') || 'dashboard'; } catch (e){ return 'dashboard'; } })();
-var CLIENT_NOM_OPEN = false;
+var DASH_SECTION = 'resumen'; // hoja activa dentro de "Dashboard de reportes"
 var CLIENT_REPORT_ROWS = [];
 var CLIENT_REPORT_SHOW_ALL = false;  // true = renderizar todas las filas (reportes grandes) aunque tarde
 var CLIENT_REPORT_QUERY = '';
@@ -2002,18 +2002,17 @@ function fillClientReportPeriodSelect(items, selected){
   var preferred = selected || (list[0] ? list[0].value : '');
   if (preferred && [].slice.call(el.options).some(function(o){ return o.value === preferred; })) el.value = preferred;
 }
-function renderClientNomencladorPanel(){
-  var box = document.getElementById('clientNomencladorBox');
-  var btn = document.getElementById('clientNomToggleBtn');
-  if (box) box.classList.toggle('collapsed', !CLIENT_NOM_OPEN);
-  if (btn) {
-    btn.textContent = CLIENT_NOM_OPEN ? 'Ocultar' : 'Mostrar';
-    btn.setAttribute('aria-expanded', CLIENT_NOM_OPEN ? 'true' : 'false');
-  }
-}
-function toggleClientNomenclador(){
-  CLIENT_NOM_OPEN = !CLIENT_NOM_OPEN;
-  renderClientNomencladorPanel();
+// Hojas del "Dashboard de reportes": Resumen / Módulos / Nomenclador. El
+// nomenclador estaba antes al final de la página (había que scrollear todo
+// el dashboard para verlo); ahora es una hoja propia, accesible de entrada.
+function setDashSection(sec){
+  DASH_SECTION = sec;
+  var secc = { resumen: 'dash-sub-resumen', modulos: 'dash-sub-modulos', nomenclador: 'dash-sub-nomenclador' };
+  var tabs = { resumen: 'dashTabResumen', modulos: 'dashTabModulos', nomenclador: 'dashTabNomenclador' };
+  Object.keys(secc).forEach(function(k){
+    var s = document.getElementById(secc[k]); if (s) s.style.display = (k === sec) ? '' : 'none';
+    var t = document.getElementById(tabs[k]); if (t) t.classList.toggle('active', k === sec);
+  });
 }
 function renderNomencladorRows(rows, bodyId, metaId, total){
   var body = document.getElementById(bodyId);
@@ -2374,7 +2373,7 @@ function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
   // NO forzamos la solapa: se mantiene la última usada (CLIENT_SECTION). Si venís
   // por un link con solapa, selectClientWhenReady la aplica después.
-  CLIENT_NOM_OPEN = false;
+  setDashSection('resumen');
   renderClientList();
   renderActiveClient();
 }
@@ -4579,7 +4578,6 @@ async function renderActiveClient(){
   setClientHeaderUp('');   // se limpia al cambiar de cliente; loadClientPami lo recarga
   aplicarPestanasCliente();
   setClientSection(CLIENT_SECTION);
-  renderClientNomencladorPanel();
   loadClientPami();
   document.getElementById('clientBusinessName').textContent = client.businessName;
   document.getElementById('clientCuit').textContent = client.cuit;
@@ -5238,7 +5236,7 @@ function renderClientDashboard(data){
     } else {
       trend.style.display = '';
       var maxSerie = series.reduce(function(mx, s){ return Math.max(mx, Math.abs(Number(s.net || 0))); }, 0) || 1;
-      trend.innerHTML = '<div class="dashboard-trend-title">Facturación neta — evolución</div>'
+      trend.innerHTML = '<div class="dashboard-trend-title">Facturación neta por mes<span class="dashboard-trend-hint">tocá un mes para verlo en el dashboard</span></div>'
         + '<div class="dashboard-trend-bars">'
         + series.map(function(s){
             var h = Math.max(4, Math.round(Math.abs(Number(s.net || 0)) / maxSerie * 100));

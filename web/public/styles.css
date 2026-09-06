@@ -935,14 +935,18 @@
   .debit-status.confirmado{color:var(--success);background:var(--success-bg);border-color:var(--success)}
   .debit-status:hover{filter:brightness(.97)}
   .dashboard-trend{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:12px 14px}
-  .dashboard-trend-title{font-size:10.5px;font-weight:750;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .dashboard-trend-title{font-size:10.5px;font-weight:750;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:baseline;gap:8px}
+  .dashboard-trend-hint{font-size:10px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text-3,var(--text-2));opacity:.75}
   .dashboard-trend-bars{display:flex;align-items:flex-end;gap:8px;height:118px}
-  .dtb{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;background:transparent;border:0;cursor:pointer;padding:0;border-radius:7px}
+  .dtb{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;background:transparent;border:0;cursor:pointer;padding:6px 0 4px;border-radius:9px;transition:background .15s ease}
   .dtb-flag{position:absolute;top:16px;left:-4px;font-size:12px;line-height:1;cursor:help;z-index:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
-  .dtb:hover{background:var(--hover)}
+  .dtb:hover,.dtb:focus-visible{background:var(--hover)}
+  .dtb:focus-visible{outline:2px solid var(--turq);outline-offset:-2px}
   .dtb-area{flex:1;width:100%;min-height:0;display:flex;align-items:flex-end;justify-content:center}
-  .dtb-col{display:block;width:100%;max-width:44px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#9bb6cd,#7593b0)}
-  .dtb.hot .dtb-col{background:linear-gradient(180deg,var(--turq),var(--turq-d))}
+  .dtb-col{display:block;width:100%;max-width:44px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#9bb6cd,#7593b0);box-shadow:0 2px 5px rgba(15,40,60,.2);transition:transform .15s ease,box-shadow .15s ease}
+  .dtb:hover .dtb-col{transform:translateY(-3px);box-shadow:0 6px 12px rgba(15,40,60,.3)}
+  .dtb.hot .dtb-col{background:linear-gradient(180deg,var(--turq),var(--turq-d));box-shadow:0 2px 6px rgba(15,120,110,.32)}
+  .dtb.hot:hover .dtb-col{box-shadow:0 6px 14px rgba(15,120,110,.4)}
   .dtb-amt{font-size:10.5px;font-weight:750;color:var(--text-2);font-variant-numeric:tabular-nums}
   .dtb.hot .dtb-amt{color:var(--turq-d)}
   .dtb-mo{font-size:10.5px;color:var(--text-2);font-weight:600}
@@ -1215,16 +1219,13 @@
   .module-chip-list{display:flex;gap:7px;flex-wrap:wrap}
   .module-chip{display:inline-flex;gap:6px;align-items:center;background:var(--celeste);color:#0f7f7c;border-radius:999px;padding:4px 9px;font-size:11.5px;font-weight:650}
   .client-nomenclador{overflow:hidden}
-  .client-nomenclador.collapsed .client-nom-controls,.client-nomenclador.collapsed .client-nom-body{display:none}
-  .client-nomenclador.collapsed .client-nom-head{border-bottom:0;align-items:center}
   .client-nom-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:15px 16px;border-bottom:1px solid var(--border)}
   .client-nom-head h3{margin-bottom:2px}
   .client-nom-head p{margin:0;color:var(--text-2);font-size:12px}
-  .client-nom-toggle{height:34px;border-radius:8px;font-size:12px;padding:0 12px;margin-left:auto}
   .client-nom-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
   .client-nom-actions .btn{height:34px;border-radius:8px;font-size:12px;padding:0 12px;gap:6px}
-  .client-nom-actions .client-nom-toggle{margin-left:0}
   .client-nom-controls{display:grid;grid-template-columns:170px minmax(220px,320px);gap:10px}
+  .dash-hojas{margin:2px 0 16px}
   .report-model-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .report-model-grid div{border:1px solid var(--border);border-radius:10px;padding:11px;background:var(--surface-2)}
   .report-model-grid b,.report-model-grid span{display:block}
