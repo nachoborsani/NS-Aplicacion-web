@@ -6772,6 +6772,22 @@ const server = http.createServer(async (req, res) => {
     store[slug] = entry;
     saveClientBandejas(store);
     saveClientBandejaCupEntry(slug, entry);
+    // Con la bandeja nueva, re-matcheamos los informes de este cliente para que su
+    // estado refleje la validación/transmisión actual: una OME recién validada pasa
+    // a "Listo para subir", una que sigue sin validar queda en "Falta validar", y lo
+    // que se transmitió queda "Ya transmitido". Solo se recalcula it.match; lo
+    // resuelto a mano / desestimado / reclamado es trabajo del operador y no se toca.
+    try {
+      const infStore = loadInformes();
+      const items = (infStore[slug] && infStore[slug].items) || [];
+      let cambios = 0;
+      for (const it of items) {
+        if (!it || it.desestimado || it.reclamado || it.resuelto || it.error || !it.extract) continue;
+        it.match = matchearInforme(slug, it.extract);
+        cambios++;
+      }
+      if (cambios) saveInformes(infStore);
+    } catch { /* si el re-match falla, la bandeja igual quedó guardada */ }
     return json(res, 200, { ok: true, count: rows.length });
   }
 

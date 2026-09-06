@@ -319,8 +319,11 @@ function matchInforme(informe, bandeja, padronCliente) {
           // bloquea: no es facturable acá, no hay nada para revisar. `todas` (todas con
           // OME) baja la confianza a media, pero igual resuelve.
           const completo = !ambiguo;
+          // Si alguna OME pendiente de transmitir todavía no está validada, no se
+          // puede subir: falta validar esas OMEs primero.
+          const faltaValidar = pendientes.some((p) => !p.validada);
           return {
-            estado: completo ? (pendientes.length ? "ok" : "ya_transmitido") : (todosTransmitidos ? "ya_transmitido" : "revisar_practica"),
+            estado: completo ? (pendientes.length ? (faltaValidar ? "falta_validar" : "ok") : "ya_transmitido") : (todosTransmitidos ? "ya_transmitido" : "revisar_practica"),
             ome: completo ? (principal.nOrden || "") : "",
             omes: varias.map((p) => p.nOrden).filter(Boolean),
             prestacion: completo ? principal : null,
@@ -333,8 +336,10 @@ function matchInforme(informe, bandeja, padronCliente) {
       }
       const { elegida, ambiguo } = elegirPractica(delPaciente, informe.practicaHint, informe.fecha);
       if (elegida) {
+        // Para SUBIR el informe la OME tiene que estar validada en PAMI. Si todavía
+        // no lo está (ni transmitida), no está lista: falta validar esa OME primero.
         return {
-          estado: elegida.transmitida ? "ya_transmitido" : "ok",
+          estado: elegida.transmitida ? "ya_transmitido" : (elegida.validada ? "ok" : "falta_validar"),
           ome: elegida.nOrden || "",
           prestacion: elegida,
           via: "beneficio_" + via,
@@ -370,7 +375,7 @@ function matchInforme(informe, bandeja, padronCliente) {
   const mejores = conScore.filter((x) => x.s >= Math.max(0.6, top - 0.01)).map((x) => x.p);
   const { elegida, ambiguo } = elegirPractica(mejores, informe.practicaHint, informe.fecha);
   if (elegida && top >= 0.8) {
-    return { estado: elegida.transmitida ? "ya_transmitido" : "ok", ome: elegida.nOrden || "",
+    return { estado: elegida.transmitida ? "ya_transmitido" : (elegida.validada ? "ok" : "falta_validar"), ome: elegida.nOrden || "",
       prestacion: elegida, via: "nombre", confianza: top >= 0.99 ? "media" : "baja", candidatos: mejores };
   }
   return { estado: "revisar_nombre", ome: "", prestacion: null, via: "nombre", confianza: "baja",

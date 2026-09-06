@@ -8482,6 +8482,7 @@ function toggleCabEstadoFiltro(k){
 }
 var CAB_ESTADOS = {
   ok:{t:'Listo para subir',c:'ok'},
+  falta_validar:{t:'Falta validar',c:'warn'},
   factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
   revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'},
@@ -8489,7 +8490,7 @@ var CAB_ESTADOS = {
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','factura','revisar_practica','revisar_nombre','sin_ome','reclamado','ya_transmitido','desestimado','sin_match'];
+  var orden = ['ok','falta_validar','factura','revisar_practica','revisar_nombre','sin_ome','reclamado','ya_transmitido','desestimado','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = CAB_ESTADO_FILTRO === k;
@@ -8504,6 +8505,7 @@ function cabBadge(it){
   var e = cabEstadoDe(it);
   if (e === 'desestimado') return '<span class="cab-badge muted" title="Desestimado por el operador: no se sube">Desestimado</span>';
   if (e === 'reclamado') { var nr=(it.reclamado&&it.reclamado.nota)?(' — '+it.reclamado.nota):''; return '<span class="cab-badge warn" title="Reclamado al centro, esperando datos'+esc(nr)+'">Reclamado</span>'; }
+  if (e === 'falta_validar') return '<span class="cab-badge warn" title="La OME está en la bandeja pero todavía no está validada en PAMI. Hay que validarla antes de poder subir el informe.">Falta validar</span>';
   if (it.resuelto) {
     var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
     if (e === 'ya_transmitido') return '<span class="cab-badge muted" title="Resuelto a mano; '+(no>1?'sus '+no+' OMEs ya están':'su OME ya está')+' transmitido(s) en PAMI, no hay nada para subir">Ya transmitido</span>';

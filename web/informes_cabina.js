@@ -66,6 +66,7 @@ function candidatoLiviano(p) {
 // Etiqueta legible del estado para la UI (castellano llano).
 const ETIQUETA_ESTADO = {
   ok: "Listo para subir",
+  falta_validar: "Falta validar",
   factura: "Factura",
   ya_transmitido: "Ya transmitido",
   revisar_practica: "Revisar cuál práctica",
