@@ -1162,17 +1162,19 @@
               <div><b id="cabResultTitle">Informes</b><span id="cabResultMeta">Elegí un cliente.</span></div>
               <div style="display:flex;gap:6px;align-items:center">
                 <span id="cabTareaEstado" class="cab-estado" hidden></span>
-                <button class="btn btn-ghost btn-sm" onclick="tareaCabina('auditar-informes')" title="Revisa en PAMI, uno por uno, cuáles de estos informes ya tienen el documento cargado. No sube nada: solo te dice cuántos están y cuántos faltan.">🔍 Auditar</button>
-                <button class="btn btn-primary btn-sm" onclick="tareaCabina('subir-informes')" title="Subir los informes a PAMI">⬆️ Subir a PAMI</button>
-                <button class="btn btn-ghost btn-sm" onclick="descargarCabina('xlsx')" title="Descargar Excel">📊 Excel</button>
-                <button class="btn btn-ghost btn-sm" onclick="descargarCabina('pdf')" title="Descargar PDF">📄 PDF</button>
+                <span id="cabToolbarNormal" style="display:contents">
+                  <button class="btn btn-ghost btn-sm" onclick="tareaCabina('auditar-informes')" title="Revisa en PAMI, uno por uno, cuáles de estos informes ya tienen el documento cargado. No sube nada: solo te dice cuántos están y cuántos faltan.">🔍 Auditar</button>
+                  <button class="btn btn-primary btn-sm" onclick="tareaCabina('subir-informes')" title="Subir los informes a PAMI">⬆️ Subir a PAMI</button>
+                  <button class="btn btn-ghost btn-sm" onclick="descargarCabina('xlsx')" title="Descargar Excel">📊 Excel</button>
+                  <button class="btn btn-ghost btn-sm" onclick="descargarCabina('pdf')" title="Descargar PDF">📄 PDF</button>
+                </span>
+                <span id="cabToolbarSel" class="cab-bulkbar" style="display:none">
+                  <span><b id="cabSelCount">0</b> seleccionado(s)</span>
+                  <button class="btn btn-primary btn-sm" onclick="cabSubirSeleccionados()" title="Subir a PAMI los seleccionados que estén listos">⬆️ Subir</button>
+                  <button class="btn btn-sm" onclick="cabDesestimarSeleccionados()" title="Desestimar los seleccionados">🚫 Desestimar</button>
+                  <button class="btn btn-ghost btn-sm" onclick="cabLimpiarSel()">Limpiar</button>
+                </span>
               </div>
-            </div>
-            <div id="cabBulkBar" class="cab-bulkbar" hidden>
-              <span><b id="cabSelCount">0</b> seleccionado(s)</span>
-              <button class="btn btn-primary btn-sm" onclick="cabSubirSeleccionados()" title="Subir a PAMI los seleccionados que estén listos">⬆️ Subir seleccionados</button>
-              <button class="btn btn-sm" onclick="cabDesestimarSeleccionados()">🚫 Desestimar seleccionados</button>
-              <button class="btn btn-ghost btn-sm" onclick="cabLimpiarSel()">Limpiar</button>
             </div>
             <div class="table-scroll">
               <table class="nom-results-table">

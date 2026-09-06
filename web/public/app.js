@@ -8542,9 +8542,12 @@ function renderCabinaRows(slug, items){
 function cabToggleSel(){
   var checks = [].slice.call(document.querySelectorAll('#cabBody .cab-check'));
   var n = checks.filter(function(c){ return c.checked; }).length;
-  var bar = document.getElementById('cabBulkBar'); var cnt = document.getElementById('cabSelCount');
+  var cnt = document.getElementById('cabSelCount');
   if (cnt) cnt.textContent = n;
-  if (bar) bar.hidden = (n === 0);
+  var normal = document.getElementById('cabToolbarNormal');
+  var sel = document.getElementById('cabToolbarSel');
+  if (normal) normal.style.display = (n === 0) ? 'contents' : 'none';
+  if (sel) sel.style.display = (n === 0) ? 'none' : 'inline-flex';
   var all = document.getElementById('cabCheckAll');
   if (all){ all.checked = checks.length > 0 && n === checks.length; all.indeterminate = n > 0 && n < checks.length; }
 }
@@ -8583,7 +8586,7 @@ async function cabDesestimarSeleccionados(){
   if (!ids.length) return;
   if (!confirm('¿Desestimar ' + ids.length + ' informe(s)?\n\nSe dan por cerrados y NO se suben. Salen de la lista de revisar. Se pueden reactivar después uno por uno.')) return;
   var slug = document.getElementById('cabCliente').value;
-  var bar = document.getElementById('cabBulkBar'); var cnt = document.getElementById('cabSelCount');
+  var cnt = document.getElementById('cabSelCount');
   var okN = 0, errN = 0;
   for (var i = 0; i < ids.length; i++){
     if (cnt) cnt.textContent = 'desestimando ' + (i+1) + '/' + ids.length + '…';
