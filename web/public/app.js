@@ -4335,9 +4335,10 @@ function arrancarPollRefresco(){
   }, 15000);
 }
 async function pedirRefrescoBandejas(btn){
+  var label = (btn && btn.getAttribute('data-refresh-label')) || 'Actualizar';
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
   var r = await req('POST', '/api/bandeja/refresco/pedir', {});
-  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
+  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 ' + label; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
   REFRESCO_ACTIVO = true;
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Actualizando…'; btn.title = 'La PC lo está corriendo'; }
   arrancarPollRefresco();
@@ -4408,7 +4409,7 @@ function mesCursoBotonRefresco(label){
   var texto = label || 'Actualizar';
   return REFRESCO_ACTIVO
     ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
-    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" title="Actualizar bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
+    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Actualizar bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
 }
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 function mesCursoCardMesEnCurso(r, estado){
