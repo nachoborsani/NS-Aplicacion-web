@@ -3972,7 +3972,25 @@ function opcionesModelo(m){
   return { presets: presets, medicos: medicos, camposReq: camposReq,
     haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 };
 }
-// Crear + subir a PAMI. Si el modelo tiene opciones, abre el modal para elegir.
+// Faltantes de la MISMA visita (mismo paciente + mismo turno) que la fila x, con
+// OME y no desestimados/ya generados. Sirve para que un mismo informe cubra las
+// varias OMEs de la visita (ej. ORL cerumen + tratamiento).
+function faltantesDeVisita(panelId, x){
+  var benef = String((x && x.benef) || '').replace(/\D/g, '');
+  var turno = String((x && x.turno) || '');
+  var xo = String((x && x.ome) || '').replace(/\D/g, '');
+  return (faltanInformesDe(panelId) || []).filter(function(f){
+    if (String(f.benef || '').replace(/\D/g, '') !== benef) return false;
+    if (String(f.turno || '') !== turno) return false;
+    var od = String(f.ome || '').replace(/\D/g, '');
+    if (!od) return false;
+    if (MESCURSO_FALTANTES_DESEST[od]) return false;
+    if (od !== xo && MESCURSO_OMES_GEN[od]) return false; // otra OME de la visita ya generada
+    return true;
+  });
+}
+// Crear + subir a PAMI. Si el modelo tiene opciones (o la visita tiene varias
+// OMEs), abre el modal para elegir.
 async function crearYSubirInforme(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
   if (!x) return;
@@ -3980,7 +3998,8 @@ async function crearYSubirInforme(panelId, idx, btn){
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ await nsConfirm('No hay un modelo cargado para esa práctica.', { titulo:'Sin modelo', okLabel:'Entendido', cancelLabel:'' }); return; }
   var op = opcionesModelo(m);
-  if (op.haceFalta){ modalOpcionesInforme(x, m, op, true, btn); return; }
+  var visita = faltantesDeVisita(panelId, x);
+  if (op.haceFalta || visita.length > 1){ modalOpcionesInforme(x, m, op, true, btn, visita); return; }
   var payload = payloadInformeDeFila(x);
   if (!payload) return;
   delete payload._modelo;
@@ -3996,7 +4015,10 @@ async function ejecutarCrearYSubir(payload, x, btn){
   try {
     var r = await api('/api/informes/generar-y-subir', payload);
     if (!r.ok) throw new Error((r.data && r.data.error) || ('No se pudo (HTTP ' + r.status + ').'));
-    if (x && x.ome) MESCURSO_OMES_GEN[String(x.ome).replace(/\D/g, '')] = 1; // ya generado: no ofrecer de nuevo
+    // Marca "generado" TODAS las OMEs que cubre el informe (el mismo PDF se sube a
+    // todas las de la visita), no solo la de la fila clickeada.
+    var omesGen = (r.data && r.data.omes) || (payload && payload.omes) || (x && x.ome ? [x.ome] : []);
+    omesGen.forEach(function(o){ var d = String(o).replace(/\D/g, ''); if (d) MESCURSO_OMES_GEN[d] = 1; });
     if (btn){ btn.textContent = '⏳ En cola'; btn.disabled = true; btn.title = 'Informe generado; esperando que el worker lo suba a PAMI'; }
     var taskId = r.data && r.data.taskId;
     if (taskId && btn) seguirSubidaInforme(taskId, btn);
@@ -4077,10 +4099,13 @@ function mcEnsureModalCss(){
     '.mc-inf-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#0f172a);font-weight:600;cursor:pointer;font-size:14px}',
     '.mc-inf-btn.primary{background:#2563eb;color:#fff;border-color:transparent}',
     '.mc-inf-btn.subir{background:#16a34a;color:#fff;border-color:transparent}',
+    '.mc-inf-visita{display:flex;flex-direction:column;gap:6px;border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:8px 10px}',
+    '.mc-inf-omechk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--text,#0f172a);margin:0;cursor:pointer}',
+    '.mc-inf-omechk input{width:auto}.mc-inf-omechk span{flex:1;min-width:0}.mc-inf-omechk b{color:var(--text-2,#64748b);font-size:11.5px;font-weight:600}',
   ].join('\n');
   document.head.appendChild(s);
 }
-function modalOpcionesInforme(x, m, op, subir, btn){
+function modalOpcionesInforme(x, m, op, subir, btn, visita){
   mcEnsureModalCss();
   var medDef = loteMedicoParaModelo(m.key) || (op.medicos[0] && op.medicos[0].id) || '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
@@ -4098,6 +4123,17 @@ function modalOpcionesInforme(x, m, op, subir, btn){
   // El sexo va PRIMERO (arriba de todo): al elegirlo se filtran los presets.
   var sexoCampo = op.camposReq.find(function(c){ return c.key === 'sexo'; });
   var restoCampos = op.camposReq.filter(function(c){ return c.key !== 'sexo'; });
+  // Si la visita (mismo paciente + turno) tiene varias OMEs, se ofrecen todas:
+  // el mismo informe se sube a las tildadas.
+  var visitaMulti = subir && Array.isArray(visita) && visita.length > 1;
+  var visitaHtml = visitaMulti
+    ? '<div class="mc-inf-field"><label>Esta visita tiene ' + visita.length + ' OMEs — el mismo informe se sube a las tildadas:</label><div class="mc-inf-visita">'
+      + visita.map(function(f){
+          var od = String(f.ome || '').replace(/\D/g, '');
+          var prac = String(f.practica || '').split(' - ').slice(-1)[0];
+          return '<label class="mc-inf-omechk"><input type="checkbox" class="mc-inf-ome" value="' + esc(od) + '" checked> <span>' + esc(prac) + '</span> <b>OME ' + esc(od) + '</b></label>';
+        }).join('') + '</div></div>'
+    : '';
   var scrim = document.createElement('div'); scrim.className = 'mc-inf-scrim';
   scrim.innerHTML =
     '<div class="mc-inf-box">' +
@@ -4107,6 +4143,7 @@ function modalOpcionesInforme(x, m, op, subir, btn){
         (sexoCampo ? campoHtml(sexoCampo) : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
+        visitaHtml +
         restoCampos.map(campoHtml).join('') +
       '</div>' +
       '<div class="mc-inf-foot"><button class="mc-inf-btn" id="mc-inf-cancel">Cancelar</button>' +
@@ -4155,12 +4192,16 @@ function modalOpcionesInforme(x, m, op, subir, btn){
         valores[c.key] = v;
       });
       if (falta){ nsAlert('Completá: ' + falta); return; }
+      // OMEs de la visita tildadas (si no hay bloque de visita, la OME sola).
+      var omes = [];
+      scrim.querySelectorAll('.mc-inf-ome:checked').forEach(function(c){ if (c.value) omes.push(c.value); });
+      if (!omes.length) omes = [String(x.ome || '').replace(/\D/g, '')].filter(Boolean);
       var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
       if (!payload) return;
       delete payload._modelo;
       scrim.remove();
       if (subir){
-        payload.ome = x.ome; payload.practicaTexto = x.practica || '';
+        payload.ome = x.ome; payload.omes = omes; payload.practicaTexto = x.practica || '';
         ejecutarCrearYSubir(payload, x, btn);
       } else {
         ejecutarCrear(payload, x, btn);

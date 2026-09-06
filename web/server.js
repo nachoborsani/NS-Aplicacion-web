@@ -9173,10 +9173,16 @@ const server = http.createServer(async (req, res) => {
     if (!cliente) return json(res, 400, { error: "Elegí para qué cliente es el informe." });
     const pac = body.paciente || {};
     const ome = cabinaLib.digs(body.ome);
+    // Un mismo informe puede cubrir varias OMEs de la misma visita (ej. ORL:
+    // cerumen + tratamiento, o las ecografías del mismo día). Se genera UN PDF y
+    // se sube a todas. `omes` (array) es opcional; si no viene, es la OME sola.
+    const omes = (Array.isArray(body.omes) ? body.omes : []).map((o) => cabinaLib.digs(o)).filter(Boolean);
+    if (ome && !omes.includes(ome)) omes.unshift(ome);
+    const omesUnicas = [...new Set(omes)];
     const faltan = [];
     if (!String(pac.nombre || "").trim()) faltan.push("el nombre");
     if (!String(pac.benef || "").trim()) faltan.push("el N° de beneficiario");
-    if (!ome) faltan.push("la OME");
+    if (!omesUnicas.length) faltan.push("la OME");
     if (faltan.length) return json(res, 400, { error: "Falta " + faltan.join(", ") + " para subir." });
     try {
       const cfg = loadInformesConfig();
@@ -9208,7 +9214,7 @@ const server = http.createServer(async (req, res) => {
         id, filename, ext: ".pdf", stored, origen: "generado",
         storedAt: new Date().toISOString(), fecha: extract.fecha,
         extract, match: matchearInforme(slug, extract),
-        resuelto: { ome, omes: [ome], beneficio: extract.beneficio, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido: false },
+        resuelto: { ome: omesUnicas[0], omes: omesUnicas, beneficio: extract.beneficio, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido: false },
         error: null,
       };
       const store = loadInformes();
@@ -9224,11 +9230,11 @@ const server = http.createServer(async (req, res) => {
         clientSlug: slug, payload: { informeIds: [id] },
         createdAt: new Date().toISOString(), createdBy: me.username, attempts: 0, logs: [],
       };
-      appendWorkerTaskLog(task, "info", `Informe generado y encolado por ${me.username} (OME ${ome}).`);
+      appendWorkerTaskLog(task, "info", `Informe generado y encolado por ${me.username} (OME${omesUnicas.length > 1 ? "s" : ""} ${omesUnicas.join(", ")}).`);
       state.tasks.unshift(task);
       state.tasks = state.tasks.slice(0, 500);
       saveWorkerState(state);
-      return json(res, 200, { ok: true, informeId: id, taskId: task.id, ome });
+      return json(res, 200, { ok: true, informeId: id, taskId: task.id, ome: omesUnicas[0], omes: omesUnicas });
     } catch (error) {
       console.log("[generar-y-subir] error:", error && error.message);
       return json(res, 500, { error: "No se pudo generar/encolar el informe: " + (error && error.message || "error") });
