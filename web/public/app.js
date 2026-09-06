@@ -4482,7 +4482,7 @@ function mesCursoBloqueFuturo(f){
   if (!f) return '';
   var abarca = (f.coversFrom && f.coversTo) ? (f.coversFrom + ' al ' + f.coversTo) : '';
   var deb = f.posiblesDebitosCount || 0;
-  return '<div class="mescurso-futuro" style="border-top:1px dashed var(--border,#d8dee6);margin-top:14px;padding-top:12px">'
+  return '<div class="mescurso-futuro" style="border-top:1px dashed var(--border,#d8dee6);margin-top:10px;padding-top:8px">'
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'
     + '<b>' + esc(f.label || f.period || '') + '</b>'
     + (abarca ? '<span class="mescurso-abarca">' + esc(abarca) + '</span>' : '') + '</div>'
