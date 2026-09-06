@@ -75,6 +75,18 @@
   .msg:empty{display:none}
   .msg.err{color:var(--error)}
   .msg.ok{color:var(--success)}
+  .lc-notice{display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 8px 24px rgba(15,23,42,.06);font-size:13px;line-height:1.35}
+  .lc-notice b{display:block;color:var(--text);margin-bottom:2px}
+  .lc-notice span{color:var(--text-2)}
+  .lc-notice.ok{border-color:#bbf7d0;background:#f0fdf4}
+  .lc-notice.err{border-color:#fecaca;background:#fff7f7}
+  .lc-notice.warn{border-color:#fde68a;background:#fffbeb}
+  .lc-notice.info{border-color:#bae6fd;background:#f0f9ff}
+  [data-theme="dark"] .lc-notice{background:rgba(15,23,42,.78)}
+  [data-theme="dark"] .lc-notice.ok{background:rgba(20,83,45,.22)}
+  [data-theme="dark"] .lc-notice.err{background:rgba(127,29,29,.22)}
+  [data-theme="dark"] .lc-notice.warn{background:rgba(113,63,18,.24)}
+  [data-theme="dark"] .lc-notice.info{background:rgba(12,74,110,.22)}
   .chk.sm{font-size:12.5px;gap:7px;color:var(--text-2);margin-top:0}
   .chk.sm input{width:15px;height:15px}
   .reset{position:fixed;inset:0;display:none;place-items:center;padding:24px;background:radial-gradient(1200px 600px at 70% -10%, #14335a 0%, var(--navy) 55%);z-index:55}

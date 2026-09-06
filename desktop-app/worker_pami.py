@@ -19,6 +19,7 @@ USO (dejarlo corriendo en la PC, o como tarea de Windows):
 """
 from __future__ import annotations
 
+import dataclasses
 import http.client
 import json
 import platform

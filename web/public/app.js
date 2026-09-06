@@ -8167,6 +8167,21 @@ function lcBuildParams(){
   });
   return p;
 }
+function lcNotice(kind, title, text){
+  var el = document.getElementById('lcError');
+  if (!el) return;
+  var icon = kind === 'ok' ? '✓' : (kind === 'err' ? '!' : (kind === 'warn' ? '!' : 'i'));
+  el.className = 'lc-notice ' + (kind || 'info');
+  el.innerHTML = '<div aria-hidden="true">' + esc(icon) + '</div><div><b>' + esc(title || '') + '</b><span>' + esc(text || '') + '</span></div>';
+  el.style.display = 'flex';
+}
+function lcClearNotice(){
+  var el = document.getElementById('lcError');
+  if (!el) return;
+  el.style.display = 'none';
+  el.textContent = '';
+  el.className = 'msg err';
+}
 function onLiberarCupoCliente(){
   try { localStorage.setItem('ns-liberar-cupo-cliente', (document.getElementById('lcCliente') || {}).value || ''); } catch(e){}
   var per = document.getElementById('lcPeriodo'); if (per) per.innerHTML = '';
@@ -8180,7 +8195,7 @@ function lcQueueRefresh(){
 async function refreshLiberarCupo(){
   var base = lcBase();
   var body = document.getElementById('lcBody'), meta = document.getElementById('lcResultMeta'), title = document.getElementById('lcResultTitle');
-  var err = document.getElementById('lcError'); if (err){ err.style.display = 'none'; err.textContent = ''; }
+  lcClearNotice();
   if (!base){ if (body) body.innerHTML = '<tr><td colspan="8" class="nom-empty">Elegí un cliente.</td></tr>'; return; }
   if (meta) meta.textContent = 'Cargando...';
   var qs = lcBuildParams().toString();
@@ -8200,7 +8215,7 @@ async function refreshLiberarCupo(){
     LC_ROWS = [];
     if (meta) meta.textContent = '';
     if (body) body.innerHTML = '<tr><td colspan="8" class="nom-empty">No se pudieron cargar candidatos.</td></tr>';
-    if (err){ err.textContent = e.message || String(e); err.style.display = 'block'; }
+    lcNotice('err', 'No se pudieron cargar candidatos', e.message || String(e));
   }
 }
 function lcRenderPeriodos(periods, selected){
@@ -8252,19 +8267,21 @@ function liberarCupoUno(i){
   liberarCupoSeleccionadas([r.n_orden]);
 }
 async function liberarCupoSeleccionadas(omes){
-  var base = lcBase(); if (!base){ alert('Elegí un cliente.'); return; }
+  var base = lcBase(); if (!base){ lcNotice('warn', 'Elegí un cliente', 'Primero seleccioná el cliente que tiene la bandeja.'); return; }
   omes = omes || lcSelectedOmes();
-  if (!omes.length){ alert('Seleccioná al menos una OME.'); return; }
+  if (!omes.length){ lcNotice('warn', 'Seleccioná al menos una OME', 'Tildá una o más órdenes para liberar cupo.'); return; }
   if (!confirm('Vas a liberar cupo de ' + omes.length + ' OME(s) en PAMI.\n\nEsto cancela la aceptación. ¿Confirmás?')) return;
   var est = document.getElementById('lcTareaEstado'); if (est) est.textContent = 'Creando tarea...';
+  lcNotice('info', 'Tarea en preparación', 'Estoy enviando la solicitud al worker PAMI.');
   var filtros = {};
   lcBuildParams().forEach(function(v, k){ filtros[k] = v; });
   try{
     var r = await fetch(base + '/liberar', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ period:(document.getElementById('lcPeriodo')||{}).value||'', omes:omes, filtros:filtros }) });
     var d = await r.json();
-    if(!r.ok){ if(est) est.textContent = ''; alert(d.error || 'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ if(est) est.textContent = ''; lcNotice('err', 'No se pudo crear la tarea', d.error || 'Volvé a intentar en unos segundos.'); return; }
+    lcNotice('info', 'Tarea enviada', 'Esperando que el worker tome la liberación.');
     seguirLiberarCupoTarea(d.task.id);
-  }catch(e){ if(est) est.textContent = ''; alert('Error de red al crear la tarea.'); }
+  }catch(e){ if(est) est.textContent = ''; lcNotice('err', 'Error de conexión', 'No se pudo crear la tarea.'); }
 }
 function seguirLiberarCupoTarea(id){
   if (LC_TASK_TIMER) clearInterval(LC_TASK_TIMER);
@@ -8282,10 +8299,10 @@ function seguirLiberarCupoTarea(id){
       if(est) est.textContent = '';
       if(t.status === 'done'){
         var res = t.result || {};
-        alert('Liberación terminada: ' + (res.liberadas || 0) + ' liberada(s), ' + (res.errores || 0) + ' error(es), ' + (res.omitidas || 0) + ' omitida(s).');
         await refreshLiberarCupo();
+        lcNotice('ok', 'Liberación terminada', (res.liberadas || 0) + ' liberada(s), ' + (res.errores || 0) + ' error(es), ' + (res.omitidas || 0) + ' omitida(s).');
       } else {
-        alert('La tarea falló: ' + (t.error || 'error del worker.'));
+        lcNotice('err', 'La tarea falló', t.error || 'Error del worker.');
       }
     }catch(e){}
   }, 3000);
