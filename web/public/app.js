@@ -8054,15 +8054,55 @@ function seguirTarea(id, tipo){
       clearInterval(timer);
       if(est) est.textContent='';
       if(t.status==='done'){
-        var res=t.result||{};
-        if(tipo==='subir-informes') alert('Subida terminada: '+(res.subidos||0)+' de '+(res.total||0)+' informe(s) subidos a PAMI.');
-        else alert('Auditoría en PAMI: '+(res.con_doc||0)+' de '+(res.total||0)+' con documentación cargada.');
+        mostrarResultadoTarea(tipo, t);
         await refreshCabina();
       } else {
-        alert('La tarea falló: '+(t.error||'error del worker.'));
+        mostrarResultadoTarea(tipo, t);
       }
     }catch(e){}
   }, 3000);
+}
+function cerrarResultadoTarea(){ hideModal('taskResModal','taskResScrim'); }
+// Ventana linda con el resultado de subir/auditar a PAMI (en vez del alert del navegador).
+function mostrarResultadoTarea(tipo, t){
+  var res = t.result || {};
+  var ok = t.status === 'done';
+  var titulo, resumen, filas = '';
+  var row = function(ic, nombre, motivo, color){
+    return '<div style="display:flex;align-items:flex-start;gap:9px;padding:7px 0;border-top:1px solid var(--border)">'
+      + '<span style="flex:0 0 auto">'+ic+'</span>'
+      + '<span style="flex:1;min-width:0;color:var(--text);font-size:13.5px">'+esc(nombre)+'</span>'
+      + '<span style="flex:0 0 auto;font-size:12px;color:'+(color||'var(--text-2)')+';text-align:right;max-width:55%">'+esc(motivo)+'</span></div>';
+  };
+  if (!ok){
+    titulo = '❌ La tarea falló';
+    resumen = '<span style="color:#dc2626">'+esc(t.error||'error del worker.')+'</span>';
+  } else if (tipo === 'subir-informes'){
+    var det = res.detalle || [];
+    var subidos = res.subidos || 0, total = res.total || det.length;
+    titulo = '📤 Subida a PAMI';
+    resumen = '<b>'+subidos+'</b> de <b>'+total+'</b> informe(s) transmitidos'
+      + (subidos < total ? ' · <span style="color:#b45309">'+(total-subidos)+' con problema</span>' : ' ✅');
+    filas = det.map(function(d){
+      var okd = ['transmitido','ya_transmitido'].indexOf(d.estado) >= 0;
+      var etq = d.estado==='ya_transmitido' ? 'ya estaba transmitido' : (okd ? 'transmitido' : (d.motivo || d.estado || 'sin subir'));
+      return row(okd?'✅':'⚠️', d.filename || ('OME '+(d.ome||'')), etq, okd?'#16a34a':'#b45309');
+    }).join('');
+  } else {
+    var det2 = res.detalle || [];
+    titulo = '🔎 Auditoría en PAMI';
+    resumen = '<b>'+(res.con_doc||0)+'</b> de <b>'+(res.total||det2.length)+'</b> con documentación cargada.';
+    filas = det2.slice(0,300).map(function(d){
+      var ic = d.trans==='SI' ? '✅' : (d.doc==='SI' ? '📄' : '⚠️');
+      return row(ic, d.paciente || ('OME '+(d.ome||'')), 'doc '+(d.doc||'-')+' · trans '+(d.trans||'-'), d.trans==='SI'?'#16a34a':'var(--text-2)');
+    }).join('');
+  }
+  var ttl = document.getElementById('taskResTitle'); if (ttl) ttl.textContent = titulo;
+  var body = document.getElementById('taskResBody');
+  if (body) body.innerHTML =
+    '<div style="font-size:14px;margin-bottom:'+(filas?'10px':'2px')+'">'+resumen+'</div>'
+    + (filas ? '<div style="max-height:360px;overflow-y:auto">'+filas+'</div>' : '');
+  showModal('taskResModal','taskResScrim');
 }
 
 // ===== Liberar cupo PAMI =====

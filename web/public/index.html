@@ -1355,6 +1355,13 @@
           </div>
         </div>
 
+        <!-- Resultado de subir/auditar a PAMI (reemplaza el alert del navegador) -->
+        <div class="scrim" id="taskResScrim" onclick="cerrarResultadoTarea()"></div>
+        <div class="modal" id="taskResModal" role="dialog" aria-modal="true" style="max-width:560px">
+          <div class="modal-head"><h3 id="taskResTitle">Resultado</h3><button class="x" onclick="cerrarResultadoTarea()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" id="taskResBody" style="padding:18px"></div>
+        </div>
+
         <div class="scrim" id="cabinaScrim" onclick="cerrarCabinaModal()"></div>
         <div class="modal cab-modal" id="cabinaModal" role="dialog" aria-modal="true">
           <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>
