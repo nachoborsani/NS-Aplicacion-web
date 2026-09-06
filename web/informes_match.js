@@ -75,9 +75,15 @@ function _tokenPega(t, tb) {
 function scoreNombre(a, b) {
   const ta = tokens(a), tb = new Set(tokens(b));
   if (!ta.length || !tb.size) return 0;
+  // Los tokens de 1-2 letras (iniciales sueltas, o el código de práctica que el
+  // centro pega al nombre del archivo, tipo "GUNINI H FL") no identifican a nadie:
+  // no cuentan en el denominador, así un "GUNINI H FL" no queda penalizado contra
+  // "GUNINI HUGO". La unicidad la sigue garantizando quien llama.
+  const signif = ta.filter((t) => t.length >= 3);
+  const base = signif.length ? signif : ta;
   let hit = 0;
-  for (const t of ta) if (_tokenPega(t, tb)) hit += 1;
-  let sc = hit / ta.length;
+  for (const t of base) if (_tokenPega(t, tb)) hit += 1;
+  let sc = hit / base.length;
   // Nombre PEGADO sin espacios ("FERNANDEZCLEIA" por OCR) contra el padrón con
   // espacios: si la concatenación de uno es prefijo de la del otro, es la misma
   // persona (el informe suele ser prefijo del nombre completo). Se exige 8+ letras
@@ -375,6 +381,17 @@ function matchInforme(informe, bandeja, padronCliente) {
   const mejores = conScore.filter((x) => x.s >= Math.max(0.6, top - 0.01)).map((x) => x.p);
   const { elegida, ambiguo } = elegirPractica(mejores, informe.practicaHint, informe.fecha);
   if (elegida && top >= 0.8) {
+    // Salvaguarda anti-cruce de pacientes: un match por nombre puede haberse reducido
+    // a un solo apellido (sin beneficio en el informe). Si ese apellido cae en MÁS de
+    // una persona con la práctica compatible, NO adivinamos: va a "revisar nombre" con
+    // los candidatos para confirmar en un clic. Cruzar pacientes es un error grave.
+    const compat = filtrarCandidatosPorPractica(mejores, informe.practicaHint);
+    const base = compat.length ? compat : mejores;
+    const personas = new Set(base.map((p) => soloDigitos(p.beneficio) || norm(p.nombre)));
+    if (personas.size > 1) {
+      return { estado: "revisar_nombre", ome: "", prestacion: null, via: "nombre", confianza: "baja",
+        candidatos: base.slice(0, 8) };
+    }
     return { estado: elegida.transmitida ? "ya_transmitido" : (elegida.validada ? "ok" : "falta_validar"), ome: elegida.nOrden || "",
       prestacion: elegida, via: "nombre", confianza: top >= 0.99 ? "media" : "baja", candidatos: mejores };
   }
