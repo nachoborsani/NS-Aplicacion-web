@@ -1855,6 +1855,13 @@
   .cab-chip:hover{border-color:var(--turq);opacity:1}
   .cab-chip.on{border-color:var(--turq);box-shadow:0 0 0 3px var(--ring);opacity:1}
   .cab-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:750;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  /* Estado de la tarea (subiendo/auditando): chip notable, texto en llano. */
+  .cab-estado{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;padding:6px 14px;border-radius:999px;white-space:nowrap}
+  .cab-estado.is-working{background:rgba(20,150,150,.12);color:var(--turq-d,#0c7a7a);border:1px solid rgba(20,150,150,.35)}
+  .cab-estado.is-working::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:cabspin .7s linear infinite;flex:0 0 auto}
+  .cab-estado.is-error{background:rgba(220,38,38,.1);color:#dc2626;border:1px solid rgba(220,38,38,.35)}
+  @keyframes cabspin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.cab-estado.is-working::before{animation:none}}
   .cab-badge.ok{background:color-mix(in srgb,#12b3a6 18%,var(--surface));color:#0a7d73}
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}

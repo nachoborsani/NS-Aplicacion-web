@@ -8018,30 +8018,29 @@ async function subirInformeUno(id){
   var omesArr=(it&&it.resuelto&&(it.resuelto.omes||(it.resuelto.ome?[it.resuelto.ome]:[])))||(it&&it.match&&it.match.ome?[it.match.ome]:[]);
   var ome=omesArr.join(', ');
   if(!confirm('Vas a SUBIR a PAMI:\n\n'+nom+(ome?('  ·  OME '+ome):'')+'\n\nEs real e irreversible. ¿Confirmás?')) return;
-  var est=document.getElementById('cabTareaEstado'); if(est) est.textContent='Creando tarea…';
+  cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
     var d=await r.json();
-    if(!r.ok){ if(est) est.textContent=''; alert(d.error||'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
     seguirTarea(d.task.id,'subir-informes');
-  }catch(e){ if(est) est.textContent=''; alert('Error de red al crear la tarea.'); }
+  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
 }
 async function tareaCabina(tipo){
   var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
   var ids=cabIdsParaTarea(tipo);
   if(!ids.length){ alert(tipo==='subir-informes'?'No hay informes listos para subir en este rango.':'No hay informes para auditar en este rango.'); return; }
   if(tipo==='subir-informes' && !confirm('Vas a SUBIR '+ids.length+' informe(s) a PAMI.\n\nEsto es real e irreversible. ¿Confirmás?')) return;
-  var est=document.getElementById('cabTareaEstado'); if(est) est.textContent='Creando tarea…';
+  cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:tipo,clientSlug:slug,payload:{informeIds:ids}})});
     var d=await r.json();
-    if(!r.ok){ if(est) est.textContent=''; alert(d.error||'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
     seguirTarea(d.task.id, tipo);
-  }catch(e){ if(est) est.textContent=''; alert('Error de red al crear la tarea.'); }
+  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
 }
 function seguirTarea(id, tipo){
-  var est=document.getElementById('cabTareaEstado');
-  var etiqueta=(tipo==='subir-informes')?'Subiendo':'Auditando';
+  var accion=(tipo==='subir-informes')?'Subiendo a PAMI':'Auditando en PAMI';
   var vueltas=0;
   var timer=setInterval(async function(){
     vueltas++;
@@ -8049,10 +8048,10 @@ function seguirTarea(id, tipo){
       var d=await fetch('/api/admin/worker/tasks').then(function(r){return r.json();});
       var t=(d.tasks||[]).find(function(x){return x.id===id;});
       if(!t) return;
-      if(t.status==='pending'){ if(est) est.textContent=etiqueta+'… (esperando al worker de la PC'+(vueltas>6?' — ¿está prendido?':'')+')'; return; }
-      if(t.status==='running'){ var lg=(t.logs&&t.logs.length)?t.logs[t.logs.length-1].message:''; if(est) est.textContent=etiqueta+'… '+String(lg).slice(0,60); return; }
+      if(t.status==='pending'){ cabEstado('En cola'+(vueltas>6?' — puede demorar':'')+'…','working'); return; }
+      if(t.status==='running'){ cabEstado(accion+'…','working'); return; }
       clearInterval(timer);
-      if(est) est.textContent='';
+      cabEstado('','');
       if(t.status==='done'){
         mostrarResultadoTarea(tipo, t);
         await refreshCabina();
@@ -8063,6 +8062,13 @@ function seguirTarea(id, tipo){
   }, 3000);
 }
 function cerrarResultadoTarea(){ hideModal('taskResModal','taskResScrim'); }
+// Estado de la tarea (subiendo/auditando) como chip visible y en castellano llano
+// — nada de nombres de server ni logs internos. tipo: 'working' | 'error' | ''.
+function cabEstado(texto, tipo){
+  var el = document.getElementById('cabTareaEstado'); if (!el) return;
+  if (!texto){ el.hidden = true; el.textContent = ''; el.className = 'cab-estado'; return; }
+  el.hidden = false; el.textContent = texto; el.className = 'cab-estado' + (tipo ? (' is-' + tipo) : '');
+}
 // Ventana linda con el resultado de subir/auditar a PAMI (en vez del alert del navegador).
 function mostrarResultadoTarea(tipo, t){
   var res = t.result || {};
