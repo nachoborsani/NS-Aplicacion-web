@@ -476,7 +476,7 @@ function construirPayloadInforme(){
 }
 // ---- Vista previa en vivo (mientras se completa el formulario) ----
 var PREVIEW_TIMER = null, PREVIEW_SEQ = 0;
-function programarPreviewVivo(){ clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = setTimeout(actualizarPreviewVivo, 500); }
+function programarPreviewVivo(){ try { renderAvisosUro(); } catch(e){} clearTimeout(PREVIEW_TIMER); PREVIEW_TIMER = setTimeout(actualizarPreviewVivo, 500); }
 // Aplica los defaults que dependen del sexo (posición, diagnóstico) según el preset
 // elegido. Los valores numéricos NO cambian con el sexo. Se llama al aplicar un
 // preset y cada vez que se cambia el sexo. Solo pisa los campos que el preset
@@ -553,6 +553,8 @@ function bajarBlob(blob, fname){
 }
 // "Descargar PDF": genera y baja el informe.
 async function descargarInformeDirecto(){
+  // Urodinamia: pantalla de revisión final obligatoria antes de generar/firmar.
+  if (modeloActualKey() === 'urodinamia'){ if (!await revisarUrodinamia()) return; }
   var r = await pedirInformePdf(); if (!r) return;
   bajarBlob(r.blob, r.fname);
 }
@@ -707,6 +709,70 @@ function recolectarCampos(){
     if (val) v[inp.getAttribute('data-key')] = val;
   });
   return v;
+}
+// ===== Urodinamia: validaciones de coherencia (AVISOS, no cambian el diagnóstico) =====
+function _numUro(v){ var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : null; }
+function avisosUrodinamia(v){
+  v = v || {}; var a = [];
+  var qmax = _numUro(v.qmax); if (qmax != null && qmax < 15) a.push('Qmax por debajo del valor de referencia (> 15 ml/s).');
+  var rpm = _numUro(v.rpm); if (rpm != null && rpm >= 50) a.push('Residuo postmiccional elevado (RPM ≥ 50 ml).');
+  var cap = _numUro(v.capacidad);
+  if (cap != null && cap < 350) a.push('Capacidad cistométrica disminuida (< 350 ml).');
+  if (cap != null && cap > 600) a.push('Capacidad cistométrica aumentada (> 600 ml).');
+  var pd = _numUro(v.primerDeseo);
+  if (pd != null && pd < 150) a.push('Primer deseo miccional precoz (< 150 ml).');
+  if (pd != null && pd > 250) a.push('Primer deseo tardío / sensibilidad disminuida (> 250 ml).');
+  var pdet = _numUro(v.pdetMax); if (pdet != null && pdet > 60) a.push('Presión detrusoral elevada durante el vaciado (> 60 cm H2O).');
+  var vlpp = _numUro(v.vlpp); if (vlpp != null && vlpp > 0 && vlpp < 60) a.push('VLPP disminuido (< 60 cm H2O).');
+  return a;
+}
+// Panel de avisos en vivo bajo los campos (solo para el modelo urodinamia).
+function renderAvisosUro(){
+  var wrap = document.getElementById('infAvisosUro'); if (!wrap) return;
+  if (modeloActualKey() !== 'urodinamia'){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  var a = avisosUrodinamia(recolectarCampos());
+  if (!a.length){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = '';
+  wrap.innerHTML = '<div class="inf-avisos-tit">⚠ Revisá la coherencia (son avisos, no cambian el diagnóstico):</div><ul class="inf-avisos-list">'
+    + a.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+}
+// Pantalla de revisión final: muestra todos los valores + conclusión + avisos y
+// exige confirmar antes de generar/firmar. Resuelve true/false.
+function revisarUrodinamia(){
+  return new Promise(function(resolve){
+    var campos = (INFORMES_CFG.modelos || []).find(function(m){ return m.key === 'urodinamia'; });
+    var defs = (campos && campos.campos) || [];
+    var v = recolectarCampos();
+    var pac = {
+      nombre: (document.getElementById('infNombre') || {}).value || '',
+      doc: (document.getElementById('infDoc') || {}).value || '',
+      benef: (document.getElementById('infBenef') || {}).value || '',
+      fecha: (document.getElementById('infFecha') || {}).value || '',
+    };
+    var texto = (document.getElementById('infTexto') || {}).value || '';
+    var filas = defs.filter(function(d){ return String(v[d.key] || '').trim() !== ''; })
+      .map(function(d){ return '<div class="rev-kv"><span>' + esc(d.label) + '</span><b>' + esc(v[d.key]) + '</b></div>'; }).join('');
+    var av = avisosUrodinamia(v);
+    var avHtml = av.length ? '<div class="rev-avisos"><b>⚠ Avisos de coherencia</b><ul>' + av.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' : '';
+    var scrim = document.createElement('div'); scrim.className = 'mc-inf-scrim';
+    scrim.innerHTML =
+      '<div class="mc-inf-box" style="max-width:640px;max-height:86vh;display:flex;flex-direction:column">'
+      + '<div class="mc-inf-head"><b>Revisión final del informe</b><span class="mc-inf-sub">' + esc(pac.nombre || '—') + (pac.fecha ? ' · ' + esc(pac.fecha) : '') + ' · Estudio urodinámico completo</span></div>'
+      + '<div class="mc-inf-body" style="overflow:auto">'
+      + avHtml
+      + '<div class="rev-sec">Datos del estudio</div>'
+      + '<div class="rev-grid">' + (filas || '<span class="nom-muted">Sin valores cargados.</span>') + '</div>'
+      + '<div class="rev-sec">Conclusión / resumen</div><div class="rev-texto">' + (texto ? esc(texto).replace(/\n/g, '<br>') : '<span class="nom-muted">—</span>') + '</div>'
+      + '<div class="rev-nota">Revisá que los valores y la conclusión sean correctos. El informe lo firma el médico responsable.</div>'
+      + '</div>'
+      + '<div class="mc-inf-foot"><button class="mc-inf-btn" id="rev-cancel">Volver a editar</button>'
+      + '<button class="mc-inf-btn primary" id="rev-ok">✓ Confirmar y generar</button></div></div>';
+    document.body.appendChild(scrim);
+    var done = function(val){ scrim.remove(); resolve(val); };
+    scrim.addEventListener('click', function(e){ if (e.target === scrim) done(false); });
+    scrim.querySelector('#rev-cancel').onclick = function(){ done(false); };
+    scrim.querySelector('#rev-ok').onclick = function(){ done(true); };
+  });
 }
 // Campos obligatorios del modelo (data-req) que quedaron vacíos → sus etiquetas.
 function camposObligatoriosFaltantes(){
