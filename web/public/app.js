@@ -9502,6 +9502,19 @@ function aplicarUsuario(u){
   // Configuración general (usuarios, débitos): alguien con clientes restringidos
   // no debe entrar ahí - un operador sin restringir sí, como siempre.
   var ngen = document.getElementById('navGeneral'); if (ngen) ngen.style.display = tieneClientesRestringidos(u) ? 'none' : '';
+  // Javi (rol operador): no debe leer la palabra "Clientes" en el menú - se
+  // oculta el título de esa sección (el desplegable de Med. Cabecera queda
+  // igual adentro, solo sin el agrupador visible por encima). Al perder el
+  // header pierde también su botón de plegar/desplegar, así que forzamos a
+  // que el contenido quede siempre visible (nunca colapsado).
+  var navSecCli = document.getElementById('navSectionClientes');
+  var itemsCli = document.querySelector('.nav-section-items[data-section-items="clientes"]');
+  if (u.role === 'operador') {
+    if (navSecCli) navSecCli.style.display = 'none';
+    if (itemsCli) itemsCli.classList.remove('collapsed');
+  } else if (navSecCli) {
+    navSecCli.style.display = '';
+  }
   var ini = initials(u.name);
   document.getElementById('sideName').textContent = u.name;
   document.getElementById('sideRole').textContent = roleLabel(u.role);

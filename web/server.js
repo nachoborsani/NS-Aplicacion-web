@@ -1788,6 +1788,18 @@ function clientesVisiblesPara(me, clientes) {
   const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
   return clientes.filter((c) => permitidos.has(c.slug));
 }
+// Mismo criterio que clientesVisiblesPara, pero para médicos de la config de
+// Informes (cada médico puede estar atado a uno o más clientes en m.clientes;
+// vacío = médico "global", no asociado a ningún cliente en particular, se
+// muestra siempre). Un usuario con clientes restringidos (operador con lista,
+// demo, colaborador) NO debe ver médicos/firmas de una clínica que no le
+// asignamos, aunque no esté en la sección "Clientes" (esto viaja también por
+// /api/informes/config, que arma el desplegable de la pantalla de Informes).
+function medicosVisiblesPara(me, medicos) {
+  if (!tieneClientesRestringidos(me)) return medicos;
+  const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
+  return medicos.filter((m) => !Array.isArray(m.clientes) || m.clientes.length === 0 || m.clientes.some((c) => permitidos.has(c)));
+}
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
   const m = cookie.match(/(?:^|;\s*)ns_session=([^;]+)/);
@@ -9201,13 +9213,21 @@ const server = http.createServer(async (req, res) => {
       // (Scheffelaar/Dubesarky no son clínicas - la cascada Especialidad/Práctica
       // no les aplica, todavía no hay un flujo propio para ellos).
       clientes: clientesVisiblesPara(me, loadClientsStore()).map((c) => ({ slug: c.slug, name: c.name, tipo: c.tipo || "consultorio" })),
-      medicos: (cfg.medicos || []).map((m) => ({
+      medicos: medicosVisiblesPara(me, cfg.medicos || []).map((m) => ({
         id: m.id, nombre: m.nombre, hasFirma: firmaExiste(m.firma), matricula: m.matricula || "",
         modelos: m.modelos || [], clientes: m.clientes || [],
       })),
-      descripciones: (cfg.descripciones || []).map((d) => ({
-        id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
-      })),
+      // Una descripción atada a un médico (medicoId) que quedó afuera del
+      // filtro de arriba tampoco debe viajar: mismo motivo (no vio ese médico,
+      // no tiene por qué ver sus modelos de texto).
+      descripciones: (() => {
+        const medicosVisibles = new Set(medicosVisiblesPara(me, cfg.medicos || []).map((m) => m.id));
+        return (cfg.descripciones || [])
+          .filter((d) => !d.medicoId || medicosVisibles.has(d.medicoId))
+          .map((d) => ({
+            id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
+          }));
+      })(),
       motivosDesestimacion: cfg.motivosDesestimacion || [],
     });
   }
