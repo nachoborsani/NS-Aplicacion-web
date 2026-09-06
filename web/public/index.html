@@ -601,6 +601,19 @@
               </article>
               </section>
 
+              <!-- Pendientes del centro (operador_clinica): mismo contador que ve Javi
+                   de este cliente en su Inicio ("Pendientes de Javi") - sin plata ni
+                   detalle de pacientes, eso sigue viviendo en la Cabina de informes. -->
+              <section id="client-section-pendientes" class="client-section" style="display:none">
+                <article class="client-card">
+                  <div class="client-card-head">
+                    <h3>Pendientes con Javi</h3>
+                  </div>
+                  <p class="nom-muted" style="margin-top:-6px">Lo que le falta a este centro es lo que Javi tiene pendiente de resolver.</p>
+                  <div id="centroPendCard"><p class="nom-muted">Cargando…</p></div>
+                </article>
+              </section>
+
               <section id="client-section-dashboard" class="client-section">
               <div class="client-card client-dashboard-card">
                 <div class="client-card-head dashboard-head">
@@ -1596,9 +1609,15 @@
             <option value="colaborador">Colaborador (solo ver)</option>
             <option value="medico">Médico</option>
             <option value="clinica">Clínica</option>
+            <option value="operador_clinica">Operador Clínica (empleado del centro)</option>
             <option value="demo">Demostración (solo ver)</option>
             <option value="admin">Administrador</option>
           </select>
+        </div>
+        <div class="field" id="umCentroField" style="display:none">
+          <label>Centro</label>
+          <select class="inp" id="umCentro"></select>
+          <div class="hint" id="umCentroHint">A qué centro pertenece este usuario. Solo va a ver y hacer lo que corresponda a ese centro.</div>
         </div>
         <div class="field" id="umClientesField" style="display:none">
           <label>Clientes que puede ver</label>

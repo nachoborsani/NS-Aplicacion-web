@@ -1769,6 +1769,13 @@
   /* Clínica: navega por el menú izquierdo, se oculta la barra de pestañas del cliente */
   body.role-clinica .client-tabs{display:none}
 
+  /* Rol operador_clinica (empleado del centro, no el dueño): mismo encierro que
+     clínica - solo su centro, oculta lo interno de NS y navega por el menú
+     izquierdo (que hoy le muestra una única sección: Datos del centro). */
+  body.role-operador_clinica .ns-only,
+  body.role-operador_clinica #clientNewBtn{display:none !important}
+  body.role-operador_clinica .client-tabs{display:none}
+
   /* Rol demo en Afiliados: SOLO VE la lista y la búsqueda. Se ocultan las acciones
      (consultar cápita, credencial, subir turnera) — el backend igual las bloquea. */
   body.role-demo #view-padron .afil-tools,
