@@ -4,6 +4,7 @@
 // rango de fechas y baja los PDF/Word/imagen. Usa el refresh_token ya autorizado.
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const TIPOS_ACEPTADOS = new Set([
   "application/pdf",
@@ -49,9 +50,25 @@ function* iterarPartes(payload) {
 }
 
 // Baja los adjuntos aceptados en [desde, hasta) (formato YYYY/MM/DD, before exclusivo).
-// yaExiste(filename) -> true para saltar los que ya están en la cabina.
-// Devuelve [{ filename, buffer }].
-async function descargarAdjuntos(token, desde, hasta, yaExiste) {
+// Saltea lo que ya está en la cabina. `filtros` es:
+//   yaPorNombre(filename, size) -> true  (barato: NO baja el adjunto)
+//   yaPorHash(sha256)           -> true  (seguro: ya lo bajó, compara contenido)
+//
+// Son dos pasadas a propósito. Comparar solo por NOMBRE pierde archivos:
+// dos adjuntos distintos que se llaman igual ("informe.pdf", de dos
+// pacientes) hacían que el segundo no entrara nunca, y eso no se nota —
+// no aparece un duplicado, falta un informe. Comparar solo por CONTENIDO
+// obliga a bajar todos los adjuntos del rango en cada corrida.
+//
+// Entonces: el nombre corta gratis cuando ADEMÁS coincide el tamaño (el
+// caso normal, volver a pedir un mes ya traído), y el hash decide en el
+// resto. Un mismo archivo reenviado con otro nombre tampoco entra dos
+// veces, que antes sí pasaba.
+//
+// Devuelve [{ filename, buffer, hash, fecha, asunto }].
+async function descargarAdjuntos(token, desde, hasta, filtros) {
+  const yaPorNombre = (filtros && filtros.yaPorNombre) || (() => false);
+  const yaPorHash = (filtros && filtros.yaPorHash) || (() => false);
   const gmail = clienteGmail(token);
   const q = `has:attachment after:${desde} before:${hasta}`;
   // Listar todos los mensajes del rango (paginado).
@@ -83,8 +100,10 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
       const filename = String(part.filename || "").trim();
       if (!filename || !TIPOS_ACEPTADOS.has(part.mimeType)) continue;
       const safe = path.basename(filename);
-      if (vistos.has(safe)) continue;              // no repetir dentro de la misma corrida
-      if (yaExiste && yaExiste(safe)) continue;    // ya está en la cabina
+      const tam = Number((part.body && part.body.size) || 0);
+      // Corte barato: mismo nombre Y mismo tamaño es, con toda
+      // probabilidad, el mismo archivo. Se salta sin bajarlo.
+      if (yaPorNombre(safe, tam)) continue;
       let data = part.body && part.body.data;
       const attId = part.body && part.body.attachmentId;
       if (attId && !data) {
@@ -94,8 +113,14 @@ async function descargarAdjuntos(token, desde, hasta, yaExiste) {
         } catch { continue; }
       }
       if (!data) continue;
-      vistos.add(safe);
-      bajados.push({ filename: safe, buffer: Buffer.from(data, "base64"), fecha, asunto });
+      const buffer = Buffer.from(data, "base64");
+      const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+      // Ahora sí, por contenido: cubre el mismo archivo con otro nombre
+      // y el mismo mail reenviado.
+      if (vistos.has(hash)) continue;   // repetido dentro de esta corrida
+      if (yaPorHash(hash)) continue;    // ya está en la cabina
+      vistos.add(hash);
+      bajados.push({ filename: safe, buffer, hash, fecha, asunto });
     }
   }
   return bajados;

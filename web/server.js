@@ -8244,8 +8244,34 @@ const server = http.createServer(async (req, res) => {
     try {
       const store = loadInformes();
       if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
-      const existentes = new Set((store[slug].items || []).map((x) => x.filename));
-      let bajados = await gmailInformes.descargarAdjuntos(token, desde, hasta, (fn) => existentes.has(fn));
+      // Índices de lo que ya está, para no traerlo dos veces.
+      //
+      // El hash de los informes viejos no existe (se guardaban sin él),
+      // así que se calcula una sola vez leyendo el archivo del disco y
+      // queda anotado. Sin esto, el primer barrido después de este
+      // cambio no reconocería nada y bajaría todo de nuevo.
+      const items = store[slug].items || [];
+      let completados = 0;
+      for (const it of items) {
+        if (it.hash || !it.stored) continue;
+        try {
+          const buf = fs.readFileSync(path.join(informesDir, slug, it.stored));
+          it.hash = crypto.createHash("sha256").update(buf).digest("hex");
+          it.tam = buf.length;
+          completados++;
+        } catch { /* el archivo ya no está: se queda sin hash */ }
+      }
+      if (completados) saveInformes(store);
+      const porHash = new Set(items.map((x) => x.hash).filter(Boolean));
+      // Nombre+tamaño, para el corte barato. Los que quedaron sin hash
+      // (archivo borrado del disco) entran igual por nombre solo, que es
+      // el comportamiento de antes.
+      const porNombre = new Set(items.map((x) => x.filename + "|" + (x.tam || 0)));
+      const soloNombre = new Set(items.filter((x) => !x.hash).map((x) => x.filename));
+      let bajados = await gmailInformes.descargarAdjuntos(token, desde, hasta, {
+        yaPorNombre: (fn, tam) => porNombre.has(fn + "|" + tam) || soloNombre.has(fn),
+        yaPorHash: (h) => porHash.has(h),
+      });
       const hayMas = bajados.length > TOPE;
       bajados = bajados.slice(0, TOPE);
       const destDir = path.join(informesDir, slug);
@@ -8257,6 +8283,9 @@ const server = http.createServer(async (req, res) => {
         const stored = id + ext;
         fs.writeFileSync(path.join(destDir, stored), f.buffer);
         const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto);
+        // Con qué se compara la próxima vez.
+        rec.hash = f.hash || "";
+        rec.tam = f.buffer.length;
         store[slug].items.unshift(rec);
         nuevos.push(rec);
       }
