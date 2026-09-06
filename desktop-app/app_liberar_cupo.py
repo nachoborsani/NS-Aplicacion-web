@@ -10,7 +10,19 @@ import customtkinter as ctk
 from app_credentials import sync_profile_records, upsert_shared_credentials_from_records
 from app_paths import get_data_dir, get_log_file, get_output_dir
 from app_transmision import DatePickerDialog
-from pami_liberar_cupo import PamiLiberarCupoController, ResumenLiberacion, exportar_reporte_no_validadas
+from pami_liberar_cupo import (
+    LIBERAR_CUPO_GROUPS_FILENAME,
+    LIBERAR_CUPO_SCOPE_ALL,
+    PamiLiberarCupoController,
+    ResumenLiberacion,
+    exportar_reporte_no_validadas,
+    filter_liberar_cupo_rows_by_group,
+    format_liberar_cupo_group_text,
+    liberar_cupo_scope_options,
+    load_liberar_cupo_practice_groups,
+    parse_liberar_cupo_group_text,
+    save_liberar_cupo_practice_groups,
+)
 
 
 class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
@@ -24,6 +36,8 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
         self.detected_rows: list[dict] = []
         self.data_dir = get_data_dir()
         self.profiles_file = Path(self.data_dir) / "usuarios_liberar_cupo.json"
+        self.practice_groups_file = Path(self.data_dir) / LIBERAR_CUPO_GROUPS_FILENAME
+        self.practice_groups = load_liberar_cupo_practice_groups(self.practice_groups_file)
         self.saved_profiles = self._load_saved_profiles()
         self.controller = PamiLiberarCupoController(
             log_callback=self._push_log,
@@ -114,11 +128,12 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
 
         filter_frame = ctk.CTkFrame(content, corner_radius=12, fg_color="#f8fafc")
         filter_frame.grid(row=1, column=0, padx=14, pady=(0, 8), sticky="ew")
-        filter_frame.grid_columnconfigure(8, weight=1)
+        filter_frame.grid_columnconfigure(11, weight=1)
 
         self.fecha_desde_var = ctk.StringVar(value=self._today_str())
         self.fecha_hasta_var = ctk.StringVar(value=self._today_str())
         self.max_pages_var = ctk.StringVar(value="10")
+        self.scope_var = ctk.StringVar(value=LIBERAR_CUPO_SCOPE_ALL)
 
         ctk.CTkLabel(filter_frame, text="Turno desde").grid(row=0, column=0, padx=(12, 6), pady=8, sticky="w")
         self.fecha_desde_entry = ctk.CTkEntry(filter_frame, textvariable=self.fecha_desde_var, width=118, height=28)
@@ -135,6 +150,27 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
         ctk.CTkLabel(filter_frame, text="Max. paginas").grid(row=0, column=6, padx=(0, 6), pady=8, sticky="w")
         self.max_pages_entry = ctk.CTkEntry(filter_frame, textvariable=self.max_pages_var, width=70, height=28)
         self.max_pages_entry.grid(row=0, column=7, padx=(0, 12), pady=8, sticky="w")
+
+        ctk.CTkLabel(filter_frame, text="Practicas").grid(row=0, column=8, padx=(0, 6), pady=8, sticky="w")
+        self.scope_combo = ctk.CTkComboBox(
+            filter_frame,
+            values=self._scope_options(),
+            variable=self.scope_var,
+            state="readonly",
+            width=220,
+            height=28,
+        )
+        self.scope_combo.grid(row=0, column=9, padx=(0, 6), pady=8, sticky="w")
+        self.configure_groups_button = ctk.CTkButton(
+            filter_frame,
+            text="Config grupos",
+            width=112,
+            height=28,
+            fg_color="#66788a",
+            hover_color="#536577",
+            command=self._open_practice_groups_dialog,
+        )
+        self.configure_groups_button.grid(row=0, column=10, padx=(0, 12), pady=8, sticky="w")
 
         buttons = ctk.CTkFrame(content, corner_radius=12, fg_color="#eef3f8")
         buttons.grid(row=2, column=0, padx=14, pady=(0, 10), sticky="ew")
@@ -232,6 +268,7 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
                 {
                     "fecha_desde": self.fecha_desde_var.get().strip(),
                     "fecha_hasta": self.fecha_hasta_var.get().strip(),
+                    "grupo_practicas": self.scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL,
                 },
             )
             self.summary_label.configure(text=f"Reporte guardado en: {output}")
@@ -244,9 +281,10 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
         if not rows:
             messagebox.showwarning("Liberar Cupo", "No hay OMEs detectadas para liberar.")
             return
+        scope = self.scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL
         if not messagebox.askyesno(
             "Confirmar liberacion",
-            f"Se cancelara la aceptacion de {len(rows)} OME(s) en PAMI.\n\nEsto libera el cupo del turno. Continuar?",
+            f"Alcance: {scope}\n\nSe cancelara la aceptacion de {len(rows)} OME(s) en PAMI.\n\nEsto libera el cupo del turno. Continuar?",
         ):
             return
         self._run_action(lambda: self._open_if_needed_and_release(rows), result_event="released")
@@ -266,11 +304,17 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
     def _open_if_needed_and_detect(self) -> list[dict]:
         if not self.controller.sesion_activa():
             self._open_pami_with_profile()
-        return self.controller.detectar_candidatas(
+        rows = self.controller.detectar_candidatas(
             self.fecha_desde_var.get().strip(),
             self.fecha_hasta_var.get().strip(),
             self._max_pages(),
         )
+        filtered = self._filter_rows_by_scope(rows)
+        if len(filtered) != len(rows):
+            self._push_log(
+                f"Filtro de practicas '{self.scope_var.get()}': {len(filtered)} de {len(rows)} OME(s) no validadas."
+            )
+        return filtered
 
     def _open_if_needed_and_release(self, rows: list[dict]) -> ResumenLiberacion:
         if not self.controller.sesion_activa():
@@ -318,11 +362,12 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
                 elif event == "detected":
                     rows = payload or []
                     self._render_detected(rows)
+                    scope = self.scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL
                     self.after(
                         100,
-                        lambda total=len(rows): messagebox.showinfo(
+                        lambda total=len(rows), scope=scope: messagebox.showinfo(
                             "Liberar Cupo",
-                            f"Proceso terminado.\n\nDetectadas {total} OME(s) no validadas.",
+                            f"Proceso terminado.\n\nAlcance: {scope}\nDetectadas {total} OME(s) no validadas.",
                         ),
                     )
                 elif event == "released":
@@ -378,7 +423,8 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
                     "No validada / pendiente de liberar",
                 ),
             )
-        self.summary_label.configure(text=f"Detectadas: {len(self.detected_rows)} | Selecciona filas para liberar cupo.")
+        scope = self.scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL
+        self.summary_label.configure(text=f"Alcance: {scope} | Detectadas: {len(self.detected_rows)} | Selecciona filas para liberar cupo.")
 
     def _render_release_summary(self, resumen: ResumenLiberacion | None) -> None:
         if resumen is None:
@@ -414,9 +460,11 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
             self.toggle_password_button,
             self.fecha_desde_button,
             self.fecha_hasta_button,
+            self.configure_groups_button,
         ):
             button.configure(state=state)
         self.profile_combo.configure(state=state)
+        self.scope_combo.configure(state="readonly" if enabled else "disabled")
         self.client_entry.configure(state=state)
         self.user_entry.configure(state=state)
         self.password_entry.configure(state=state)
@@ -436,6 +484,60 @@ class PamiLiberarCupoModuleFrame(ctk.CTkFrame):
             return max(1, min(50, int(self.max_pages_var.get().strip() or "10")))
         except ValueError:
             return 10
+
+    def _scope_options(self) -> list[str]:
+        return liberar_cupo_scope_options(self.practice_groups)
+
+    def _filter_rows_by_scope(self, rows: list[dict]) -> list[dict]:
+        return filter_liberar_cupo_rows_by_group(
+            rows,
+            self.scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL,
+            self.practice_groups,
+        )
+
+    def _refresh_scope_combo(self) -> None:
+        options = self._scope_options()
+        current = self.scope_var.get().strip()
+        self.scope_combo.configure(values=options)
+        if current not in options:
+            self.scope_var.set(LIBERAR_CUPO_SCOPE_ALL)
+
+    def _open_practice_groups_dialog(self) -> None:
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Grupos de practicas")
+        dialog.geometry("640x430")
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            dialog,
+            text="Un grupo por linea. Formato: Nombre: texto o codigo, otro texto",
+            text_color="#16324f",
+        ).grid(row=0, column=0, padx=14, pady=(14, 6), sticky="w")
+
+        text = ctk.CTkTextbox(dialog, height=260)
+        text.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="nsew")
+        text.insert("1.0", format_liberar_cupo_group_text(self.practice_groups))
+
+        actions = ctk.CTkFrame(dialog, fg_color="transparent")
+        actions.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="e")
+
+        def save_and_close() -> None:
+            groups = parse_liberar_cupo_group_text(text.get("1.0", "end"))
+            if not groups:
+                messagebox.showwarning("Grupos", "Carga al menos un grupo con uno o mas patrones.")
+                return
+            self.practice_groups = save_liberar_cupo_practice_groups(self.practice_groups_file, groups)
+            self._refresh_scope_combo()
+            self._push_log(f"Grupos de practicas actualizados: {len(self.practice_groups)}")
+            dialog.destroy()
+
+        ctk.CTkButton(actions, text="Cancelar", width=96, fg_color="#9aafc3", hover_color="#7f95aa", command=dialog.destroy).grid(
+            row=0, column=0, padx=(0, 8), pady=0
+        )
+        ctk.CTkButton(actions, text="Guardar", width=96, command=save_and_close).grid(row=0, column=1, padx=0, pady=0)
 
     def _open_date_picker(self, target_var: ctk.StringVar) -> None:
         dialog = DatePickerDialog(self, target_var.get().strip())

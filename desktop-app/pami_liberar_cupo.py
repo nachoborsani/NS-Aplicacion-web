@@ -1,4 +1,5 @@
 import threading
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,13 @@ from pami_scraper import configurar_playwright
 CUP_LOGIN_URL = "https://cup.pami.org.ar/controllers/loginController.php?redirect=https://pe.pami.org.ar"
 PAMI_TRANSMISION_URL = "https://pe.pami.org.ar/controllers/transmision.php?registros_por_pagina=50"
 PAMI_PANEL_ACEPTACION_URL = "https://pe.pami.org.ar/controllers/efector.php?registros_por_pagina=50"
+LIBERAR_CUPO_SCOPE_ALL = "Modulo entero"
+LIBERAR_CUPO_GROUPS_FILENAME = "liberar_cupo_grupos_practicas.json"
+DEFAULT_LIBERAR_CUPO_PRACTICE_GROUPS = [
+    {"nombre": "Ecografias", "patrones": ["ECOGRAFIA"]},
+    {"nombre": "Cardiologia", "patrones": ["ERGOMETRIA", "HOLTER", "CARDIO"]},
+    {"nombre": "Consultas", "patrones": ["CONSULTA"]},
+]
 _NO_EVALUATE_ARG = object()
 _NAVIGATION_TRANSIENT_ERRORS = (
     "execution context was destroyed",
@@ -69,6 +77,7 @@ def exportar_reporte_no_validadas(rows: list[dict], destino: str | Path, filtros
         "Vencimiento aceptacion",
         "Filtro turno desde",
         "Filtro turno hasta",
+        "Alcance practicas",
         "Exportado",
     ]
 
@@ -93,18 +102,136 @@ def exportar_reporte_no_validadas(rows: list[dict], destino: str | Path, filtros
                 row.get("f_vencimiento", ""),
                 filtros.get("fecha_desde", ""),
                 filtros.get("fecha_hasta", ""),
+                filtros.get("grupo_practicas", LIBERAR_CUPO_SCOPE_ALL),
                 exportado,
             ]
         )
 
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
-    widths = [18, 22, 18, 34, 72, 34, 22, 20, 20, 22]
+    widths = [18, 22, 18, 34, 72, 34, 22, 20, 20, 26, 22]
     for idx, width in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(idx)].width = width
 
     wb.save(destino)
     return destino
+
+
+def load_liberar_cupo_practice_groups(config_path: str | Path) -> list[dict]:
+    path = Path(config_path)
+    try:
+        if not path.exists():
+            save_liberar_cupo_practice_groups(path, DEFAULT_LIBERAR_CUPO_PRACTICE_GROUPS)
+            return [dict(item) for item in DEFAULT_LIBERAR_CUPO_PRACTICE_GROUPS]
+        data = json_load(path)
+        groups = normalize_liberar_cupo_practice_groups(data.get("grupos", []))
+        if groups:
+            return groups
+    except Exception:
+        pass
+    return [dict(item) for item in DEFAULT_LIBERAR_CUPO_PRACTICE_GROUPS]
+
+
+def save_liberar_cupo_practice_groups(config_path: str | Path, groups: list[dict]) -> list[dict]:
+    normalized = normalize_liberar_cupo_practice_groups(groups)
+    path = Path(config_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json_dumps({"grupos": normalized}), encoding="utf-8")
+    return normalized
+
+
+def normalize_liberar_cupo_practice_groups(groups: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    seen: set[str] = set()
+    for item in groups or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("nombre", "")).strip()
+        if not name or name.lower() == LIBERAR_CUPO_SCOPE_ALL.lower():
+            continue
+        patterns_raw = item.get("patrones", [])
+        if isinstance(patterns_raw, str):
+            patterns_raw = [part.strip() for part in patterns_raw.split(",")]
+        patterns = []
+        for pattern in patterns_raw or []:
+            value = str(pattern or "").strip()
+            if value and value not in patterns:
+                patterns.append(value)
+        if not patterns:
+            continue
+        key = _normalize_practice_text(name)
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append({"nombre": name, "patrones": patterns})
+    return normalized
+
+
+def liberar_cupo_scope_options(groups: list[dict]) -> list[str]:
+    return [LIBERAR_CUPO_SCOPE_ALL] + [str(item.get("nombre", "")).strip() for item in groups if str(item.get("nombre", "")).strip()]
+
+
+def format_liberar_cupo_group_text(groups: list[dict]) -> str:
+    lines = []
+    for group in groups:
+        name = str(group.get("nombre", "")).strip()
+        patterns = ", ".join(str(item).strip() for item in group.get("patrones", []) if str(item).strip())
+        if name and patterns:
+            lines.append(f"{name}: {patterns}")
+    return "\n".join(lines)
+
+
+def parse_liberar_cupo_group_text(text: str) -> list[dict]:
+    groups = []
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        name, raw_patterns = line.split(":", 1)
+        patterns = [part.strip() for part in raw_patterns.split(",") if part.strip()]
+        groups.append({"nombre": name.strip(), "patrones": patterns})
+    return normalize_liberar_cupo_practice_groups(groups)
+
+
+def filter_liberar_cupo_rows_by_group(rows: list[dict], selected_group: str, groups: list[dict]) -> list[dict]:
+    selected = str(selected_group or "").strip()
+    if not selected or selected.lower() == LIBERAR_CUPO_SCOPE_ALL.lower():
+        return list(rows or [])
+    selected_key = _normalize_practice_text(selected)
+    group = next((item for item in groups if _normalize_practice_text(item.get("nombre", "")) == selected_key), None)
+    if not group:
+        return []
+    patterns = [_normalize_practice_text(item) for item in group.get("patrones", []) if str(item or "").strip()]
+    if not patterns:
+        return []
+    filtered = []
+    for row in rows or []:
+        practice = _normalize_practice_text(row.get("practica", ""))
+        if any(pattern in practice for pattern in patterns):
+            enriched = dict(row)
+            enriched["grupo_practicas"] = group.get("nombre", selected)
+            filtered.append(enriched)
+    return filtered
+
+
+def _normalize_practice_text(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.upper().split())
+
+
+def json_load(path: Path) -> dict:
+    import json
+
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def json_dumps(payload: dict) -> str:
+    import json
+
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 class PamiLiberarCupoController:

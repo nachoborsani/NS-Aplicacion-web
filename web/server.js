@@ -3521,6 +3521,125 @@ function buildBandejaResumen(slug) {
     uploadedAt: bandeja.uploadedAt || "",
   };
 }
+function isoDateFromBandejaValue(value) {
+  const raw = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const d = parseDateTime(value);
+  return d ? isoDateTime(d).slice(0, 10) : "";
+}
+function getLiberarCupoBandeja(slug, periodInput) {
+  const period = normalizePeriod(periodInput) || String(periodInput || "").trim();
+  const hist = (loadClientBandejasCup()[slug] || {});
+  const live = loadClientBandejas()[slug] || null;
+  if (period && hist && hist[period]) return hist[period];
+  if (period && live && normalizePeriod(live.month) === period) return live;
+  if (!period && live && Array.isArray(live.rows) && live.rows.length) return live;
+  const latest = Object.keys(hist || {}).sort().reverse()[0];
+  return latest ? hist[latest] : live;
+}
+function liberarCupoBandejaPeriods(slug) {
+  const hist = loadClientBandejasCup()[slug] || {};
+  const live = loadClientBandejas()[slug] || null;
+  const map = new Map();
+  for (const p of Object.keys(hist || {})) {
+    const b = hist[p] || {};
+    map.set(p, { period: p, label: b.monthLabel || periodLabel(p), count: b.count || ((b.rows || []).length), uploadedAt: b.uploadedAt || "", live: false });
+  }
+  if (live && live.month) {
+    const p = normalizePeriod(live.month) || String(live.month || "");
+    map.set(p, { period: p, label: live.monthLabel || periodLabel(p), count: live.count || ((live.rows || []).length), uploadedAt: live.uploadedAt || "", live: true });
+  }
+  return [...map.values()].sort((a, b) => String(b.period).localeCompare(String(a.period)));
+}
+function nomencladorRowsByCode(period) {
+  const store = loadNomencladorStore();
+  const payload = getNomencladorByPeriod(store, period);
+  const byCode = new Map();
+  if (payload && Array.isArray(payload.rows)) {
+    for (const r of payload.rows) {
+      const code = cleanIdentifier(r.practiceCode);
+      if (!code) continue;
+      const prev = byCode.get(code);
+      if (!prev || money(r.total || 0) > money(prev.total || 0)) byCode.set(code, r);
+    }
+  }
+  return { byCode, periodo: payload ? (payload.period || "") : "", label: payload ? (payload.label || periodLabel(payload.period)) : "" };
+}
+function buildLiberarCupoCandidates(slug, opts = {}) {
+  const client = loadClientsStore().find((item) => item.slug === slug);
+  if (!client) return null;
+  const bandeja = getLiberarCupoBandeja(slug, opts.period);
+  const periods = liberarCupoBandejaPeriods(slug);
+  if (!bandeja || !Array.isArray(bandeja.rows) || !bandeja.rows.length) {
+    return { client, period: "", label: "", periods, rows: [], total: 0, totalFiltrado: 0, modules: [], uploadedAt: "" };
+  }
+  const period = normalizePeriod(bandeja.month) || normalizePeriod(opts.period) || "";
+  const nom = nomencladorRowsByCode(period);
+  const desde = isoDateFromBandejaValue(opts.desde);
+  const hasta = isoDateFromBandejaValue(opts.hasta);
+  const moduleFilter = String(opts.module || "").trim();
+  const codeFilters = String(opts.code || "").split(/[,\s;]+/).map(cleanIdentifier).filter(Boolean);
+  const q = normalizeText(opts.q || "");
+  const all = [];
+  const moduleMap = new Map();
+  for (const row of bandeja.rows) {
+    const practice = splitPractice(getRowValue(row, ["PRACTICA"]));
+    const code = cleanIdentifier(practice.code);
+    const nomRow = code ? nom.byCode.get(code) : null;
+    const order = cleanIdentifier(getRowValue(row, ["NRO. ORDEN", "NRO ORDEN", "ORDEN"]));
+    const validated = normalizeText(getRowValue(row, ["VALIDADA"])) === "S";
+    const transmitted = normalizeText(getRowValue(row, ["TRASMITIDA", "TRANSMITIDA"])) === "S";
+    if (validated || !order) continue;
+    const turnoRaw = getRowValue(row, ["TURNO"]);
+    const turnoIso = isoDateFromBandejaValue(turnoRaw);
+    if (desde && (!turnoIso || turnoIso < desde)) continue;
+    if (hasta && (!turnoIso || turnoIso > hasta)) continue;
+    const moduleCode = String((nomRow && nomRow.moduleCode) || "").trim();
+    const moduleDescription = String((nomRow && nomRow.moduleDescription) || "").trim();
+    const moduleKey = moduleCode || moduleDescription || "sin";
+    if (!moduleMap.has(moduleKey)) moduleMap.set(moduleKey, { value: moduleKey, label: `${moduleCode || "-"} - ${moduleDescription || "Sin modulo"}`, count: 0 });
+    moduleMap.get(moduleKey).count += 1;
+    const item = {
+      n_orden: order,
+      turno: String(turnoRaw || "").trim(),
+      turnoIso,
+      beneficio: cleanIdentifier(getRowValue(row, ["NRO. BENEFICIO", "NRO BENEFICIO", "BENEFICIO"])),
+      nombre: String(getRowValue(row, ["APELLIDO Y NOMBRE", "NOMBRE"]) || "").trim(),
+      practica: practice.text,
+      practiceCode: code,
+      practiceDescription: practice.description,
+      moduleCode,
+      moduleDescription,
+      estado: "No validada",
+      transmitida: transmitted ? "S" : "",
+      f_vencimiento: String(getRowValue(row, ["FECHA VTO", "F VTO", "VENCIMIENTO", "FECHA VENCIMIENTO"]) || "").trim(),
+    };
+    all.push(item);
+  }
+  let filtered = all;
+  if (moduleFilter) filtered = filtered.filter((r) => (r.moduleCode || r.moduleDescription || "sin") === moduleFilter);
+  if (codeFilters.length) {
+    const wanted = new Set(codeFilters);
+    filtered = filtered.filter((r) => wanted.has(cleanIdentifier(r.practiceCode)));
+  }
+  if (q) {
+    filtered = filtered.filter((r) => normalizeText([r.n_orden, r.beneficio, r.nombre, r.practica, r.moduleCode, r.moduleDescription].join(" ")).includes(q));
+  }
+  filtered.sort((a, b) => String(a.turnoIso || "").localeCompare(String(b.turnoIso || "")) || String(a.nombre || "").localeCompare(String(b.nombre || "")));
+  return {
+    client,
+    period,
+    label: bandeja.monthLabel || periodLabel(period) || "",
+    periods,
+    rows: filtered.slice(0, 3000),
+    total: all.length,
+    totalFiltrado: filtered.length,
+    modules: [...moduleMap.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    uploadedAt: bandeja.uploadedAt || "",
+    nomencladorPeriod: nom.periodo,
+    nomencladorLabel: nom.label,
+  };
+}
 // Resumen "hacia adelante": bandeja de turnos futuros (día siguiente al corte del
 // mes en curso → fin de mes). El objetivo es DETECTAR POSIBLES DÉBITOS por
 // adelantado, no estimar facturación (los turnos futuros no deberían faltar pero
@@ -5095,16 +5214,17 @@ const server = http.createServer(async (req, res) => {
     if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
-    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes"]);
+    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes", "liberar-cupo"]);
     if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
     // El operador solo dispara tareas de informes (subir/auditar a PAMI); la
     // sincronización de bandeja y las pruebas quedan para el admin.
-    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes") {
+    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes" && type !== "liberar-cupo") {
       return json(res, 403, { error: "Solo un administrador." });
     }
     const LABELS = {
       healthcheck: "Prueba de worker", "bandeja-sync": "Sincronizar bandeja",
       "auditar-informes": "Verificar informes en PAMI", "subir-informes": "Subir informes a PAMI",
+      "liberar-cupo": "Liberar cupo PAMI",
     };
     const state = loadWorkerState();
     const task = {
@@ -6643,6 +6763,114 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudo procesar el archivo." });
     }
+  }
+
+  const liberarCupoMatch = p.match(/^\/api\/clientes\/([^/]+)\/liberar-cupo\/candidatos$/);
+  if (liberarCupoMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(liberarCupoMatch[1]);
+    const data = buildLiberarCupoCandidates(slug, {
+      period: url.searchParams.get("period"),
+      desde: url.searchParams.get("desde"),
+      hasta: url.searchParams.get("hasta"),
+      module: url.searchParams.get("module"),
+      code: url.searchParams.get("code"),
+      q: url.searchParams.get("q"),
+    });
+    if (!data) return json(res, 404, { error: "Cliente no encontrado." });
+    if (me.role === "operador" && !clientesVisiblesPara(me, [data.client]).length) {
+      return json(res, 403, { error: "No tenés acceso a este cliente." });
+    }
+    const { client, ...out } = data;
+    return json(res, 200, out);
+  }
+
+  const liberarCupoReporteMatch = p.match(/^\/api\/clientes\/([^/]+)\/liberar-cupo\/reporte\.xlsx$/);
+  if (liberarCupoReporteMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(liberarCupoReporteMatch[1]);
+    const data = buildLiberarCupoCandidates(slug, {
+      period: url.searchParams.get("period"),
+      desde: url.searchParams.get("desde"),
+      hasta: url.searchParams.get("hasta"),
+      module: url.searchParams.get("module"),
+      code: url.searchParams.get("code"),
+      q: url.searchParams.get("q"),
+    });
+    if (!data) return json(res, 404, { error: "Cliente no encontrado." });
+    if (me.role === "operador" && !clientesVisiblesPara(me, [data.client]).length) {
+      return json(res, 403, { error: "No tenés acceso a este cliente." });
+    }
+    const rows = data.rows.map((r) => ({
+      "Nro. OME": r.n_orden,
+      "Turno": r.turno,
+      "Beneficio/GP": r.beneficio,
+      "Paciente": r.nombre,
+      "Código": r.practiceCode,
+      "Práctica": r.practica,
+      "Módulo": [r.moduleCode, r.moduleDescription].filter(Boolean).join(" - "),
+      "Estado": r.estado,
+      "Vencimiento aceptación": r.f_vencimiento,
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "No validadas");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const base = downloadName(`Liberar cupo ${data.client.name} ${data.label || data.period}`) || "liberar_cupo";
+    res.writeHead(200, {
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-length": buf.length,
+      "content-disposition": `attachment; filename="${base}.xlsx"`,
+      "cache-control": "no-store",
+    });
+    return res.end(buf);
+  }
+
+  const liberarCupoRunMatch = p.match(/^\/api\/clientes\/([^/]+)\/liberar-cupo\/liberar$/);
+  if (liberarCupoRunMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(liberarCupoRunMatch[1]);
+    const body = await readBody(req);
+    const data = buildLiberarCupoCandidates(slug, { period: body && body.period });
+    if (!data) return json(res, 404, { error: "Cliente no encontrado." });
+    if (me.role === "operador" && !clientesVisiblesPara(me, [data.client]).length) {
+      return json(res, 403, { error: "No tenés acceso a este cliente." });
+    }
+    const selected = new Set((Array.isArray(body && body.omes) ? body.omes : [])
+      .map((x) => cleanIdentifier(x)).filter(Boolean));
+    if (!selected.size) return json(res, 400, { error: "Seleccioná al menos una OME para liberar." });
+    if (selected.size > 300) return json(res, 400, { error: "Demasiadas OMEs en una tarea (máximo 300)." });
+    const candidatas = data.rows.filter((r) => selected.has(cleanIdentifier(r.n_orden)));
+    if (!candidatas.length) return json(res, 400, { error: "Las OMEs elegidas no figuran como no validadas en la bandeja guardada." });
+    const state = loadWorkerState();
+    const task = {
+      id: crypto.randomUUID(),
+      type: "liberar-cupo",
+      label: `Liberar cupo PAMI (${candidatas.length} OME${candidatas.length === 1 ? "" : "s"})`,
+      status: "pending",
+      clientSlug: slug,
+      payload: {
+        period: data.period,
+        periodLabel: data.label,
+        omes: candidatas,
+        filtros: body && body.filtros && typeof body.filtros === "object" ? body.filtros : {},
+      },
+      createdAt: new Date().toISOString(),
+      createdBy: me.username,
+      attempts: 0,
+      logs: [],
+    };
+    appendWorkerTaskLog(task, "info", `Creada por ${me.username}.`);
+    appendWorkerTaskLog(task, "info", `OMEs a liberar: ${candidatas.map((r) => r.n_orden).join(", ").slice(0, 450)}`);
+    state.tasks.unshift(task);
+    state.tasks = state.tasks.slice(0, 500);
+    saveWorkerState(state);
+    return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
   // Bandeja "hacia adelante" (turnos futuros) — la sube la app, la lee la card

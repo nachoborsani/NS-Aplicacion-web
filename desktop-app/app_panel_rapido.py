@@ -59,7 +59,18 @@ from google_sheets_ome import (
     write_ome_sheet_results,
 )
 from pami_activar import PamiActivarController
-from pami_liberar_cupo import PamiLiberarCupoController, exportar_reporte_no_validadas
+from pami_liberar_cupo import (
+    LIBERAR_CUPO_GROUPS_FILENAME,
+    LIBERAR_CUPO_SCOPE_ALL,
+    PamiLiberarCupoController,
+    exportar_reporte_no_validadas,
+    filter_liberar_cupo_rows_by_group,
+    format_liberar_cupo_group_text,
+    liberar_cupo_scope_options,
+    load_liberar_cupo_practice_groups,
+    parse_liberar_cupo_group_text,
+    save_liberar_cupo_practice_groups,
+)
 from pami_plan_salud_resolver import (
     explain_unresolved_plan_salud_practice,
     is_skippable_plan_salud_practice,
@@ -102,6 +113,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.activar_profiles_file = Path(self.data_dir) / "usuarios_activar.json"
         self.transmision_profiles_file = Path(self.data_dir) / "usuarios_transmision.json"
         self.liberar_cupo_profiles_file = Path(self.data_dir) / "usuarios_liberar_cupo.json"
+        self.liberar_cupo_groups_file = Path(self.data_dir) / LIBERAR_CUPO_GROUPS_FILENAME
         self.event_queue: queue.Queue = queue.Queue()
         self.action_queue: queue.Queue = queue.Queue()
         self.action_thread: threading.Thread | None = None
@@ -146,6 +158,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.transmision_profile_lookup: dict[str, dict] = {}
         self.liberar_cupo_profiles = self._load_liberar_cupo_profiles()
         self.liberar_cupo_profile_lookup: dict[str, dict] = {}
+        self.liberar_cupo_practice_groups = load_liberar_cupo_practice_groups(self.liberar_cupo_groups_file)
         self.liberar_cupo_detected_rows: list[dict] = []
         self.transmision_controller = PamiTransmisionController(
             log_callback=lambda message: self.event_queue.put(("transmision_log", message)),
@@ -282,6 +295,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.liberar_cupo_fecha_desde_var = ctk.StringVar(value=self._today_str())
         self.liberar_cupo_fecha_hasta_var = ctk.StringVar(value=self._today_str())
         self.liberar_cupo_max_pages_var = ctk.StringVar(value="10")
+        self.liberar_cupo_scope_var = ctk.StringVar(value=LIBERAR_CUPO_SCOPE_ALL)
         self.liberar_cupo_ver_web_var = ctk.BooleanVar(value=False)
         self.liberar_cupo_status_var = ctk.StringVar(value="Liberar Cupo listo.")
         self.activar_sheet_url_var = ctk.StringVar(value=normalize_spreadsheet_url(str(self.activar_sheet_settings.get("spreadsheet_url", ""))))
@@ -1196,8 +1210,30 @@ class PanelRapidoFrame(ctk.CTkFrame):
         )
         self.liberar_cupo_max_pages_entry.grid(row=0, column=9, padx=0, pady=0, sticky="w")
 
+        ctk.CTkLabel(fields, text="Practicas", text_color="#16324f").grid(row=1, column=0, padx=(0, 6), pady=(6, 0), sticky="w")
+        self.liberar_cupo_scope_combo = ctk.CTkComboBox(
+            fields,
+            values=self._liberar_cupo_scope_options(),
+            variable=self.liberar_cupo_scope_var,
+            state="readonly",
+            width=300,
+            height=28,
+        )
+        self.liberar_cupo_scope_combo.grid(row=1, column=1, padx=(0, 8), pady=(6, 0), sticky="w")
+
+        self.liberar_cupo_config_groups_button = ctk.CTkButton(
+            fields,
+            text="Config grupos",
+            command=self._open_liberar_cupo_groups_dialog,
+            fg_color="#66788a",
+            hover_color="#536577",
+            width=112,
+            height=28,
+        )
+        self.liberar_cupo_config_groups_button.grid(row=1, column=2, columnspan=2, padx=(0, 8), pady=(6, 0), sticky="w")
+
         actions = ctk.CTkFrame(block, fg_color="transparent")
-        actions.grid(row=2, column=0, padx=10, pady=(0, 8), sticky="w")
+        actions.grid(row=2, column=0, padx=10, pady=(4, 8), sticky="w")
 
         self.liberar_cupo_ver_web_check = ctk.CTkCheckBox(
             actions,
@@ -1276,6 +1312,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.activar_saved_profiles = self._load_activate_profiles()
         self.transmision_profiles = self._load_transmision_profiles()
         self.liberar_cupo_profiles = self._load_liberar_cupo_profiles()
+        self.liberar_cupo_practice_groups = load_liberar_cupo_practice_groups(self.liberar_cupo_groups_file)
         for combo, options_fn in (
             (getattr(self, "profile_combo", None), self._profile_options),
             (getattr(self, "specialist_profile_combo", None), self._specialist_profile_options),
@@ -1287,6 +1324,8 @@ class PanelRapidoFrame(ctk.CTkFrame):
                 continue
             options = options_fn()
             combo.configure(values=options or [""])
+        if hasattr(self, "liberar_cupo_scope_combo"):
+            self._refresh_liberar_cupo_scope_combo()
         for var, callback in (
             (getattr(self, "profile_var", None), self._on_profile_selected),
             (getattr(self, "specialist_profile_var", None), self._on_specialist_profile_selected),
@@ -2126,6 +2165,16 @@ class PanelRapidoFrame(ctk.CTkFrame):
             options.append(display)
         return options
 
+    def _liberar_cupo_scope_options(self) -> list[str]:
+        return liberar_cupo_scope_options(self.liberar_cupo_practice_groups)
+
+    def _refresh_liberar_cupo_scope_combo(self) -> None:
+        options = self._liberar_cupo_scope_options()
+        current = self.liberar_cupo_scope_var.get().strip()
+        self.liberar_cupo_scope_combo.configure(values=options)
+        if current not in options:
+            self.liberar_cupo_scope_var.set(LIBERAR_CUPO_SCOPE_ALL)
+
     def _restore_transmision_profile_selection(self) -> None:
         options = self._transmision_profile_options()
         self.transmision_profile_combo.configure(values=options or [""])
@@ -2157,9 +2206,9 @@ class PanelRapidoFrame(ctk.CTkFrame):
         profile = self.liberar_cupo_profile_lookup.get(selected)
         if not profile:
             return
-            self.liberar_cupo_status_var.set(
-                self._panel_text(f"Perfil {profile.get('usuario', '')} listo para detectar.", 58)
-            )
+        self.liberar_cupo_status_var.set(
+            self._panel_text(f"Perfil {profile.get('usuario', '')} listo para detectar.", 58)
+        )
 
     def _current_transmision_profile(self) -> dict:
         selected = (self.transmision_profile_var.get() or "").strip()
@@ -2335,7 +2384,19 @@ class PanelRapidoFrame(ctk.CTkFrame):
             self.liberar_cupo_fecha_hasta_var.get().strip(),
             self._liberar_cupo_max_pages(),
         )
-        self.event_queue.put(("liberar_cupo_detected", rows))
+        filtered = filter_liberar_cupo_rows_by_group(
+            rows,
+            self.liberar_cupo_scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL,
+            self.liberar_cupo_practice_groups,
+        )
+        if len(filtered) != len(rows):
+            self.event_queue.put(
+                (
+                    "liberar_cupo_log",
+                    f"Filtro de practicas '{self.liberar_cupo_scope_var.get()}': {len(filtered)} de {len(rows)} OME(s).",
+                )
+            )
+        self.event_queue.put(("liberar_cupo_detected", filtered))
 
     def _ensure_liberar_cupo_session(self) -> None:
         profile = self._current_liberar_cupo_profile()
@@ -2355,9 +2416,10 @@ class PanelRapidoFrame(ctk.CTkFrame):
         if not total:
             messagebox.showwarning("Liberar Cupo", "Primero detecta OMEs no validadas.")
             return
+        scope = self.liberar_cupo_scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL
         if not messagebox.askyesno(
             "Liberar Cupo",
-            f"Vas a cancelar la aceptacion de {total} OME(s) detectada(s). Continuar?",
+            f"Alcance: {scope}\n\nVas a cancelar la aceptacion de {total} OME(s) detectada(s). Continuar?",
         ):
             return
         self._run_action(self._run_liberar_cupo_liberar_detectadas)
@@ -2383,6 +2445,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
                 {
                     "fecha_desde": self.liberar_cupo_fecha_desde_var.get().strip(),
                     "fecha_hasta": self.liberar_cupo_fecha_hasta_var.get().strip(),
+                    "grupo_practicas": self.liberar_cupo_scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL,
                 },
             )
             self.liberar_cupo_status_var.set(self._panel_text(f"Reporte guardado: {output}", 58))
@@ -2390,6 +2453,43 @@ class PanelRapidoFrame(ctk.CTkFrame):
             messagebox.showinfo("Liberar Cupo", f"Reporte guardado:\n{output}")
         except Exception as exc:
             messagebox.showerror("Liberar Cupo", f"No se pudo guardar el reporte:\n{exc}")
+
+    def _open_liberar_cupo_groups_dialog(self) -> None:
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Grupos de practicas")
+        dialog.geometry("640x430")
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+        dialog.grid_columnconfigure(0, weight=1)
+        dialog.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            dialog,
+            text="Un grupo por linea. Formato: Nombre: texto o codigo, otro texto",
+            text_color="#16324f",
+        ).grid(row=0, column=0, padx=14, pady=(14, 6), sticky="w")
+
+        text = ctk.CTkTextbox(dialog, height=260)
+        text.grid(row=1, column=0, padx=14, pady=(0, 10), sticky="nsew")
+        text.insert("1.0", format_liberar_cupo_group_text(self.liberar_cupo_practice_groups))
+
+        actions = ctk.CTkFrame(dialog, fg_color="transparent")
+        actions.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="e")
+
+        def save_and_close() -> None:
+            groups = parse_liberar_cupo_group_text(text.get("1.0", "end"))
+            if not groups:
+                messagebox.showwarning("Grupos", "Carga al menos un grupo con uno o mas patrones.")
+                return
+            self.liberar_cupo_practice_groups = save_liberar_cupo_practice_groups(self.liberar_cupo_groups_file, groups)
+            self._refresh_liberar_cupo_scope_combo()
+            self.liberar_cupo_status_var.set(f"Grupos actualizados: {len(self.liberar_cupo_practice_groups)}")
+            dialog.destroy()
+
+        ctk.CTkButton(actions, text="Cancelar", width=96, fg_color="#9aafc3", hover_color="#7f95aa", command=dialog.destroy).grid(
+            row=0, column=0, padx=(0, 8), pady=0
+        )
+        ctk.CTkButton(actions, text="Guardar", width=96, command=save_and_close).grid(row=0, column=1, padx=0, pady=0)
 
     def _run_liberar_cupo_liberar_detectadas(self) -> None:
         rows = list(self.liberar_cupo_detected_rows)
@@ -2784,9 +2884,11 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.activar_saved_profiles = self._load_activate_profiles()
         self.transmision_profiles = self._load_transmision_profiles()
         self.liberar_cupo_profiles = self._load_liberar_cupo_profiles()
+        self.liberar_cupo_practice_groups = load_liberar_cupo_practice_groups(self.liberar_cupo_groups_file)
         self.profile_combo.configure(values=self._profile_options() or [""])
         self.specialist_profile_combo.configure(values=self._specialist_profile_options() or [""])
         self.activar_profile_combo.configure(values=self._activate_profile_options() or [""])
+        self._refresh_liberar_cupo_scope_combo()
         self._load_credencial_settings_into_form()
         self._restore_sheet_profile_selection()
         self._load_initial_profile_into_form()
@@ -5078,6 +5180,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
             self.liberar_cupo_report_button,
             self.liberar_cupo_close_button,
             self.open_liberar_cupo_button,
+            self.liberar_cupo_config_groups_button,
             self.liberar_cupo_fecha_desde_button,
             self.liberar_cupo_fecha_hasta_button,
             self.liberar_cupo_max_pages_entry,
@@ -5107,6 +5210,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.transmision_validada_combo.configure(state=readonly)
         self.transmision_transmitida_combo.configure(state=readonly)
         self.liberar_cupo_profile_combo.configure(state=readonly)
+        self.liberar_cupo_scope_combo.configure(state=readonly)
         self.credencial_destination_combo.configure(state=readonly)
         self.credencial_sheet_name_combo.configure(state=state)
         for widget in (
@@ -5166,6 +5270,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
             self.liberar_cupo_report_button,
             self.liberar_cupo_close_button,
             self.open_liberar_cupo_button,
+            self.liberar_cupo_config_groups_button,
             self.liberar_cupo_fecha_desde_button,
             self.liberar_cupo_fecha_hasta_button,
             self.liberar_cupo_max_pages_entry,
@@ -5195,6 +5300,7 @@ class PanelRapidoFrame(ctk.CTkFrame):
         self.activar_sheet_combo.configure(state=readonly_locked)
         self.activar_profile_combo.configure(state=readonly_locked)
         self.liberar_cupo_profile_combo.configure(state=readonly_locked)
+        self.liberar_cupo_scope_combo.configure(state=readonly_locked)
         self.credencial_destination_combo.configure(state=readonly_locked)
         self.credencial_sheet_name_combo.configure(state=locked_state)
         self.transmision_profile_combo.configure(state=readonly_locked)
@@ -5343,13 +5449,14 @@ class PanelRapidoFrame(ctk.CTkFrame):
                 elif event == "liberar_cupo_detected":
                     rows = payload or []
                     self.liberar_cupo_detected_rows = list(rows)
-                    self.liberar_cupo_status_var.set(f"Detectadas {len(rows)} OME(s) no validadas.")
-                    self.result_summary_var.set(f"Liberar Cupo: {len(rows)} OME(s) para revisar.")
+                    scope = self.liberar_cupo_scope_var.get().strip() or LIBERAR_CUPO_SCOPE_ALL
+                    self.liberar_cupo_status_var.set(f"{scope}: {len(rows)} OME(s) no validadas.")
+                    self.result_summary_var.set(f"Liberar Cupo ({scope}): {len(rows)} OME(s) para revisar.")
                     self.after(
                         100,
-                        lambda total=len(rows): messagebox.showinfo(
+                        lambda total=len(rows), scope=scope: messagebox.showinfo(
                             "Liberar Cupo",
-                            f"Proceso terminado.\n\nDetectadas {total} OME(s) no validadas.",
+                            f"Proceso terminado.\n\nAlcance: {scope}\nDetectadas {total} OME(s) no validadas.",
                         ),
                     )
                 elif event == "liberar_cupo_released":
@@ -5616,6 +5723,9 @@ class PanelRapidoFrame(ctk.CTkFrame):
             self.transmision_ver_web_var.set(bool(self.panel_config.get("ver_web_default", False)))
         if hasattr(self, "liberar_cupo_ver_web_var"):
             self.liberar_cupo_ver_web_var.set(False)
+        if hasattr(self, "liberar_cupo_scope_combo"):
+            self.liberar_cupo_practice_groups = load_liberar_cupo_practice_groups(self.liberar_cupo_groups_file)
+            self._refresh_liberar_cupo_scope_combo()
         if hasattr(self, "results_block"):
             self._apply_panel_layout()
 

@@ -9,6 +9,7 @@ Tipos de tarea:
   - healthcheck        : prueba (responde "vivo").
   - auditar-informes   : verifica en PAMI qué informes están cargados/transmitidos.
   - subir-informes     : adjunta el informe a la OME en PAMI (upload real + transmite).
+  - liberar-cupo       : cancela aceptaciones de OMEs no validadas para liberar cupo.
 
 Auth: el token de la cola lo obtiene logueado como admin (/api/admin/worker/token);
 los datos (informes, clave PAMI, archivos) los saca con la sesión admin.
@@ -258,6 +259,43 @@ def tarea_subir(web, slug, payload, tlog, cola=None, tid=None):
     return {"total": len(items), "subidos": ok, "detalle": detalle}
 
 
+def tarea_liberar_cupo(web, slug, payload, tlog):
+    from pami_liberar_cupo import PamiLiberarCupoController
+
+    user, clave = _creds(web, slug)
+    if not user or not clave:
+        raise RuntimeError("El cliente no tiene usuario/clave PAMI cargados en la web.")
+
+    candidatas = payload.get("omes") or payload.get("candidatas") or []
+    if not isinstance(candidatas, list):
+        candidatas = []
+    candidatas = [x for x in candidatas if isinstance(x, dict) and str(x.get("n_orden", "") or "").strip()]
+    if not candidatas:
+        return {"total": 0, "liberadas": 0, "errores": 0, "omitidas": 0, "detalle": []}
+
+    tlog(f"Liberando cupo de {len(candidatas)} OME(s) en PAMI...")
+    ctrl = PamiLiberarCupoController(log_callback=lambda m: tlog(str(m)), status_callback=lambda m: None)
+    try:
+        ctrl.abrir_pami(user, clave, headless=True)
+        resumen = ctrl.liberar_omes(candidatas)
+    finally:
+        ctrl.cerrar()
+
+    detalle = []
+    for r in resumen.detalle:
+        d = dataclasses.asdict(r)
+        detalle.append(d)
+        extra = (" · vto " + d.get("f_vencimiento", "")) if d.get("f_vencimiento") else ""
+        tlog(f"OME {d.get('n_orden','')} -> {d.get('estado','')}{extra}")
+    return {
+        "total": len(candidatas),
+        "liberadas": resumen.ok,
+        "errores": resumen.errores,
+        "omitidas": resumen.omitidos,
+        "detalle": detalle,
+    }
+
+
 def dispatch(task, web, cola):
     tid = task["id"]
     tipo = task["type"]
@@ -275,6 +313,8 @@ def dispatch(task, web, cola):
         return tarea_auditar(web, slug, payload, tlog)
     if tipo == "subir-informes":
         return tarea_subir(web, slug, payload, tlog, cola, tid)
+    if tipo == "liberar-cupo":
+        return tarea_liberar_cupo(web, slug, payload, tlog)
     raise RuntimeError(f"Tipo de tarea no soportado por este worker: {tipo}")
 
 
