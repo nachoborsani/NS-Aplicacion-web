@@ -3722,21 +3722,54 @@ function faltanInformesDe(panelId){
 }
 // Botón por fila: sólo aparece si hay un modelo para esa práctica.
 var MESCURSO_OMES_GEN = {}; // OMEs que ya tienen informe generado (para no crear/subir de nuevo)
+var MESCURSO_FALTANTES_DESEST = {}; // OMEs de faltantes desestimados (no se crea informe; el monto igual cuenta)
 function accionCrearInforme(panelId){
   return function(idx){
     var x = faltanInformesDe(panelId)[idx];
-    if (!x || !modeloParaPracticaRow(x.practica)) return '';
-    // Si ya generamos un informe para esa OME (aunque la bandeja no lo refleje
-    // todavía), no ofrecemos crear/subir de nuevo: evita duplicar.
+    if (!x) return '';
     var omeDig = String(x.ome || '').replace(/\D/g, '');
-    if (omeDig && MESCURSO_OMES_GEN[omeDig]) {
-      return '<span class="mc-generado" style="color:#16a34a;font-weight:600;font-size:12px;white-space:nowrap" title="Ya se generó un informe para esta OME (subiéndose o subido). Cuando la bandeja se refresque, sale de la lista.">✅ Generado</span>';
+    // Desestimado (ej. paciente no afiliado): no se ofrece crear/subir. El monto
+    // sigue contando (es plata perdida), solo se bloquea la acción. Reversible.
+    if (omeDig && MESCURSO_FALTANTES_DESEST[omeDig]) {
+      return '<span class="mc-desest" style="color:var(--text-2);font-weight:600;font-size:12px;white-space:nowrap" title="Desestimado: no se le genera informe. El monto sigue contando como plata perdida.">🚫 Desestimado</span>'
+        + ' <button class="btn btn-ghost mc-crear" type="button" title="Reactivar (volver a ofrecer crear)" onclick="reactivarFaltante(\'' + panelId + '\',' + idx + ',this)">↩️</button>';
     }
-    var btn = '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
-    // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
-    if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
+    var puedeCrear = !!modeloParaPracticaRow(x.practica);
+    var btn = '';
+    if (puedeCrear) {
+      btn += '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
+      // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
+      if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
+    }
+    // "Desestimar": disponible siempre que haya OME (para poder marcarlo), aunque
+    // no exista modelo para la práctica.
+    if (omeDig) btn += ' <button class="btn btn-ghost mc-desest-btn" type="button" title="Desestimar: no generar informe (paciente no afiliado, etc.). El monto igual cuenta." onclick="desestimarFaltante(\'' + panelId + '\',' + idx + ',this)">🚫 Desestimar</button>';
     return btn;
   };
+}
+async function desestimarFaltante(panelId, idx, btn){
+  var x = faltanInformesDe(panelId)[idx]; if (!x) return;
+  var omeDig = String(x.ome || '').replace(/\D/g, ''); if (!omeDig) return;
+  var slug = ACTIVE_CLIENT && ACTIVE_CLIENT.slug; if (!slug) return;
+  var motivo = await nsPrompt('¿Por qué se desestima? (queda anotado)', {
+    titulo: 'Desestimar faltante', cuerpo: (x.nombre || x.patientName || '') + ' — ' + (x.practica || ''),
+    placeholder: 'Ej: paciente no afiliado', okLabel: 'Desestimar' });
+  if (motivo === null) return;
+  var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes/' + omeDig + '/desestimar', { motivo: motivo });
+  if (!r.ok){ nsAlert((r.data && r.data.error) || 'No se pudo desestimar.'); return; }
+  MESCURSO_FALTANTES_DESEST[omeDig] = 1;
+  // Re-dibuja el panel abierto para reflejar el cambio (mismo tipo = panelId).
+  if (typeof mesCursoTogglePanel === 'function'){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(panelId); }
+}
+async function reactivarFaltante(panelId, idx, btn){
+  var x = faltanInformesDe(panelId)[idx]; if (!x) return;
+  var omeDig = String(x.ome || '').replace(/\D/g, ''); if (!omeDig) return;
+  var slug = ACTIVE_CLIENT && ACTIVE_CLIENT.slug; if (!slug) return;
+  var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes/' + omeDig + '/desestimar', { desestimar: false });
+  if (!r.ok){ nsAlert((r.data && r.data.error) || 'No se pudo reactivar.'); return; }
+  delete MESCURSO_FALTANTES_DESEST[omeDig];
+  // Re-dibuja el panel abierto para reflejar el cambio (mismo tipo = panelId).
+  if (typeof mesCursoTogglePanel === 'function'){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(panelId); }
 }
 function ausentesDePanel(panelId){
   if (panelId === 'ausentes') return MESCURSO_AUSENTES || [];
@@ -4779,6 +4812,10 @@ async function loadClientMesCurso(){
   MESCURSO_OMES_GEN = {};
   api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas').then(function(r){
     if (r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
+  }).catch(function(){});
+  MESCURSO_FALTANTES_DESEST = {};
+  api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados').then(function(r){
+    if (r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_FALTANTES_DESEST[String(o).replace(/\D/g, '')] = 1; });
   }).catch(function(){});
   // El mes anterior es SIEMPRE el calendario anterior a hoy (Agosto -> Julio), no
   // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
@@ -7343,33 +7380,48 @@ function srvRelativo(iso){
 }
 function srvOnline(w){ return !!(w && w.lastSeenAt) && (Date.now()-Date.parse(w.lastSeenAt)) < 45000; }
 function srvIconTarea(s){ return s==='done'?'✅':s==='error'?'❌':s==='running'?'⏳':s==='pending'?'🕓':'•'; }
+// Estado del server: 'on' (latido reciente), 'busy' (sin latido pero hay una tarea
+// corriendo → está ocupado subiendo, NO caído) u 'off' (sin conexión de verdad).
+// El worker no manda latido mientras está metido en una tarea larga (subir a PAMI),
+// así que sin este chequeo mostraba "Sin conexión" estando a full trabajando.
+function srvEstado(st){
+  var ws=(st&&st.workers)||[]; if(ws.some(srvOnline)) return 'on';
+  var tasks=(st&&st.tasks)||[];
+  if(tasks.some(function(t){ return t.status==='running'; })) return 'busy';
+  return 'off';
+}
 
 async function srvCargarEstado(){
   var r = await fetch('/api/admin/worker/status', { credentials:'same-origin' });
   if(!r.ok) throw new Error('http '+r.status);
   return r.json();
 }
-function srvSetDot(online){ var d=document.getElementById('srvDot'); if(d) d.style.background = online ? '#16a34a' : '#dc2626'; }
+function srvSetDot(estado){ var d=document.getElementById('srvDot'); if(d) d.style.background = estado==='on'||estado===true ? '#16a34a' : estado==='busy' ? '#d97706' : '#dc2626'; }
 async function srvRefrescarDot(){
-  try{ var st=await srvCargarEstado(); srvSetDot((st.workers||[]).some(srvOnline)); }
-  catch(e){ srvSetDot(false); }
+  try{ var st=await srvCargarEstado(); srvSetDot(srvEstado(st)); }
+  catch(e){ srvSetDot('off'); }
 }
 
 function srvRender(st){
   var body=document.getElementById('srvBody'); if(!body) return;
   var ws=(st.workers||[]);
-  var online = ws.some(srvOnline);
-  srvSetDot(online);
+  var tasks=(st.tasks||[]);
+  var estado = srvEstado(st);
+  srvSetDot(estado);
+  var enCola = tasks.filter(function(t){ return t.status==='pending'; }).length;
   var w = ws.slice().sort(function(a,b){ return String(b.lastSeenAt||'').localeCompare(String(a.lastSeenAt||'')); })[0];
+  // Paleta según estado: verde en línea / ámbar trabajando / rojo sin conexión.
+  var C = estado==='on'   ? { bg:'rgba(22,163,74,.10)', dot:'#16a34a', ring:'rgba(22,163,74,.18)', txt:'Server en línea' }
+        : estado==='busy' ? { bg:'rgba(217,119,6,.10)', dot:'#d97706', ring:'rgba(217,119,6,.18)', txt:'Trabajando…' + (enCola? ' ('+enCola+' en cola)' : '') }
+        :                    { bg:'rgba(220,38,38,.10)', dot:'#dc2626', ring:'rgba(220,38,38,.18)', txt:'Sin conexión con el server' };
   var h='';
-  // Cabecera: vivo / sin conexión
-  h += '<div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-radius:12px;background:'+(online?'rgba(22,163,74,.10)':'rgba(220,38,38,.10)')+';margin-bottom:16px">';
-  h += '<span style="width:12px;height:12px;border-radius:50%;flex:none;background:'+(online?'#16a34a':'#dc2626')+';box-shadow:0 0 0 4px '+(online?'rgba(22,163,74,.18)':'rgba(220,38,38,.18)')+'"></span>';
-  h += '<div style="min-width:0"><div style="font-weight:800;color:var(--text)">'+(online?'Server en línea':'Sin conexión con el server')+'</div>';
+  // Cabecera: vivo / trabajando / sin conexión
+  h += '<div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-radius:12px;background:'+C.bg+';margin-bottom:16px">';
+  h += '<span style="width:12px;height:12px;border-radius:50%;flex:none;background:'+C.dot+';box-shadow:0 0 0 4px '+C.ring+'"></span>';
+  h += '<div style="min-width:0"><div style="font-weight:800;color:var(--text)">'+C.txt+'</div>';
   h += '<div style="font-size:12px;color:var(--text-2)">'+ (w ? ((w.hostname||w.workerId||'server')+' · visto '+srvRelativo(w.lastSeenAt)) : 'nunca reportó') +'</div></div></div>';
 
   // Qué está haciendo ahora
-  var tasks=(st.tasks||[]);
   var corriendo = tasks.filter(function(t){ return t.status==='running'; })[0];
   h += '<div style="font-size:11.5px;font-weight:800;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px">Ahora</div>';
   if(corriendo){

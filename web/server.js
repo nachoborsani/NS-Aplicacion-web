@@ -477,6 +477,17 @@ function savePadron(store) {
 // { [slug]: { items: [ {id, filename, ext, stored, origen, storedAt, extract, match, resuelto, error} ], updatedAt } }
 const informesDir = path.join(dataDir, "informes");
 const informesIndexFile = path.join(dataDir, "informes_index.json");
+// Faltantes de informe DESESTIMADOS (ej. paciente no afiliado): { [slug]: { [omeDig]: {por, at, motivo} } }.
+// NO tocan la plata (el monto "falta informe" sigue contando: es plata perdida);
+// solo bloquean el "Crear / Crear y subir" de esa fila en el dashboard.
+const faltantesDesestFile = path.join(dataDir, "faltantes_desestimados.json");
+function loadFaltantesDesest() {
+  try { const o = JSON.parse(fs.readFileSync(faltantesDesestFile, "utf8")); return (o && typeof o === "object") ? o : {}; } catch { return {}; }
+}
+function saveFaltantesDesest(o) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(faltantesDesestFile, JSON.stringify(o, null, 2));
+}
 function loadInformes() {
   try { const j = JSON.parse(fs.readFileSync(informesIndexFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
   catch { return {}; }
@@ -8441,6 +8452,36 @@ const server = http.createServer(async (req, res) => {
       omes.forEach((o) => { const d = cabinaLib.digs(o); if (d) set.add(d); });
     }
     return json(res, 200, { omes: [...set] });
+  }
+
+  // Faltantes de informe desestimados de un cliente (para no ofrecer Crear/Crear y subir).
+  const faltDesestList = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/faltantes-desestimados$/);
+  if (faltDesestList && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const slug = faltDesestList[1];
+    const map = loadFaltantesDesest()[slug] || {};
+    return json(res, 200, { omes: Object.keys(map), detalle: map });
+  }
+  // Desestimar / reactivar un faltante (por OME). No toca el monto; solo bloquea Crear.
+  const faltDesest = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/faltantes\/(\d+)\/desestimar$/);
+  if (faltDesest && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const [, slug, ome] = faltDesest;
+    let body = {};
+    try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
+    const store = loadFaltantesDesest();
+    if (!store[slug]) store[slug] = {};
+    if (body.desestimar === false) {
+      delete store[slug][ome];
+    } else {
+      store[slug][ome] = { por: me.username || me.name || "", at: new Date().toISOString(), motivo: String(body.motivo || "").slice(0, 200) };
+    }
+    saveFaltantesDesest(store);
+    return json(res, 200, { ok: true, ome, desestimado: store[slug][ome] || null });
   }
 
   // Servir el archivo original de un informe (para verlo en la cabina).
