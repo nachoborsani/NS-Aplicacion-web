@@ -3923,6 +3923,47 @@ function payloadInformeDeFila(x, opts){
 }
 // ¿El modelo obliga a elegir algo antes de generar? (varios resultados, campos
 // requeridos como sexo, o hay que elegir médico). Devuelve las opciones.
+// ===== Selección múltiple en Faltan informes: crear y subir varios =====
+function mcFaltCheckSel(panelId){
+  var checks = [].slice.call(document.querySelectorAll('.mc-falt-chk[data-panel="' + panelId + '"]'));
+  var n = checks.filter(function(c){ return c.checked; }).length;
+  var b = document.getElementById('mcFaltBulk-' + panelId);
+  if (b){ b.disabled = (n === 0); b.textContent = '📤 Crear y subir seleccionados' + (n ? ' (' + n + ')' : ''); }
+}
+function mcFaltCheckAll(el, panelId){
+  [].slice.call(document.querySelectorAll('.mc-falt-chk[data-panel="' + panelId + '"]')).forEach(function(c){ c.checked = el.checked; });
+  mcFaltCheckSel(panelId);
+}
+// Procesa los faltantes tildados uno por uno: para cada uno abre su modal de
+// opciones (preset/médico/sexo), y al confirmar lo encola. Secuencial: el
+// siguiente modal aparece cuando cerrás el anterior.
+async function crearYSubirSeleccionadosPanel(panelId){
+  var idxs = [].slice.call(document.querySelectorAll('.mc-falt-chk[data-panel="' + panelId + '"]'))
+    .filter(function(c){ return c.checked; }).map(function(c){ return parseInt(c.value, 10); });
+  if (!idxs.length) return;
+  if (!await nsConfirm('Vas a crear y subir ' + idxs.length + ' informe(s). Para cada uno vas a elegir el resultado, el médico y los datos que falten.', { titulo:'Crear y subir varios', okLabel:'Empezar' })) return;
+  var hechos = 0, saltados = 0;
+  for (var k = 0; k < idxs.length; k++){
+    var x = faltanInformesDe(panelId)[idxs[k]];
+    if (!x || !x.ome){ saltados++; continue; }
+    var omeDig = String(x.ome || '').replace(/\D/g, '');
+    if (omeDig && (MESCURSO_OMES_GEN[omeDig] || MESCURSO_FALTANTES_DESEST[omeDig])){ saltados++; continue; }
+    var m = modeloParaPracticaRow(x.practica);
+    if (!m){ saltados++; continue; }   // sin modelo no se puede crear
+    var op = opcionesModelo(m);
+    if (op.haceFalta){
+      var ok = await modalOpcionesInforme(x, m, op, true, null);   // abre modal, espera confirmar/cancelar
+      if (ok){ hechos++; MESCURSO_OMES_GEN[omeDig] = 1; } else { saltados++; }
+    } else {
+      var payload = payloadInformeDeFila(x);
+      if (payload){ delete payload._modelo; payload.ome = x.ome; payload.practicaTexto = x.practica || ''; ejecutarCrearYSubir(payload, x, null); hechos++; MESCURSO_OMES_GEN[omeDig] = 1; }
+      else saltados++;
+    }
+  }
+  // Re-dibuja el panel (los hechos pasan a "Generado").
+  if (typeof mesCursoTogglePanel === 'function'){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(panelId); }
+  nsAlert('Encolados ' + hechos + ' informe(s).' + (saltados ? ' ' + saltados + ' salteado(s) (sin OME/modelo o ya generados).' : ''));
+}
 function opcionesModelo(m){
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
   var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key); });
@@ -4068,57 +4109,61 @@ function modalOpcionesInforme(x, m, op, subir, btn){
         '<button class="mc-inf-btn ' + (subir ? 'subir' : 'primary') + '" id="mc-inf-ok">' + (subir ? '📤 Crear y subir' : '📝 Crear') + '</button></div>' +
     '</div>';
   document.body.appendChild(scrim);
-  // Filtro de presets por sexo: si los presets traen valores.sexo (urodinamia:
-  // M1-M8 / F1-F8), al elegir el sexo se ofrecen solo los de ese sexo; y al elegir
-  // un preset se sincroniza el sexo, para que el informe salga coherente.
-  (function(){
-    var presetSel = scrim.querySelector('#mc-inf-preset');
-    var sexoSel = scrim.querySelector('[data-campo="sexo"]');
-    if (!presetSel || !sexoSel) return;
-    if (!op.presets.some(function(p){ return p.valores && p.valores.sexo; })) return;
-    var nsx = function(s){ s = String(s || '').toLowerCase(); return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : ''; };
-    var rebuild = function(){
-      var sx = nsx(sexoSel.value);
-      var prev = presetSel.value;
-      var vis = op.presets.filter(function(p){ var ps = nsx(p.valores && p.valores.sexo); return !ps || !sx || ps === sx; });
-      presetSel.innerHTML = vis.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + '</option>'; }).join('');
-      if (vis.some(function(p){ return p.id === prev; })) presetSel.value = prev;
+  // Devuelve una Promise: resuelve true si se confirmó (y se encoló la creación),
+  // false si se canceló. Permite encadenar varios en la creación masiva.
+  return new Promise(function(resolve){
+    // Filtro de presets por sexo (urodinamia M1-M8 / F1-F8): al elegir el sexo se
+    // ofrecen solo los de ese sexo; al elegir un preset se sincroniza el sexo.
+    (function(){
+      var presetSel = scrim.querySelector('#mc-inf-preset');
+      var sexoSel = scrim.querySelector('[data-campo="sexo"]');
+      if (!presetSel || !sexoSel) return;
+      if (!op.presets.some(function(p){ return p.valores && p.valores.sexo; })) return;
+      var nsx = function(s){ s = String(s || '').toLowerCase(); return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : ''; };
+      var rebuild = function(){
+        var sx = nsx(sexoSel.value);
+        var prev = presetSel.value;
+        var vis = op.presets.filter(function(p){ var ps = nsx(p.valores && p.valores.sexo); return !ps || !sx || ps === sx; });
+        presetSel.innerHTML = vis.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + '</option>'; }).join('');
+        if (vis.some(function(p){ return p.id === prev; })) presetSel.value = prev;
+      };
+      sexoSel.addEventListener('change', rebuild);
+      presetSel.addEventListener('change', function(){
+        var p = op.presets.find(function(pp){ return pp.id === presetSel.value; });
+        var ps = p && p.valores && p.valores.sexo;
+        if (ps && nsx(sexoSel.value) !== nsx(ps)) { sexoSel.value = ps; }
+      });
+      rebuild();
+    })();
+    function cerrar(val){ scrim.remove(); resolve(!!val); }
+    scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(false); });
+    scrim.querySelector('#mc-inf-cancel').onclick = function(){ cerrar(false); };
+    scrim.querySelector('#mc-inf-ok').onclick = function(){
+      var presetSel = scrim.querySelector('#mc-inf-preset');
+      var medicoId = scrim.querySelector('#mc-inf-medico').value;
+      if (!medicoId){ nsAlert('Elegí el médico que firma.'); return; }
+      var valores = {};
+      var falta = null;
+      op.camposReq.forEach(function(c){
+        var el = scrim.querySelector('[data-campo="' + c.key + '"]');
+        var v = el ? String(el.value || '').trim() : '';
+        if (!v) falta = c.label || c.key;
+        valores[c.key] = v;
+      });
+      if (falta){ nsAlert('Completá: ' + falta); return; }
+      var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
+      if (!payload) return;
+      delete payload._modelo;
+      scrim.remove();
+      if (subir){
+        payload.ome = x.ome; payload.practicaTexto = x.practica || '';
+        ejecutarCrearYSubir(payload, x, btn);
+      } else {
+        ejecutarCrear(payload, x, btn);
+      }
+      resolve(true);
     };
-    sexoSel.addEventListener('change', rebuild);
-    presetSel.addEventListener('change', function(){
-      var p = op.presets.find(function(pp){ return pp.id === presetSel.value; });
-      var ps = p && p.valores && p.valores.sexo;
-      if (ps && nsx(sexoSel.value) !== nsx(ps)) { sexoSel.value = ps; }
-    });
-    rebuild();
-  })();
-  function cerrar(){ scrim.remove(); }
-  scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(); });
-  scrim.querySelector('#mc-inf-cancel').onclick = cerrar;
-  scrim.querySelector('#mc-inf-ok').onclick = function(){
-    var presetSel = scrim.querySelector('#mc-inf-preset');
-    var medicoId = scrim.querySelector('#mc-inf-medico').value;
-    if (!medicoId){ nsAlert('Elegí el médico que firma.'); return; }
-    var valores = {};
-    var falta = null;
-    op.camposReq.forEach(function(c){
-      var el = scrim.querySelector('[data-campo="' + c.key + '"]');
-      var v = el ? String(el.value || '').trim() : '';
-      if (!v) falta = c.label || c.key;
-      valores[c.key] = v;
-    });
-    if (falta){ nsAlert('Completá: ' + falta); return; }
-    var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
-    if (!payload) return;
-    delete payload._modelo;
-    cerrar();
-    if (subir){
-      payload.ome = x.ome; payload.practicaTexto = x.practica || '';
-      ejecutarCrearYSubir(payload, x, btn);
-    } else {
-      ejecutarCrear(payload, x, btn);
-    }
-  };
+  });
 }
 // Abre/cierra debajo de los cuadros el detalle copiable.
 function mesCursoTogglePanel(tipo){
@@ -4288,15 +4333,20 @@ function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accio
   // Columna extra opcional (botón "Crear informe"): no se copia ni se exporta,
   // sólo se muestra. La celda va sin escapar porque trae HTML del botón.
   var conAcc = typeof accionFn === 'function';
-  var thead = '<tr>' + headers.map(function(h, i){
+  // Selección múltiple: solo en los paneles de faltan-informes (crear/subir varios).
+  var conCheck = conAcc && /^informes/.test(String(panelId || ''));
+  var pid = esc(panelId || '');
+  var thead = '<tr>' + (conCheck ? '<th class="mc-chk-th"><input type="checkbox" title="Seleccionar todos" onclick="mcFaltCheckAll(this,\'' + pid + '\')"></th>' : '') + headers.map(function(h, i){
     var icon = sort.col === i ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : '';
     return '<th' + clase(i) + '><button type="button" class="mc-sort" onclick="mesCursoOrdenar(\'' + esc(panelId || '') + '\',' + i + ')" title="Ordenar por ' + esc(h) + '">' + esc(h) + '<span>' + esc(icon) + '</span></button></th>';
   }).join('') + (conAcc ? '<th></th>' : '') + '</tr>';
   var tbody = ordenadas.map(function(row){
-    return '<tr>' + row.cells.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
+    return '<tr>' + (conCheck ? '<td class="mc-chk-td"><input type="checkbox" class="mc-falt-chk" data-panel="' + pid + '" value="' + row.idx + '" onclick="mcFaltCheckSel(\'' + pid + '\')"></td>' : '') + row.cells.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
       + (conAcc ? '<td class="mc-acc">' + (accionFn(row.idx) || '') + '</td>' : '') + '</tr>';
   }).join('');
-  var acciones = '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
+  var acciones = '';
+  if (conCheck) acciones += '<button id="mcFaltBulk-' + pid + '" class="btn btn-primary btn-sm" type="button" disabled onclick="crearYSubirSeleccionadosPanel(\'' + pid + '\')">📤 Crear y subir seleccionados</button>';
+  acciones += '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
   if (panelId){
     acciones += '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'' + panelId + '\',this)">📄 PDF</button>'
       + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'' + panelId + '\',this)">📊 Excel</button>';

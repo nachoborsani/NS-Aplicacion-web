@@ -1514,6 +1514,8 @@
   .mescurso-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .mescurso-panel-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap}
   .mescurso-panel-actions .btn{padding:5px 9px;font-size:12px}
+  .bandeja-table th.mc-chk-th,.bandeja-table td.mc-chk-td{width:30px;text-align:center;padding-left:6px;padding-right:2px}
+  .bandeja-table .mc-falt-chk{cursor:pointer}
   .mescurso-panel-head b{font-size:13px;color:var(--text)}
   .mescurso-panel-vacio{font-size:12px;color:var(--text-2);padding:10px 2px 2px}
   .mescurso-panel.error .mescurso-panel-head b{color:var(--error)}
