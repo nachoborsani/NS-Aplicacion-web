@@ -8755,8 +8755,19 @@ async function refreshCabina(){
     var d = await r.json();
     if (!r.ok){ if(meta) meta.textContent = d.error || 'No se pudo cargar.'; return; }
     CAB_ITEMS = d.items || [];
+    cabMostrarUltimaImport(d.lastMailImportAt);
     aplicarFiltroCabina();
   } catch(e){ if(meta) meta.textContent = 'Error de red.'; }
+}
+// Muestra cuándo fue la última vez que se trajo del mail para este cliente.
+function cabMostrarUltimaImport(iso){
+  var el = document.getElementById('cabUltimaImport'); if (!el) return;
+  if (!iso){ el.textContent = 'Sin importaciones de mail todavía'; return; }
+  var d = new Date(iso);
+  if (isNaN(d)){ el.textContent = ''; return; }
+  var f = d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+  var h = d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+  el.textContent = 'Última importación del mail: ' + f + ' ' + h;
 }
 // Fecha del informe para filtrar/mostrar: la del mail si la tenemos, si no cuándo se bajó.
 function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').slice(0,10); }
@@ -8789,7 +8800,11 @@ function cabResueltoTodoTransmitido(it){
 // informe puede estar reclamado al centro Y ademas tener la OME sin
 // validar. Son dos cosas distintas y hay que hacer las dos.
 function cabEstadoSinReclamo(it){
-  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'ok';
+  if (it.resuelto){
+    if (cabResueltoTodoTransmitido(it)) return 'ya_transmitido';
+    if (it.resuelto.faltaValidar) return 'falta_validar';
+    return 'ok';
+  }
   return it.match ? it.match.estado : 'sin_match';
 }
 function cabEstadoDe(it){
@@ -8798,7 +8813,11 @@ function cabEstadoDe(it){
   // Un resuelto a mano cuya OME todavía no está transmitida es, a los efectos de
   // subir, lo mismo que un "listo para subir": va en el mismo grupo. Solo se separa
   // cuando ya está todo transmitido (ahí no hay nada que hacer).
-  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'ok';
+  if (it.resuelto){
+    if (cabResueltoTodoTransmitido(it)) return 'ya_transmitido';
+    if (it.resuelto.faltaValidar) return 'falta_validar';   // la subida rebotó: OME sin validar
+    return 'ok';
+  }
   return it.match ? it.match.estado : 'sin_match';
 }
 function cabResumenDe(items){

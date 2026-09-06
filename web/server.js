@@ -622,9 +622,14 @@ function resueltoTodoTransmitido(it) {
 function estadoInforme(it) {
   if (it && it.desestimado) return "desestimado";   // el operador lo dio por cerrado sin subir
   if (it && it.reclamado) return "reclamado";        // reclamado al centro, esperando datos
-  // Resuelto a mano pero con OME sin transmitir = listo para subir (mismo grupo que
-  // el match automático). Solo se separa "ya transmitido", que no tiene nada que hacer.
-  if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "ok";
+  // Resuelto a mano: "ya transmitido" si están todas; "falta validar" si la última
+  // subida dijo que alguna OME no está validada todavía (así se puede trabajar sola);
+  // si no, "listo para subir".
+  if (it && it.resuelto) {
+    if (resueltoTodoTransmitido(it)) return "ya_transmitido";
+    if (it.resuelto.faltaValidar) return "falta_validar";
+    return "ok";
+  }
   return (it && it.match && it.match.estado) || "sin_match";
 }
 // Pendientes de UN cliente: cuántos informes de la Cabina siguen "en juego"
@@ -5031,8 +5036,12 @@ const server = http.createServer(async (req, res) => {
         const okOmes = new Set(det
           .filter((d) => d && ["transmitido", "ya_transmitido"].includes(d.estado))
           .map((d) => String(d.ome || "").replace(/\D+/g, "")).filter(Boolean));
+        // OMEs que la subida rebotó porque todavía no están validadas en PAMI.
+        const noValidadas = new Set(det
+          .filter((d) => d && d.estado === "no_validada")
+          .map((d) => String(d.ome || "").replace(/\D+/g, "")).filter(Boolean));
         const ids = new Set((task.payload && Array.isArray(task.payload.informeIds) ? task.payload.informeIds : []).map(String));
-        if (okOmes.size && ids.size) {
+        if (ids.size && (okOmes.size || noValidadas.size)) {
           const slug = task.clientSlug || "";
           const store = loadInformes();
           const items = (store[slug] && store[slug].items) || [];
@@ -5043,7 +5052,13 @@ const server = http.createServer(async (req, res) => {
               .map((o) => String(o).replace(/\D+/g, "")).filter(Boolean);
             if (!omes.length) continue;
             if (omes.every((o) => okOmes.has(o))) {
-              it.resuelto = Object.assign({ ome: omes[0], omes, por: "subida", at: new Date().toISOString() }, it.resuelto || {}, { todoTransmitido: true });
+              it.resuelto = Object.assign({ ome: omes[0], omes, por: "subida", at: new Date().toISOString() }, it.resuelto || {}, { todoTransmitido: true, faltaValidar: false });
+              cambios++;
+            } else if (it.resuelto && omes.some((o) => noValidadas.has(o))) {
+              // Subió parte y alguna OME quedó sin validar: se marca "falta validar" para
+              // que se pueda trabajar sola (validarla en PAMI y volver a subir).
+              it.resuelto.faltaValidar = true;
+              it.resuelto.omesFaltaValidar = omes.filter((o) => noValidadas.has(o));
               cambios++;
             }
           }
@@ -8290,6 +8305,7 @@ const server = http.createServer(async (req, res) => {
         nuevos.push(rec);
       }
       store[slug].updatedAt = new Date().toISOString();
+      store[slug].lastMailImportAt = new Date().toISOString();  // cuándo se trajo del mail por última vez
       saveInformes(store);
       return json(res, 200, { procesados: nuevos.length, hayMas, desde, hasta, items: nuevos });
     } catch (error) {
@@ -8334,7 +8350,7 @@ const server = http.createServer(async (req, res) => {
       const e = estadoInforme(it);
       resumen[e] = (resumen[e] || 0) + 1;
     }
-    return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", resumen, items });
+    return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", lastMailImportAt: cli.lastMailImportAt || "", resumen, items });
   }
 
   // OMEs que ya tienen un informe GENERADO desde "Crear y subir" (aunque la

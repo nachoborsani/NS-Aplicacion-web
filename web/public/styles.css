@@ -1941,6 +1941,15 @@
   .cab-ocr{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#7a5cff 16%,var(--surface));color:#5a3ec8;vertical-align:middle}
   .cab-actions{white-space:nowrap;text-align:right}
   .cab-actions .rowbtn{margin-left:2px}
+  /* Encabezado compacto de Informes recibidos: una sola barra */
+  .cab-head{display:flex;flex-direction:column;gap:10px;padding:12px 14px}
+  .cab-head-desc{font-size:12.5px;color:var(--text-2);line-height:1.4}
+  .cab-head-controls{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}
+  .cab-mailbox{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+  .cab-head-info{display:flex;flex-direction:column;gap:2px;margin-left:auto;text-align:right;align-self:center}
+  .cab-head-info .cab-sub{font-size:11.5px;color:var(--text-2)}
+  .lc-head-card{padding:10px 14px}
+  .lc-head-card #lcStatusText span{font-size:12.5px;color:var(--text-2)}
   .lc-filters{grid-template-columns:150px 150px minmax(190px,1fr) 130px minmax(220px,1.2fr) auto;align-items:end}
   .lc-actions,.lc-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .lc-actions{justify-content:flex-end}

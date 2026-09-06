@@ -1131,29 +1131,31 @@
         </section>
 
         <section id="view-cabina" style="display:none">
-          <div class="nom-status card">
-            <div id="cabStatusText"><span>Subí los informes que llegaron (Word, PDF o escaneados) y el sistema los lee y los cruza con la bandeja del mes. Lo que queda en verde está listo; lo amarillo hay que revisarlo a mano.</span></div>
-            <div class="nom-upload">
-              <label class="field" style="min-width:200px">
+          <div class="card cab-head">
+            <div id="cabStatusText" class="cab-head-desc"><span>Subí los informes que llegaron (Word, PDF o escaneados) y el sistema los lee y los cruza con la bandeja del mes. Lo que queda en verde está listo; lo amarillo hay que revisarlo a mano.</span></div>
+            <div class="cab-head-controls">
+              <label class="field" style="min-width:160px;margin:0">
                 <span>Cliente</span>
                 <select class="inp" id="cabCliente" onchange="loadCabinaView()"></select>
               </label>
+              <div class="cab-mailbox" id="cabMailCard" style="display:none">
+                <div class="field" style="margin:0"><label>Desde</label><input class="inp" id="cabDesde" type="date"></div>
+                <div class="field" style="margin:0"><label>Hasta</label><input class="inp" id="cabHasta" type="date"></div>
+                <button class="btn btn-primary btn-sm" id="cabMailBtn" onclick="traerDelMail()">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="margin-right:4px"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.7"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  Traer del mail
+                </button>
+              </div>
               <label class="btn btn-primary file-btn" id="cabUploadBtn">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 Subir informes
                 <input id="cabFiles" type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.tif,.tiff" onchange="uploadInformes(this.files)">
               </label>
+              <div class="cab-head-info">
+                <span class="cab-sub" id="cabMailInfo"></span>
+                <span class="cab-sub" id="cabUltimaImport"></span>
+              </div>
             </div>
-          </div>
-
-          <div class="nom-filters card" id="cabMailCard" style="display:none;align-items:end">
-            <div class="field"><label>Desde</label><input class="inp" id="cabDesde" type="date"></div>
-            <div class="field"><label>Hasta</label><input class="inp" id="cabHasta" type="date"></div>
-            <button class="btn btn-primary btn-sm" id="cabMailBtn" onclick="traerDelMail()" style="justify-self:start">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" style="margin-right:4px"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.7"/><path d="M4 7l8 6 8-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Traer del mail
-            </button>
-            <span class="cab-sub" id="cabMailInfo" style="margin-left:auto"></span>
           </div>
 
           <div id="cabResumen" class="cab-resumen"></div>
