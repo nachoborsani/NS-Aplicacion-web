@@ -2428,9 +2428,9 @@ var CLIENT_SECTIONS = [
 // usuarios puntuales (no es un tema de rol — ni "Dube" ni ningún otro admin
 // nuevo lo debe ver por default). Sumar a alguien es agregar su username acá.
 var PLAN_SALUD_USUARIOS = ['seba', 'nacho'];
-// Qué pestañas ve cada tipo de cliente. Los médicos de cabecera por ahora NO
-// tienen reportes ni mes en curso: solo Info básica + Dashboard general. Los
-// consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
+// Qué pestañas ve cada tipo de cliente. Los médicos de cabecera tienen tablero
+// propio desde la bandeja automática; no usan valorización ni reportes cerrados.
+// Los consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
 function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
   var esOperador = (ME && ME.role === 'operador');
@@ -2438,7 +2438,7 @@ function clientSeccionesPermitidas(){
   // Colaborador (socio externo, solo lectura): por ahora SOLO los dashboards.
   // Es una lista propia y corta a propósito: los módulos se le van sumando de a
   // uno acá, no hereda nada por estar en la misma rama que otro rol.
-  if (ME && ME.role === 'colaborador') return esMC ? ['general'] : ['mescurso', 'dashboard'];
+  if (ME && ME.role === 'colaborador') return esMC ? ['mescurso'] : ['mescurso', 'dashboard'];
   // Operador Clínica (empleado del centro): Información básica + Pendientes
   // (mismo contador que ve Javi de este centro). Cero plata, cero gráficas.
   // Lista propia y corta, igual criterio que arriba.
@@ -2450,9 +2450,9 @@ function clientSeccionesPermitidas(){
   // heredar la lista del admin. De un consultorio normal sigue viendo SOLO
   // la información básica: nada de dashboards, adjuntar reporte, honorarios
   // ni usuarios médicos.
-  if (esOperador) return esMC ? ['general', 'basica'] : ['basica'];
+  if (esOperador) return esMC ? ['mescurso', 'general', 'basica'] : ['basica'];
   if (esMC) {
-    var seccionesMC = ['general', 'basica'];
+    var seccionesMC = ['mescurso', 'general', 'basica'];
     // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
     if (ACTIVE_CLIENT.slug === 'scheffelaar-mc') seccionesMC.push('osdop');
     return seccionesMC;
@@ -2655,7 +2655,7 @@ function renderClientGeneral(){
   var tieneCred = CRED_CLIENTES.indexOf(slug) >= 0;
   var esMC = !!(ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera');
   if (card) card.style.display = tieneCred ? '' : 'none';
-  if (cupCard) cupCard.style.display = esMC ? '' : 'none';
+  if (cupCard) cupCard.style.display = 'none';
   if (ph) ph.style.display = (tieneCred || esMC) ? 'none' : '';
   if (links){
     var sid = CRED_PLANILLA[slug];
@@ -2665,7 +2665,6 @@ function renderClientGeneral(){
     } else { links.style.display = 'none'; }
   }
   if (tieneCred) credSchedCargar();
-  if (esMC) cargarCupInforme();
 }
 // ===== Informe del CUP (médico de cabecera): sube a mano el Excel del Panel de
 // prestaciones de PAMI, UN mes por vez (no se pisan entre sí). El mes más nuevo
@@ -4610,9 +4609,94 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin activar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>' + syncSc + foot + '</div>';
 }
+function medCabEstadoMes(d){
+  var validar = Number(d && d.pendienteValidar) || 0;
+  var transmitir = Number(d && d.pendienteTransmitir) || 0;
+  if (validar || transmitir) return 'pendiente';
+  if ((Number(d && d.listas) || 0) > 0) return 'ok';
+  return 'vacio';
+}
+function medCabMesCard(d){
+  var validar = Number(d && d.pendienteValidar) || 0;
+  var transmitir = Number(d && d.pendienteTransmitir) || 0;
+  var listas = Number(d && d.listas) || 0;
+  var total = Number(d && d.count) || (validar + transmitir + listas);
+  var pendientes = validar + transmitir;
+  var estado = medCabEstadoMes(d);
+  var cls = estado === 'ok' ? ' ok' : (estado === 'pendiente' ? ' warn' : '');
+  return '<div class="mescurso-card medcab-card' + cls + '">'
+    + '<div class="mescurso-head"><span class="mescurso-title">' + esc(d.monthLabel || d.month || 'Mes') + '</span>'
+    + (d.live ? '<span class="mescurso-chip">Actual</span>' : '') + '</div>'
+    + '<div class="mescurso-val-lbl">Pendientes</div>'
+    + '<div class="mescurso-val chico">' + esc(numberFmt(pendientes)) + '</div>'
+    + '<div class="mescurso-val-note">Médico de cabecera · sin valorización por práctica</div>'
+    + '<div class="mescurso-lines">'
+    + '<div class="mescurso-line warn"><span>Faltan validar</span><b>' + esc(numberFmt(validar)) + '</b></div>'
+    + '<div class="mescurso-line alert"><span>Faltan transmitir</span><b>' + esc(numberFmt(transmitir)) + '</b></div>'
+    + '<div class="mescurso-line"><span>Transmitidas</span><b>' + esc(numberFmt(listas)) + '</b></div>'
+    + '<div class="mescurso-line"><span>Total en bandeja</span><b>' + esc(numberFmt(total)) + '</b></div>'
+    + '</div>'
+    + (d.uploadedAt ? '<div class="mescurso-sync"><span>Ultima actualización</span><b>' + esc(mesCursoFechaHora(d.uploadedAt)) + '</b></div>' : '')
+    + '</div>';
+}
+function medCabResumenLista(historial, key, titulo, empty){
+  var rows = (historial || []).filter(function(d){ return (Number(d && d[key]) || 0) > 0; });
+  if (!rows.length) return '<div class="medcab-list"><h3>' + esc(titulo) + '</h3><p class="nom-muted">' + esc(empty) + '</p></div>';
+  return '<div class="medcab-list"><h3>' + esc(titulo) + '</h3>'
+    + rows.map(function(d){
+      return '<div class="medcab-list-row"><span>' + esc(d.monthLabel || d.month || 'Mes') + '</span><b>' + esc(numberFmt(d[key] || 0)) + '</b></div>';
+    }).join('')
+    + '</div>';
+}
+async function loadMedCabMesCurso(){
+  var box = document.getElementById('clientMesCurso');
+  if (!box || !ACTIVE_CLIENT) return;
+  var slug = ACTIVE_CLIENT.slug;
+  box.innerHTML = '<div class="client-card"><p class="nom-muted">Cargando dashboard...</p></div>';
+  var results = await Promise.all([
+    api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/archivo'),
+    api('/api/bandeja/refresco/estado'),
+  ]);
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return;
+  var r = results[0];
+  var refEstado = (results[1] && results[1].ok && results[1].data) ? results[1].data : null;
+  REFRESCO_ACTIVO = !!(refEstado && (refEstado.pendiente || refEstado.corriendo));
+  if (!r.ok) {
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-empty"><b>No se pudo cargar la bandeja</b><span>' + esc((r.data && r.data.error) || 'Revisá el estado del server.') + '</span></div></div>';
+    return;
+  }
+  var historial = ((r.data || {}).historial || []).slice().sort(function(a, b){
+    return String(b.month || '').localeCompare(String(a.month || ''));
+  });
+  if (!historial.length) {
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">Dashboard médico de cabecera</span>' + mesCursoBotonRefresco() + '</div>'
+      + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan transmitir.</span></div></div>';
+    if (REFRESCO_ACTIVO) arrancarPollRefresco();
+    return;
+  }
+  var cards = historial.slice(0, 6).map(medCabMesCard).join('');
+  var totalValidar = historial.reduce(function(a, d){ return a + (Number(d.pendienteValidar) || 0); }, 0);
+  var totalTransmitir = historial.reduce(function(a, d){ return a + (Number(d.pendienteTransmitir) || 0); }, 0);
+  var totalListas = historial.reduce(function(a, d){ return a + (Number(d.listas) || 0); }, 0);
+  box.innerHTML = '<div class="client-card medcab-dashboard-head">'
+    + '<div><h3>Dashboard médico de cabecera</h3><p>Control por bandejas del CUP. No se valoriza por práctica porque el pago es fijo.</p></div>'
+    + '<div class="medcab-totals">'
+    + '<div><b>' + esc(numberFmt(totalValidar)) + '</b><span>faltan validar</span></div>'
+    + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan transmitir</span></div>'
+    + '<div><b>' + esc(numberFmt(totalListas)) + '</b><span>transmitidas</span></div>'
+    + mesCursoBotonRefresco()
+    + '</div></div>'
+    + '<div class="mescurso-cards medcab-grid">' + cards + '</div>'
+    + '<div class="medcab-columns">'
+    + medCabResumenLista(historial, 'pendienteValidar', 'Meses con faltante de validación', 'No hay meses con OMEs pendientes de validar.')
+    + medCabResumenLista(historial, 'pendienteTransmitir', 'Meses con faltante de transmitir', 'No hay meses con OMEs validadas sin transmitir.')
+    + '</div>';
+  if (REFRESCO_ACTIVO) arrancarPollRefresco();
+}
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
+  if (ACTIVE_CLIENT.tipo === 'med_cabecera') return loadMedCabMesCurso();
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
   // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.

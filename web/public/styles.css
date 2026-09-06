@@ -1347,6 +1347,25 @@
   .mescurso-card.cerrado .mescurso-chip{background:var(--celeste);color:var(--turq-d, #139a96)}
   .mescurso-card.sincerrar{border-color:var(--warning)}
   .mescurso-card.adelante{border-color:var(--accent, #6c5ce7);border-style:dashed}
+  .mescurso-cards.medcab-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .medcab-dashboard-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+  .medcab-dashboard-head h3{margin:0 0 3px;font-size:18px}
+  .medcab-dashboard-head p{margin:0;color:var(--text-2);font-size:12.5px}
+  .medcab-totals{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .medcab-totals>div{min-width:118px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:8px 10px}
+  .medcab-totals b,.medcab-totals span{display:block}
+  .medcab-totals b{font-size:18px;line-height:1.15;font-variant-numeric:tabular-nums}
+  .medcab-totals span{font-size:11px;color:var(--text-2);margin-top:2px}
+  .medcab-card.warn{border-color:var(--warning)}
+  .medcab-card.ok{border-color:var(--success)}
+  .medcab-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .medcab-list{border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow-sm);padding:13px 14px}
+  .medcab-list h3{margin:0 0 10px;font-size:15px}
+  .medcab-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border)}
+  .medcab-list-row span{color:var(--text);font-weight:700}
+  .medcab-list-row b{font-variant-numeric:tabular-nums}
+  @media(max-width:1100px){ .mescurso-cards.medcab-grid{grid-template-columns:1fr 1fr}.medcab-dashboard-head{align-items:stretch;flex-direction:column}.medcab-totals{justify-content:flex-start} }
+  @media(max-width:640px){ .mescurso-cards.medcab-grid,.medcab-columns{grid-template-columns:1fr}.medcab-totals>div{flex:1 1 120px} }
   .mescurso-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
   .mescurso-title{font-size:14px;font-weight:700;color:var(--text)}
   .mescurso-abarca{font-size:11px;font-weight:600;color:var(--text-2);margin-left:6px}

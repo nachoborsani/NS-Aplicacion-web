@@ -35,9 +35,9 @@ _TRANSMIT_TIMEOUT_S = 1800
 # hasta hoy. Antes de esa hora (ej. una corrida manual al mediodía): read-only,
 # hasta ayer. El schedule por defecto es una sola corrida a las 20:00.
 _HORA_FIN_DIA_H = 19
-# Clientes que NO se bajan en el barrido automático (por ahora, por decisión del
+# Clientes que NO se bajan en el barrido automático (por decisión puntual del
 # user). Se pueden bajar igual pidiéndolos explícitamente por only_slugs.
-EXCLUIDOS_AUTO = {"navarro-mc", "scheffelaar-mc"}
+EXCLUIDOS_AUTO = {"navarro-mc"}
 
 
 def _current_period() -> str:
@@ -488,11 +488,9 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
         slug = client.get("slug")
         if only_slugs and slug not in only_slugs:
             continue
-        # Los médicos de cabecera NO bajan bandeja (su flujo es benef/credenciales,
-        # no tienen consultas/prácticas para transmitir). Se excluyen por tipo, así
-        # cualquier MC actual o futuro queda afuera solo. También se excluyen los
-        # slugs de EXCLUIDOS_AUTO. Si se piden por only_slugs, igual se bajan.
-        if not only_slugs and (client.get("tipo") == "med_cabecera" or slug in EXCLUIDOS_AUTO):
+        # Solo se excluyen los clientes marcados explícitamente. Scheffelaar MC sí
+        # entra al mismo refresco/transmisión de las 20:00 que los consultorios.
+        if not only_slugs and slug in EXCLUIDOS_AUTO:
             if progress:
                 progress(f"{client.get('name', slug)}: omitido (no baja bandeja)")
             continue

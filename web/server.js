@@ -6937,11 +6937,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET") {
       const historialStore = loadClientBandejasCup();
       const meses = historialStore[slug] || {};
-      const liveMonth = (loadClientBandejas()[slug] || {}).month || "";
-      const historial = Object.keys(meses)
+      const live = loadClientBandejas()[slug] || null;
+      const liveMonth = (live || {}).month || "";
+      const merged = { ...meses };
+      if (live && liveMonth && !merged[liveMonth]) merged[liveMonth] = live;
+      const historial = Object.keys(merged)
         .sort((a, b) => b.localeCompare(a))
         .map((month) => {
-          const b = meses[month];
+          const b = merged[month];
           return { month, monthLabel: b.monthLabel || periodLabel(month), uploadedAt: b.uploadedAt,
             uploadedBy: b.uploadedBy, count: b.count, archivo: b.archivo || "",
             live: month === liveMonth, ...bandejaResumenCup(b) };
