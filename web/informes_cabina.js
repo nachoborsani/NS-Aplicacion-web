@@ -73,6 +73,7 @@ const ETIQUETA_ESTADO = {
   revisar_nombre: "Revisar nombre",
   sin_ome: "Sin OME en la bandeja",
   sin_match: "No se encontró",
+  no_es_pami: "No es de PAMI",
 };
 
 module.exports = { bandejaParaMatcher, reporteParaMatcher, beneficioLimpio, candidatoLiviano, ETIQUETA_ESTADO, normTxt, digs };

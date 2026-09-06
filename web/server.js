@@ -548,7 +548,10 @@ function matchearInforme(slug, extract) {
     if (releidas.length > hints.length) hints = releidas;
   }
   const informe = { dni: extract.dni, beneficio: extract.beneficio, nombre: extract.nombre,
-                    practicaHint: extract.practica, practicaHints: hints, fecha: extract.fecha };
+                    practicaHint: extract.practica, practicaHints: hints, fecha: extract.fecha,
+                    // Sin estos dos el corte por obra social del matcher no se
+                    // dispara nunca: este objeto se arma campo por campo.
+                    obraSocial: extract.obraSocial || "", noEsPami: !!extract.noEsPami };
   const m = informeMatch.matchInforme(informe, bandejaRows, padronCliente);
   // Cuando no matcheó confiado, sugerir afiliados del padrón con nombre parecido
   // (para confirmar en 1 clic los typos / abreviados / nombres con ruido).
@@ -565,6 +568,8 @@ function matchearInforme(slug, extract) {
     prestaciones: (m.prestaciones || []).map(cabinaLib.candidatoLiviano),
     candidatos: (m.candidatos || []).slice(0, 8).map(cabinaLib.candidatoLiviano),
     sugerencias,
+    // Para que la cabina pueda decir POR QUE no lo busco.
+    obraSocial: m.obraSocial || extract.obraSocial || "",
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
@@ -8408,6 +8413,10 @@ const server = http.createServer(async (req, res) => {
           // prefijos de fecha en el archivo, etc.). Antes solo se completaba si estaba
           // vacío, y un nombre mal leído ("23JUL") quedaba pegado para siempre.
           if (d.nombre) it.extract.nombre = d.nombre;
+          // La cobertura que declara el propio informe. Si no es PAMI,
+          // el matcher ni lo busca en el padron.
+          it.extract.obraSocial = d.obraSocial || "";
+          it.extract.noEsPami = !!d.noEsPami;
         } else {
           const fuente = (it.filename || "") + " " + (it.extract.practica || "") + " " + (it.extract.practicas || []).join(" ");
           it.extract.practicas = informeExtract.practicasDe(fuente);

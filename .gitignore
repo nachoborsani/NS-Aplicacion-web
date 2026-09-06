@@ -32,6 +32,12 @@ token_drive.json
 token_drive*.json
 token_sheets.json
 token_sheets*.json
+# Los patrones de arriba exigen terminar en .json, asi que los
+# backups NO quedaban cubiertos: 'token_sheets.json.bak_20260819_1930'
+# entro en un commit el 06/09/2026 y lo freno GitHub, no nosotros.
+token_gmail*
+token_drive*
+token_sheets*
 window_state.json
 *_sheets_config.json
 *_nomenclador_practicas.json

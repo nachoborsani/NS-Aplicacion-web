@@ -164,6 +164,57 @@ function practicaDe(fuente) {
   return practicasDe(fuente)[0] || "";
 }
 
+// ── Obra social ──────────────────────────────────────────────────────
+// Un informe que dice "Obra Social: OSDE" no es de PAMI, y buscarlo en
+// el padron de PAMI no puede terminar bien: no aparece, y la cabina
+// ofrece cinco afiliados al 50% de parecido que no tienen nada que ver.
+// Paso con FERNANDEZ RODOLFO (Holter, 08/08/2026): el PDF decia OSDE y
+// los candidatos eran CORRARO JOSE RODOLFO y DIAZ RODOLFO RICARDO.
+//
+// La misma logica ya vivia en el desktop (`_detectar_obra_social_informe`
+// en pami_documentacion.py). Se porta igual para que las dos puntas
+// digan lo mismo del mismo PDF.
+const OBRAS_NO_PAMI = { osde: "OSDE", privado: "PRIVADO", ospeca: "OSPECA" };
+
+function obraSocialDe(texto) {
+  const t = String(texto || "");
+  if (!t) return "";
+  const lineas = t.split(/\r?\n/).map((x) => x.trim());
+  for (const linea of lineas) {
+    const m = linea.match(
+      /\b(?:obra\s+social|cobertura|prepaga)\s*[:\-]?\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})/i);
+    if (!m) continue;
+    // El valor suele venir pegado al campo siguiente en la misma linea
+    // ("OSDE   DNI: 8634818"). Se corta ahi.
+    let v = m[1].trim().replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
+    v = v.split(/\s{2,}|\b(?:dni|documento|edad|fecha|peso|talla|afiliad[oa])\b\s*:?/i)[0]
+         .trim().replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
+    if (v) return v;
+  }
+  // Segunda pasada: a veces no dice "obra social" sino que nombra la
+  // prepaga al lado del afiliado.
+  for (const linea of lineas) {
+    const k = norm(linea).toLowerCase();
+    if (!/\b(?:benef|beneficio|afiliado|afiliada)\b/.test(k)) continue;
+    for (const [marca, etiqueta] of Object.entries(OBRAS_NO_PAMI)) {
+      if (new RegExp("(?:^|\\s)" + marca + "(?:\\s|$)").test(k)) return etiqueta;
+    }
+  }
+  return "";
+}
+
+// Si el informe DICE una obra social y esa obra social no es PAMI,
+// no corresponde buscarlo en el padron.
+//
+// Ojo con el sentido: sin obra social detectada devuelve false, o sea
+// "seguí tratandolo como PAMI". Es a proposito. Esconder un informe
+// porque no se le pudo leer la cobertura seria peor que mostrarlo de
+// mas: lo primero lo hace desaparecer sin que nadie se entere.
+function noEsPamiPorObraSocial(obraSocial) {
+  const k = norm(obraSocial).toLowerCase();
+  return !!(k && !k.includes("pami"));
+}
+
 // Extrae {dni, beneficio, nombre, nombreKey} del texto + nombre de archivo.
 // Porta los patrones que probamos en el motor Python (varios formatos de Caballito).
 function extraerDatos(texto, filename) {
@@ -235,7 +286,10 @@ function extraerDatos(texto, filename) {
     if (m) practica = m[1].replace(/\s+/g, " ").trim();
   }
 
-  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas, fecha: fechaDe(t), esFactura: esFactura(t, fn) };
+  const obraSocial = obraSocialDe(texto);
+  return { dni, beneficio, nombre, nombreKey: norm(nombre), practica, practicas,
+           fecha: fechaDe(t), esFactura: esFactura(t, fn),
+           obraSocial, noEsPami: noEsPamiPorObraSocial(obraSocial) };
 }
 
 // Procesa un informe de punta a punta: lee el texto (o lo saca por OCR si está
@@ -259,4 +313,5 @@ async function procesar(filePath, nombreArchivo) {
   return { ...datos, necesitaOcr, ocrUsado, error: error || null, texto: texto || "" };
 }
 
-module.exports = { extraerTexto, extraerDatos, procesar, practicasDe, esFactura };
+module.exports = { extraerTexto, extraerDatos, procesar, practicasDe, esFactura,
+                   obraSocialDe, noEsPamiPorObraSocial };

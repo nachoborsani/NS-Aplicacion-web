@@ -278,6 +278,17 @@ function elegirPracticas(prestaciones, hints) {
 // padronCliente: { [dni]: { beneficio, ... } }
 // Devuelve { estado, ome, prestacion, via, confianza, candidatos }
 function matchInforme(informe, bandeja, padronCliente) {
+  // Antes que nada: si el informe declara una obra social que no es
+  // PAMI, no se busca. Buscarlo igual no encuentra nada --no esta en el
+  // padron-- pero SI ofrece los cinco afiliados de nombre mas parecido,
+  // y eso es peor que no ofrecer ninguno: invita a confirmar el
+  // equivocado de un clic. Cruzar pacientes es el error grave de esta
+  // pantalla.
+  if (informe && informe.noEsPami) {
+    return { estado: "no_es_pami", ome: "", prestacion: null, via: "obra_social",
+             confianza: "alta", candidatos: [],
+             obraSocial: informe.obraSocial || "" };
+  }
   let { beneficio, via } = resolverBeneficio(informe, padronCliente || {});
   // Si no hay beneficio por informe ni por DNI, probar por NOMBRE contra el padrón.
   if (!beneficio && informe.nombre) {

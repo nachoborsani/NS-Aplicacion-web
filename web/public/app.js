@@ -8577,7 +8577,7 @@ async function refreshLiberarCupo(){
     if (title) title.textContent = 'OMEs no validadas';
     if (meta) meta.textContent = (d.totalFiltrado || 0) + ' visible(s) de ' + (d.total || 0) + ' detectada(s)' + (d.label ? ' · ' + d.label : '') + (d.source === 'reportes' ? ' · desde reporte guardado' : '');
     var st = document.getElementById('lcStatusText');
-    if (st) st.innerHTML = '<b>Liberar cupo</b><span>Seleccioná ausentes/no validadas desde la bandeja guardada y enviá la cancelación al worker PAMI.</span>';
+    if (st) st.innerHTML = '<span>Seleccioná ausentes/no validadas desde la bandeja guardada y enviá la cancelación al worker PAMI.</span>';
     renderLiberarCupoRows();
   }catch(e){
     LC_ROWS = [];
@@ -8837,6 +8837,7 @@ var CAB_ESTADOS = {
   factura:{t:'Factura',c:'fac'},
   ya_transmitido:{t:'Ya transmitido',c:'muted'}, revisar_practica:{t:'Revisar práctica',c:'warn'},
   revisar_nombre:{t:'Revisar nombre',c:'warn'}, sin_ome:{t:'Sin OME en bandeja',c:'warn'}, sin_match:{t:'No se encontró',c:'bad'},
+  no_es_pami:{t:'No es de PAMI',c:'warn'},
   reclamado:{t:'Reclamado',c:'warn'}, desestimado:{t:'Desestimado',c:'muted'}
 };
 function renderCabinaResumen(resumen, total){
@@ -9116,8 +9117,25 @@ function abrirInforme(id){
   var cont = document.getElementById('cabCandidatos');
   if (!cands.length){
     var sug = (it.match && it.match.sugerencias) || [];
-    var h = '<div class="cab-sub">Sin candidatos en la bandeja. Fijá la OME a mano si la conocés.</div>';
-    if (sug.length){
+    // Cuando el informe declara una obra social que no es PAMI, el
+    // problema no es que "no se encontró": es que no hay que buscarlo.
+    // Decirlo cambia lo que el operador hace: en vez de ponerse a buscar
+    // la OME, lo saca de la cola.
+    //
+    // OJO: acá NO va un `return`. Después del if/else viene el
+    // showModal, así que cortar el flujo deja el panel sin abrir.
+    var noPami = !!(it.match && it.match.estado === 'no_es_pami');
+    var h;
+    if (noPami){
+      var os = ((it.match && it.match.obraSocial) || '').trim();
+      h = '<div class="cab-sub">'
+        + 'El informe dice <b>' + esc(os || 'otra obra social') + '</b>, as&iacute; que no es de PAMI '
+        + 'y no se busca en el padr&oacute;n.'
+        + '<br>Si en realidad es de PAMI, fij&aacute; la OME a mano ac&aacute; abajo.</div>';
+    } else {
+      h = '<div class="cab-sub">Sin candidatos en la bandeja. Fijá la OME a mano si la conocés.</div>';
+    }
+    if (sug.length && !noPami){
       h += '<div class="cab-cand-title" style="margin-top:10px">¿Es alguno de estos? (del padrón)</div>'
         + sug.map(function(s){
           return '<div class="cab-cand">'
