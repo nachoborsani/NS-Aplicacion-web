@@ -1286,7 +1286,7 @@
 
         <section id="view-cruzas" style="display:none">
           <div class="nom-status card">
-            <div><b>Cruzas</b></div>
+            <div id="czStatusText"><span>Cruzá el listado de consultas contra una bandeja de PAMI para detectar ausentes y prácticas sin transmitir.</span></div>
             <div class="nom-upload">
               <label class="field" style="min-width:220px">
                 <span>Cliente</span>
@@ -1313,11 +1313,10 @@
                 <input id="czFileAgenda" type="file" accept=".xls,.xlsx,.xlsm" onchange="marcarArchivoElegido('czFileAgenda','czNombreAgenda')">
               </label>
               <span class="nom-muted" id="czNombreAgenda"></span>
-              <label class="btn btn-ghost file-btn">
-                📁 Bandeja de transmisión
-                <input id="czFileBandeja" type="file" accept=".xls,.xlsx,.xlsm" onchange="marcarArchivoElegido('czFileBandeja','czNombreBandeja')">
+              <label class="field" style="min-width:240px">
+                <span>Bandeja de transmisión</span>
+                <select class="inp" id="czBandejaPeriod"></select>
               </label>
-              <span class="nom-muted" id="czNombreBandeja"></span>
               <button class="btn btn-primary" id="czCruzarBtn" onclick="cruzarAhora()">Cruzar</button>
             </div>
             <div class="msg err" id="czError" style="display:none"></div>

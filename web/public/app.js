@@ -7961,6 +7961,29 @@ function onCambiaClienteCruzas(){
   var slug = document.getElementById('czCliente').value;
   if (slug){ try { localStorage.setItem('ns_cruzas_cliente', slug); } catch(e){} }
   cargarHistorialCruzas();
+  cargarBandejasCruza();
+}
+// Bandejas ya guardadas del cliente (mes en curso + meses cerrados) para elegir
+// cuál usar en la cruza, en vez de tener que subir el Excel a mano.
+async function cargarBandejasCruza(){
+  var sel = document.getElementById('czBandejaPeriod');
+  if (!sel) return;
+  var slug = document.getElementById('czCliente').value;
+  if (!slug){ sel.innerHTML = '<option value="">Elegí un cliente</option>'; return; }
+  sel.innerHTML = '<option value="">Cargando…</option>';
+  try {
+    var r = await fetch('/api/cruzas/' + slug + '/bandejas');
+    var data = {}; try { data = await r.json(); } catch(e){}
+    var periods = (data && data.periods) || [];
+    if (!periods.length){ sel.innerHTML = '<option value="">Este cliente no tiene bandejas guardadas</option>'; return; }
+    sel.innerHTML = periods.map(function(b){
+      var extra = b.live ? ' (actual)' : '';
+      var n = b.count ? (' · ' + b.count + ' filas') : '';
+      return '<option value="' + esc(b.period) + '">' + esc(b.label || b.period) + extra + n + '</option>';
+    }).join('');
+  } catch(e){
+    sel.innerHTML = '<option value="">No se pudieron cargar las bandejas</option>';
+  }
 }
 function marcarArchivoElegido(inputId, spanId){
   var inp = document.getElementById(inputId), span = document.getElementById(spanId);
@@ -7993,20 +8016,22 @@ async function cruzarAhora(){
   err.style.display = 'none';
   if (!slug){ err.textContent = 'Elegí un cliente.'; err.style.display = 'block'; return; }
   var agenda = document.getElementById('czFileAgenda').files[0];
-  var bandeja = document.getElementById('czFileBandeja').files[0];
-  if (!agenda || !bandeja){ err.textContent = 'Subí los dos archivos: Listado de consultas y bandeja de transmisión.'; err.style.display = 'block'; return; }
+  var bandejaPeriod = (document.getElementById('czBandejaPeriod') || {}).value || '';
+  if (!agenda){ err.textContent = 'Subí el Listado de consultas.'; err.style.display = 'block'; return; }
+  if (!bandejaPeriod){ err.textContent = 'Elegí la bandeja de transmisión que querés cruzar.'; err.style.display = 'block'; return; }
   var btn = document.getElementById('czCruzarBtn'); btn.disabled = true; var textoOrig = btn.textContent; btn.textContent = 'Cruzando…';
   try {
     var fd = new FormData();
-    fd.append('agenda', agenda); fd.append('bandeja', bandeja);
+    fd.append('agenda', agenda);
+    fd.append('bandejaPeriod', bandejaPeriod);
     fd.append('label', document.getElementById('czLabel').value || '');
     fd.append('nomencladorPeriod', document.getElementById('czNomenclador').value || '');
     var r = await fetch('/api/cruzas/' + slug + '/cruzar', { method:'POST', body: fd });
     var data = {}; try { data = await r.json(); } catch(e){}
     if (!r.ok){ err.textContent = data.error || 'No se pudo procesar el cruce.'; err.style.display = 'block'; return; }
     CZ.cruceActivo = data;
-    document.getElementById('czFileAgenda').value = ''; document.getElementById('czFileBandeja').value = ''; document.getElementById('czLabel').value = '';
-    document.getElementById('czNombreAgenda').textContent = ''; document.getElementById('czNombreBandeja').textContent = '';
+    document.getElementById('czFileAgenda').value = ''; document.getElementById('czLabel').value = '';
+    document.getElementById('czNombreAgenda').textContent = '';
     renderCruceActivo();
     await cargarHistorialCruzas();
   } finally {

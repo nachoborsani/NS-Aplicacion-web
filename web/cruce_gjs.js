@@ -141,9 +141,48 @@ function estadoCodigo(rowsBand, codigo) {
   return { estado: "AUSENTE" };
 }
 
-// agendaBuffer / bandejaBuffer: Buffer del .xls/.xlsx tal cual se sube.
+// Filas de la bandeja cruda (Excel de PAMI) al shape interno del cruce.
+function bandDesdeExcel(bandejaBuffer) {
+  const rows2 = readRows(bandejaBuffer);
+  const band = [];
+  for (let i = 1; i < rows2.length; i++) {
+    const r = rows2[i];
+    if (!r || !r.length) continue;
+    const beneficio = soloDigitos(r[2]);
+    if (!beneficio) continue;
+    const practicaFull = limpiar(r[4]);
+    const codigo = practicaFull.split(" - ")[0].trim();
+    band.push({
+      beneficio, nombre: limpiar(r[3]), nombreClave: claveNombre(r[3]), codigo, descripcion: practicaFull,
+      turno: limpiar(r[5]), trasmitida: limpiar(r[8]).toUpperCase(), validada: limpiar(r[11]).toUpperCase(),
+    });
+  }
+  return band;
+}
+
+// Una bandeja YA guardada llega en el shape del matcher
+// ({ beneficio, nombre, practica, turno, validada, transmitida }) - la pasamos al
+// mismo shape interno del cruce, sin volver a leer ningún Excel.
+function bandDesdeMatcher(rows) {
+  const band = [];
+  for (const m of (Array.isArray(rows) ? rows : [])) {
+    const beneficio = soloDigitos(m.beneficio);
+    if (!beneficio) continue;
+    const practicaFull = limpiar(m.practica);
+    const codigo = practicaFull.split(" - ")[0].trim();
+    band.push({
+      beneficio, nombre: limpiar(m.nombre), nombreClave: claveNombre(m.nombre), codigo, descripcion: practicaFull,
+      turno: limpiar(m.turno), trasmitida: m.transmitida ? "S" : "N", validada: m.validada ? "S" : "N",
+    });
+  }
+  return band;
+}
+
+// agendaBuffer: Buffer del .xls/.xlsx del listado de consultas.
+// bandejaBuffer: Buffer del Excel de la bandeja (cuando se sube un archivo), o
+// bandejaRows: filas de una bandeja ya guardada (cuando se elige una del sistema).
 // valorPorCodigo: Map(codigo -> monto $) o null si no hay nomenclador cargado.
-function calcularCruce({ agendaBuffer, bandejaBuffer, valorPorCodigo }) {
+function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodigo }) {
   const valores = valorPorCodigo || new Map();
   const rows1 = readRows(agendaBuffer);
   const EXCLUIR_ESPECIALIDAD = new Set(["MEDICOS DE CABECERA PAMI"]);
@@ -166,20 +205,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, valorPorCodigo }) {
     });
   }
 
-  const rows2 = readRows(bandejaBuffer);
-  const band = [];
-  for (let i = 1; i < rows2.length; i++) {
-    const r = rows2[i];
-    if (!r || !r.length) continue;
-    const beneficio = soloDigitos(r[2]);
-    if (!beneficio) continue;
-    const practicaFull = limpiar(r[4]);
-    const codigo = practicaFull.split(" - ")[0].trim();
-    band.push({
-      beneficio, nombre: limpiar(r[3]), nombreClave: claveNombre(r[3]), codigo, descripcion: practicaFull,
-      turno: limpiar(r[5]), trasmitida: limpiar(r[8]).toUpperCase(), validada: limpiar(r[11]).toUpperCase(),
-    });
-  }
+  const band = bandejaBuffer ? bandDesdeExcel(bandejaBuffer) : bandDesdeMatcher(bandejaRows);
   const bandPorBeneficio = new Map();
   const bandPorNombre = new Map();
   const identidades = new Map();

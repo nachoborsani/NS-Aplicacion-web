@@ -8013,6 +8013,20 @@ const server = http.createServer(async (req, res) => {
   // ---- Cruzas (Grupo Justo y similares): cruce agenda vs bandeja PAMI ----
   // Todo admin-only por ahora: es una herramienta interna nueva y sensible
   // (maneja montos y datos de pacientes) - se abre a otros roles si hace falta.
+  // Bandejas guardadas del cliente que se pueden usar para una cruza. Son las que
+  // tienen los flags trasmitida/validada (la del mes en curso + las de meses
+  // cerrados "cup"); los reportes solo guardan ausentes y no sirven para el cruce.
+  const cruzasBandejas = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/bandejas$/);
+  if (cruzasBandejas && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede ver esto." });
+    const slug = cruzasBandejas[1];
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    const periods = liberarCupoBandejaPeriods(slug).filter((b) => b.source !== "reportes");
+    return json(res, 200, { periods });
+  }
+
   const cruzasCruzar = p.match(/^\/api\/cruzas\/([a-z0-9-]+)\/cruzar$/);
   if (cruzasCruzar && req.method === "POST") {
     const me = getSessionUser(req);
@@ -8024,11 +8038,29 @@ const server = http.createServer(async (req, res) => {
       const raw = await readBuffer(req);
       const mp = extractMultipartNamed(raw, req.headers["content-type"]);
       const agenda = mp.files.agenda, bandeja = mp.files.bandeja;
-      if (!agenda || !bandeja) return json(res, 400, { error: "Subí los dos archivos: Listado de consultas y bandeja de transmisión." });
       const extOk = (f) => [".xls", ".xlsx", ".xlsm"].includes(path.extname(f.filename).toLowerCase());
-      if (!extOk(agenda) || !extOk(bandeja)) return json(res, 400, { error: "Los archivos deben ser Excel (.xls/.xlsx/.xlsm)." });
+      if (!agenda) return json(res, 400, { error: "Subí el Listado de consultas (Excel .xls/.xlsx/.xlsm)." });
+      if (!extOk(agenda)) return json(res, 400, { error: "El Listado de consultas debe ser Excel (.xls/.xlsx/.xlsm)." });
+      // La bandeja puede venir como archivo subido O como una bandeja ya guardada
+      // (elegida por período). Se prioriza el archivo si el usuario subió uno.
+      const bandejaPeriod = String(mp.fields.bandejaPeriod || "").trim();
+      let bandejaBuffer = null, bandejaRows = null, archivoBandeja = "";
+      if (bandeja) {
+        if (!extOk(bandeja)) return json(res, 400, { error: "La bandeja debe ser Excel (.xls/.xlsx/.xlsm)." });
+        bandejaBuffer = bandeja.data;
+        archivoBandeja = bandeja.filename;
+      } else if (bandejaPeriod) {
+        const guardada = getLiberarCupoBandeja(slug, bandejaPeriod);
+        if (!guardada || !Array.isArray(guardada.rows) || !guardada.rows.length) {
+          return json(res, 400, { error: "Esa bandeja guardada no tiene datos. Elegí otra o subí el archivo." });
+        }
+        bandejaRows = cabinaLib.bandejaParaMatcher(guardada);
+        archivoBandeja = "Bandeja guardada · " + (guardada.monthLabel || periodLabel(bandejaPeriod) || bandejaPeriod);
+      } else {
+        return json(res, 400, { error: "Elegí una bandeja guardada o subí el archivo de la bandeja de transmisión." });
+      }
       const infoNom = nomencladorValorPorCodigoConInfo(mp.fields.nomencladorPeriod);
-      const resultado = cruceGjs.calcularCruce({ agendaBuffer: agenda.data, bandejaBuffer: bandeja.data, valorPorCodigo: infoNom.mapa });
+      const resultado = cruceGjs.calcularCruce({ agendaBuffer: agenda.data, bandejaBuffer, bandejaRows, valorPorCodigo: infoNom.mapa });
       // Cuántos de los códigos que aparecen en "Ausentes" efectivamente encontraron
       // precio en ese nomenclador - para poder avisar en la UI si el período usado
       // no es el que corresponde (en vez de un "—" silencioso sin explicación).
@@ -8042,7 +8074,7 @@ const server = http.createServer(async (req, res) => {
         createdBy: me.username,
         confirmedAt: null,
         archivoAgenda: agenda.filename,
-        archivoBandeja: bandeja.filename,
+        archivoBandeja: archivoBandeja,
         nomencladorPeriodo: infoNom.periodo,
         nomencladorLabel: infoNom.label,
         nomencladorCodigosEnAusentes: codigosAusentes.size,
