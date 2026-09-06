@@ -1275,12 +1275,17 @@ function iniHoyISO(){
 // showPicker() lo abre igual sin importar dónde se hizo click (soportado en
 // Chrome/Edge/Firefox/Safari recientes; en un navegador viejo simplemente no hace nada).
 function iniAbrirPicker(el){ try{ el.showPicker && el.showPicker(); }catch(e){} }
-// Estado de vencimiento de una tarea NO hecha: '' | 'futuro' | 'hoy' | 'vencida'.
+// Estado de vencimiento de una tarea NO hecha: '' | 'futuro' | 'proxima' | 'hoy' | 'vencida'.
+// 'proxima': le quedan pocos días (PROXIMA_DIAS) para vencer - todavía no es
+// urgente como 'hoy'/'vencida', pero conviene que se note antes de que sea tarde.
+var PROXIMA_DIAS = 3;
 function iniVenceEstado(t){
   if (!t || t.hecha || !t.vence) return '';
   var hoy = iniHoyISO();
   if (t.vence < hoy) return 'vencida';
   if (t.vence === hoy) return 'hoy';
+  var diffDias = Math.round((new Date(t.vence+'T00:00:00') - new Date(hoy+'T00:00:00')) / 86400000);
+  if (diffDias <= PROXIMA_DIAS) return 'proxima';
   return 'futuro';
 }
 function iniVenceLabel(v){ var p=String(v||'').split('-'); return p.length===3 ? p[2]+'/'+p[1] : ''; }
@@ -1337,7 +1342,7 @@ function iniTareaHTML(t, opts){
       + (esAdmin ? '<label class="ini-due-btn">📅 Nueva fecha<input type="date" value="'+esc(t.vence||'')+'" onclick="iniAbrirPicker(this)" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>' : '')
       + '</div>'
     : '';
-  return '<li class="ini-task'+(t.hecha?' done':'')+(est==='vencida'?' venc':'')+'">'
+  return '<li class="ini-task'+(t.hecha?' done':'')+(est==='vencida'?' venc':'')+(est==='proxima'?' proxima':'')+'">'
     + '<button class="ini-ck" onclick="iniToggleTarea(\''+esc(t.id)+'\')" title="'+(t.hecha?'Reabrir':'Marcar hecha')+'"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5 9-10" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
     + '<div class="ini-tbody"><div class="ini-ttitle">'+esc(t.titulo)+'</div>'
     + '<div class="ini-tmeta">'+chip+due+'<span>'+meta+'</span>'
