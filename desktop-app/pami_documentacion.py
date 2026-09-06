@@ -5291,7 +5291,11 @@ class PamiDocumentacionController:
                     """,
                         {
                             "nroOrden": nro_orden,
-                            "rango": {"desde": rango[0], "hasta": rango[1]} if rango else None,
+                            # Al buscar por Nro. de Orden (OME exacta) NO se filtra por fecha de
+                            # turno: el número es único y el filtro de mes puede excluir la OME si
+                            # el turno cayó en otro mes (le pasó a DI CARLO: turno 24/08 buscado
+                            # con rango de julio → "no se encontró la OME" aunque estaba).
+                            "rango": {"desde": rango[0], "hasta": rango[1]} if (rango and search_modo != "orden") else None,
                             "modo": search_modo,
                             "valor": search_valor,
                         },
