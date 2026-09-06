@@ -8779,6 +8779,14 @@ function cabResueltoTodoTransmitido(it){
   });
   return omes.every(function(o){ return trans[o]; });
 }
+// El estado SIN mirar si esta reclamado. `cabEstadoDe` corta en
+// 'reclamado' apenas ve la marca, y eso tapa lo que hay abajo: un
+// informe puede estar reclamado al centro Y ademas tener la OME sin
+// validar. Son dos cosas distintas y hay que hacer las dos.
+function cabEstadoSinReclamo(it){
+  if (it.resuelto) return cabResueltoTodoTransmitido(it) ? 'ya_transmitido' : 'ok';
+  return it.match ? it.match.estado : 'sin_match';
+}
 function cabEstadoDe(it){
   if (it.desestimado) return 'desestimado';
   if (it.reclamado) return 'reclamado';   // reclamado al centro, esperando datos
@@ -8856,7 +8864,16 @@ function cabBadge(it){
   if (it.error) return '<span class="cab-badge bad" title="'+esc(it.error)+'">No se pudo leer</span>';
   var e = cabEstadoDe(it);
   if (e === 'desestimado') return '<span class="cab-badge muted" title="Desestimado por el operador: no se sube">Desestimado</span>';
-  if (e === 'reclamado') { var nr=(it.reclamado&&it.reclamado.nota)?(' — '+it.reclamado.nota):''; return '<span class="cab-badge warn" title="Reclamado al centro, esperando datos'+esc(nr)+'">Reclamado</span>'; }
+  if (e === 'reclamado') {
+    var nr=(it.reclamado&&it.reclamado.nota)?(' — '+it.reclamado.nota):'';
+    // Si ademas le falta validar la OME, decirlo: son dos tareas
+    // distintas. Con solo "Reclamado" uno espera al centro y despues se
+    // encuentra con que igual no se puede subir.
+    var falta = cabEstadoSinReclamo(it) === 'falta_validar';
+    return '<span class="cab-badge warn" title="Reclamado al centro, esperando datos'
+      + (falta ? '. Y la OME todavia no esta validada en PAMI: hay que validarla igual' : '')
+      + esc(nr)+'">Reclamado'+(falta ? '/Falta validar' : '')+'</span>';
+  }
   if (e === 'falta_validar') return '<span class="cab-badge warn" title="La OME está en la bandeja pero todavía no está validada en PAMI. Hay que validarla antes de poder subir el informe.">Falta validar</span>';
   if (it.resuelto) {
     var no=(it.resuelto.omes&&it.resuelto.omes.length)||1;
