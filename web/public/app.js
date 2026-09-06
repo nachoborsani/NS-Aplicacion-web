@@ -1268,6 +1268,13 @@ function iniHoyISO(){
   var d = new Date();
   return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
 }
+// El <input type="date"> de los chips de vencimiento cubre todo el chip de forma
+// invisible, pero varios navegadores (Firefox, Safari) solo abren el calendario
+// nativo si el click cae justo en su ícono interno, no en cualquier punto del
+// control - con el chip estirado, ese ícono queda escondido y tocar no hace nada.
+// showPicker() lo abre igual sin importar dónde se hizo click (soportado en
+// Chrome/Edge/Firefox/Safari recientes; en un navegador viejo simplemente no hace nada).
+function iniAbrirPicker(el){ try{ el.showPicker && el.showPicker(); }catch(e){} }
 // Estado de vencimiento de una tarea NO hecha: '' | 'futuro' | 'hoy' | 'vencida'.
 function iniVenceEstado(t){
   if (!t || t.hecha || !t.vence) return '';
@@ -1320,14 +1327,14 @@ function iniTareaHTML(t, opts){
     ? (t.vence ? '<span class="ini-due set done">'+cal+'<span>'+esc(iniVenceLabel(t.vence))+'</span></span>' : '')
     : (puedeCambiarFecha
       ? '<label class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span>'
-        + '<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>'
+        + '<input type="date" value="'+esc(t.vence||'')+'" onclick="iniAbrirPicker(this)" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>'
       : '<span class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span></span>');
   // Vencida: no se la deja en rojo pasivo - pide explícitamente resolverla o
   // (solo un admin) pasarla a otra fecha (no alcanza con el chip de fecha, poco visible).
   var urgente = est==='vencida'
     ? '<div class="ini-task-urgent"><span>Venció — ¿la resolvés'+(esAdmin?' o la pasás para otra fecha':'')+'?</span>'
       + '<button type="button" class="btn btn-primary btn-sm" onclick="iniToggleTarea(\''+esc(t.id)+'\')">✓ Resuelta</button>'
-      + (esAdmin ? '<label class="ini-due-btn">📅 Nueva fecha<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>' : '')
+      + (esAdmin ? '<label class="ini-due-btn">📅 Nueva fecha<input type="date" value="'+esc(t.vence||'')+'" onclick="iniAbrirPicker(this)" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>' : '')
       + '</div>'
     : '';
   return '<li class="ini-task'+(t.hecha?' done':'')+(est==='vencida'?' venc':'')+'">'
