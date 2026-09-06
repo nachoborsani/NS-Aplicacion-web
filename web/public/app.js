@@ -2177,8 +2177,13 @@ function loteMedicoDefault(){
   loteRender();
 }
 function loteRender(){
-  var centro = document.getElementById('loteCentro').value;
-  var modelosCentro = (INFORMES_CFG.modelos || []).filter(function(m){ return m.centro === centro; });
+  // Los modelos ya no son por cliente (ver comentario en informes.js sobre
+  // MODELOS): antes acá se filtraba por m.centro === centro, pero listarModelos()
+  // hace rato dejó de mandar ese campo -> el filtro daba SIEMPRE vacío, y el
+  // desplegable de "Práctica" quedaba sin ninguna opción real (solo el
+  // placeholder "— sin plantilla —"), aunque el modelo ya estuviera bien
+  // detectado por código puntualmente. Se usa el catálogo completo.
+  var modelosCentro = INFORMES_CFG.modelos || [];
   var body = document.getElementById('loteBody'); if (!body) return;
   var ok = 0;
   body.innerHTML = LOTE_ROWS.map(function(row, i){
