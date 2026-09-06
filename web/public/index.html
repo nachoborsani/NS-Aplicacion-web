@@ -277,19 +277,17 @@
                 <div class="ini-accesos-catalogo" id="iniAccesosCatalogo"></div>
               </div>
             </section>
-          </div>
-
-          <!-- Actividad de operadores (solo admin): horas conectado HOY, sumando en
-               vivo, y un ícono por operador para ver el detalle (log de ingresos +
-               historial de horas por día). El operador (ej. Javi) nunca ve esta
-               tarjeta - no está en su panel (operadorPaneles) y el endpoint que la
-               alimenta es /api/admin/*, bloqueado para cualquier rol que no sea admin. -->
-          <div class="card ini-card" id="actividadOpCard" style="display:none;margin-top:14px">
-            <div class="ini-head">
-              <span class="ini-ic">🕒</span>
-              <div><h2>Actividad de operadores</h2><div class="ini-meta">Horas conectado hoy</div></div>
+            <!-- Actividad de operadores (solo admin): horas conectado HOY. Es una
+                 tarjeta más del mismo sistema de arrastrar/redimensionar (data-panel) -
+                 el operador nunca la ve (su panel es operadorPaneles) y el endpoint es
+                 /api/admin/*. -->
+            <div class="card ini-card" data-panel="actividad" id="actividadOpCard" style="display:none">
+              <div class="ini-head ini-drag-handle">
+                <span class="ini-ic">🕒</span>
+                <div><h2>Actividad de operadores</h2><div class="ini-meta">Horas conectado hoy</div></div>
+              </div>
+              <ul class="acted-list" id="actividadOpList"><li class="ini-empty">Cargando…</li></ul>
             </div>
-            <ul class="acted-list" id="actividadOpList"><li class="ini-empty">Cargando…</li></ul>
           </div>
 
           <!-- Panel de operador (Javi por ahora): chat con los admins, accesos
@@ -602,6 +600,19 @@
                   <span class="msg ok" id="clientPamiMsg"></span>
                 </div>
               </article>
+              </section>
+
+              <!-- Pendientes del centro (operador_clinica): mismo contador que ve Javi
+                   de este cliente en su Inicio ("Pendientes de Javi") - sin plata ni
+                   detalle de pacientes, eso sigue viviendo en la Cabina de informes. -->
+              <section id="client-section-pendientes" class="client-section" style="display:none">
+                <article class="client-card">
+                  <div class="client-card-head">
+                    <h3>Pendientes con Javi</h3>
+                  </div>
+                  <p class="nom-muted" style="margin-top:-6px">Lo que le falta a este centro es lo que Javi tiene pendiente de resolver.</p>
+                  <div id="centroPendCard"><p class="nom-muted">Cargando…</p></div>
+                </article>
               </section>
 
               <section id="client-section-dashboard" class="client-section">
@@ -1252,6 +1263,13 @@
           </div>
         </div>
 
+        <!-- ===== Modal: asignar valor a códigos "sin valorizar" de un módulo ===== -->
+        <div class="scrim" id="svScrim" onclick="cerrarSinValor()"></div>
+        <div class="modal" id="svModal" role="dialog" aria-modal="true" style="max-width:600px">
+          <div class="modal-head"><h3 id="svModalTitle">Sin valorizar</h3><button class="x" onclick="cerrarSinValor()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" id="svModalBody" style="padding:18px"></div>
+        </div>
+
         <!-- ===== Modal: Configuración de horarios del server (solo admin) ===== -->
         <div class="scrim" id="srvCfgScrim" onclick="cerrarConfigServer()"></div>
         <div class="modal" id="srvCfgModal" role="dialog" aria-modal="true" style="max-width:560px">
@@ -1295,12 +1313,6 @@
           <!-- El Cliente queda SIEMPRE visible (fuera del bloque que se oculta
                para médico de cabecera): si no, elegir Scheffelaar/Dubesarky
                dejaba sin forma de volver a elegir otro cliente. -->
-          <div class="card" id="infClienteCard" style="margin-bottom:16px">
-            <div class="field" style="max-width:420px">
-              <label>Cliente</label>
-              <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
-            </div>
-          </div>
           <!-- Médico de cabecera (Scheffelaar/Dubesarky): no es una clínica, la
                cascada Especialidad/Práctica de abajo no le aplica - todavía no
                hay un flujo de informes propio para este tipo de cliente. -->
@@ -1309,6 +1321,11 @@
           </div>
           <div class="inf-gen-layout" id="infGenLayout">
           <div class="card" id="infFormCard" oninput="programarPreviewVivo()" onchange="programarPreviewVivo()">
+            <div class="field">
+              <label>Cliente</label>
+              <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
+            </div>
+            <div id="infFormResto">
             <div class="field">
               <label>Especialidad</label>
               <select class="inp" id="infEspecialidad" onchange="onEspecialidadChange()"></select>
@@ -1363,6 +1380,7 @@
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Descargar PDF
             </button>
+            </div>
           </div>
           <div class="inf-preview-live" id="infPreviewLive">
             <div class="inf-preview-bar">Vista previa <span>en vivo</span></div>
@@ -1592,9 +1610,15 @@
             <option value="colaborador">Colaborador (solo ver)</option>
             <option value="medico">Médico</option>
             <option value="clinica">Clínica</option>
+            <option value="operador_clinica">Operador Clínica (empleado del centro)</option>
             <option value="demo">Demostración (solo ver)</option>
             <option value="admin">Administrador</option>
           </select>
+        </div>
+        <div class="field" id="umCentroField" style="display:none">
+          <label>Centro</label>
+          <select class="inp" id="umCentro"></select>
+          <div class="hint" id="umCentroHint">A qué centro pertenece este usuario. Solo va a ver y hacer lo que corresponda a ese centro.</div>
         </div>
         <div class="field" id="umClientesField" style="display:none">
           <label>Clientes que puede ver</label>

@@ -614,6 +614,32 @@ function estadoInforme(it) {
   if (it && it.resuelto) return resueltoTodoTransmitido(it) ? "ya_transmitido" : "ok";
   return (it && it.match && it.match.estado) || "sin_match";
 }
+// Pendientes de UN cliente: cuántos informes de la Cabina siguen "en juego"
+// (ni transmitidos ni desestimados), cuántos están listos pero sin transmitir
+// (`sinTransmitir`), y - solo para médico de cabecera - lo que surge directo
+// del cruce de la bandeja (`cup`: pendiente de validar o transmitir en PAMI,
+// aunque todavía no se haya cargado ningún informe para esa OME). Mismos 3
+// números para el panel de Javi (todos sus clientes) y para el panel del
+// centro (el suyo solo) - "lo que tiene pendiente el centro es lo que tiene
+// pendiente Javi", un solo cálculo, dos vistas.
+function pendientesDeCliente(slug, cliente, informes, bandejas) {
+  const items = ((informes || {})[slug] || {}).items || [];
+  let pendientes = 0, sinTransmitir = 0;
+  for (const it of items) {
+    const e = estadoInforme(it);
+    if (e !== "ya_transmitido" && e !== "desestimado") pendientes += 1;
+    if (e === "ok") sinTransmitir += 1;
+  }
+  let cup = 0;
+  if (cliente && cliente.tipo === "med_cabecera") {
+    const bandeja = (bandejas || {})[slug];
+    if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
+      const r = bandejaResumenCup(bandeja);
+      cup = r.pendienteValidar + r.pendienteTransmitir;
+    }
+  }
+  return { pendientes, sinTransmitir, cup };
+}
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
 function informesExportRows(items) {
   return (items || []).map((it) => {
@@ -2004,7 +2030,12 @@ function publicUser(u) {
 // "demo": usuario de demostración (para mostrar la app sin poder usarla). Ve las
 // herramientas con datos reales y puede descargar, pero NO escribe nada y solo
 // accede a los clientes de su lista (u.clientes).
-const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo", "colaborador"]);
+// "operador_clinica": empleado de recepción/administrativo DEL centro médico (no
+// de NS). Atado a un único centro (como "clinica"), pero a diferencia de ese rol
+// no ve plata ni gráficas de ningún tipo - arranca sin ninguna pantalla de datos
+// habilitada, se le van sumando de a una (ver PDF "Empleado Cliente" - roadmap
+// 05/09/2026). Es un rol propio, no una variante de "clinica" ni de "operador".
+const ROLES = new Set(["admin", "operador", "medico", "clinica", "demo", "colaborador", "operador_clinica"]);
 const DEFAULT_CLIENTS = [
   {
     slug: "sala-millon",
@@ -3264,6 +3295,18 @@ function buildBandejaResumen(slug) {
       if (c && !byCode.has(c)) byCode.set(c, r);
     }
   }
+  // Valores asignados a mano (globales / por-cliente) para códigos que no están en
+  // el nomenclador: se incluyen acá para que el mes en curso los valorice igual que
+  // los reportes (si no, "darle valor" desde el chip no se reflejaba hasta un reporte).
+  const _pv = loadClientPracticeValues();
+  const _pvMerge = { ...(_pv["__global__"] || {}), ...(_pv[slug] || {}) };
+  for (const c of Object.keys(_pvMerge)) {
+    const code = cleanIdentifier(c);
+    const ov = _pvMerge[c];
+    if (code && ov && Number(ov.total) > 0 && !byCode.has(code)) {
+      byCode.set(code, { practiceCode: code, practiceDescription: ov.practiceDescription || "", moduleCode: ov.moduleCode || "", moduleDescription: ov.moduleDescription || "", total: Number(ov.total) });
+    }
+  }
   const keys = Object.keys(bandeja.rows[0] || {});
   const findKey = (re) => keys.find((k) => re.test(normalizeText(k))) || "";
   const kPrac = findKey(/PRACTICA/);
@@ -3330,9 +3373,15 @@ function buildBandejaResumen(slug) {
     const modCode = String((nomRow && nomRow.moduleCode) || "");
     const modKey = modCode || "sin";
     let modAgr = moduloAgr.get(modKey);
-    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0 }; moduloAgr.set(modKey, modAgr); }
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
     if (esConsulta) modAgr.consultations++; else modAgr.practices++;
     modAgr.gross += valueGross;
+    if (!nomRow) {   // el código no está en el nomenclador → suma $0 pero cuenta
+      modAgr.sinValor++;
+      const svc = code || "?";
+      if (!modAgr._sv[svc]) modAgr._sv[svc] = { code: svc, desc: (pracRaw.split(" - ").slice(1).join(" - ") || pracRaw).trim(), count: 0 };
+      modAgr._sv[svc].count++;
+    }
     if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
       benef: String(row[kBenef] || "").trim(),
       nombre: String(row[kNombre] || "").trim(),
@@ -3464,7 +3513,7 @@ function buildBandejaResumen(slug) {
     missingInformeRows, ausentesRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
-    modules: [...moduloAgr.values()].map((m) => ({ ...m, gross: money(m.gross) })).sort((a, b) => b.gross - a.gross),
+    modules: [...moduloAgr.values()].map((m) => { const { _sv, ...rest } = m; return { ...rest, gross: money(m.gross), sinValorCodigos: Object.values(_sv || {}) }; }).sort((a, b) => b.gross - a.gross),
     coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
     coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
     nomencladorPeriod: nom ? (nom.period || "") : "",
@@ -3697,6 +3746,8 @@ function addRowToDashboardPeriod(target, row) {
       consultations: 0,
       practices: 0,
       gross: 0,
+      sinValor: 0,
+      _sv: {},
       debit: 0,
       net: 0,
       rows: [],
@@ -3706,6 +3757,12 @@ function addRowToDashboardPeriod(target, row) {
   if (consultation) module.consultations += 1;
   else module.practices += 1;
   module.gross += gross;
+  if (!row.matchFound) {   // código sin match en el nomenclador → $0
+    module.sinValor += 1;
+    const c = String(row.practiceCode || "?");
+    if (!module._sv[c]) module._sv[c] = { code: c, desc: row.practiceDescription || row.practiceText || "", count: 0 };
+    module._sv[c].count += 1;
+  }
   module.debit += debit;
   module.net += net;
   module.rows.push({
@@ -3738,13 +3795,17 @@ function finalizeDashboardPeriod(target) {
   target.nextPeriodCutoff = money(target.nextPeriodCutoff);
   target.missingInformeAmount = money(target.missingInformeAmount);
   target.modules = Object.values(target._modules || {})
-    .map((module) => ({
-      ...module,
-      gross: money(module.gross),
-      debit: money(module.debit),
-      net: money(module.net),
-      rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
-    }))
+    .map((module) => {
+      const { _sv, ...rest } = module;
+      return {
+        ...rest,
+        gross: money(module.gross),
+        debit: money(module.debit),
+        net: money(module.net),
+        sinValorCodigos: Object.values(_sv || {}),
+        rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
+      };
+    })
     .sort((a, b) => b.net - a.net || String(a.moduleCode).localeCompare(String(b.moduleCode)));
   delete target._modules;
   return target;
@@ -4719,6 +4780,36 @@ const server = http.createServer(async (req, res) => {
         avisarTelegram(txt).catch(() => {});
       } catch { /* un aviso que falla no puede tumbar el complete */ }
     }
+    // Marcar como transmitidos los informes subidos OK: salen de "Listo para subir"
+    // al instante (sin esperar el refresco de la bandeja) y no se re-suben. El worker
+    // igual nunca re-transmite (chequea antes de subir); esto es para reflejarlo en la UI.
+    if (task.type === "subir-informes" && ok) {
+      try {
+        const r = task.result || {};
+        const det = Array.isArray(r.detalle) ? r.detalle : [];
+        const okOmes = new Set(det
+          .filter((d) => d && ["transmitido", "ya_transmitido"].includes(d.estado))
+          .map((d) => String(d.ome || "").replace(/\D+/g, "")).filter(Boolean));
+        const ids = new Set((task.payload && Array.isArray(task.payload.informeIds) ? task.payload.informeIds : []).map(String));
+        if (okOmes.size && ids.size) {
+          const slug = task.clientSlug || "";
+          const store = loadInformes();
+          const items = (store[slug] && store[slug].items) || [];
+          let cambios = 0;
+          for (const it of items) {
+            if (!ids.has(String(it.id))) continue;
+            const omes = ((it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []))
+              .map((o) => String(o).replace(/\D+/g, "")).filter(Boolean);
+            if (!omes.length) continue;
+            if (omes.every((o) => okOmes.has(o))) {
+              it.resuelto = Object.assign({ ome: omes[0], omes, por: "subida", at: new Date().toISOString() }, it.resuelto || {}, { todoTransmitido: true });
+              cambios++;
+            }
+          }
+          if (cambios) saveInformes(store);
+        }
+      } catch { /* si el marcado falla, el refresco de la bandeja lo corrige igual */ }
+    }
     return json(res, 200, { ok: true, task: publicWorkerTask(task) });
   }
   // El worker sube la captura de pantalla de PAMI en el momento de un error (para
@@ -4806,6 +4897,21 @@ const server = http.createServer(async (req, res) => {
       else if (!esGet && suCentro && /\/honorarios$/.test(p)) permitido = true;
       else if (p === "/api/mescurso/export") permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
+    }
+
+    // --- Gate del rol "operador_clinica" (empleado de recepción del centro, NO
+    // el dueño): SOLO LECTURA, SOLO su centro, y sin dashboards/honorarios/
+    // reportes (nada con plata ni gráficas). Se van sumando permisos puntuales
+    // acá a medida que se construye cada pantalla nueva para este rol. Hoy
+    // tiene: quién es, cambiar su clave, salir, la lista de clientes (filtrada
+    // a su centro) y el contador de pendientes de SU centro (mismo cálculo que
+    // ya usa Javi - ver pendientesDeCliente - sin tocar la Cabina de informes).
+    if (meGate && meGate.role === "operador_clinica") {
+      const esGet = (req.method === "GET" || !req.method);
+      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
+      const permitido = permitidoSiempre || (esGet && p === "/api/clientes")
+        || (esGet && p === `/api/clientes/${encodeURIComponent(meGate.centro)}/pendientes-centro`);
+      if (!permitido) return json(res, 403, { error: "Tu usuario todavía no tiene pantallas habilitadas (en desarrollo)." });
     }
 
     // --- Gate de los roles de SOLO LECTURA ("demo" y "colaborador").
@@ -5232,27 +5338,8 @@ const server = http.createServer(async (req, res) => {
     const filas = [];
     let totalPendientes = 0, totalSinTransmitir = 0, totalCup = 0;
     for (const slug of slugsVisibles) {
-      const items = (informes[slug] || {}).items || [];
-      let pendientes = 0, sinTransmitir = 0;
-      for (const it of items) {
-        const e = estadoInforme(it);
-        if (e !== "ya_transmitido" && e !== "desestimado") pendientes += 1;
-        if (e === "ok") sinTransmitir += 1;
-      }
-      // Médico de cabecera (Scheffelaar/Dubesarky): además de lo anterior (que
-      // depende de que se haya subido un informe a "Informes recibidos"), sumamos
-      // lo que surge directo del informe del CUP recién subido - pendiente de
-      // validar o de transmitir en PAMI, aunque todavía no se haya cargado ningún
-      // informe para esa OME.
-      let cup = 0;
       const cliente = todosClientes.find((c) => c.slug === slug);
-      if (cliente && cliente.tipo === "med_cabecera") {
-        const bandeja = bandejas[slug];
-        if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
-          const r = bandejaResumenCup(bandeja);
-          cup = r.pendienteValidar + r.pendienteTransmitir;
-        }
-      }
+      const { pendientes, sinTransmitir, cup } = pendientesDeCliente(slug, cliente, informes, bandejas);
       if (pendientes || sinTransmitir || cup) {
         filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir, cup });
         totalPendientes += pendientes;
@@ -5262,6 +5349,28 @@ const server = http.createServer(async (req, res) => {
     }
     filas.sort((a, b) => (b.pendientes + b.sinTransmitir + b.cup) - (a.pendientes + a.sinTransmitir + a.cup));
     return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir, totalCup });
+  }
+
+  // Mismo cálculo de arriba, para UN solo centro: lo usa el "operador_clinica"
+  // de ese centro para ver "qué le falta" (mismos 3 números que ve Javi de su
+  // propio centro, sin plata ni detalle de pacientes - eso sigue siendo de la
+  // Cabina de informes, que no es de acá). Notificación = mostrar esto en su
+  // pantalla; si algún día el centro puede "resolver" algo, se avisa de vuelta
+  // a Javi desde el mismo lugar donde hoy se resuelve (la Cabina).
+  const pendientesCentroMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/pendientes-centro$/);
+  if (pendientesCentroMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = pendientesCentroMatch[1];
+    const todosClientes = loadClientsStore();
+    const cliente = todosClientes.find((c) => c.slug === slug);
+    if (!cliente) return json(res, 404, { error: "Cliente no encontrado." });
+    const puede = me.role === "admin"
+      || (me.role === "operador" && clientesVisiblesPara(me, [cliente]).length > 0)
+      || ((me.role === "clinica" || me.role === "operador_clinica") && me.centro === slug);
+    if (!puede) return json(res, 403, { error: "sin permiso" });
+    const { pendientes, sinTransmitir, cup } = pendientesDeCliente(slug, cliente, loadInformes(), loadClientBandejas());
+    return json(res, 200, { pendientes, sinTransmitir, cup });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
@@ -5301,8 +5410,9 @@ const server = http.createServer(async (req, res) => {
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
-    // El rol "clinica" (dueño del centro) DEBE estar atado a un centro existente.
-    if (rl === "clinica" && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece el usuario clínica." });
+    // Los roles atados a UN centro ("clinica" el dueño, "operador_clinica" su
+    // empleado) DEBEN tener un centro existente.
+    if ((rl === "clinica" || rl === "operador_clinica") && !loadClientsStore().some((c) => c.slug === ce)) return json(res, 400, { error: "Elegí a qué centro pertenece este usuario." });
     // Los roles de solo lectura (demo/colaborador) DEBEN tener al menos un cliente
     // asignado (si no, no ven nada). Un operador con lista vacía queda SIN restringir
     // (ve todos, como siempre); si se le carga al menos un cliente, ve solo esos.
@@ -5314,7 +5424,7 @@ const server = http.createServer(async (req, res) => {
     // El checkbox de clientes solo se muestra (y se completa) para demo/operador;
     // para el resto de los roles el formulario lo manda vacío igual, así que no
     // hace falta filtrar por rol acá - guardamos lo que vino.
-    users.push({ username: uname, name: nm, role: rl, email: em, centro: rl === "clinica" ? ce : "",
+    users.push({ username: uname, name: nm, role: rl, email: em, centro: (rl === "clinica" || rl === "operador_clinica") ? ce : "",
                  clientes: cls, password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
@@ -5373,9 +5483,9 @@ const server = http.createServer(async (req, res) => {
         users[idx].clientes = (Array.isArray(body.clientes) ? body.clientes : [])
           .map((s) => String(s || "").trim()).filter((s) => existentes.has(s));
       }
-      // Un usuario clínica siempre debe tener un centro válido.
-      if (users[idx].role === "clinica" && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
-        return json(res, 400, { error: "El usuario clínica tiene que estar atado a un centro válido." });
+      // Un usuario clínica u operador_clinica siempre debe tener un centro válido.
+      if ((users[idx].role === "clinica" || users[idx].role === "operador_clinica") && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
+        return json(res, 400, { error: "Este usuario tiene que estar atado a un centro válido." });
       }
       // Un usuario de solo lectura (demo/colaborador) siempre debe tener al menos un
       // cliente asignado (un operador con lista vacía es válido: "sin restringir").
@@ -5501,8 +5611,8 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     let clients = loadClientsStore();
-    // El rol clínica solo ve SU centro.
-    if (me.role === "clinica") clients = clients.filter((c) => c.slug === me.centro);
+    // El rol clínica y el operador_clinica solo ven SU centro.
+    if (me.role === "clinica" || me.role === "operador_clinica") clients = clients.filter((c) => c.slug === me.centro);
     // Demo, y un operador con lista propia, solo ven los clientes que se les asignaron.
     clients = clientesVisiblesPara(me, clients);
     return json(res, 200, { clients });
@@ -6607,6 +6717,28 @@ const server = http.createServer(async (req, res) => {
       rows,
     };
     const store = loadClientReportsStore();
+    // Guardia anti-duplicado: el período se calcula por las FECHAS de los turnos, no
+    // por el título. Si este reporte cae en un mes que YA tiene un reporte CONFIRMADO
+    // (con débitos), avisamos antes de crear un duplicado que lo tape (le pasó a DBAIME:
+    // una bandeja de julio cerrada como "Agosto" tapó los débitos confirmados de julio).
+    // force=1 para crear igual (ej. quincenas legítimas del mismo mes).
+    const forceDup = ["1", "true", "si"].includes(String(url.searchParams.get("force") || "").toLowerCase());
+    const nuevoPeriod = reportDashboardPeriod(report);
+    const confirmadoExistente = (store.items || []).find((it) =>
+      it.clientSlug === slug && reportDashboardPeriod(it) === nuevoPeriod && it.debitStatus === "confirmado");
+    if (confirmadoExistente && !forceDup) {
+      return json(res, 409, {
+        error: "duplicado-periodo",
+        avisoDuplicado: {
+          period: nuevoPeriod, periodLabel: periodLabel(nuevoPeriod),
+          existente: {
+            id: confirmadoExistente.id, title: confirmadoExistente.title,
+            debito: money((confirmadoExistente.rows || []).reduce((a, r) => a + reportRowDebit(r), 0)),
+          },
+          nuevoTitulo: report.title,
+        },
+      });
+    }
     store.items = [report, ...(store.items || [])];
     saveClientReportsStore(store);
     return json(res, 200, { report: reportListItem(report) });
