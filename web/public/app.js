@@ -3638,6 +3638,7 @@ var MESCURSO_PERIODO_ACTUAL = '';
 var MESCURSO_PERIODO_JULIO = '';
 var MESCURSO_PERIODO_CERRADO = '';
 var MESCURSO_PANEL_ABIERTO = '';    // '' | 'informes' | 'debitos' | 'informes-julio' | 'debitos-julio' | 'debitos-adelante' | 'ausentes'
+var MESCURSO_PANEL_SORT = {};       // panelId -> { col, dir }
 function mesCursoSetCaret(id, abierto){ var c = document.getElementById(id); if (c) c.textContent = abierto ? '▾' : '▸'; }
 function toggleFaltanInformes(){ mesCursoTogglePanel('informes'); }
 function togglePosiblesDebitos(){ mesCursoTogglePanel('debitos'); }
@@ -4090,19 +4091,73 @@ function mesCursoVacioHtml(titulo, tono){
     + '<div class="mescurso-panel-vacio">Sin registros para este período.</div>'
     + '</div>';
 }
+function mesCursoParseFecha(v){
+  var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(String(v || '').trim());
+  if (!m) return null;
+  return new Date(+m[3], (+m[2]) - 1, +m[1], +(m[4] || 0), +(m[5] || 0)).getTime();
+}
+function mesCursoParseNumero(v){
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  var limpio = s.replace(/\$/g, '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  if (!/^-?\d+(?:\.\d+)?$/.test(limpio)) return null;
+  return Number(limpio);
+}
+function mesCursoSortKey(valor, header){
+  var h = String(header || '').toLowerCase();
+  var fecha = /turno|fecha/.test(h) ? mesCursoParseFecha(valor) : null;
+  if (fecha != null && isFinite(fecha)) return { tipo:'num', valor:fecha };
+  var num = /valor|facturaci|debito|débito|consultas|prácticas|practicas|benef/.test(h) || String(valor || '').indexOf('$') >= 0
+    ? mesCursoParseNumero(valor)
+    : null;
+  if (num != null && isFinite(num)) return { tipo:'num', valor:num };
+  return { tipo:'txt', valor:String(valor == null ? '' : valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
+}
+function mesCursoOrdenarFilas(panelId, headers, filas){
+  var sort = MESCURSO_PANEL_SORT[String(panelId || '')];
+  var rows = (filas || []).map(function(f, idx){ return { idx:idx, cells:f }; });
+  if (!sort || sort.col == null) return rows;
+  rows.sort(function(a, b){
+    var ka = mesCursoSortKey(a.cells[sort.col], headers[sort.col]);
+    var kb = mesCursoSortKey(b.cells[sort.col], headers[sort.col]);
+    var cmp = 0;
+    if (ka.tipo === 'num' && kb.tipo === 'num') cmp = ka.valor - kb.valor;
+    else cmp = String(ka.valor).localeCompare(String(kb.valor), 'es', { numeric:true, sensitivity:'base' });
+    if (!cmp) cmp = a.idx - b.idx;
+    return sort.dir === 'desc' ? -cmp : cmp;
+  });
+  return rows;
+}
+function mesCursoOrdenar(panelId, col){
+  var key = String(panelId || '');
+  var actual = MESCURSO_PANEL_SORT[key] || {};
+  MESCURSO_PANEL_SORT[key] = { col:col, dir:(actual.col === col && actual.dir === 'asc') ? 'desc' : 'asc' };
+  MESCURSO_PANEL_ABIERTO = '';
+  mesCursoTogglePanel(key);
+}
 function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accionFn){
   // Columnas que absorben el ancho sobrante (las de texto largo): así la tabla
   // llena el panel sin dejar un bloque vacío a la derecha ni abrir huecos entre
   // las columnas cortas. El resto se ajusta al contenido.
   var expand = /informes|ausentes/.test(String(panelId || '')) ? [1, 2] : (/modulos/.test(String(panelId || '')) ? [0] : [1, 3, 6]);
-  var clase = function(i){ return expand.indexOf(i) >= 0 ? ' class="mc-exp"' : ''; };
+  var sort = MESCURSO_PANEL_SORT[String(panelId || '')] || {};
+  var clase = function(i){
+    var cls = [];
+    if (expand.indexOf(i) >= 0) cls.push('mc-exp');
+    if (sort.col === i) cls.push('sort-' + sort.dir);
+    return cls.length ? ' class="' + cls.join(' ') + '"' : '';
+  };
+  var ordenadas = mesCursoOrdenarFilas(panelId, headers, filas);
   // Columna extra opcional (botón "Crear informe"): no se copia ni se exporta,
   // sólo se muestra. La celda va sin escapar porque trae HTML del botón.
   var conAcc = typeof accionFn === 'function';
-  var thead = '<tr>' + headers.map(function(h, i){ return '<th' + clase(i) + '>' + esc(h) + '</th>'; }).join('') + (conAcc ? '<th></th>' : '') + '</tr>';
-  var tbody = filas.map(function(f, idx){
-    return '<tr>' + f.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
-      + (conAcc ? '<td class="mc-acc">' + (accionFn(idx) || '') + '</td>' : '') + '</tr>';
+  var thead = '<tr>' + headers.map(function(h, i){
+    var icon = sort.col === i ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : '';
+    return '<th' + clase(i) + '><button type="button" class="mc-sort" onclick="mesCursoOrdenar(\'' + esc(panelId || '') + '\',' + i + ')" title="Ordenar por ' + esc(h) + '">' + esc(h) + '<span>' + esc(icon) + '</span></button></th>';
+  }).join('') + (conAcc ? '<th></th>' : '') + '</tr>';
+  var tbody = ordenadas.map(function(row){
+    return '<tr>' + row.cells.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
+      + (conAcc ? '<td class="mc-acc">' + (accionFn(row.idx) || '') + '</td>' : '') + '</tr>';
   }).join('');
   var acciones = '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
   if (panelId){

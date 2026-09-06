@@ -1514,6 +1514,10 @@
      ni bloque vacío a la derecha. La práctica/cruce envuelven si no entran. */
   .mescurso-panel table.bandeja-table{width:100%;min-width:0;border-collapse:collapse;font-size:11px;table-layout:auto}
   .mescurso-panel th{position:sticky;top:0;background:var(--surface);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text-2);font-weight:700;white-space:nowrap}
+  .mescurso-panel th .mc-sort{display:inline-flex;align-items:center;gap:3px;max-width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
+  .mescurso-panel th .mc-sort:hover{color:var(--text)}
+  .mescurso-panel th.sort-asc .mc-sort,.mescurso-panel th.sort-desc .mc-sort{color:var(--petrol)}
+  .mescurso-panel th .mc-sort span{font-size:10px;line-height:1}
   /* Columnas cortas: se ajustan al contenido en una línea. */
   .mescurso-panel td,.mescurso-panel th{padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top;white-space:nowrap;width:1%}
   /* Columnas de texto largo: toman el ancho sobrante y envuelven por palabra si
