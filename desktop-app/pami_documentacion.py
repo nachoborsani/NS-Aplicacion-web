@@ -5319,8 +5319,10 @@ class PamiDocumentacionController:
                             # turno: el número es único y el filtro de mes puede excluir la OME si
                             # el turno cayó en otro mes (le pasó a DI CARLO: turno 24/08 buscado
                             # con rango de julio → "no se encontró la OME" aunque estaba).
-                            "rango": ({"desde": rango_amplio[0], "hasta": rango_amplio[1]} if search_modo == "orden"
-                                      else ({"desde": rango[0], "hasta": rango[1]} if rango else None)),
+                            # SIEMPRE rango amplio: el filtro angosto del turno era lo que hacía
+                            # "no se encontró la OME" cuando el turno caía en otro mes (DI CARLO,
+                            # turno 24/08). El beneficio/OME es la llave; la fecha solo acota.
+                            "rango": {"desde": rango_amplio[0], "hasta": rango_amplio[1]},
                             "modo": search_modo,
                             "valor": search_valor,
                         },
