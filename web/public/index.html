@@ -1392,6 +1392,23 @@
           </div>
         </div>
 
+        <!-- ===== Ventana genérica de confirmar / pedir un texto (reemplaza a los confirm()/prompt() del navegador) ===== -->
+        <div class="scrim" id="nsAskScrim" onclick="nsAskCancel()"></div>
+        <div class="modal" id="nsAskModal" role="dialog" aria-modal="true" style="max-width:460px">
+          <div class="modal-head"><h3 id="nsAskTitle">Confirmar</h3><button class="x" onclick="nsAskCancel()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-body" style="padding:18px">
+            <div id="nsAskBody" style="font-size:14px;line-height:1.5;color:var(--text)"></div>
+            <label class="field" id="nsAskInputWrap" style="margin-top:12px;display:none">
+              <span id="nsAskInputLabel"></span>
+              <input class="inp" id="nsAskInput" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();nsAskOk();}">
+            </label>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+              <button class="btn btn-ghost" type="button" id="nsAskCancelBtn" onclick="nsAskCancel()">Cancelar</button>
+              <button class="btn btn-primary" type="button" id="nsAskOkBtn" onclick="nsAskOk()">Aceptar</button>
+            </div>
+          </div>
+        </div>
+
         <div class="scrim" id="cabinaScrim" onclick="cerrarCabinaModal()"></div>
         <div class="modal cab-modal" id="cabinaModal" role="dialog" aria-modal="true">
           <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>

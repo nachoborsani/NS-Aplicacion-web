@@ -3801,18 +3801,18 @@ function opcionesModelo(m){
 async function crearYSubirInforme(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
   if (!x) return;
-  if (!x.ome){ alert('Esta práctica no tiene OME en la bandeja, no se puede subir.'); return; }
+  if (!x.ome){ await nsConfirm('Esta práctica no tiene OME en la bandeja, no se puede subir.', { titulo:'Sin OME', okLabel:'Entendido', cancelLabel:'' }); return; }
   var m = modeloParaPracticaRow(x.practica);
-  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return; }
+  if (!m){ await nsConfirm('No hay un modelo cargado para esa práctica.', { titulo:'Sin modelo', okLabel:'Entendido', cancelLabel:'' }); return; }
   var op = opcionesModelo(m);
   if (op.haceFalta){ modalOpcionesInforme(x, m, op, true, btn); return; }
   var payload = payloadInformeDeFila(x);
   if (!payload) return;
   delete payload._modelo;
   payload.ome = x.ome; payload.practicaTexto = x.practica || '';
-  if (!confirm('Vas a CREAR y SUBIR a PAMI este informe:\n\n' +
-      (x.nombre || '') + '\n' + (x.practica || '') + '\nOME ' + x.ome + '\nModelo: ' + (m.label || m.key) +
-      '\n\nEsto es real e irreversible. ¿Confirmás?')) return;
+  if (!await nsConfirm('', { titulo:'Crear y subir a PAMI',
+      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)+'<br>Modelo: '+esc(m.label || m.key)+'<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
+      okLabel:'Crear y subir' })) return;
   ejecutarCrearYSubir(payload, x, btn);
 }
 async function ejecutarCrearYSubir(payload, x, btn){
@@ -8017,7 +8017,7 @@ async function subirInformeUno(id){
   var nom=(it&&it.extract&&it.extract.nombre)||'este informe';
   var omesArr=(it&&it.resuelto&&(it.resuelto.omes||(it.resuelto.ome?[it.resuelto.ome]:[])))||(it&&it.match&&it.match.ome?[it.match.ome]:[]);
   var ome=omesArr.join(', ');
-  if(!confirm('Vas a SUBIR a PAMI:\n\n'+nom+(ome?('  ·  OME '+ome):'')+'\n\nEs real e irreversible. ¿Confirmás?')) return;
+  if(!await nsConfirm('', { titulo:'Subir a PAMI', cuerpoHtml:'<b>'+esc(nom)+'</b>'+(ome?(' · OME '+esc(ome)):'')+'<br><br>Se sube a PAMI. Es real e irreversible.', okLabel:'Subir' })) return;
   cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
@@ -8030,7 +8030,7 @@ async function tareaCabina(tipo){
   var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
   var ids=cabIdsParaTarea(tipo);
   if(!ids.length){ alert(tipo==='subir-informes'?'No hay informes listos para subir en este rango.':'No hay informes para auditar en este rango.'); return; }
-  if(tipo==='subir-informes' && !confirm('Vas a SUBIR '+ids.length+' informe(s) a PAMI.\n\nEsto es real e irreversible. ¿Confirmás?')) return;
+  if(tipo==='subir-informes' && !await nsConfirm('Se suben ' + ids.length + ' informe(s) a PAMI. Es real e irreversible.', { titulo:'Subir a PAMI', okLabel:'Subir '+ids.length })) return;
   cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:tipo,clientSlug:slug,payload:{informeIds:ids}})});
@@ -8287,7 +8287,7 @@ async function liberarCupoSeleccionadas(omes){
   var base = lcBase(); if (!base){ lcNotice('warn', 'Elegí un cliente', 'Primero seleccioná el cliente que tiene la bandeja.'); return; }
   omes = omes || lcSelectedOmes();
   if (!omes.length){ lcNotice('warn', 'Seleccioná al menos una OME', 'Tildá una o más órdenes para liberar cupo.'); return; }
-  if (!confirm('Vas a liberar cupo de ' + omes.length + ' OME(s) en PAMI.\n\nEsto cancela la aceptación. ¿Confirmás?')) return;
+  if (!await nsConfirm('Se libera cupo de ' + omes.length + ' OME(s) en PAMI. Esto cancela la aceptación.', { titulo:'Liberar cupo', okLabel:'Liberar', peligro:true })) return;
   var est = document.getElementById('lcTareaEstado'); if (est) est.textContent = 'Creando tarea...';
   lcNotice('info', 'Tarea en preparación', 'Estoy enviando la solicitud al worker PAMI.');
   var filtros = {};
@@ -8570,9 +8570,9 @@ async function cabSubirSeleccionados(){
     var e = it ? cabEstadoDe(it) : '';
     if (e==='ok' || e==='resuelto') ids.push(c.value); else noListos++;
   });
-  if (!ids.length){ alert('Ninguno de los seleccionados está "Listo para subir".'); return; }
-  var extra = noListos ? ('\n\n(' + noListos + ' seleccionado(s) no están listos y se omiten.)') : '';
-  if (!confirm('Vas a SUBIR ' + ids.length + ' informe(s) a PAMI.\n\nEs real e irreversible.' + extra + '\n\n¿Confirmás?')) return;
+  if (!ids.length){ await nsConfirm('Ninguno de los seleccionados está "Listo para subir".', { titulo:'No hay nada para subir', okLabel:'Entendido', cancelLabel:'' }); return; }
+  var extra = noListos ? (' (' + noListos + ' seleccionado(s) no están listos y se omiten.)') : '';
+  if (!await nsConfirm('Se suben ' + ids.length + ' informe(s) a PAMI. Es real e irreversible.' + extra, { titulo:'Subir a PAMI', okLabel:'Subir '+ids.length })) return;
   var slug = document.getElementById('cabCliente').value;
   cabEstado('Preparando…','working');
   try{
@@ -8865,7 +8865,7 @@ async function reanalizarInforme(id){
   if (r.ok) await refreshCabina(); else { var d=await r.json().catch(function(){return{};}); alert(d.error||'No se pudo reanalizar.'); }
 }
 async function borrarInforme(id){
-  if (!confirm('¿Borrar este informe recibido?')) return;
+  if (!await nsConfirm('Se elimina de la lista de informes recibidos. No se puede deshacer.', { titulo:'Borrar informe', okLabel:'Borrar', peligro:true })) return;
   var slug = document.getElementById('cabCliente').value;
   var r = await fetch('/api/clientes/'+slug+'/informes/'+id, { method:'DELETE' });
   if (r.ok) await refreshCabina();
@@ -8888,13 +8888,61 @@ async function toggleDesestimar(id, esta){
 // Reclamar al centro: el operador no sabe de qué paciente es y lo reclamó para que
 // confirmen. Queda "en gestión" (fuera de revisar), con una nota. Reversible: soltar
 // lo devuelve a su estado anterior.
+// ===== Ventanas in-app (reemplazan confirm()/prompt() del navegador) =====
+var _nsAskResolve = null, _nsAskMode = 'confirm';
+function _nsAskOpen(opts){
+  return new Promise(function(resolve){
+    _nsAskResolve = resolve;
+    _nsAskMode = opts.mode || 'confirm';
+    var t = document.getElementById('nsAskTitle');
+    if (t) t.textContent = opts.titulo || (_nsAskMode === 'prompt' ? 'Escribí' : 'Confirmar');
+    var body = document.getElementById('nsAskBody');
+    if (body) body.innerHTML = opts.cuerpoHtml || (opts.cuerpo ? esc(opts.cuerpo).replace(/\n/g, '<br>') : '');
+    var wrap = document.getElementById('nsAskInputWrap');
+    var inp = document.getElementById('nsAskInput');
+    if (_nsAskMode === 'prompt'){
+      if (wrap) wrap.style.display = '';
+      var lbl = document.getElementById('nsAskInputLabel'); if (lbl) lbl.textContent = opts.inputLabel || '';
+      if (inp){ inp.placeholder = opts.placeholder || ''; inp.value = opts.valor || ''; }
+    } else if (wrap){ wrap.style.display = 'none'; }
+    var okB = document.getElementById('nsAskOkBtn');
+    if (okB){
+      okB.textContent = opts.okLabel || (_nsAskMode === 'prompt' ? 'Guardar' : 'Confirmar');
+      okB.className = 'btn ' + (opts.peligro ? 'btn-danger' : 'btn-primary');
+    }
+    var cB = document.getElementById('nsAskCancelBtn');
+    if (cB){
+      if (opts.cancelLabel === ''){ cB.style.display = 'none'; }
+      else { cB.style.display = ''; cB.textContent = opts.cancelLabel || 'Cancelar'; }
+    }
+    showModal('nsAskModal', 'nsAskScrim');
+    setTimeout(function(){ try { (_nsAskMode === 'prompt' && inp ? inp : okB).focus(); } catch(e){} }, 30);
+  });
+}
+function nsAskCancel(){
+  hideModal('nsAskModal', 'nsAskScrim');
+  if (_nsAskResolve){ var r = _nsAskResolve; _nsAskResolve = null; r(_nsAskMode === 'prompt' ? null : false); }
+}
+function nsAskOk(){
+  var val = _nsAskMode === 'prompt' ? ((document.getElementById('nsAskInput')||{}).value || '').trim() : true;
+  hideModal('nsAskModal', 'nsAskScrim');
+  if (_nsAskResolve){ var r = _nsAskResolve; _nsAskResolve = null; r(val); }
+}
+// nsConfirm(cuerpo, opts) -> Promise<bool>; nsPrompt(label, opts) -> Promise<string|null>
+function nsConfirm(cuerpo, opts){ return _nsAskOpen(Object.assign({ mode:'confirm', cuerpo:cuerpo }, opts || {})); }
+function nsPrompt(inputLabel, opts){ return _nsAskOpen(Object.assign({ mode:'prompt', inputLabel:inputLabel }, opts || {})); }
+
 async function toggleReclamar(id, esta){
   var nota = '';
   if (!esta){
-    nota = prompt('Reclamar al centro — ¿qué reclamaste? (queda anotado)\n\nEj: reclamado a Caballito para que confirmen el paciente', '');
+    nota = await nsPrompt('¿Qué reclamaste? (queda anotado)', {
+      titulo: 'Reclamar al centro',
+      cuerpo: 'Anotá qué reclamaste para que quede registrado.',
+      placeholder: 'Ej: reclamado a Caballito para que confirmen el paciente',
+      okLabel: 'Reclamar' });
     if (nota === null) return;   // canceló
   } else {
-    if (!confirm('¿Soltar este informe? Vuelve a la lista de revisar.')) return;
+    if (!await nsConfirm('Vuelve a la lista de revisar.', { titulo:'Soltar informe', okLabel:'Soltar' })) return;
   }
   var slug = document.getElementById('cabCliente').value;
   var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/reclamar', esta ? { reclamar: false } : { nota: nota });
