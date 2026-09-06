@@ -236,7 +236,7 @@ async function descargarCredencial(){
   }
 }
 // ===== Lote de credenciales (planilla de Google) — por cliente Médico de cabecera =====
-// Clientes con módulo de credenciales; la tarjeta aparece en su Dashboard general.
+// Clientes con módulo de credenciales; la tarjeta aparece en Configuración.
 var CRED_CLIENTES = ['scheffelaar-mc', 'dubesarky-ezequiel'];
 // Planilla de Google de cada cliente (para el botón "Ir a la planilla").
 var CRED_PLANILLA = {
@@ -2404,6 +2404,7 @@ function renderClientList(){
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
+  if (ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera' && CLIENT_SECTION === 'general') CLIENT_SECTION = 'mescurso';
   // NO forzamos la solapa: se mantiene la última usada (CLIENT_SECTION). Si venís
   // por un link con solapa, selectClientWhenReady la aplica después.
   setDashSection('resumen');
@@ -2450,11 +2451,12 @@ function clientSeccionesPermitidas(){
   // heredar la lista del admin. De un consultorio normal sigue viendo SOLO
   // la información básica: nada de dashboards, adjuntar reporte, honorarios
   // ni usuarios médicos.
-  if (esOperador) return esMC ? ['mescurso', 'general', 'basica'] : ['basica'];
+  if (esOperador) return esMC ? ['mescurso', 'basica', 'general'] : ['basica'];
   if (esMC) {
-    var seccionesMC = ['mescurso', 'general', 'basica'];
+    var seccionesMC = ['mescurso', 'basica'];
     // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
     if (ACTIVE_CLIENT.slug === 'scheffelaar-mc') seccionesMC.push('osdop');
+    seccionesMC.push('general');
     return seccionesMC;
   }
   var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
@@ -2470,6 +2472,11 @@ function clientSeccionesPermitidas(){
 // Muestra/oculta las pestañas según el tipo de cliente.
 function aplicarPestanasCliente(){
   var permitidas = clientSeccionesPermitidas();
+  var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
+  var tabMes = document.getElementById('clientTabMescurso');
+  if (tabMes) tabMes.textContent = esMC ? 'Dashboard' : 'Dashboard mes en curso';
+  var tabGeneral = document.getElementById('clientTabGeneral');
+  if (tabGeneral) tabGeneral.textContent = esMC ? 'Configuración' : 'Dashboard general';
   CLIENT_SECTIONS.forEach(function(s){
     var tab = document.getElementById(s.tab);
     if (tab) tab.style.display = permitidas.indexOf(s.key) >= 0 ? '' : 'none';
@@ -2490,7 +2497,7 @@ function setClientSection(section){
     if (tab) tab.classList.toggle('active', s.key === CLIENT_SECTION);
   });
   var crumb = document.getElementById('clientCrumbSection');
-  if (crumb) crumb.textContent = found.crumb;
+  if (crumb) crumb.textContent = clientSectionCrumb(found);
   // El hash guarda cliente + sub-solapa, así F5 restaura la solapa exacta.
   if (ACTIVE_CLIENT) pushHash('clientes/' + ACTIVE_CLIENT.slug + '/' + CLIENT_SECTION);
   // La bandeja (puede ser grande) se carga recién al abrir su solapa, no en cada
@@ -2506,6 +2513,13 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'osdop') renderOsdop();
   if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
   if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentro();
+}
+function clientSectionCrumb(found){
+  if (ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera') {
+    if (found.key === 'mescurso') return 'Dashboard';
+    if (found.key === 'general') return 'Configuración';
+  }
+  return found.crumb;
 }
 // Pendientes del centro (operador_clinica): mismos 3 números que ve Javi de
 // este cliente en su Inicio ("Pendientes de Javi"), sin plata ni detalle de
@@ -2645,7 +2659,7 @@ function osdopExportarPDF(){
   }
   window.print();
 }
-// El lote de credenciales es exclusivo de Scheffelaar: en el "Dashboard general"
+// El lote de credenciales es exclusivo de Scheffelaar: en "Configuración"
 // se muestra solo para ese cliente; el resto ve el placeholder.
 function renderClientGeneral(){
   var card = document.getElementById('credLoteCard'), ph = document.getElementById('generalPlaceholder');
