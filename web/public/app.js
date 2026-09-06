@@ -9285,7 +9285,7 @@ var CAB_ESTADOS = {
 };
 function renderCabinaResumen(resumen, total){
   var res = document.getElementById('cabResumen'); if (!res) return;
-  var orden = ['ok','falta_validar','factura','revisar_practica','revisar_nombre','sin_ome','reclamado','ya_transmitido','desestimado','sin_match'];
+  var orden = ['ok','falta_validar','factura','revisar_practica','revisar_nombre','sin_ome','no_es_pami','sin_match','reclamado','ya_transmitido','desestimado'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
     var on = !cabEstadoOculto(k);   // tildado = se muestra
