@@ -5189,6 +5189,12 @@ class PamiDocumentacionController:
         rango = _rango_mes_desde_turno(turno) or self.rango_turno_fallback
         if rango:
             self._log(f"Filtro de turno ajustado para buscar OME {nro_orden}: {rango[0]} a {rango[1]}")
+        # Para la búsqueda por Nro. de Orden (OME exacta) usamos un rango AMPLIO, no el del
+        # turno: el número es único y así la OME aparece aunque su turno haya caído en otro
+        # mes (caso DI CARLO: turno 24/08 no encontrado con el default del panel). Dejar el
+        # filtro por defecto era muy angosto y la excluía.
+        _hoy = datetime.now()
+        rango_amplio = ((_hoy - timedelta(days=200)).strftime("%d/%m/%Y"), (_hoy + timedelta(days=45)).strftime("%d/%m/%Y"))
         if modo != "orden":
             self._log(f"Buscando OME para cargar documento por {modo}: {valor}")
 
@@ -5295,7 +5301,8 @@ class PamiDocumentacionController:
                             # turno: el número es único y el filtro de mes puede excluir la OME si
                             # el turno cayó en otro mes (le pasó a DI CARLO: turno 24/08 buscado
                             # con rango de julio → "no se encontró la OME" aunque estaba).
-                            "rango": {"desde": rango[0], "hasta": rango[1]} if (rango and search_modo != "orden") else None,
+                            "rango": ({"desde": rango_amplio[0], "hasta": rango_amplio[1]} if search_modo == "orden"
+                                      else ({"desde": rango[0], "hasta": rango[1]} if rango else None)),
                             "modo": search_modo,
                             "valor": search_valor,
                         },
