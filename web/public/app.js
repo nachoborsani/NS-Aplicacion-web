@@ -3814,6 +3814,11 @@ function accionCrearInforme(panelId){
       return '<span class="mc-desest" style="color:var(--text-2);font-weight:600;font-size:12px;white-space:nowrap" title="Desestimado: no se le genera informe. El monto sigue contando como plata perdida.">🚫 Desestimado</span>'
         + ' <button class="btn btn-ghost mc-crear" type="button" title="Reactivar (volver a ofrecer crear)" onclick="reactivarFaltante(\'' + panelId + '\',' + idx + ',this)">↩️</button>';
     }
+    // Ya se generó/subió un informe para esta OME (aunque la bandeja no lo refleje):
+    // no se ofrece crear/subir de nuevo. Persiste tras F5 (viene de omes-generadas).
+    if (omeDig && MESCURSO_OMES_GEN[omeDig]) {
+      return '<span class="mc-generado" style="color:#16a34a;font-weight:600;font-size:12px;white-space:nowrap" title="Ya se generó un informe para esta OME (subiéndose o subido). Cuando la bandeja se refresque, sale de la lista.">✅ Generado</span>';
+    }
     var puedeCrear = !!modeloParaPracticaRow(x.practica);
     var btn = '';
     if (puedeCrear) {
