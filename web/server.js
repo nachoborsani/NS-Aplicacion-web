@@ -679,6 +679,50 @@ async function mailAutoTick() {
   }
 }
 setInterval(() => { mailAutoTick().catch(() => {}); }, 60 * 1000); // chequea cada minuto
+// ===== Resumen diario de subidas a PAMI por Telegram (1 aviso a las 19:00) =====
+// Antes se avisaba por cada subida (spam). Ahora se acumula durante el día y se
+// manda un solo resumen a las 19:00 hs (AR).
+const telegramSubidasFile = path.join(dataDir, "telegram_subidas_dia.json");
+function loadTelegramSubidas() {
+  try { const o = JSON.parse(fs.readFileSync(telegramSubidasFile, "utf8")); return (o && typeof o === "object") ? o : {}; } catch { return {}; }
+}
+function saveTelegramSubidas(o) { try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramSubidasFile, JSON.stringify(o)); } catch {} }
+function acumularSubidaTelegram(task, ok) {
+  try {
+    const { fecha } = ahoraAR();
+    let acc = loadTelegramSubidas();
+    if (acc.fecha !== fecha) acc = { fecha, subidos: 0, total: 0, conProblema: 0, porCliente: {}, problemas: [], enviado: false };
+    const r = task.result || {};
+    const det = Array.isArray(r.detalle) ? r.detalle : [];
+    const cli = task.clientSlug || "—";
+    const subidos = ok ? (r.subidos != null ? r.subidos : det.filter((d) => d && ["transmitido", "ya_transmitido"].includes(d.estado)).length) : 0;
+    const total = r.total || det.length || 0;
+    const fallas = det.filter((d) => d && d.estado && !["transmitido", "ya_transmitido"].includes(d.estado));
+    const problema = ok ? fallas.length : total;
+    acc.subidos += subidos; acc.total += total; acc.conProblema += problema;
+    if (!acc.porCliente[cli]) acc.porCliente[cli] = { subidos: 0, problema: 0 };
+    acc.porCliente[cli].subidos += subidos; acc.porCliente[cli].problema += problema;
+    if (!ok) { if (acc.problemas.length < 40) acc.problemas.push(cli + ": la tarea falló (" + (task.error || "error") + ")"); }
+    else fallas.forEach((d) => { if (acc.problemas.length < 40) acc.problemas.push(cli + " · OME " + (d.ome || "?") + ": " + (d.motivo || d.estado)); });
+    saveTelegramSubidas(acc);
+  } catch { /* acumular nunca puede tumbar el /complete */ }
+}
+async function telegramResumenTick() {
+  try {
+    const { fecha, hhmm } = ahoraAR();
+    if (hhmm < "19:00") return;
+    const acc = loadTelegramSubidas();
+    if (!acc || acc.fecha !== fecha || acc.enviado) return; // sin actividad hoy o ya enviado
+    acc.enviado = true; saveTelegramSubidas(acc); // marcar antes de enviar (evita doble envío)
+    if (!acc.total && !acc.conProblema) return;
+    let txt = "📤 <b>Subidas a PAMI de hoy</b>\n✅ " + acc.subidos + " subido(s)" + (acc.conProblema ? " · ⚠️ " + acc.conProblema + " con problema" : "") + ".";
+    const clis = Object.keys(acc.porCliente).filter((c) => acc.porCliente[c].subidos || acc.porCliente[c].problema);
+    if (clis.length > 1) clis.forEach((c) => { txt += "\n• " + c + ": " + acc.porCliente[c].subidos + " ok" + (acc.porCliente[c].problema ? " · " + acc.porCliente[c].problema + " problema" : ""); });
+    if (acc.problemas.length) { txt += "\n\nProblemas:"; acc.problemas.slice(0, 12).forEach((p) => { txt += "\n• " + p; }); if (acc.problemas.length > 12) txt += "\n…y " + (acc.problemas.length - 12) + " más."; }
+    await avisarTelegram(txt.slice(0, 3500)).catch(() => {});
+  } catch { /* nada */ }
+}
+setInterval(() => { telegramResumenTick().catch(() => {}); }, 60 * 1000);
 // Conjunto de N° de OME TRANSMITIDAS de un cliente (bandeja del mes + reporte del mes
 // anterior, igual que el matcher). Sirve para saber, con la bandeja COMPLETA, si las
 // OMEs a las que se resolvió un informe ya están transmitidas.
@@ -5165,27 +5209,10 @@ const server = http.createServer(async (req, res) => {
     task.result = body && body.result && typeof body.result === "object" ? body.result : null;
     appendWorkerTaskLog(task, ok ? "info" : "error", ok ? "Tarea finalizada." : task.error);
     saveWorkerState(state);
-    // Aviso por Telegram cuando termina una subida de informes a PAMI (así no hay
-    // que ir a mirar). Resume subidos/total y los que fallaron con el motivo.
+    // No se avisa por Telegram en cada subida (spameaba): se ACUMULA y se manda un
+    // solo resumen a las 19:00 hs (ver telegramResumenTick).
     if (task.type === "subir-informes") {
-      try {
-        const r = task.result || {};
-        const det = Array.isArray(r.detalle) ? r.detalle : [];
-        const fallas = det.filter((d) => d && d.estado && !["transmitido", "ya_transmitido"].includes(d.estado));
-        const cli = task.clientSlug || "";
-        let txt = "📤 <b>Subida a PAMI</b>" + (cli ? " · " + cli : "") + "\n";
-        if (!ok) {
-          txt += "❌ La tarea falló: " + (task.error || "error") + ".";
-        } else {
-          txt += "✅ Subidos " + (r.subidos || 0) + " de " + (r.total || det.length || 0) + ".";
-          if (fallas.length) {
-            txt += "\n⚠️ " + fallas.length + " con problema:";
-            fallas.slice(0, 8).forEach((d) => { txt += "\n• OME " + (d.ome || "?") + ": " + (d.motivo || d.estado); });
-            if (fallas.length > 8) txt += "\n…y " + (fallas.length - 8) + " más.";
-          }
-        }
-        avisarTelegram(txt).catch(() => {});
-      } catch { /* un aviso que falla no puede tumbar el complete */ }
+      acumularSubidaTelegram(task, ok);
     }
     // Marcar como transmitidos los informes subidos OK: salen de "Listo para subir"
     // al instante (sin esperar el refresco de la bandeja) y no se re-suben. El worker
