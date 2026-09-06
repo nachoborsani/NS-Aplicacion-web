@@ -5270,7 +5270,10 @@ class PamiDocumentacionController:
                           select.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                       }
-                      const inputs = Array.from(document.querySelectorAll('input[type="text"], input:not([type])')).filter(visible);
+                      // IMPORTANTE: incluir type="number" — el campo "Nro. de Orden" de PAMI es
+                      // <input type="number" name="n_orden">. Sin esto quedaba fuera de la lista y
+                      // el número de OME terminaba en el campo Afiliado (bug de DI CARLO).
+                      const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="number"], input:not([type])')).filter(visible);
                       let input = null;
                       if (modo === 'orden') {
                         input = inputs.find((el) => /orden|nro|numero/i.test(`${el.name || ''} ${el.id || ''} ${el.placeholder || ''}`));
