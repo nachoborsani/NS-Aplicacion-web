@@ -1862,6 +1862,10 @@
   .cab-estado.is-error{background:rgba(220,38,38,.1);color:#dc2626;border:1px solid rgba(220,38,38,.35)}
   @keyframes cabspin{to{transform:rotate(360deg)}}
   @media(prefers-reduced-motion:reduce){.cab-estado.is-working::before{animation:none}}
+  /* N° de OME: clic para copiar (y seleccionable). */
+  .cab-ome{cursor:pointer;font-weight:700;user-select:all;border-bottom:1px dashed transparent;transition:color .12s}
+  .cab-ome:hover{color:var(--turq-d,#0c7a7a);border-bottom-color:currentColor}
+  .cab-ome.copiado{color:#16a34a;font-weight:800;border-bottom-color:transparent}
   .cab-badge.ok{background:color-mix(in srgb,#12b3a6 18%,var(--surface));color:#0a7d73}
   .cab-badge.warn{background:color-mix(in srgb,#e8a13a 20%,var(--surface));color:#a15c00}
   .cab-badge.bad{background:color-mix(in srgb,var(--error) 15%,var(--surface));color:var(--error)}

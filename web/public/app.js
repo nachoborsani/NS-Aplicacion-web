@@ -8062,6 +8062,17 @@ function seguirTarea(id, tipo){
   }, 3000);
 }
 function cerrarResultadoTarea(){ hideModal('taskResModal','taskResScrim'); }
+// Copiar el N° de OME al portapapeles con un clic (sin abrir el informe).
+function cabCopiarFallback(txt){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); ta.remove(); }catch(e){} }
+function cabCopiarOme(el, ome){
+  var txt=String(ome||'').trim();
+  var restore=el.textContent;
+  var ok=function(){ el.textContent='✓ copiado'; el.classList.add('copiado'); setTimeout(function(){ el.textContent=restore; el.classList.remove('copiado'); }, 1200); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok, function(){ cabCopiarFallback(txt); ok(); }); }
+    else { cabCopiarFallback(txt); ok(); }
+  }catch(e){ cabCopiarFallback(txt); ok(); }
+}
 // Estado de la tarea (subiendo/auditando) como chip visible y en castellano llano
 // — nada de nombres de server ni logs internos. tipo: 'working' | 'error' | ''.
 function cabEstado(texto, tipo){
@@ -8514,7 +8525,7 @@ function renderCabinaRows(slug, items){
       + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
       + '<td>'+cabBadge(it)+'</td>'
-      + '<td>'+(ome?('<b>'+esc(ome)+'</b>'):'—')+'</td>'
+      + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
         + ((cabEstadoDe(it)==='ok'||cabEstadoDe(it)==='resuelto') ? '<button class="rowbtn" title="Subir este a PAMI" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
