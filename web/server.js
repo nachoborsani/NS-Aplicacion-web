@@ -8404,7 +8404,10 @@ const server = http.createServer(async (req, res) => {
           if (d.practica) it.extract.practica = d.practica;
           it.extract.esFactura = !!d.esFactura;
           if (d.fecha) it.extract.fecha = d.fecha;   // fecha del estudio (desempate por fecha)
-          if (!it.extract.nombre && d.nombre) it.extract.nombre = d.nombre;
+          // El nombre se toma de la re-lectura (el lector mejoró: "Paciente: Rojas, M.",
+          // prefijos de fecha en el archivo, etc.). Antes solo se completaba si estaba
+          // vacío, y un nombre mal leído ("23JUL") quedaba pegado para siempre.
+          if (d.nombre) it.extract.nombre = d.nombre;
         } else {
           const fuente = (it.filename || "") + " " + (it.extract.practica || "") + " " + (it.extract.practicas || []).join(" ");
           it.extract.practicas = informeExtract.practicasDe(fuente);

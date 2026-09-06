@@ -194,6 +194,9 @@ function extraerDatos(texto, filename) {
   if (m) nombre = m[1];
   // espirometría en texto: "Apellidos Ramundo Nombre Daniel"
   if (!nombre) { m = t.match(/Apellidos?\s+([A-Za-zÁÉÍÓÚÑñ]+)\s+Nombre\s+([A-Za-zÁÉÍÓÚÑñ]+)/i); if (m) nombre = m[1] + " " + m[2]; }
+  // Urodinamia/ECUD: "Paciente: Rojas, M." — el nombre viene como Apellido, Inicial.
+  // (no como el "NOMBRE: X EDAD" de cardio). Se toma apellido + inicial.
+  if (!nombre) { m = t.match(/Paciente\s*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑñ ]+?)\s*,\s*([A-ZÁÉÍÓÚÑ])\.?(?=\s|\||$)/); if (m) nombre = m[1] + " " + m[2]; }
   // "Paciente: X" / "Nombre: X" acotado (se corta antes de Edad/Sexo/Fecha/Documento)
   if (!nombre) { m = t.match(/(?:Paciente|Nombre)\s*:\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑñ, ]{3,}?)(?=\s{2,}|\s*\||\s+(?:Edad|Sexo|Fecha|Documento|Tipo|N[°º]|DNI)|\s*$)/im); if (m) nombre = m[1]; }
   if (/^(NOMBRE|FECHA|PACIENTE|EDAD|SEXO|DOCUMENTO|HOMBRE|MUJER|MASCULINO|FEMENINO|VAR[OÓ]N)\b/i.test(nombre.trim())) nombre = "";
@@ -205,7 +208,8 @@ function extraerDatos(texto, filename) {
       base = `${sp[1]} ${sp[2]}`;
     } else {
       base = base
-        .replace(/^\d+[_\-\s]+/, "")   // prefijo numérico (ej. "04JUN_01_")
+        .replace(/^\d{1,2}[A-Za-z]{3,4}[_\-\s]+/, "")  // prefijo de fecha "23JUL_" (día+mes)
+        .replace(/^\d+[_\-\s]+/, "")   // prefijo numérico (ej. "04JUN_01_" -> "01_")
         .replace(/[_]+/g, " ")          // guiones bajos -> espacios (nombre en varias partes)
         .replace(/\s*-\s*.*$/, "")      // corta en " - <estudio>" (ej. "RODRIGUEZ LUIS - MAPA")
         // corta cuando arranca el tipo de estudio o una fecha/número (ej. "... HOLTER 10 08 2025")
