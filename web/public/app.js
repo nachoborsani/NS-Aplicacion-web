@@ -4403,11 +4403,12 @@ function mesCursoLabelPeriodo(period){
 // Botón "Actualizar" reutilizable (mes en curso y mes sin cerrar). Un solo pedido
 // de refresco baja TODAS las bandejas (mira 2 meses atrás), así que sirve para las
 // dos cards. Sin id: pedirRefrescoBandejas usa el botón clickeado, no getElementById.
-function mesCursoBotonRefresco(){
+function mesCursoBotonRefresco(label){
   if (!(ME && (ME.role === 'admin' || ME.role === 'operador'))) return '';
+  var texto = label || 'Actualizar';
   return REFRESCO_ACTIVO
     ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
-    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" title="Actualizar" style="margin-left:8px">🔄 Actualizar</button>';
+    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" title="Actualizar bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
 }
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 function mesCursoCardMesEnCurso(r, estado){
@@ -4688,7 +4689,7 @@ async function loadMedCabMesCurso(){
     return String(b.month || '').localeCompare(String(a.month || ''));
   });
   if (!historial.length) {
-    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">Dashboard médico de cabecera</span>' + mesCursoBotonRefresco() + '</div>'
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">Dashboard médico de cabecera</span>' + mesCursoBotonRefresco('Actualizar bandeja') + '</div>'
       + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan transmitir.</span></div></div>';
     if (REFRESCO_ACTIVO) arrancarPollRefresco();
     return;
@@ -4703,7 +4704,7 @@ async function loadMedCabMesCurso(){
     + '<div><b>' + esc(numberFmt(totalValidar)) + '</b><span>faltan validar</span></div>'
     + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan transmitir</span></div>'
     + '<div><b>' + esc(numberFmt(totalListas)) + '</b><span>transmitidas</span></div>'
-    + mesCursoBotonRefresco()
+    + mesCursoBotonRefresco('Actualizar bandeja')
     + '</div></div>'
     + '<div class="mescurso-cards medcab-grid">' + cards + '</div>'
     + '<div class="medcab-columns">'
@@ -8926,7 +8927,7 @@ function renderCabinaRows(slug, items){
       + '<td class="cab-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
-        + ((cabEstadoDe(it)==='ok'||cabEstadoDe(it)==='resuelto') ? '<button class="rowbtn" title="Subir este a PAMI" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
+        + (['ok','resuelto','falta_validar'].indexOf(cabEstadoDe(it))>=0 ? '<button class="rowbtn" title="Subir este a PAMI (si ya validaste la OME)" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
         + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
         + '<button class="rowbtn" title="'+(it.reclamado?'Soltar (volvió del centro)':'Reclamar al centro')+'" onclick="toggleReclamar(\''+esc(it.id)+'\','+(it.reclamado?'true':'false')+')">'+(it.reclamado?'↩️':'📮')+'</button>'
         + '<button class="rowbtn" title="'+(it.desestimado?'Reactivar':'Desestimar (no subir)')+'" onclick="toggleDesestimar(\''+esc(it.id)+'\','+(it.desestimado?'true':'false')+')">'+(it.desestimado?'↩️':'🚫')+'</button>'
@@ -8963,7 +8964,7 @@ async function cabSubirSeleccionados(){
   checks.forEach(function(c){
     var it = (CAB_ITEMS||[]).find(function(x){ return x.id===c.value; });
     var e = it ? cabEstadoDe(it) : '';
-    if (e==='ok' || e==='resuelto') ids.push(c.value); else noListos++;
+    if (e==='ok' || e==='resuelto' || e==='falta_validar') ids.push(c.value); else noListos++;
   });
   if (!ids.length){ await nsConfirm('Ninguno de los seleccionados está "Listo para subir".', { titulo:'No hay nada para subir', okLabel:'Entendido', cancelLabel:'' }); return; }
   var extra = noListos ? (' (' + noListos + ' seleccionado(s) no están listos y se omiten.)') : '';
