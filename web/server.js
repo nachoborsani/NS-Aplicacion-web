@@ -601,6 +601,84 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
            storedAt: new Date().toISOString(), fecha: fecha || "", asunto: asunto || "", extract, match, resuelto: null, error };
 }
+// Baja los adjuntos del mail en [desde, hasta) (YYYY/MM/DD, before exclusivo) para un
+// cliente: deduplica por hash/nombre, guarda y matchea. Reusado por el endpoint
+// /informes/gmail y por la bajada automática diaria. Devuelve { procesados, hayMas, nuevos }.
+async function traerDelMailInterno(slug, token, desde, hasta) {
+  const TOPE = 40;
+  const store = loadInformes();
+  if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
+  const items = store[slug].items || [];
+  let completados = 0;
+  for (const it of items) {
+    if (it.hash || !it.stored) continue;
+    try {
+      const buf = fs.readFileSync(path.join(informesDir, slug, it.stored));
+      it.hash = crypto.createHash("sha256").update(buf).digest("hex");
+      it.tam = buf.length;
+      completados++;
+    } catch { /* el archivo ya no está: se queda sin hash */ }
+  }
+  if (completados) saveInformes(store);
+  const porHash = new Set(items.map((x) => x.hash).filter(Boolean));
+  const porNombre = new Set(items.map((x) => x.filename + "|" + (x.tam || 0)));
+  const soloNombre = new Set(items.filter((x) => !x.hash).map((x) => x.filename));
+  let bajados = await gmailInformes.descargarAdjuntos(token, desde, hasta, {
+    yaPorNombre: (fn, tam) => porNombre.has(fn + "|" + tam) || soloNombre.has(fn),
+    yaPorHash: (h) => porHash.has(h),
+  });
+  const hayMas = bajados.length > TOPE;
+  bajados = bajados.slice(0, TOPE);
+  const destDir = path.join(informesDir, slug);
+  fs.mkdirSync(destDir, { recursive: true });
+  const nuevos = [];
+  for (const f of bajados) {
+    const ext = path.extname(f.filename).toLowerCase();
+    const id = crypto.randomBytes(8).toString("hex");
+    const stored = id + ext;
+    fs.writeFileSync(path.join(destDir, stored), f.buffer);
+    const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto);
+    rec.hash = f.hash || "";
+    rec.tam = f.buffer.length;
+    store[slug].items.unshift(rec);
+    nuevos.push(rec);
+  }
+  store[slug].updatedAt = new Date().toISOString();
+  store[slug].lastMailImportAt = new Date().toISOString();
+  saveInformes(store);
+  return { procesados: nuevos.length, hayMas, nuevos };
+}
+// ===== Bajada automática del mail: 10/14/16/18 hs (AR), diaria =====
+const MAIL_AUTO_HORAS = ["10:00", "14:00", "16:00", "18:00"];
+const MAIL_AUTO_CLIENTES = ["caballito-pediatrico"]; // clientes que usan la casilla de informes
+const mailAutoEstadoFile = path.join(dataDir, "mail_auto_estado.json");
+let _mailAutoUltimo = {}; // { "slug|HH:MM": "YYYY-MM-DD" }
+try { _mailAutoUltimo = JSON.parse(fs.readFileSync(mailAutoEstadoFile, "utf8")) || {}; } catch { _mailAutoUltimo = {}; }
+let _mailAutoCorriendo = false;
+async function mailAutoTick() {
+  if (_mailAutoCorriendo || !gmailInformes || !informeExtract) return;
+  let token; try { token = gmailInformes.cargarToken(dataDir); } catch { token = null; }
+  if (!token) return;
+  const { fecha, hhmm } = ahoraAR();
+  const fmt = (d) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  const desde = fmt(new Date(Date.now() - 4 * 24 * 3600 * 1000)); // últimos ~4 días
+  const hasta = fmt(new Date(Date.now() + 24 * 3600 * 1000));     // before exclusivo → incluye hoy
+  for (const hora of MAIL_AUTO_HORAS) {
+    if (hhmm < hora) continue; // todavía no llegó este horario hoy
+    for (const slug of MAIL_AUTO_CLIENTES) {
+      const k = slug + "|" + hora;
+      if (_mailAutoUltimo[k] === fecha) continue; // ya corrió este slot hoy
+      _mailAutoUltimo[k] = fecha; try { fs.writeFileSync(mailAutoEstadoFile, JSON.stringify(_mailAutoUltimo)); } catch {}
+      _mailAutoCorriendo = true;
+      try {
+        const r = await traerDelMailInterno(slug, token, desde, hasta);
+        console.log(`[mail-auto] ${slug} ${hora}: ${r.procesados} nuevo(s)${r.hayMas ? " (hay más)" : ""}`);
+      } catch (e) { console.log(`[mail-auto] ${slug} ${hora} error:`, e && e.message); }
+      finally { _mailAutoCorriendo = false; }
+    }
+  }
+}
+setInterval(() => { mailAutoTick().catch(() => {}); }, 60 * 1000); // chequea cada minuto
 // Conjunto de N° de OME TRANSMITIDAS de un cliente (bandeja del mes + reporte del mes
 // anterior, igual que el matcher). Sirve para saber, con la bandeja COMPLETA, si las
 // OMEs a las que se resolvió un informe ya están transmitidas.
@@ -8338,59 +8416,9 @@ const server = http.createServer(async (req, res) => {
     const manana = new Date(hoy.getTime() + 24 * 3600 * 1000);
     const desde = /^\d{4}\/\d{2}\/\d{2}$/.test(body.desde || "") ? body.desde : fmt(hoy);
     const hasta = /^\d{4}\/\d{2}\/\d{2}$/.test(body.hasta || "") ? body.hasta : fmt(manana);
-    const TOPE = 40; // por corrida, para no pasar el timeout HTTP de Railway (60s)
     try {
-      const store = loadInformes();
-      if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
-      // Índices de lo que ya está, para no traerlo dos veces.
-      //
-      // El hash de los informes viejos no existe (se guardaban sin él),
-      // así que se calcula una sola vez leyendo el archivo del disco y
-      // queda anotado. Sin esto, el primer barrido después de este
-      // cambio no reconocería nada y bajaría todo de nuevo.
-      const items = store[slug].items || [];
-      let completados = 0;
-      for (const it of items) {
-        if (it.hash || !it.stored) continue;
-        try {
-          const buf = fs.readFileSync(path.join(informesDir, slug, it.stored));
-          it.hash = crypto.createHash("sha256").update(buf).digest("hex");
-          it.tam = buf.length;
-          completados++;
-        } catch { /* el archivo ya no está: se queda sin hash */ }
-      }
-      if (completados) saveInformes(store);
-      const porHash = new Set(items.map((x) => x.hash).filter(Boolean));
-      // Nombre+tamaño, para el corte barato. Los que quedaron sin hash
-      // (archivo borrado del disco) entran igual por nombre solo, que es
-      // el comportamiento de antes.
-      const porNombre = new Set(items.map((x) => x.filename + "|" + (x.tam || 0)));
-      const soloNombre = new Set(items.filter((x) => !x.hash).map((x) => x.filename));
-      let bajados = await gmailInformes.descargarAdjuntos(token, desde, hasta, {
-        yaPorNombre: (fn, tam) => porNombre.has(fn + "|" + tam) || soloNombre.has(fn),
-        yaPorHash: (h) => porHash.has(h),
-      });
-      const hayMas = bajados.length > TOPE;
-      bajados = bajados.slice(0, TOPE);
-      const destDir = path.join(informesDir, slug);
-      fs.mkdirSync(destDir, { recursive: true });
-      const nuevos = [];
-      for (const f of bajados) {
-        const ext = path.extname(f.filename).toLowerCase();
-        const id = crypto.randomBytes(8).toString("hex");
-        const stored = id + ext;
-        fs.writeFileSync(path.join(destDir, stored), f.buffer);
-        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto);
-        // Con qué se compara la próxima vez.
-        rec.hash = f.hash || "";
-        rec.tam = f.buffer.length;
-        store[slug].items.unshift(rec);
-        nuevos.push(rec);
-      }
-      store[slug].updatedAt = new Date().toISOString();
-      store[slug].lastMailImportAt = new Date().toISOString();  // cuándo se trajo del mail por última vez
-      saveInformes(store);
-      return json(res, 200, { procesados: nuevos.length, hayMas, desde, hasta, items: nuevos });
+      const { procesados, hayMas, nuevos } = await traerDelMailInterno(slug, token, desde, hasta);
+      return json(res, 200, { procesados, hayMas, desde, hasta, items: nuevos });
     } catch (error) {
       return json(res, 400, { error: (error && error.message) || "No se pudieron traer los informes del mail." });
     }
