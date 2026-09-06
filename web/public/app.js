@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', liberarcupo:'Liberar cupo', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', omeweb:'Generar OME', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', liberarcupo:'Liberar cupo', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
 // En Inicio, el título de la barra ES el saludo (no "Inicio", que es redundante).
 // Devuelve HTML: el "Buenas tardes, " va en un span que se esconde en celular
 // (queda solo "Ignacio 👋") para que no se parta en dos líneas al lado de los íconos.
@@ -106,6 +106,7 @@ function go(v, el){
   // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
   if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
+  if (v === 'omeweb' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
   // el backend le bloquea las acciones). El resto, afuera.
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
@@ -118,7 +119,7 @@ function go(v, el){
   // Configuración general: un operador con clientes restringidos no debe entrar
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','liberarcupo','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','omeweb','resumen','facturas','padron','cabina','liberarcupo','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   var _pt = document.getElementById('pageTitle');
   if (v === 'dash' && ME) _pt.innerHTML = saludoHTML(ME); else _pt.textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -132,6 +133,7 @@ function go(v, el){
   if (v === 'resumen') setResSection('resumen');  // Resumen · Ingresos · Gastos
   if (v === 'nomencladores') loadNomencladorSummary();
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
+  if (v === 'omeweb') loadOmeWebView();
   if (v === 'padron') loadPadronView();
   if (v === 'cabina') loadCabinaView();
   if (v === 'liberarcupo') loadLiberarCupoView();
@@ -367,7 +369,7 @@ async function credCorrerAhora(){
   var btn = document.getElementById('credCorrerBtn'); btn.disabled = true;
   var r = await req('POST', credBase() + '/correr-ahora', {});
   btn.disabled = false;
-  if (r.ok && r.data && r.data.ok === false){ alert(r.data.error || 'No se pudo iniciar.'); return; }
+  if (r.ok && r.data && r.data.ok === false){ nsAlert(r.data.error || 'No se pudo iniciar.'); return; }
   credSchedPoll();
 }
 function credSchedPoll(){
@@ -395,7 +397,7 @@ function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
   if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'liberarcupo', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'omeweb', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'liberarcupo', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -857,7 +859,7 @@ async function uploadFirmaMedico(id, fileInput){
   await loadInformesConfig();
 }
 async function deleteMedico(id){
-  if (!confirm('¿Eliminar este médico?')) return;
+  if (!await nsConfirm('Se elimina este médico.', { titulo:'Eliminar médico', okLabel:'Eliminar', peligro:true })) return;
   var r = await req('DELETE', '/api/informes/medicos/' + encodeURIComponent(id));
   if (r.ok) await loadInformesConfig();
 }
@@ -871,7 +873,7 @@ async function addDescripcion(){
   inp.value = ''; if (nomInp) nomInp.value = ''; await loadInformesConfig();
 }
 async function deleteDescripcion(id){
-  if (!confirm('¿Eliminar esta descripción?')) return;
+  if (!await nsConfirm('Se elimina esta descripción.', { titulo:'Eliminar descripción', okLabel:'Eliminar', peligro:true })) return;
   var r = await req('DELETE', '/api/informes/descripciones/' + encodeURIComponent(id));
   if (r.ok) await loadInformesConfig();
 }
@@ -1029,7 +1031,7 @@ function actividadOpArrancarPolling(){
 }
 async function abrirActividadModal(username){
   var res = await api('/api/admin/actividad/' + encodeURIComponent(username));
-  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo cargar la actividad.'); return; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo cargar la actividad.'); return; }
   var u = findUser(username);
   document.getElementById('actModalTitle').textContent = 'Actividad de ' + (u ? u.name : username);
   var dias = res.data.dias || [];
@@ -1248,7 +1250,7 @@ async function iniSend(textareaId, adjKey, feedId, previewId, quitarName){
   if (f) fd.append('archivo', f, f.name || 'archivo');
   var r = await fetch('/api/inicio/mensajes', { method:'POST', body: fd });
   var data = await r.json().catch(function(){ return {}; });
-  if (!r.ok){ alert((data && data.error) || 'No se pudo enviar el mensaje.'); return; }
+  if (!r.ok){ nsAlert((data && data.error) || 'No se pudo enviar el mensaje.'); return; }
   inp.value=''; inp.style.height=''; INICIO[adjKey]=null; iniRenderAdjunto(previewId, null, quitarName);
   INICIO.mensajes.push(data.mensaje);
   if (INICIO.noLeidos) INICIO.noLeidos[INICIO.canal] = 0;
@@ -1260,11 +1262,11 @@ function opEnviarMsg(){ iniSend('opMsg','adjuntoOp','opFeed','opAdjPreview','opQ
 // Adjuntos del composer (admin usa INICIO.adjunto; operador INICIO.adjuntoOp).
 function iniPickAdjunto(){ var i=document.getElementById('iniFileInput'); if(i) i.click(); }
 function iniOnFileInput(input){ if(input.files && input.files[0]){ iniSetAdjunto(input.files[0]); input.value=''; } }
-function iniSetAdjunto(f){ if(f.size>30*1024*1024){ alert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjunto=f; iniRenderAdjunto('iniAdjPreview', f, 'iniQuitarAdjunto'); }
+function iniSetAdjunto(f){ if(f.size>30*1024*1024){ nsAlert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjunto=f; iniRenderAdjunto('iniAdjPreview', f, 'iniQuitarAdjunto'); }
 function iniQuitarAdjunto(){ INICIO.adjunto=null; iniRenderAdjunto('iniAdjPreview', null, 'iniQuitarAdjunto'); }
 function opPickAdjunto(){ var i=document.getElementById('opFileInput'); if(i) i.click(); }
 function opOnFileInput(input){ if(input.files && input.files[0]){ opSetAdjunto(input.files[0]); input.value=''; } }
-function opSetAdjunto(f){ if(f.size>30*1024*1024){ alert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjuntoOp=f; iniRenderAdjunto('opAdjPreview', f, 'opQuitarAdjunto'); }
+function opSetAdjunto(f){ if(f.size>30*1024*1024){ nsAlert('El archivo es muy grande (máx 30 MB).'); return; } INICIO.adjuntoOp=f; iniRenderAdjunto('opAdjPreview', f, 'opQuitarAdjunto'); }
 function opQuitarAdjunto(){ INICIO.adjuntoOp=null; iniRenderAdjunto('opAdjPreview', null, 'opQuitarAdjunto'); }
 function iniRenderAdjunto(boxId, f, quitarName){
   var box = document.getElementById(boxId); if(!box) return;
@@ -1372,7 +1374,7 @@ async function iniAgregarTarea(){
   if (err) err.style.display='none';
   var vi = document.getElementById('iniTaskVence');
   var res = await api('/api/inicio/tareas', { titulo:v, para: INICIO.assign||[], vence: (vi&&vi.value)||'' });
-  if (!res.ok){ alert(res.data.error || 'No se pudo agregar la tarea.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo agregar la tarea.'); return; }
   inp.value=''; if(vi) vi.value=''; INICIO.assign=[]; iniRenderAssign();
   INICIO.tareas.unshift(res.data.tarea); iniRenderTareas();
 }
@@ -1381,22 +1383,22 @@ async function iniAgregarTarea(){
 function iniRenderTareasSegunRol(){ iniEsAdmin() ? iniRenderTareas() : opRenderTareas(); }
 async function iniSetVence(id, val){
   var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/vence', { vence: val||'' });
-  if (!res.ok){ alert(res.data.error || 'No se pudo guardar la fecha.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo guardar la fecha.'); return; }
   var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
   if(t) t.vence = res.data.tarea.vence;
   iniRenderTareasSegunRol();
 }
 async function iniToggleTarea(id){
   var res = await api('/api/inicio/tareas/'+encodeURIComponent(id)+'/toggle', {});
-  if (!res.ok){ alert(res.data.error || 'No se pudo actualizar la tarea.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo actualizar la tarea.'); return; }
   var t = (INICIO.tareas||[]).find(function(x){return x.id===id;});
   if(t){ t.hecha=res.data.tarea.hecha; t.hechaAt=res.data.tarea.hechaAt; }
   iniRenderTareasSegunRol();
 }
 async function iniBorrarTarea(id){
-  if (!confirm('¿Borrar esta tarea?')) return;
+  if (!await nsConfirm('Se borra esta tarea.', { titulo:'Borrar tarea', okLabel:'Borrar', peligro:true })) return;
   var res = await req('DELETE', '/api/inicio/tareas/'+encodeURIComponent(id));
-  if (!res.ok){ alert(res.data.error || 'No se pudo borrar la tarea.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo borrar la tarea.'); return; }
   INICIO.tareas = (INICIO.tareas||[]).filter(function(x){return x.id!==id;}); iniRenderTareas();
 }
 
@@ -1448,7 +1450,7 @@ async function opAgregarTarea(){
   var v = inp.value.trim(); if(!v) return;
   var vi = document.getElementById('opTaskVence');
   var res = await api('/api/inicio/tareas', { titulo:v, vence: (vi&&vi.value)||'' });
-  if (!res.ok){ alert(res.data.error || 'No se pudo agregar la tarea.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo agregar la tarea.'); return; }
   inp.value=''; if(vi) vi.value='';
   INICIO.tareas.unshift(res.data.tarea); opRenderTareas();
 }
@@ -2256,10 +2258,10 @@ function loteItemPayload(row){
 }
 async function loteDescargarFila(i){
   var row = LOTE_ROWS[i];
-  if (row && row.modelo && modeloRequiereSexo(row.modelo) && !row.sexo){ alert('Elegí el sexo de ' + (row.nombre || 'este paciente') + ' antes de generar.'); return; }
+  if (row && row.modelo && modeloRequiereSexo(row.modelo) && !row.sexo){ nsAlert('Elegí el sexo de ' + (row.nombre || 'este paciente') + ' antes de generar.'); return; }
   var payload = loteItemPayload(row); if (!payload) return;
   var r = await fetch('/api/informes/generar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-  if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar.'); return; }
+  if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} nsAlert((d && d.error) || 'No se pudo generar.'); return; }
   var blob = await r.blob(); var cd = r.headers.get('content-disposition') || ''; var m = cd.match(/filename="([^"]+)"/);
   bajarBlob(blob, m ? m[1] : 'informe.pdf');
 }
@@ -2269,7 +2271,7 @@ async function loteGenerarZip(){
   var faltanSexo = LOTE_ROWS.filter(function(r){ return r.modelo && modeloRequiereSexo(r.modelo) && !r.sexo; });
   var items = LOTE_ROWS.map(loteItemPayload).filter(Boolean);
   if (!items.length){ err.textContent = faltanSexo.length ? 'Elegí el sexo de los pacientes marcados antes de generar.' : 'No hay pacientes con plantilla para generar.'; return; }
-  if (faltanSexo.length && !confirm(faltanSexo.length + ' paciente(s) sin sexo elegido no se van a incluir. ¿Generar el resto igual?')) return;
+  if (faltanSexo.length && !await nsConfirm(faltanSexo.length + ' paciente(s) sin sexo elegido no se van a incluir. ¿Generar el resto igual?', { titulo:'Faltan datos', okLabel:'Generar el resto' })) return;
   var btn = document.getElementById('loteZipBtn'); btn.disabled = true; var t = btn.textContent; btn.textContent = 'Generando…';
   try {
     var r = await fetch('/api/informes/lote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: items }) });
@@ -2902,7 +2904,7 @@ async function honDescargar(fmt){
     a.download = d.titulo.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') + (fmt === 'pdf' ? '.pdf' : '.xlsx');
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
-  } catch (e){ alert('No se pudo generar el archivo.'); }
+  } catch (e){ nsAlert('No se pudo generar el archivo.'); }
 }
 var MEDICOS = [];
 async function loadClientMedicos(){
@@ -3013,7 +3015,7 @@ async function saveMinimo(){
   if (res.ok){ FACTURAS.minimo = res.data.minimoGanancias; renderFacturas(); }
 }
 async function agregarPeriodo(){
-  var nombre = prompt('Nombre del nuevo período (ej: JULIO, AGOSTO, etc.):');
+  var nombre = await nsPrompt('Nombre del nuevo período', { titulo:'Nuevo período', placeholder:'Ej: JULIO, AGOSTO…', okLabel:'Crear' });
   if (!nombre) return;
   nombre = nombre.trim(); if (!nombre) return;
   // Copia la estructura del período más nuevo (facturas con el mes +1, montos vacíos).
@@ -3028,7 +3030,7 @@ async function agregarPeriodo(){
 }
 async function renombrarPeriodo(pIdx){
   var viejo = FAC_RENDER[pIdx];
-  var nuevo = prompt('Nuevo nombre del período:', viejo);
+  var nuevo = await nsPrompt('Nuevo nombre del período', { titulo:'Renombrar período', valor: viejo, okLabel:'Guardar' });
   if (nuevo == null) return;
   nuevo = nuevo.trim(); if (!nuevo || nuevo === viejo) return;
   var res = await req('POST', '/api/facturas/periodo/renombrar', { viejo: viejo, nuevo: nuevo });
@@ -3189,7 +3191,7 @@ function toggleFacturaCli(k){
 }
 async function borrarPeriodo(pIdx){
   var periodo = FAC_RENDER[pIdx];
-  if (!confirm('¿Borrar el período “' + periodo + '” y todas sus facturas?')) return;
+  if (!await nsConfirm('Se borra el período “' + periodo + '” y todas sus facturas.', { titulo:'Borrar período', okLabel:'Borrar', peligro:true })) return;
   var res = await req('POST', '/api/facturas/periodo/borrar', { valor: periodo });
   if (res.ok){ FACTURAS.periodos = res.data.periodos || []; if (res.data.archivados) FACTURAS.archivados = res.data.archivados; FACTURAS.registros = res.data.registros || []; delete FAC_PER_OPEN[periodo]; renderFacturas(); }
 }
@@ -3317,7 +3319,7 @@ async function saveGasto(){
   closeGastoModal();
 }
 async function deleteGasto(id){
-  if (!confirm('¿Borrar este gasto fijo?')) return;
+  if (!await nsConfirm('Se borra este gasto fijo.', { titulo:'Borrar gasto', okLabel:'Borrar', peligro:true })) return;
   var res = await req('DELETE', '/api/gastos/' + encodeURIComponent(id));
   if (res.ok){ GASTOS.gastos = res.data.gastos || []; renderGastos(); }
 }
@@ -3330,9 +3332,9 @@ async function toggleGastoPagado(id, pagado){
 async function copiarGastosMesAnterior(){
   var periodo = gastosPeriodoActual(); if (!periodo){ return; }
   var res = await req('POST', '/api/gastos/copiar-pagos', { periodo: periodo });
-  if (!res.ok){ alert(res.error || 'No se pudo copiar.'); return; }
+  if (!res.ok){ nsAlert(res.error || 'No se pudo copiar.'); return; }
   GASTOS.pagos = res.data.pagos || GASTOS.pagos; renderGastos();
-  if (!res.data.copiados) alert('El mes anterior' + (res.data.prev ? ' (' + res.data.prev + ')' : '') + ' no tenía gastos pagados para copiar.');
+  if (!res.data.copiados) nsAlert('El mes anterior' + (res.data.prev ? ' (' + res.data.prev + ')' : '') + ' no tenía gastos pagados para copiar.');
 }
 
 // ===== Resumen de cuenta: sub-pestañas (Resumen · Ingresos · Gastos) =====
@@ -3423,7 +3425,7 @@ async function saveIngreso(){
   loadIngresosExtra();
 }
 async function deleteIngreso(id){
-  if (!confirm('¿Borrar este ingreso?')) return;
+  if (!await nsConfirm('Se borra este ingreso.', { titulo:'Borrar ingreso', okLabel:'Borrar', peligro:true })) return;
   var res = await req('DELETE', '/api/ingresos/' + encodeURIComponent(id));
   if (res.ok) loadIngresosExtra();
 }
@@ -3585,7 +3587,7 @@ async function saveMedico(){
 async function deleteMedico(id){
   if (!ACTIVE_CLIENT || !id) return;
   var m = MEDICOS.find(function(x){ return x.id === id; });
-  if (!confirm('¿Borrar a ' + ((m && m.nombre) || 'este médico') + '?')) return;
+  if (!await nsConfirm('Se borra a ' + ((m && m.nombre) || 'este médico') + '.', { titulo:'Borrar médico', okLabel:'Borrar', peligro:true })) return;
   var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id));
   if (!res.ok){ var err = document.getElementById('medicosError'); if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo borrar.'; } return; }
   MEDICOS = (res.data && res.data.medicos) || [];
@@ -3769,9 +3771,9 @@ function irALiberarCupoAusente(panelId, idx, btn){
 function payloadInformeDeFila(x, opts){
   opts = opts || {};
   var m = modeloParaPracticaRow(x.practica);
-  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return null; }
+  if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return null; }
   var medicoId = opts.medicoId || loteMedicoParaModelo(m.key);
-  if (!medicoId){ alert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
+  if (!medicoId){ nsAlert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
   var preset = (opts.presetId ? presets.find(function(d){ return d.id === opts.presetId; }) : null) || presets[0];
   var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
@@ -3826,7 +3828,7 @@ async function ejecutarCrearYSubir(payload, x, btn){
     var taskId = r.data && r.data.taskId;
     if (taskId && btn) seguirSubidaInforme(taskId, btn);
   } catch (e){
-    alert(e && e.message ? e.message : 'No se pudo crear/subir el informe.');
+    nsAlert(e && e.message ? e.message : 'No se pudo crear/subir el informe.');
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
 }
@@ -3861,7 +3863,7 @@ async function crearInformeDirecto(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
   if (!x) return;
   var m = modeloParaPracticaRow(x.practica);
-  if (!m){ alert('No hay un modelo cargado para esa práctica.'); return; }
+  if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return; }
   var op = opcionesModelo(m);
   if (op.haceFalta){ modalOpcionesInforme(x, m, op, false, btn); return; }
   var payload = payloadInformeDeFila(x);
@@ -3882,7 +3884,7 @@ async function ejecutarCrear(payload, x, btn){
     bajarBlob(blob, mm ? mm[1] : ('informe_' + String((x && x.nombre) || 'paciente').replace(/[^a-z0-9]+/gi, '_') + '.pdf'));
     if (btn){ btn.textContent = '✓ Listo'; btn.disabled = false; }
   } catch (e){
-    alert(e && e.message ? e.message : 'No se pudo generar el informe.');
+    nsAlert(e && e.message ? e.message : 'No se pudo generar el informe.');
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
 }
@@ -3940,7 +3942,7 @@ function modalOpcionesInforme(x, m, op, subir, btn){
   scrim.querySelector('#mc-inf-ok').onclick = function(){
     var presetSel = scrim.querySelector('#mc-inf-preset');
     var medicoId = scrim.querySelector('#mc-inf-medico').value;
-    if (!medicoId){ alert('Elegí el médico que firma.'); return; }
+    if (!medicoId){ nsAlert('Elegí el médico que firma.'); return; }
     var valores = {};
     var falta = null;
     op.camposReq.forEach(function(c){
@@ -3949,7 +3951,7 @@ function modalOpcionesInforme(x, m, op, subir, btn){
       if (!v) falta = c.label || c.key;
       valores[c.key] = v;
     });
-    if (falta){ alert('Completá: ' + falta); return; }
+    if (falta){ nsAlert('Completá: ' + falta); return; }
     var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
     if (!payload) return;
     delete payload._modelo;
@@ -4146,7 +4148,7 @@ async function mesCursoDescargar(fmt, panelId, btn){
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
   } catch (e){
-    alert('No se pudo generar el archivo.');
+    nsAlert('No se pudo generar el archivo.');
   } finally {
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
@@ -4317,7 +4319,7 @@ function arrancarPollRefresco(){
 async function pedirRefrescoBandejas(btn){
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
   var r = await req('POST', '/api/bandeja/refresco/pedir', {});
-  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } alert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
+  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar'; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
   REFRESCO_ACTIVO = true;
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Actualizando…'; btn.title = 'La PC lo está corriendo'; }
   arrancarPollRefresco();
@@ -4744,19 +4746,19 @@ async function loadClientNomenclador(){
 async function exportClientNomenclador(format){
   if (!ACTIVE_CLIENT) return;
   var period = document.getElementById('clientNomPeriod').value || NOM_ACTIVE_PERIOD || '';
-  if (!period){ alert('Primero elegí un nomenclador (período) para este cliente.'); return; }
+  if (!period){ nsAlert('Primero elegí un nomenclador (período) para este cliente.'); return; }
   var q = document.getElementById('clientNomQ').value.trim();
   var params = new URLSearchParams({ period: period, q: q, format: format });
   var btn = document.getElementById(format === 'pdf' ? 'clientNomPdfBtn' : 'clientNomXlsxBtn');
   if (btn) btn.disabled = true;
   try {
     var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/nomenclador/export?' + params.toString());
-    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar el archivo.'); return; }
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} nsAlert((d && d.error) || 'No se pudo generar el archivo.'); return; }
     var blob = await r.blob();
     var cd = r.headers.get('content-disposition') || '';
     var m = cd.match(/filename="([^"]+)"/);
     bajarBlob(blob, m ? m[1] : ('nomenclador.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
-  } catch (e){ alert('No se pudo generar el archivo.'); }
+  } catch (e){ nsAlert('No se pudo generar el archivo.'); }
   finally { if (btn) btn.disabled = false; }
 }
 function moduleNameFromOption(option){
@@ -4907,7 +4909,7 @@ async function uploadClientLogo(fileInput){
 }
 async function quitarClientLogo(){
   if (!ACTIVE_CLIENT || !ACTIVE_CLIENT.logo) return;
-  if (!confirm('¿Quitar el logo de este cliente?')) return;
+  if (!await nsConfirm('Se quita el logo de este cliente.', { titulo:'Quitar logo', okLabel:'Quitar', peligro:true })) return;
   var r = await req('DELETE', '/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/logo');
   if (!r.ok) return;
   ACTIVE_CLIENT = r.data.client || ACTIVE_CLIENT;
@@ -5162,16 +5164,16 @@ async function descargarComparativa(format){
   if (!ACTIVE_CLIENT) return;
   var period = (document.getElementById('clientDashPeriod') || {}).value || '';
   var compare = (document.getElementById('clientDashCompare') || {}).value || '';
-  if (!period || !compare){ alert('Elegí un mes y un mes para comparar antes de descargar.'); return; }
+  if (!period || !compare){ nsAlert('Elegí un mes y un mes para comparar antes de descargar.'); return; }
   var params = new URLSearchParams({ period: period, compare: compare, format: format });
   try {
     var r = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/dashboard/comparativa/export?' + params.toString());
-    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} alert((d && d.error) || 'No se pudo generar el archivo.'); return; }
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} nsAlert((d && d.error) || 'No se pudo generar el archivo.'); return; }
     var blob = await r.blob();
     var cd = r.headers.get('content-disposition') || '';
     var m = cd.match(/filename="([^"]+)"/);
     bajarBlob(blob, m ? m[1] : ('comparativa.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
-  } catch (e){ alert('No se pudo generar el archivo.'); }
+  } catch (e){ nsAlert('No se pudo generar el archivo.'); }
 }
 // Resumen ejecutivo en texto: qué facturó y por qué cambió (arriba de todo).
 function renderDashResumen(current, compare, deltas){
@@ -5657,7 +5659,7 @@ function closeDebitoReglasModal(){ hideModal('debitoReglasModal', 'debitoReglasS
 var COTEJO_OFICIAL = null;   // último detalle PAMI parseado (para el ajuste automático)
 var COTEJO_VER_TODOS = false; // mostrar también los módulos que cuadran (redondeo)
 function openCotejoModal(){
-  if (!(CLIENT_REPORT_ROWS || []).length){ alert('Abrí o armá un reporte primero.'); return; }
+  if (!(CLIENT_REPORT_ROWS || []).length){ nsAlert('Abrí o armá un reporte primero.'); return; }
   document.getElementById('cotejoError').textContent = '';
   COTEJO_VER_TODOS = false;
   showModal('cotejoModal', 'cotejoScrim');
@@ -6185,7 +6187,7 @@ async function assignPracticeValue(btn){
     moduleCode: rowEl.getAttribute('data-mc'), moduleDescription: rowEl.getAttribute('data-md')
   });
   btn.disabled = false;
-  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo guardar el valor.'); return; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo guardar el valor.'); return; }
   (CLIENT_REPORT_ROWS || []).forEach(function(r){
     if (String(r.practiceCode) === code && !r.matchFound && !r.valueEdited){
       // OJO: no tocar r.billable. Viene bien del parser (false para ausentes /
@@ -6388,12 +6390,12 @@ function setClientReportObservations(value){
   CLIENT_REPORT_OBSERVATIONS = value || '';
   saveClientReportDraft();
 }
-function editReportValue(index){
+async function editReportValue(index){
   if (CLIENT_REPORT_MODE === 'closed') return;
   var row = CLIENT_REPORT_ROWS[index];
   if (!row) return;
   var current = Number(row.valueGross || 0);
-  var entered = window.prompt('Nuevo valor bruto para esta práctica', current ? String(current).replace('.', ',') : '');
+  var entered = await nsPrompt('Nuevo valor bruto para esta práctica', { titulo:'Editar valor', valor: current ? String(current).replace('.', ',') : '', okLabel:'Guardar' });
   if (entered === null) return;
   var next = parseMoneyInput(entered);
   if (next < 0) next = 0;
@@ -6519,7 +6521,7 @@ async function saveClientReport(){
   // confirmado con débitos, avisar antes de crear un duplicado que lo tape.
   if (!res.ok && res.data && res.data.avisoDuplicado){
     var a = res.data.avisoDuplicado;
-    var seguir = confirm('⚠ ATENCIÓN\n\nYa hay un reporte CONFIRMADO de ' + a.periodLabel + ' con débitos por ' + moneyFmt(a.existente.debito) + '\n("' + a.existente.title + '").\n\nEste reporte que estás cerrando tiene datos de ESE MISMO mes (por las fechas de los turnos). Si lo cerrás igual, va a quedar como DUPLICADO y puede TAPAR los débitos confirmados del otro en el dashboard.\n\n¿Cerrar igual de todas formas?');
+    var seguir = await nsConfirm('Ya hay un reporte CONFIRMADO de ' + a.periodLabel + ' con débitos por ' + moneyFmt(a.existente.debito) + ' ("' + a.existente.title + '").\n\nEste reporte que estás cerrando tiene datos de ESE MISMO mes (por las fechas de los turnos). Si lo cerrás igual, va a quedar como DUPLICADO y puede TAPAR los débitos confirmados del otro en el dashboard.', { titulo:'⚠ Posible duplicado', okLabel:'Cerrar igual', cancelLabel:'No cerrar' });
     if (!seguir){ if (st) st.textContent = 'Cancelado: ya hay un reporte confirmado de ' + a.periodLabel + '.'; updateClientReportSummary(); return; }
     res = await req(method, path + (path.indexOf('?') >= 0 ? '&' : '?') + 'force=1', payload);
   }
@@ -6723,9 +6725,9 @@ function calcWire(){
   // "Limpiar todo" de la proyección en curso (no de las guardadas): si agregaste
   // un modulo entero por error (pueden ser 100+ practicas), borrar una por una
   // no es viable - se pide confirmacion porque es irreversible.
-  document.getElementById('calcClearItems').addEventListener('click', function(){
+  document.getElementById('calcClearItems').addEventListener('click', async function(){
     if(!CALC.items.length) return;
-    if(!confirm('¿Vaciar toda la proyección actual (' + CALC.items.length + ' práctica' + (CALC.items.length!==1?'s':'') + ')? No se puede deshacer.')) return;
+    if(!await nsConfirm('Se vacía toda la proyección actual (' + CALC.items.length + ' práctica' + (CALC.items.length!==1?'s':'') + '). No se puede deshacer.', { titulo:'Vaciar proyección', okLabel:'Vaciar', peligro:true })) return;
     CALC.items=[]; calcRender();
   });
   var sr=document.getElementById('calcSearch');
@@ -6984,7 +6986,7 @@ async function deleteNomenclador(){
   var period = document.getElementById('nomPeriod').value || NOM_ACTIVE_PERIOD;
   if (!period || !NOM_READY) return;
   var label = document.getElementById('nomPeriod').selectedOptions[0] ? document.getElementById('nomPeriod').selectedOptions[0].textContent : period;
-  if (!confirm('Eliminar nomenclador ' + label + '?')) return;
+  if (!await nsConfirm('Se elimina el nomenclador ' + label + '.', { titulo:'Eliminar nomenclador', okLabel:'Eliminar', peligro:true })) return;
   var st = document.getElementById('nomStatusText');
   st.innerHTML = '<b>Eliminando nomenclador...</b><span>' + esc(label) + '</span>';
   var res = await req('DELETE', '/api/nomencladores?period=' + encodeURIComponent(period));
@@ -7136,7 +7138,7 @@ async function saveResetPwd(){
 // ---------- activar / desactivar ----------
 async function toggleActive(un, active){
   var res = await req('PATCH', '/api/users/' + encodeURIComponent(un), { active: active });
-  if (!res.ok){ alert(res.data.error || 'No se pudo cambiar el estado.'); return; }
+  if (!res.ok){ nsAlert(res.data.error || 'No se pudo cambiar el estado.'); return; }
   await renderUsers();
 }
 
@@ -7459,7 +7461,7 @@ async function uploadTurnera(files){
   await refreshPadron();
 }
 async function deletePadronItem(slug, dni){
-  if (!confirm('¿Quitar este afiliado del padrón?')) return;
+  if (!await nsConfirm('Se quita este afiliado del padrón.', { titulo:'Quitar afiliado', okLabel:'Quitar', peligro:true })) return;
   var r = await fetch('/api/clientes/' + slug + '/padron/' + dni, { method:'DELETE' });
   if (r.ok) await refreshPadron();
 }
@@ -7584,7 +7586,7 @@ async function abrirCruce(id){
   var slug = document.getElementById('czCliente').value;
   var r = await fetch('/api/cruzas/' + slug + '/' + id);
   var data = {}; try { data = await r.json(); } catch(e){}
-  if (!r.ok) { alert(data.error || 'No se pudo abrir el cruce.'); return; }
+  if (!r.ok) { nsAlert(data.error || 'No se pudo abrir el cruce.'); return; }
   CZ.cruceActivo = data;
   renderCruceActivo();
   document.getElementById('czResultado').scrollIntoView({ behavior:'smooth', block:'start' });
@@ -7751,24 +7753,24 @@ async function guardarEdicionesCruce(){
     };
     var r = await fetch('/api/cruzas/' + slug + '/' + c.id, { method:'PUT', headers:{'content-type':'application/json'}, body: JSON.stringify(body) });
     var data = {}; try { data = await r.json(); } catch(e){}
-    if (!r.ok){ alert(data.error || 'No se pudo guardar.'); return; }
+    if (!r.ok){ nsAlert(data.error || 'No se pudo guardar.'); return; }
     CZ.cruceActivo = data; renderCruceActivo();
     await cargarHistorialCruzas();
   } finally { btn.disabled = false; btn.textContent = textoOrig; }
 }
 async function confirmarCruce(){
   var c = CZ.cruceActivo; if (!c) return;
-  if (!confirm('¿Confirmar este cruce? Guardá los cambios pendientes antes si hiciste alguna corrección.')) return;
+  if (!await nsConfirm('Guardá los cambios pendientes antes si hiciste alguna corrección.', { titulo:'Confirmar cruce', okLabel:'Confirmar' })) return;
   var slug = document.getElementById('czCliente').value;
   var r = await fetch('/api/cruzas/' + slug + '/' + c.id + '/confirmar', { method:'POST' });
   var data = {}; try { data = await r.json(); } catch(e){}
-  if (!r.ok){ alert(data.error || 'No se pudo confirmar.'); return; }
+  if (!r.ok){ nsAlert(data.error || 'No se pudo confirmar.'); return; }
   CZ.cruceActivo = data; renderCruceActivo();
   await cargarHistorialCruzas();
 }
 async function eliminarCruceActual(){
   var c = CZ.cruceActivo; if (!c) return;
-  if (!confirm('¿Eliminar este cruce (' + c.label + ')? No se puede deshacer.')) return;
+  if (!await nsConfirm('Se elimina este cruce (' + c.label + '). No se puede deshacer.', { titulo:'Eliminar cruce', okLabel:'Eliminar', peligro:true })) return;
   var slug = document.getElementById('czCliente').value;
   await fetch('/api/cruzas/' + slug + '/' + c.id, { method:'DELETE' });
   CZ.cruceActivo = null;
@@ -8012,7 +8014,7 @@ function cabIdsParaTarea(tipo){
 // Subir UN informe suelto a PAMI (botón 📤 de la fila) — misma cola que el masivo,
 // pero con un solo informeId.
 async function subirInformeUno(id){
-  var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
+  var slug=document.getElementById('cabCliente').value; if(!slug){ nsAlert('Elegí un cliente.'); return; }
   var it=(CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   var nom=(it&&it.extract&&it.extract.nombre)||'este informe';
   var omesArr=(it&&it.resuelto&&(it.resuelto.omes||(it.resuelto.ome?[it.resuelto.ome]:[])))||(it&&it.match&&it.match.ome?[it.match.ome]:[]);
@@ -8022,22 +8024,22 @@ async function subirInformeUno(id){
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
     var d=await r.json();
-    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
     seguirTarea(d.task.id,'subir-informes');
-  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
+  }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 async function tareaCabina(tipo){
-  var slug=document.getElementById('cabCliente').value; if(!slug){ alert('Elegí un cliente.'); return; }
+  var slug=document.getElementById('cabCliente').value; if(!slug){ nsAlert('Elegí un cliente.'); return; }
   var ids=cabIdsParaTarea(tipo);
-  if(!ids.length){ alert(tipo==='subir-informes'?'No hay informes listos para subir en este rango.':'No hay informes para auditar en este rango.'); return; }
+  if(!ids.length){ nsAlert(tipo==='subir-informes'?'No hay informes listos para subir en este rango.':'No hay informes para auditar en este rango.'); return; }
   if(tipo==='subir-informes' && !await nsConfirm('Se suben ' + ids.length + ' informe(s) a PAMI. Es real e irreversible.', { titulo:'Subir a PAMI', okLabel:'Subir '+ids.length })) return;
   cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:tipo,clientSlug:slug,payload:{informeIds:ids}})});
     var d=await r.json();
-    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
     seguirTarea(d.task.id, tipo);
-  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
+  }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 function seguirTarea(id, tipo){
   var accion=(tipo==='subir-informes')?'Subiendo a PAMI':'Auditando en PAMI';
@@ -8353,9 +8355,9 @@ async function cargarEstadoMail(){
 }
 async function traerDelMail(){
   var slug = document.getElementById('cabCliente').value;
-  if (!slug){ alert('Elegí un cliente primero.'); return; }
+  if (!slug){ nsAlert('Elegí un cliente primero.'); return; }
   var de = document.getElementById('cabDesde').value, ha = document.getElementById('cabHasta').value;
-  if (!de){ alert('Elegí la fecha desde.'); return; }
+  if (!de){ nsAlert('Elegí la fecha desde.'); return; }
   // Gmail usa "before" exclusivo -> sumamos un día al "hasta" para incluirlo.
   var desde = de.replace(/-/g,'/');
   var hastaD = ha ? new Date(ha+'T00:00:00') : new Date(de+'T00:00:00');
@@ -8375,15 +8377,15 @@ async function traerDelMail(){
       if (meta) meta.textContent = 'Trayendo del mail… ' + (total ? '(' + total + ' hasta ahora)' : 'puede tardar') + (vueltas > 1 ? ' · tanda ' + vueltas : '');
       var r = await fetch('/api/clientes/'+slug+'/informes/gmail', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ desde:desde, hasta:hasta }) });
       var d = await r.json();
-      if (!r.ok){ alert(d.error || 'No se pudieron traer los informes.'); break; }
+      if (!r.ok){ nsAlert(d.error || 'No se pudieron traer los informes.'); break; }
       total += (d.procesados || 0);
       await refreshCabina();                 // que se vea entrar cada tanda
       if (!d.hayMas || !d.procesados){        // no queda más (o una tanda no trajo nada)
-        alert(total === 0 ? 'No había informes nuevos en ese rango.' : 'Listo: se trajeron ' + total + ' informe(s) en total.');
+        nsAlert(total === 0 ? 'No había informes nuevos en ese rango.' : 'Listo: se trajeron ' + total + ' informe(s) en total.');
         break;
       }
     }
-  } catch(e){ alert('Error de red al traer del mail.'); }
+  } catch(e){ nsAlert('Error de red al traer del mail.'); }
   if (btn) btn.disabled = false;
   await refreshCabina();
 }
@@ -8578,9 +8580,9 @@ async function cabSubirSeleccionados(){
   try{
     var r = await fetch('/api/admin/worker/tasks', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ type:'subir-informes', clientSlug: slug, payload:{ informeIds: ids } }) });
     var d = await r.json();
-    if(!r.ok){ cabEstado('',''); alert(d.error||'No se pudo crear la tarea.'); return; }
+    if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
     seguirTarea(d.task.id, 'subir-informes');
-  }catch(e){ cabEstado('',''); alert('Error de red al crear la tarea.'); }
+  }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 // ===== Motivo al desestimar (modal + motivos configurables) =====
 function motivosDesestActuales(){
@@ -8664,7 +8666,7 @@ function renderDesestEditor(){
 }
 async function guardarMotivosDesest(lista){
   var res = await api('/api/informes/motivos-desestimacion', { motivos: lista });
-  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo guardar.'); return false; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo guardar.'); return false; }
   if (typeof INFORMES_CFG !== 'object' || !INFORMES_CFG) INFORMES_CFG = {};
   INFORMES_CFG.motivosDesestimacion = (res.data && res.data.motivosDesestimacion) || lista;
   return true;
@@ -8701,12 +8703,12 @@ async function cabDesestimarSeleccionados(){
     } catch(e){ errN++; }
   }
   aplicarFiltroCabina();
-  alert('Desestimados: ' + okN + (errN ? (' · ' + errN + ' con error') : '') + '.');
+  nsAlert('Desestimados: ' + okN + (errN ? (' · ' + errN + ' con error') : '') + '.');
 }
 async function uploadInformes(files){
   if (!files || !files.length) return;
   var slug = document.getElementById('cabCliente').value;
-  if (!slug){ alert('Elegí un cliente primero.'); document.getElementById('cabFiles').value=''; return; }
+  if (!slug){ nsAlert('Elegí un cliente primero.'); document.getElementById('cabFiles').value=''; return; }
   var fd = new FormData();
   for (var i=0;i<files.length;i++) fd.append('archivo'+i, files[i]);
   var meta = document.getElementById('cabResultMeta');
@@ -8714,8 +8716,8 @@ async function uploadInformes(files){
   try {
     var r = await fetch('/api/clientes/'+slug+'/informes/upload', { method:'POST', body:fd });
     var d = await r.json();
-    if (!r.ok) alert(d.error || 'No se pudieron subir los informes.');
-  } catch(e){ alert('Error de red al subir.'); }
+    if (!r.ok) nsAlert(d.error || 'No se pudieron subir los informes.');
+  } catch(e){ nsAlert('Error de red al subir.'); }
   document.getElementById('cabFiles').value = '';
   await refreshCabina();
 }
@@ -8862,7 +8864,7 @@ async function guardarBeneficioInforme(){
 async function reanalizarInforme(id){
   var slug = document.getElementById('cabCliente').value;
   var r = await fetch('/api/clientes/'+slug+'/informes/'+id+'/rematch', { method:'POST' });
-  if (r.ok) await refreshCabina(); else { var d=await r.json().catch(function(){return{};}); alert(d.error||'No se pudo reanalizar.'); }
+  if (r.ok) await refreshCabina(); else { var d=await r.json().catch(function(){return{};}); nsAlert(d.error||'No se pudo reanalizar.'); }
 }
 async function borrarInforme(id){
   if (!await nsConfirm('Se elimina de la lista de informes recibidos. No se puede deshacer.', { titulo:'Borrar informe', okLabel:'Borrar', peligro:true })) return;
@@ -8880,7 +8882,7 @@ async function toggleDesestimar(id, esta){
   var slug = document.getElementById('cabCliente').value;
   var payload = esta ? { desestimar: false } : { desestimar: true, motivo: motivo };
   var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/desestimar', payload);
-  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
   var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   if (it){ if (res.data.item && res.data.item.desestimado) it.desestimado = res.data.item.desestimado; else delete it.desestimado; }
   aplicarFiltroCabina();
@@ -8931,6 +8933,9 @@ function nsAskOk(){
 // nsConfirm(cuerpo, opts) -> Promise<bool>; nsPrompt(label, opts) -> Promise<string|null>
 function nsConfirm(cuerpo, opts){ return _nsAskOpen(Object.assign({ mode:'confirm', cuerpo:cuerpo }, opts || {})); }
 function nsPrompt(inputLabel, opts){ return _nsAskOpen(Object.assign({ mode:'prompt', inputLabel:inputLabel }, opts || {})); }
+// nsAlert: aviso (un solo botón). Reemplaza al nsAlert() del navegador. Se puede usar
+// sin await (muestra la ventana y el código sigue) o con await si querés esperar.
+function nsAlert(cuerpo, opts){ return _nsAskOpen(Object.assign({ mode:'confirm', cuerpo:cuerpo, titulo:'Aviso', okLabel:'Entendido', cancelLabel:'' }, opts || {})); }
 
 async function toggleReclamar(id, esta){
   var nota = '';
@@ -8946,7 +8951,7 @@ async function toggleReclamar(id, esta){
   }
   var slug = document.getElementById('cabCliente').value;
   var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/reclamar', esta ? { reclamar: false } : { nota: nota });
-  if (!res.ok){ alert((res.data && res.data.error) || 'No se pudo reclamar.'); return; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo reclamar.'); return; }
   var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   if (it){ if (res.data.item && res.data.item.reclamado) it.reclamado = res.data.item.reclamado; else delete it.reclamado; }
   aplicarFiltroCabina();
