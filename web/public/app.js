@@ -60,7 +60,7 @@ function expandSidebar(){
   setSidebarCollapseIcon();
 })();
 
-var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
+var titles = { dash:'Inicio', users:'Usuarios', clientes:'Clientes', nomencladores:'Nomencladores', informes:'Informes', credencial:'Credencial provisoria', resumen:'Resumen de cuenta', facturas:'Facturas', gastos:'Gastos', padron:'Afiliados', cabina:'Informes recibidos', liberarcupo:'Liberar cupo', cruzas:'Cruzas', lab:'Laboratorio', soon:'Configuración general' };
 // En Inicio, el título de la barra ES el saludo (no "Inicio", que es redundante).
 // Devuelve HTML: el "Buenas tardes, " va en un span que se esconde en celular
 // (queda solo "Ignacio 👋") para que no se parta en dos líneas al lado de los íconos.
@@ -105,6 +105,7 @@ function go(v, el){
   if (ME && ME.role === 'colaborador' && ['dash', 'clientes'].indexOf(v) < 0){ go('dash'); return; }
   // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
   if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
+  if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
   // el backend le bloquea las acciones). El resto, afuera.
   if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
@@ -117,7 +118,7 @@ function go(v, el){
   // Configuración general: un operador con clientes restringidos no debe entrar
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
-  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
+  ['dash','clientes','nomencladores','informes','resumen','facturas','padron','cabina','liberarcupo','cruzas','lab','soon'].forEach(function(x){ document.getElementById('view-'+x).style.display = x===v ? 'block' : 'none'; });
   var _pt = document.getElementById('pageTitle');
   if (v === 'dash' && ME) _pt.innerHTML = saludoHTML(ME); else _pt.textContent = titles[v];
   document.querySelector('.topbar').classList.toggle('client-mode', v === 'clientes');
@@ -133,6 +134,7 @@ function go(v, el){
   if (v === 'informes'){ setInformesTab('generar'); loadInformesConfig(); }
   if (v === 'padron') loadPadronView();
   if (v === 'cabina') loadCabinaView();
+  if (v === 'liberarcupo') loadLiberarCupoView();
   if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
   if (v === 'facturas') loadFacturas();
   if (v === 'cruzas') loadCruzasClientes();
@@ -393,7 +395,7 @@ function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
   if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'liberarcupo', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
   go(v, navElFor(v));
   APPLYING_ROUTE = false;
@@ -1205,14 +1207,22 @@ function iniRenderMensajesEn(feedId){
   var feed = document.getElementById(feedId); if(!feed) return;
   var ms = INICIO.mensajes || [];
   if (!ms.length){ feed.innerHTML = '<div class="ini-empty">Todavía no hay mensajes. Dejá el primero 👇</div>'; return; }
+  var prevAutor = null;
   feed.innerHTML = ms.map(function(m){
     var mine = m.autor === INICIO.yo;
+    var agr = m.autor === prevAutor;   // mismo autor que el anterior → tanda: no repetir avatar/nombre
+    prevAutor = m.autor;
     var adj = m.adjunto ? iniAdjuntoHtml(m.adjunto) : '';
     var txt = m.texto ? '<div class="ini-txt">'+esc(m.texto)+'</div>' : '';
-    return '<div class="ini-msg'+(mine?' me':'')+'">'
-      + '<span class="ini-av'+(mine?' me':'')+'">'+esc(iniIniciales(m.autorNombre))+'</span>'
-      + '<div class="ini-bub"><div class="ini-who">'+esc(mine?'Vos':m.autorNombre)+'</div>'
-      + adj + txt + '<div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
+    // El nombre va solo en el PRIMERO de una tanda y solo en los ajenos (los tuyos
+    // no llevan "Vos": ya están a la derecha con tu avatar).
+    var who = (!agr && !mine) ? '<div class="ini-who">'+esc(m.autorNombre)+'</div>' : '';
+    // Avatar solo en el primero de la tanda; si sigue el mismo autor, un espaciador.
+    var av = agr ? '<span class="ini-av-sp"></span>'
+                 : '<span class="ini-av'+(mine?' me':'')+'">'+esc(iniIniciales(m.autorNombre))+'</span>';
+    return '<div class="ini-msg'+(mine?' me':'')+(agr?' agr':'')+'">'
+      + av + '<div class="ini-bub">'+ who + adj + txt
+      + '<div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
   }).join('');
   feed.scrollTop = feed.scrollHeight;
 }
@@ -8003,6 +8013,172 @@ function seguirTarea(id, tipo){
     }catch(e){}
   }, 3000);
 }
+
+// ===== Liberar cupo PAMI =====
+var LC_ROWS = [];
+var LC_TASK_TIMER = null;
+async function loadLiberarCupoView(){
+  var sel = document.getElementById('lcCliente');
+  if (sel && !sel.options.length){
+    try {
+      var r = await fetch('/api/clientes');
+      var raw = await r.json();
+      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+      try {
+        var last = localStorage.getItem('ns-liberar-cupo-cliente') || '';
+        if (last && Array.prototype.some.call(sel.options, function(o){ return o.value === last; })) sel.value = last;
+      } catch(e){}
+    } catch(e){}
+  }
+  ['lcDesde','lcHasta','lcModulo','lcCodigo','lcBuscar','lcPeriodo'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el && !el._lcHooked){ el._lcHooked = true; el.addEventListener(id === 'lcBuscar' || id === 'lcCodigo' ? 'input' : 'change', lcQueueRefresh); }
+  });
+  await refreshLiberarCupo();
+}
+function lcBase(){
+  var slug = (document.getElementById('lcCliente') || {}).value || '';
+  return slug ? '/api/clientes/' + encodeURIComponent(slug) + '/liberar-cupo' : '';
+}
+function lcBuildParams(){
+  var p = new URLSearchParams();
+  [['period','lcPeriodo'],['desde','lcDesde'],['hasta','lcHasta'],['module','lcModulo'],['code','lcCodigo'],['q','lcBuscar']].forEach(function(x){
+    var v = (document.getElementById(x[1]) || {}).value || '';
+    if (v) p.set(x[0], v);
+  });
+  return p;
+}
+function onLiberarCupoCliente(){
+  try { localStorage.setItem('ns-liberar-cupo-cliente', (document.getElementById('lcCliente') || {}).value || ''); } catch(e){}
+  var per = document.getElementById('lcPeriodo'); if (per) per.innerHTML = '';
+  refreshLiberarCupo();
+}
+var LC_REFRESH_TIMER = null;
+function lcQueueRefresh(){
+  if (LC_REFRESH_TIMER) clearTimeout(LC_REFRESH_TIMER);
+  LC_REFRESH_TIMER = setTimeout(refreshLiberarCupo, 250);
+}
+async function refreshLiberarCupo(){
+  var base = lcBase();
+  var body = document.getElementById('lcBody'), meta = document.getElementById('lcResultMeta'), title = document.getElementById('lcResultTitle');
+  var err = document.getElementById('lcError'); if (err){ err.style.display = 'none'; err.textContent = ''; }
+  if (!base){ if (body) body.innerHTML = '<tr><td colspan="8" class="nom-empty">Elegí un cliente.</td></tr>'; return; }
+  if (meta) meta.textContent = 'Cargando...';
+  var qs = lcBuildParams().toString();
+  try{
+    var r = await fetch(base + '/candidatos' + (qs ? '?' + qs : ''));
+    var d = await r.json();
+    if(!r.ok){ throw new Error(d.error || 'No se pudo cargar.'); }
+    LC_ROWS = d.rows || [];
+    lcRenderPeriodos(d.periods || [], d.period || '');
+    lcRenderModulos(d.modules || []);
+    if (title) title.textContent = 'OMEs no validadas';
+    if (meta) meta.textContent = (d.totalFiltrado || 0) + ' visible(s) de ' + (d.total || 0) + ' detectada(s)' + (d.label ? ' · ' + d.label : '');
+    var st = document.getElementById('lcStatusText');
+    if (st) st.innerHTML = '<b>Liberar cupo</b><span>Seleccioná ausentes/no validadas desde la bandeja guardada y enviá la cancelación al worker PAMI.</span>';
+    renderLiberarCupoRows();
+  }catch(e){
+    LC_ROWS = [];
+    if (meta) meta.textContent = '';
+    if (body) body.innerHTML = '<tr><td colspan="8" class="nom-empty">No se pudieron cargar candidatos.</td></tr>';
+    if (err){ err.textContent = e.message || String(e); err.style.display = 'block'; }
+  }
+}
+function lcRenderPeriodos(periods, selected){
+  var sel = document.getElementById('lcPeriodo'); if (!sel) return;
+  var current = sel.value || selected || '';
+  var html = (periods || []).map(function(p){ return '<option value="' + esc(p.period) + '">' + esc(p.label || p.period) + (p.live ? ' (actual)' : '') + '</option>'; }).join('');
+  sel.innerHTML = html || '<option value="">Sin bandejas</option>';
+  if (current && Array.prototype.some.call(sel.options, function(o){ return o.value === current; })) sel.value = current;
+  else if (selected) sel.value = selected;
+}
+function lcRenderModulos(modules){
+  var sel = document.getElementById('lcModulo'); if (!sel) return;
+  var val = sel.value || '';
+  var html = '<option value="">Módulo entero</option>' + (modules || []).map(function(m){ return '<option value="' + esc(m.value) + '">' + esc(m.label) + ' (' + esc(m.count) + ')</option>'; }).join('');
+  sel.innerHTML = html;
+  if (val && Array.prototype.some.call(sel.options, function(o){ return o.value === val; })) sel.value = val;
+}
+function renderLiberarCupoRows(){
+  var body = document.getElementById('lcBody'); if (!body) return;
+  if (!LC_ROWS.length){ body.innerHTML = '<tr><td colspan="8" class="nom-empty">No hay OMEs no validadas con estos filtros.</td></tr>'; lcUpdateSelected(); return; }
+  body.innerHTML = LC_ROWS.map(function(r, i){
+    var modulo = [r.moduleCode, r.moduleDescription].filter(Boolean).join(' - ') || '-';
+    return '<tr>'
+      + '<td><input type="checkbox" class="lc-check" data-ome="' + esc(r.n_orden) + '" onchange="lcUpdateSelected()"></td>'
+      + '<td><b>' + esc(r.n_orden) + '</b><div class="cab-sub">' + esc(r.f_vencimiento || '') + '</div></td>'
+      + '<td>' + esc(r.turno || '') + '</td>'
+      + '<td>' + esc(r.beneficio || '') + '</td>'
+      + '<td>' + esc(r.nombre || '') + '</td>'
+      + '<td>' + esc(r.practica || '') + '<div class="cab-sub">' + esc(modulo) + '</div></td>'
+      + '<td><span class="cab-badge warn">' + esc(r.estado || 'No validada') + '</span></td>'
+      + '<td class="cab-actions"><button class="rowbtn" title="Liberar" onclick="liberarCupoUno(' + i + ')">🚫</button></td>'
+      + '</tr>';
+  }).join('');
+  lcUpdateSelected();
+}
+function lcSelectedOmes(){
+  return Array.prototype.slice.call(document.querySelectorAll('.lc-check:checked')).map(function(x){ return x.getAttribute('data-ome') || ''; }).filter(Boolean);
+}
+function lcUpdateSelected(){
+  var n = lcSelectedOmes().length;
+  var el = document.getElementById('lcSelected'); if (el) el.textContent = n ? (n + ' seleccionada(s)') : 'Sin selección';
+}
+function lcToggleTodos(on){
+  document.querySelectorAll('.lc-check').forEach(function(x){ x.checked = !!on; });
+  lcUpdateSelected();
+}
+function liberarCupoUno(i){
+  var r = LC_ROWS[i]; if (!r) return;
+  liberarCupoSeleccionadas([r.n_orden]);
+}
+async function liberarCupoSeleccionadas(omes){
+  var base = lcBase(); if (!base){ alert('Elegí un cliente.'); return; }
+  omes = omes || lcSelectedOmes();
+  if (!omes.length){ alert('Seleccioná al menos una OME.'); return; }
+  if (!confirm('Vas a liberar cupo de ' + omes.length + ' OME(s) en PAMI.\n\nEsto cancela la aceptación. ¿Confirmás?')) return;
+  var est = document.getElementById('lcTareaEstado'); if (est) est.textContent = 'Creando tarea...';
+  var filtros = {};
+  lcBuildParams().forEach(function(v, k){ filtros[k] = v; });
+  try{
+    var r = await fetch(base + '/liberar', { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({ period:(document.getElementById('lcPeriodo')||{}).value||'', omes:omes, filtros:filtros }) });
+    var d = await r.json();
+    if(!r.ok){ if(est) est.textContent = ''; alert(d.error || 'No se pudo crear la tarea.'); return; }
+    seguirLiberarCupoTarea(d.task.id);
+  }catch(e){ if(est) est.textContent = ''; alert('Error de red al crear la tarea.'); }
+}
+function seguirLiberarCupoTarea(id){
+  if (LC_TASK_TIMER) clearInterval(LC_TASK_TIMER);
+  var est = document.getElementById('lcTareaEstado');
+  var vueltas = 0;
+  LC_TASK_TIMER = setInterval(async function(){
+    vueltas++;
+    try{
+      var d = await fetch('/api/admin/worker/tasks').then(function(r){ return r.json(); });
+      var t = (d.tasks || []).find(function(x){ return x.id === id; });
+      if(!t) return;
+      if(t.status === 'pending'){ if(est) est.textContent = 'Esperando al worker' + (vueltas > 6 ? ' (revisá si está prendido)' : '') + '...'; return; }
+      if(t.status === 'running'){ var lg = (t.logs && t.logs.length) ? t.logs[t.logs.length - 1].message : ''; if(est) est.textContent = 'Liberando... ' + String(lg).slice(0, 70); return; }
+      clearInterval(LC_TASK_TIMER); LC_TASK_TIMER = null;
+      if(est) est.textContent = '';
+      if(t.status === 'done'){
+        var res = t.result || {};
+        alert('Liberación terminada: ' + (res.liberadas || 0) + ' liberada(s), ' + (res.errores || 0) + ' error(es), ' + (res.omitidas || 0) + ' omitida(s).');
+        await refreshLiberarCupo();
+      } else {
+        alert('La tarea falló: ' + (t.error || 'error del worker.'));
+      }
+    }catch(e){}
+  }, 3000);
+}
+function descargarLiberarCupoReporte(){
+  var base = lcBase(); if (!base) return;
+  var qs = lcBuildParams().toString();
+  var a = document.createElement('a');
+  a.href = base + '/reporte.xlsx' + (qs ? '?' + qs : '');
+  document.body.appendChild(a); a.click(); a.remove();
+}
 async function cargarEstadoMail(){
   var card = document.getElementById('cabMailCard');
   var info = document.getElementById('cabMailInfo');
@@ -8463,6 +8639,7 @@ function aplicarUsuario(u){
   var verHerramientas = (u.role === 'admin' || u.role === 'operador' || u.role === 'demo');
   var np = document.getElementById('navPadron'); if (np) np.style.display = verHerramientas ? '' : 'none';
   var nc = document.getElementById('navCabina'); if (nc) nc.style.display = verHerramientas ? '' : 'none';
+  var nl = document.getElementById('navLiberarCupo'); if (nl) nl.style.display = (u.role === 'admin' || u.role === 'operador') ? '' : 'none';
   // Cruzas: herramienta nueva y sensible (montos + datos de pacientes) - solo admin por ahora.
   var ncz = document.getElementById('navCruzas'); if (ncz) ncz.style.display = (u.role === 'admin') ? '' : 'none';
   // Nomencladores: por ahora un operador no lo necesita - se le oculta (mismo
@@ -8473,7 +8650,7 @@ function aplicarUsuario(u){
   // del menú le queda Inicio + la lista de clientes. Cuando se le sumen módulos,
   // se habilitan de a uno acá y en clientSeccionesPermitidas().
   if (esColaborador) {
-    ['navInformes', 'navPadron', 'navCabina', 'navCruzas', 'navNomencladores'].forEach(function(id){
+    ['navInformes', 'navPadron', 'navCabina', 'navLiberarCupo', 'navCruzas', 'navNomencladores'].forEach(function(id){
       var el = document.getElementById(id); if (el) el.style.display = 'none';
     });
   }
@@ -8513,7 +8690,7 @@ function aplicarUsuario(u){
   iniArrancar();   // campana: mensajes del Inicio (admin/operador) o pendientes del centro (operador_clinica)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
-var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina','cruzas'];
+var NS_ONLY_VIEWS = ['dash','informes','nomencladores','credencial','soon','resumen','facturas','padron','cabina','liberarcupo','cruzas'];
 // ===== Modo espejo: ver el sistema como otro usuario (solo lectura) =====
 async function abrirVerComo(){
   if (!ME_REAL || ME_REAL.role !== 'admin') return;

@@ -412,6 +412,10 @@
   .ini-msg{display:flex;gap:9px;max-width:84%}
   .ini-av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;background:var(--petrol)}
   .ini-av.me{background:var(--turq-d)}
+  /* Mensajes seguidos del mismo autor: sin avatar (espaciador para mantener la
+     sangría) y más pegados al anterior. */
+  .ini-av-sp{width:28px;flex:0 0 auto}
+  .ini-msg.agr{margin-top:-6px}
   .ini-bub{background:var(--surface-2);border:1px solid var(--border);border-radius:4px 13px 13px 13px;padding:7px 11px}
   .ini-who{font-size:11px;font-weight:800;margin-bottom:1px;color:var(--text-2)}
   .ini-txt{font-size:13.5px;white-space:pre-wrap;word-break:break-word;color:var(--text)}
@@ -1858,6 +1862,16 @@
   .cab-ocr{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#7a5cff 16%,var(--surface));color:#5a3ec8;vertical-align:middle}
   .cab-actions{white-space:nowrap;text-align:right}
   .cab-actions .rowbtn{margin-left:2px}
+  .lc-filters{grid-template-columns:150px 150px minmax(190px,1fr) 130px minmax(220px,1.2fr) auto;align-items:end}
+  .lc-actions,.lc-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lc-actions{justify-content:flex-end}
+  .lc-toolbar{justify-content:flex-end}
+  .lc-table{min-width:1180px}
+  .lc-table th:first-child,.lc-table td:first-child{width:34px;text-align:center}
+  .lc-table th:last-child,.lc-table td:last-child{width:54px;text-align:right}
+  .lc-check{width:16px;height:16px;accent-color:var(--turq);cursor:pointer}
+  @media(max-width:980px){.lc-filters{grid-template-columns:1fr 1fr}.lc-actions,.lc-toolbar{justify-content:flex-start}}
+  @media(max-width:620px){.lc-filters{grid-template-columns:1fr}.lc-toolbar{align-items:flex-start}}
   .cab-modal{width:min(1040px,calc(100vw - 32px))}
   .cab-modal-body{display:grid;grid-template-columns:1.15fr .85fr;gap:0;padding:0;max-height:calc(100vh - 120px)}
   .cab-modal-file{border-right:1px solid var(--border);min-height:440px;background:var(--surface-2)}
