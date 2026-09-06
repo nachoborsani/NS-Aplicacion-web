@@ -368,23 +368,33 @@
 
           <div id="res-sub-resumen">
             <div id="dashResultado" style="display:none">
-              <div class="mescurso-card res-card">
-                <div class="mescurso-head">
-                  <span class="mescurso-title">Resumen de cuenta — NS</span>
-                  <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
+              <div class="res-row">
+                <div class="mescurso-card res-card">
+                  <div class="mescurso-head">
+                    <span class="mescurso-title">Resumen de cuenta — NS</span>
+                    <input type="month" id="resMes" class="inp mini res-mes-input" onchange="loadResultado()">
+                  </div>
+                  <div class="mescurso-val-lbl">Falta cobrar</div>
+                  <div class="mescurso-val" id="resBolsillo">—</div>
+                  <div class="res-ganancia" id="resGananciaBox">
+                    <div class="rg-top"><span class="rg-lbl">Ganancia real del mes</span><b class="rg-val" id="resGanancia">—</b></div>
+                    <div class="rg-sub">cobrado <b id="resCobrado">—</b> · gastos pagados <b id="resGastos">—</b> · facturado <b id="resIngreso">—</b></div>
+                  </div>
+                  <div class="res-socios-row">
+                    <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
+                    <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
+                  </div>
+                  <div class="mescurso-lines" id="resDesglose"></div>
+                  <div class="mescurso-foot" id="resDetalle"></div>
                 </div>
-                <div class="mescurso-val-lbl">Falta cobrar</div>
-                <div class="mescurso-val" id="resBolsillo">—</div>
-                <div class="res-ganancia" id="resGananciaBox">
-                  <div class="rg-top"><span class="rg-lbl">Ganancia real del mes</span><b class="rg-val" id="resGanancia">—</b></div>
-                  <div class="rg-sub">cobrado <b id="resCobrado">—</b> · gastos pagados <b id="resGastos">—</b> · facturado <b id="resIngreso">—</b></div>
+
+                <div class="mescurso-card res-clients-card" id="resClientsCard" style="display:none">
+                  <div class="mescurso-head">
+                    <span class="mescurso-title">Facturación neta por cliente</span>
+                    <span class="res-clients-sub">último cierre vs. anterior</span>
+                  </div>
+                  <div class="res-clients-chart" id="resClientsChart"></div>
                 </div>
-                <div class="res-socios-row">
-                  <div class="res-socio"><span class="rs-name">Nacho</span><span class="rs-val" id="resNacho">—</span></div>
-                  <div class="res-socio"><span class="rs-name">Seba</span><span class="rs-val" id="resSeba">—</span></div>
-                </div>
-                <div class="mescurso-lines" id="resDesglose"></div>
-                <div class="mescurso-foot" id="resDetalle"></div>
               </div>
             </div>
           </div>

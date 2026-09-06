@@ -3478,6 +3478,39 @@ async function loadResultado(){
   }
   document.getElementById('resDetalle').textContent = d.facturasContadas + ' factura(s) con cobro en el mes · dólar oficial ' + (d.dolar && d.dolar.valor ? moneyFmt(d.dolar.valor) : '—');
   renderResChart(d.serie || [], d.mes);
+  loadResClientes();
+}
+// Comparativa de facturación neta por cliente: cada uno contra su propio
+// último cierre vs. el anterior (no todos cierran el mismo mes calendario).
+// Pensado para ir evaluando la tendencia a medida que se acumulan meses.
+async function loadResClientes(){
+  var card = document.getElementById('resClientsCard');
+  var box = document.getElementById('resClientsChart');
+  if (!card || !box) return;
+  var res = await api('/api/resultado/clientes');
+  if (!res.ok){ card.style.display = 'none'; return; }
+  var clientes = res.data.clientes || [];
+  card.style.display = '';
+  if (!clientes.length){
+    box.innerHTML = '<div class="rescli-empty">Todavía no hay reportes cerrados para comparar.</div>';
+    return;
+  }
+  var max = clientes.reduce(function(mx, c){ return Math.max(mx, Math.abs(c.net || 0)); }, 0) || 1;
+  box.innerHTML = clientes.map(function(c){
+    var pct = c.delta && c.delta.percent;
+    var deltaCls = 'flat', deltaTxt = 'sin dato previo';
+    if (pct != null){
+      deltaCls = pct > 0.001 ? 'pos' : (pct < -0.001 ? 'neg' : 'flat');
+      deltaTxt = (pct > 0 ? '+' : '') + Math.round(pct * 100) + '%';
+    }
+    var w = Math.max(3, Math.round(Math.abs(c.net || 0) / max * 100));
+    return '<div class="rescli-row" title="' + esc(c.label || c.period) + (c.comparePeriod ? (' vs ' + esc(resMesCorto(c.comparePeriod))) : '') + '">'
+      + '<div class="rescli-info"><span class="rescli-name">' + esc(c.name) + '</span>'
+      + '<span class="rescli-delta ' + deltaCls + '">' + esc(deltaTxt) + '</span></div>'
+      + '<span class="rescli-amt">' + esc(moneyFmt(c.net || 0)) + '</span>'
+      + '<div class="rescli-bar-track"><div class="rescli-bar-fill" style="width:' + w + '%"></div></div>'
+      + '</div>';
+  }).join('');
 }
 async function toggleResCobrado(id, cobrado){
   var res = await req('POST', '/api/facturas/cobrado', { id: id, cobrado: cobrado });

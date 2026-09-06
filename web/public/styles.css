@@ -1738,6 +1738,25 @@
   .res-socios-row .rs-name{font-size:12px;color:var(--text-2);font-weight:600}
   .res-socios-row .rs-val{font-weight:750;font-variant-numeric:tabular-nums}
   .mescurso-val.neg{color:var(--error)}
+
+  /* Comparativa de facturación neta por cliente, al lado del Resumen de cuenta */
+  .res-row{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+  .res-row .res-card{flex:1 1 420px}
+  .res-clients-card{flex:1 1 420px;min-width:0}
+  .res-clients-sub{font-size:11px;color:var(--text-2);font-weight:600}
+  .res-clients-chart{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow-y:auto;padding-right:2px}
+  .rescli-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:5px}
+  .rescli-info{display:flex;align-items:baseline;gap:7px;min-width:0}
+  .rescli-name{font-size:12.5px;font-weight:650;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rescli-delta{flex:0 0 auto;font-size:10.5px;font-weight:750;padding:1px 7px;border-radius:999px}
+  .rescli-delta.pos{color:var(--success);background:var(--success-bg)}
+  .rescli-delta.neg{color:var(--error);background:var(--error-bg)}
+  .rescli-delta.flat{color:var(--text-2);background:var(--surface-2)}
+  .rescli-amt{text-align:right;font-size:12.5px;font-weight:750;font-variant-numeric:tabular-nums;color:var(--text);white-space:nowrap}
+  .rescli-bar-track{grid-column:1 / -1;height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+  .rescli-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--turq-d),var(--turq));box-shadow:0 0 0 1px rgba(0,0,0,.02) inset;transition:width .4s ease}
+  .rescli-empty{font-size:12.5px;color:var(--text-2)}
+  @media(max-width:980px){ .res-row{flex-direction:column} .res-row .res-card,.res-clients-card{flex-basis:auto;width:100%} }
   .res-check{margin-right:8px;accent-color:var(--turq);width:15px;height:15px;cursor:pointer;flex:0 0 auto}
   .res-cobro-nombre{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
   .res-fecha{font-size:10.5px;color:var(--text-2);margin-left:4px}

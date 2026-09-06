@@ -6340,6 +6340,35 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Comparativa de facturación neta por cliente (gráfico al lado del Resumen de
+  // cuenta): cada cliente contra su propio último cierre vs el anterior — no
+  // forzamos un mes calendario único porque no todos los clientes cierran con
+  // la misma cadencia. Se excluyen los "en análisis" (potenciales, sin
+  // facturación real todavía) y los clientes sin ningún reporte cerrado.
+  if (p === "/api/resultado/clientes" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const clientes = loadClientsStore()
+      .filter((c) => !c.enAnalisis)
+      .map((c) => {
+        const d = buildClientDashboard(c.slug);
+        if (!d.current || !d.current.period) return null;
+        return {
+          slug: c.slug,
+          name: c.name,
+          period: d.current.period,
+          label: d.current.label,
+          net: d.current.net,
+          comparePeriod: d.compare ? d.compare.period : "",
+          prevNet: d.compare ? d.compare.net : 0,
+          delta: d.deltas.net,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.net - a.net);
+    return json(res, 200, { clientes });
+  }
+
   // Bandeja del mes (la sube la app; la lee el panel "Dashboard mes en curso").
   // Honorarios del centro: prácticas por código (cantidad + facturado) + config
   // (cuánto paga por cada código). GET admin o clínica del centro; POST guarda.
