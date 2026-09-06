@@ -277,11 +277,12 @@
                 <div class="ini-accesos-catalogo" id="iniAccesosCatalogo"></div>
               </div>
             </section>
-            <!-- Actividad de operadores (solo admin): horas conectado HOY. Va DENTRO de
-                 la grilla (abajo a la derecha, al lado de Accesos rápidos). El operador
-                 nunca la ve (su panel es operadorPaneles) y el endpoint es /api/admin/*. -->
-            <div class="card ini-card ini-actividad" id="actividadOpCard" style="display:none">
-              <div class="ini-head">
+            <!-- Actividad de operadores (solo admin): horas conectado HOY. Es una
+                 tarjeta más del mismo sistema de arrastrar/redimensionar (data-panel) -
+                 el operador nunca la ve (su panel es operadorPaneles) y el endpoint es
+                 /api/admin/*. -->
+            <div class="card ini-card" data-panel="actividad" id="actividadOpCard" style="display:none">
+              <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">🕒</span>
                 <div><h2>Actividad de operadores</h2><div class="ini-meta">Horas conectado hoy</div></div>
               </div>
@@ -309,7 +310,7 @@
             </section>
             <section class="card ini-card op-panel-pendientes" data-panel="pendientes">
               <div class="ini-head ini-drag-handle"><span class="ini-ic">🔔</span><div><h2>Pendientes</h2><div class="ini-meta" id="opPendMeta">—</div></div></div>
-              <ul class="ini-pendop-list ini-pendop-list-cortita" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
+              <ul class="ini-pendop-list" id="opPendList"><li class="ini-empty">Cargando…</li></ul>
               <!-- Tareas propias: mismo mecanismo que las de los admins (título +
                    fecha opcional, se resuelven o se reprograman si se vencen),
                    pero acá Javi se las crea a sí mismo, sin elegir a quién. -->

@@ -1136,7 +1136,7 @@ async function cargarInicio(marcarLeido){
     iniRenderAdjunto('iniAdjPreview', INICIO.adjunto, 'iniQuitarAdjunto');
     iniCargarPendientesOperador();
     iniAccesosRender();
-    iniPanelesAplicar('admin'); iniPanelesWireDrag('admin'); iniAjustarAltoObservar('admin');
+    iniPanelesAplicar('admin'); iniPanelesWireDrag('admin');
     var actCard = document.getElementById('actividadOpCard');
     if (actCard) actCard.style.display = '';
     cargarActividadOperadores();
@@ -1152,7 +1152,7 @@ async function cargarInicio(marcarLeido){
     iniCargarMisPendientes();
     iniAccesosRender('op');
     opRenderTareas();
-    iniPanelesAplicar('op'); iniPanelesWireDrag('op'); iniAjustarAltoObservar('op');
+    iniPanelesAplicar('op'); iniPanelesWireDrag('op');
   }
   iniActualizarBell();
 }
@@ -1543,33 +1543,95 @@ function iniAccesosToggle(id, on, scope){
 // donde caiga) - lo que se intercambia es el SLOT de la grilla, no el tamaño;
 // un auto-acomodo tipo masonry sería de más para 4 tarjetas de tamaño fijo.
 // Guardado por usuario en localStorage, mismo criterio que Accesos rápidos. =====
-function iniPanelesDefault(scope){ return scope === 'op' ? ['chat','pendientes','accesos'] : ['msg','tareas','pendop','accesos']; }
-function iniPanelesSlots(scope){ return scope === 'op' ? ['op-slot-a','op-slot-b','op-slot-c'] : ['ini-slot-a','ini-slot-b','ini-slot-c','ini-slot-d']; }
+// ===== Paneles del Inicio: orden (arrastrar) + tamaño (botón ⤢) =====
+// El layout es CSS Grid con grid-auto-flow:dense y una altura de fila FIJA
+// (ver .ini-grid/.op-grid en styles.css) - el propio navegador acomoda las
+// tarjetas sin pisarse ni dejar huecos según en qué ORDEN aparecen en el DOM
+// y qué TAMAÑO (.ini-size-s/m/w/l) tiene cada una. No hay que calcular
+// colisiones a mano: por eso es la opción de menor costo que igual resuelve
+// "todos los módulos movibles y redimensionables".
+// "actividad" (Actividad de operadores) solo la ve el admin y siempre está en
+// su lista de paneles - la tarjeta misma se esconde con display:none si no
+// aplica (ver cargarInicio), el grid ni se entera.
+function iniPanelesDefault(scope){ return scope === 'op' ? ['chat','pendientes','accesos'] : ['msg','tareas','pendop','actividad','accesos']; }
+// Tamaño de arranque de cada panel (el usuario lo cambia después con el
+// botón ⤢, y desde ahí queda guardado). "m" = 1 columna alta (2 filas),
+// "w" = ancho completo (2 columnas, 1 fila) - mismo alto que ya tenía el
+// chat/Accesos rápidos por defecto, para no correr el piso a nadie.
+function iniPanelesTamDefault(scope){
+  // "pendientes" del operador trae ADENTRO la sección de Tareas también (dos
+  // bloques de contenido en una sola tarjeta) - necesita el doble de alto que
+  // una tarjeta simple para que ambos entren sin apretarse.
+  return scope === 'op' ? { chat:'m', pendientes:'m', accesos:'w' } : { msg:'m', tareas:'s', pendop:'s', actividad:'s', accesos:'w' };
+}
+var INI_TAMANOS = ['s', 'm', 'w', 'l'];
+var INI_TAMANOS_LABEL = { s:'Chico', m:'Alto', w:'Ancho', l:'Grande' };
 function iniPanelesKey(scope){ return 'ns_paneles_' + (scope || 'admin') + '_' + (ME && ME.username || ''); }
-function iniPanelesOrden(scope){
-  var def = iniPanelesDefault(scope);
+// Formato guardado: { orden:[...], tamanos:{panelId:'s'|'m'|'w'|'l'} }. Sigue
+// leyendo el formato viejo (un array plano = solo orden) para no perder lo
+// que cada usuario ya tenía guardado. Migra sola cuando se suma o se saca un
+// panel (ej. "Actividad de operadores" el día que se agregó): conserva el
+// orden de los que siguen existiendo, agrega al final los nuevos y descarta
+// los que ya no están - así CUALQUIER panel nuevo que se sume a Inicio a
+// futuro entra solo, sin romper el layout guardado de nadie.
+function iniPanelesEstado(scope){
+  var def = iniPanelesDefault(scope), estado = { orden: def.slice(), tamanos: iniPanelesTamDefault(scope) };
   try {
     var v = JSON.parse(localStorage.getItem(iniPanelesKey(scope)) || 'null');
-    if (Array.isArray(v) && v.length === def.length && def.every(function(p){ return v.indexOf(p) >= 0; })) return v;
+    var ordenGuardado = Array.isArray(v) ? v : (v && v.orden);
+    if (Array.isArray(ordenGuardado)) {
+      var conocidos = ordenGuardado.filter(function(p){ return def.indexOf(p) >= 0; });
+      var faltantes = def.filter(function(p){ return conocidos.indexOf(p) < 0; });
+      if (conocidos.length) estado.orden = conocidos.concat(faltantes);
+    }
+    if (v && !Array.isArray(v) && v.tamanos) {
+      def.forEach(function(p){ if (INI_TAMANOS.indexOf(v.tamanos[p]) >= 0) estado.tamanos[p] = v.tamanos[p]; });
+    }
   } catch(e){}
-  return def.slice();
+  return estado;
 }
-function iniPanelesGuardar(scope, orden){ try{ localStorage.setItem(iniPanelesKey(scope), JSON.stringify(orden)); }catch(e){} }
+function iniPanelesGuardar(scope, estado){ try{ localStorage.setItem(iniPanelesKey(scope), JSON.stringify(estado)); }catch(e){} }
 function iniPanelesContenedor(scope){ return document.getElementById(scope === 'op' ? 'operadorPaneles' : 'inicioPaneles'); }
 function iniPanelesAplicar(scope){
   var cont = iniPanelesContenedor(scope); if (!cont) return;
-  var orden = iniPanelesOrden(scope);
-  var slots = iniPanelesSlots(scope);
-  orden.forEach(function(panelId, i){
+  var estado = iniPanelesEstado(scope);
+  // El ORDEN es la posición real en el DOM - grid-auto-flow:dense las va
+  // acomodando solas a partir de acá, sin que nada se pise.
+  estado.orden.forEach(function(panelId){
     var el = cont.querySelector('[data-panel="' + panelId + '"]');
-    if (!el) return;
-    slots.forEach(function(s){ el.classList.remove(s); });
-    el.classList.add(slots[i]);
+    if (el) cont.appendChild(el);
+  });
+  cont.querySelectorAll('[data-panel]').forEach(function(el){
+    var id = el.getAttribute('data-panel');
+    INI_TAMANOS.forEach(function(t){ el.classList.remove('ini-size-' + t); });
+    el.classList.add('ini-size-' + (estado.tamanos[id] || 's'));
+  });
+}
+function iniPanelesCambiarTamano(scope, panelId){
+  var estado = iniPanelesEstado(scope);
+  var actual = INI_TAMANOS.indexOf(estado.tamanos[panelId] || 's');
+  estado.tamanos[panelId] = INI_TAMANOS[(actual + 1) % INI_TAMANOS.length];
+  iniPanelesGuardar(scope, estado);
+  iniPanelesAplicar(scope);
+}
+// Un botón (⤢) por tarjeta para cambiar el tamaño, inyectado una sola vez en
+// el header. Es un <button> real: un click no dispara el arrastre del header
+// (los navegadores ya evitan que un elemento interactivo anidado lo inicie).
+function iniPanelesInyectarBotonesTamano(scope){
+  var cont = iniPanelesContenedor(scope); if (!cont) return;
+  cont.querySelectorAll('[data-panel]').forEach(function(el){
+    var head = el.querySelector('.ini-head'); if (!head || head.querySelector('.ini-size-btn')) return;
+    var panelId = el.getAttribute('data-panel');
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ini-size-btn'; btn.title = 'Cambiar tamaño'; btn.textContent = '⤢';
+    btn.addEventListener('click', function(e){ e.stopPropagation(); iniPanelesCambiarTamano(scope, panelId); });
+    head.appendChild(btn);
   });
 }
 function iniPanelesWireDrag(scope){
   var cont = iniPanelesContenedor(scope); if (!cont || cont._dragWired) return;
   cont._dragWired = true;
+  iniPanelesInyectarBotonesTamano(scope);
   var dragged = null;
   cont.querySelectorAll('[data-panel]').forEach(function(el){
     el.setAttribute('draggable', 'true');
@@ -1582,62 +1644,14 @@ function iniPanelesWireDrag(scope){
       el.classList.remove('ini-drop-target');
       if (!dragged || dragged === el) return;
       var a = dragged.getAttribute('data-panel'), b = el.getAttribute('data-panel');
-      var orden = iniPanelesOrden(scope);
-      var ia = orden.indexOf(a), ib = orden.indexOf(b);
+      var estado = iniPanelesEstado(scope);
+      var ia = estado.orden.indexOf(a), ib = estado.orden.indexOf(b);
       if (ia < 0 || ib < 0) return;
-      orden[ia] = b; orden[ib] = a;
-      iniPanelesGuardar(scope, orden);
+      estado.orden[ia] = b; estado.orden[ib] = a;
+      iniPanelesGuardar(scope, estado);
       iniPanelesAplicar(scope);
-      iniAjustarAltoProgramar(scope);
     });
   });
-}
-// Que la tarjeta del slot alto (la que abarca las 3 filas - el chat, salvo
-// que se haya reordenado) llegue exactamente hasta abajo de las 3 apiladas al
-// lado, en vez de dejar un hueco vacío o quedarse corta. Es una MEDICIÓN +
-// una altura fija en px (no un stretch de CSS en vivo): ya probamos
-// align-items:stretch + sin tope de alto y terminó en un crecimiento sin fin
-// al escribir muchos mensajes (ver PR "arreglar crecimiento infinito del
-// chat") - esto no tiene ese riesgo porque cada cálculo asigna un número
-// fijo, no una regla que se realimente sola. Si el contenido no entra en ese
-// alto, escrolea adentro (overflow-y:auto ya está puesto en el elemento).
-function iniAjustarAltoColumnaAlta(scope){
-  var cont = iniPanelesContenedor(scope); if (!cont) return;
-  var slotAlto = cont.querySelector(scope === 'op' ? '.op-slot-a' : '.ini-slot-a');
-  if (!slotAlto) return;
-  var scroll = slotAlto.querySelector('.ini-feed, .ini-tasks, .ini-pendop-list');
-  if (!scroll) return;
-  var rectAlto = slotAlto.getBoundingClientRect();
-  // Solo cuenta como "columna vecina" lo que arranca a la derecha del slot
-  // alto - un panel de ancho completo más abajo (como Accesos rápidos del
-  // operador) empieza en el mismo left, así que queda afuera de la cuenta:
-  // el slot alto tiene que igualar SU columna vecina, no el layout entero.
-  var resto = Array.from(cont.querySelectorAll('[data-panel]')).filter(function(el){
-    return el !== slotAlto && el.getBoundingClientRect().left >= rectAlto.right - 1;
-  });
-  if (!resto.length) return;
-  var top = Math.min.apply(null, resto.map(function(el){ return el.getBoundingClientRect().top; }));
-  var bottom = Math.max.apply(null, resto.map(function(el){ return el.getBoundingClientRect().bottom; }));
-  var altoObjetivo = bottom - top;
-  var altoFijoTarjeta = slotAlto.getBoundingClientRect().height - scroll.getBoundingClientRect().height;
-  var nuevoAlto = Math.max(210, Math.round(altoObjetivo - altoFijoTarjeta));
-  scroll.style.height = nuevoAlto + 'px';
-  scroll.style.maxHeight = nuevoAlto + 'px';
-}
-var INI_ALTURA_TIMERS = {};
-function iniAjustarAltoProgramar(scope){
-  clearTimeout(INI_ALTURA_TIMERS[scope]);
-  INI_ALTURA_TIMERS[scope] = setTimeout(function(){ iniAjustarAltoColumnaAlta(scope); }, 60);
-}
-// Se re-mide sola cuando cambia el contenido (mensaje nuevo, tarea agregada,
-// accesos editados) o cambia el ancho de ventana - así no hay que acordarse
-// de llamarla a mano desde cada función que toca estas tarjetas.
-function iniAjustarAltoObservar(scope){
-  var cont = iniPanelesContenedor(scope); if (!cont || cont._alturaObservada) return;
-  cont._alturaObservada = true;
-  new MutationObserver(function(){ iniAjustarAltoProgramar(scope); }).observe(cont, { childList:true, subtree:true, characterData:true });
-  window.addEventListener('resize', function(){ iniAjustarAltoProgramar(scope); });
-  iniAjustarAltoProgramar(scope);
 }
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
