@@ -5274,6 +5274,22 @@ class PamiDocumentacionController:
                       let input = null;
                       if (modo === 'orden') {
                         input = inputs.find((el) => /orden|nro|numero/i.test(`${el.name || ''} ${el.id || ''} ${el.placeholder || ''}`));
+                        if (!input) {
+                          // El input de "Nro. de Orden" no tiene name/id descriptivo: lo ubicamos
+                          // por el TEXTO del label y tomamos el input de su misma fila. (Antes caía
+                          // a inputs[0] = el campo Afiliado, y metía la OME donde no iba.)
+                          const norm = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                          const lbl = Array.from(document.querySelectorAll('label, span, div, td, th'))
+                            .filter(visible)
+                            .find((el) => /nro\.?\s*de\s*orden/.test(norm(el.textContent)) && norm(el.textContent).length < 25);
+                          if (lbl) {
+                            const lb = lbl.getBoundingClientRect();
+                            input = inputs.find((el) => {
+                              const b = el.getBoundingClientRect();
+                              return b.top >= lb.top - 20 && b.top <= lb.bottom + 60 && b.left >= lb.left - 10;
+                            });
+                          }
+                        }
                       } else {
                         if (select) {
                           const selectBox = select.getBoundingClientRect();
@@ -5285,7 +5301,9 @@ class PamiDocumentacionController:
                         }
                         input = input || inputs.find((el) => /benef|afiliado|documento|dni/i.test(`${el.name || ''} ${el.id || ''} ${el.placeholder || ''}`));
                       }
-                      input = input || inputs[0];
+                      // Para 'orden' NO caer a inputs[0]: preferimos no encontrar la OME antes
+                      // que meter el número en el campo equivocado (Afiliado) y buscar de más.
+                      input = input || (modo === 'orden' ? null : inputs[0]);
                       if (!input) return false;
                       setValor(input, valor || nroOrden);
                       const buscar = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'))
