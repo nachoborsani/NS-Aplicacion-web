@@ -710,7 +710,9 @@ function acumularSubidaTelegram(task, ok) {
 async function telegramResumenTick() {
   try {
     const { fecha, hhmm } = ahoraAR();
-    if (hhmm < "19:00") return;
+    let hora = "19:00";
+    try { const s = loadWorkerState().schedule; if (s && /^([01]\d|2[0-3]):[0-5]\d$/.test(s.telegramResumenHora)) hora = s.telegramResumenHora; } catch {}
+    if (hhmm < hora) return;
     const acc = loadTelegramSubidas();
     if (!acc || acc.fecha !== fecha || acc.enviado) return; // sin actividad hoy o ya enviado
     acc.enviado = true; saveTelegramSubidas(acc); // marcar antes de enviar (evita doble envío)
@@ -2124,6 +2126,7 @@ function defaultSchedule() {
       Thu: [], Fri: ["12:00", "17:00", "19:30"], Sat: [], Sun: [],
     },
     scheffelaarBenef: { dias: ["Mon", "Tue", "Wed", "Fri"], hora: "19:00" },
+    telegramResumenHora: "19:00", // resumen diario de subidas por Telegram
   };
 }
 const DIAS_SEMANA = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -2148,6 +2151,7 @@ function validarSchedule(s) {
       dias: Array.isArray(b.dias) ? DIAS_SEMANA.filter((d) => b.dias.includes(d)) : [],
       hora: okTime(b.hora) ? b.hora : "19:00",
     },
+    telegramResumenHora: okTime(s.telegramResumenHora) ? s.telegramResumenHora : "19:00",
   };
 }
 function emptyWorkerState() {

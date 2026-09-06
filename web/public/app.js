@@ -7716,7 +7716,7 @@ function srvFormatSchedule(s){
   out.push('• Refresco de bandeja <b>'+esc(s.bandejaRefresh)+'</b> · reintentos <b>'+esc(s.bandejaRetry)+'</b>');
   out.push('• "Actualizar ahora" <b>cada '+esc(String(s.pollerCadaMin))+' min</b>');
   out.push('• Traer del mail (informes): <b>10:00, 14:00, 16:00, 18:00</b>');
-  out.push('• Resumen de subidas por Telegram: <b>19:00</b>');
+  out.push('• Resumen de subidas por Telegram: <b>'+esc(s.telegramResumenHora||'19:00')+'</b>');
   var cad = s.scheffelaarCadena || {};
   var partes = SRV_DIAS_ORDEN.filter(function(d){ return (cad[d]||[]).length; })
      .map(function(d){ return SRV_DIA_LBL[d]+' '+cad[d].join(', '); });
@@ -7770,6 +7770,9 @@ function renderConfigServer(s){
   h += '</div>';
   h += '<div '+row+'><span style="width:150px">Hora</span><input type="time" id="cfgBenefHora" class="inp mini" value="'+esc((s.scheffelaarBenef&&s.scheffelaarBenef.hora)||'19:00')+'"></div>';
 
+  h += '<span '+lbl+'>Resumen de subidas por Telegram</span>';
+  h += '<div '+row+'><span style="width:150px">Hora del resumen</span><input type="time" id="cfgTelegramHora" class="inp mini" value="'+esc(s.telegramResumenHora||'19:00')+'"></div>';
+
   h += '<div id="cfgMsg" style="margin-top:10px;font-size:12.5px"></div>';
   h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
      + '<button class="btn btn-sm" type="button" onclick="cerrarConfigServer()">Cancelar</button>'
@@ -7792,6 +7795,7 @@ async function guardarConfigServer(){
     pollerCadaMin: parseInt((document.getElementById('cfgPoller')||{}).value, 10) || 10,
     scheffelaarCadena: cad,
     scheffelaarBenef: { dias: benefDias, hora: (document.getElementById('cfgBenefHora')||{}).value || '19:00' },
+    telegramResumenHora: (document.getElementById('cfgTelegramHora')||{}).value || '19:00',
   };
   var btn = document.getElementById('cfgGuardar'); if(btn){ btn.disabled = true; btn.textContent = 'Guardando…'; }
   var msg = document.getElementById('cfgMsg');
