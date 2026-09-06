@@ -639,6 +639,7 @@ function estadoInforme(it) {
   if (it && it.resuelto) {
     if (resueltoTodoTransmitido(it)) return "ya_transmitido";
     if (it.resuelto.faltaValidar) return "falta_validar";
+    if (it.match && it.match.estado === "falta_validar") return "falta_validar";
     return "ok";
   }
   return (it && it.match && it.match.estado) || "sin_match";
@@ -8620,6 +8621,10 @@ const server = http.createServer(async (req, res) => {
     const transSet = omesTransmitidasDeCliente(slug);
     const todoTransmitido = omes.length > 0 && omes.every((o) => transSet.has(o));
     it.resuelto = { ome: omes[0], omes, beneficio: benef, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido };
+    // Resolver a una OME implica que ya se encontró al paciente: si estaba
+    // "reclamado al centro", se limpia (si no, quedaba trabado en Reclamado y no
+    // pasaba a listo/falta-validar aunque ya tuviera OME).
+    if (it.reclamado) delete it.reclamado;
     // Al resolver con "Usar", aprendemos el DNI↔beneficio en el padrón: la próxima
     // vez ese paciente matchea solo (sin volver a resolver a mano).
     const dniR = cabinaLib.digs(it.extract && it.extract.dni);

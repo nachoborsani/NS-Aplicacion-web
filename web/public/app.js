@@ -498,7 +498,28 @@ function aplicarDefaultsPorSexo(){
   });
 }
 // Cambió el sexo: recargar posición/diagnóstico del preset y refrescar la vista.
-function onInformeSexoChange(){ aplicarDefaultsPorSexo(); programarPreviewVivo(); }
+function onInformeSexoChange(){ poblarPresetsInforme(); aplicarDefaultsPorSexo(); programarPreviewVivo(); }
+// Sexo elegido en el form (normalizado), leído del campo dinámico de #infCampos.
+function _sexoInformeActual(){
+  var el = document.querySelector('#infCampos [data-key="sexo"]');
+  var s = el ? String(el.value || '').toLowerCase() : '';
+  return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : '';
+}
+// Puebla el desplegable de presets del modelo actual, y —si los presets traen
+// valores.sexo (urodinamia M1-M8 / F1-F8)— filtra por el sexo elegido.
+function poblarPresetsInforme(){
+  var key = modeloActualKey();
+  var desc = document.getElementById('infDescripcion');
+  if (!desc) return;
+  var prevD = desc.value;
+  var todos = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); });
+  var tienenSexo = todos.some(function(d){ return d.valores && d.valores.sexo; });
+  var sx = _sexoInformeActual();
+  var nsx = function(s){ s = String(s || '').toLowerCase(); return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : ''; };
+  var rs = (tienenSexo && sx) ? todos.filter(function(d){ var ps = nsx(d.valores && d.valores.sexo); return !ps || ps === sx; }) : todos;
+  desc.innerHTML = rs.map(function(d){ return opt(d.id, presetLabel(d)); }).join('') + opt('__custom__', 'Texto personalizado');
+  if (prevD && rs.some(function(d){ return d.id === prevD; })) desc.value = prevD;
+}
 async function actualizarPreviewVivo(){
   var frame = document.getElementById('infLiveFrame'), ph = document.getElementById('infLivePlaceholder');
   if (!frame) return;
@@ -701,14 +722,7 @@ function camposObligatoriosFaltantes(){
 }
 function filtrarPorModelo(){
   var key = modeloActualKey();
-  var desc = document.getElementById('infDescripcion');
-  if (desc){
-    var prevD = desc.value;
-    var rs = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); });
-    desc.innerHTML = rs.map(function(d){ return opt(d.id, presetLabel(d)); }).join('')
-      + opt('__custom__', 'Texto personalizado');
-    if (prevD && rs.some(function(d){ return d.id === prevD; })) desc.value = prevD;
-  }
+  poblarPresetsInforme();
   var med = document.getElementById('infMedico');
   if (med){
     var prevM = med.value;
@@ -3988,6 +4002,30 @@ function modalOpcionesInforme(x, m, op, subir, btn){
         '<button class="mc-inf-btn ' + (subir ? 'subir' : 'primary') + '" id="mc-inf-ok">' + (subir ? '📤 Crear y subir' : '📝 Crear') + '</button></div>' +
     '</div>';
   document.body.appendChild(scrim);
+  // Filtro de presets por sexo: si los presets traen valores.sexo (urodinamia:
+  // M1-M8 / F1-F8), al elegir el sexo se ofrecen solo los de ese sexo; y al elegir
+  // un preset se sincroniza el sexo, para que el informe salga coherente.
+  (function(){
+    var presetSel = scrim.querySelector('#mc-inf-preset');
+    var sexoSel = scrim.querySelector('[data-campo="sexo"]');
+    if (!presetSel || !sexoSel) return;
+    if (!op.presets.some(function(p){ return p.valores && p.valores.sexo; })) return;
+    var nsx = function(s){ s = String(s || '').toLowerCase(); return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : ''; };
+    var rebuild = function(){
+      var sx = nsx(sexoSel.value);
+      var prev = presetSel.value;
+      var vis = op.presets.filter(function(p){ var ps = nsx(p.valores && p.valores.sexo); return !ps || !sx || ps === sx; });
+      presetSel.innerHTML = vis.map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + '</option>'; }).join('');
+      if (vis.some(function(p){ return p.id === prev; })) presetSel.value = prev;
+    };
+    sexoSel.addEventListener('change', rebuild);
+    presetSel.addEventListener('change', function(){
+      var p = op.presets.find(function(pp){ return pp.id === presetSel.value; });
+      var ps = p && p.valores && p.valores.sexo;
+      if (ps && nsx(sexoSel.value) !== nsx(ps)) { sexoSel.value = ps; }
+    });
+    rebuild();
+  })();
   function cerrar(){ scrim.remove(); }
   scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(); });
   scrim.querySelector('#mc-inf-cancel').onclick = cerrar;
@@ -8912,6 +8950,7 @@ function cabEstadoSinReclamo(it){
   if (it.resuelto){
     if (cabResueltoTodoTransmitido(it)) return 'ya_transmitido';
     if (it.resuelto.faltaValidar) return 'falta_validar';
+    if (it.match && it.match.estado === 'falta_validar') return 'falta_validar';
     return 'ok';
   }
   return it.match ? it.match.estado : 'sin_match';
@@ -8925,6 +8964,7 @@ function cabEstadoDe(it){
   if (it.resuelto){
     if (cabResueltoTodoTransmitido(it)) return 'ya_transmitido';
     if (it.resuelto.faltaValidar) return 'falta_validar';   // la subida rebotó: OME sin validar
+    if (it.match && it.match.estado === 'falta_validar') return 'falta_validar'; // la OME figura sin validar en la bandeja
     return 'ok';
   }
   return it.match ? it.match.estado : 'sin_match';
