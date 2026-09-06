@@ -4085,7 +4085,7 @@ function modalOpcionesInforme(x, m, op, subir, btn){
   var medDef = loteMedicoParaModelo(m.key) || (op.medicos[0] && op.medicos[0].id) || '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
   var medOpts = op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
-  var camposHtml = op.camposReq.map(function(c){
+  var campoHtml = function(c){
     var inp;
     if (c.tipo === 'select'){
       inp = '<select data-campo="' + esc(c.key) + '"><option value="">— Elegir —</option>' +
@@ -4094,16 +4094,20 @@ function modalOpcionesInforme(x, m, op, subir, btn){
       inp = '<input data-campo="' + esc(c.key) + '" value="' + esc(c.default || '') + '">';
     }
     return '<div class="mc-inf-field"><label>' + esc(c.label || c.key) + ' *</label>' + inp + '</div>';
-  }).join('');
+  };
+  // El sexo va PRIMERO (arriba de todo): al elegirlo se filtran los presets.
+  var sexoCampo = op.camposReq.find(function(c){ return c.key === 'sexo'; });
+  var restoCampos = op.camposReq.filter(function(c){ return c.key !== 'sexo'; });
   var scrim = document.createElement('div'); scrim.className = 'mc-inf-scrim';
   scrim.innerHTML =
     '<div class="mc-inf-box">' +
       '<div class="mc-inf-head"><b>' + (subir ? 'Crear y subir informe' : 'Crear informe') + '</b>' +
         '<span class="mc-inf-sub">' + esc(x.nombre || '') + ' · ' + esc((x.practica || '').split(' - ').slice(-1)[0]) + (subir ? ' · OME ' + esc(x.ome || '') : '') + '</span></div>' +
       '<div class="mc-inf-body">' +
+        (sexoCampo ? campoHtml(sexoCampo) : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
-        camposHtml +
+        restoCampos.map(campoHtml).join('') +
       '</div>' +
       '<div class="mc-inf-foot"><button class="mc-inf-btn" id="mc-inf-cancel">Cancelar</button>' +
         '<button class="mc-inf-btn ' + (subir ? 'subir' : 'primary') + '" id="mc-inf-ok">' + (subir ? '📤 Crear y subir' : '📝 Crear') + '</button></div>' +
