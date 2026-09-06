@@ -8435,10 +8435,29 @@ async function verCapitaAfiliado(nombre, dni, beneficio){
 // ===== Cabina de informes recibidos (admin) =====
 var CAB_ITEMS = [];      // items del cliente actual (para abrir el modal sin re-fetch)
 var CAB_ITEM = null;     // item abierto en el modal
-// Filtro rápido por estado (clic en los chips del resumen). Uno solo a la vez,
-// mismo criterio que el filtro rápido de "Reportes" (setClientReportQuickFilter):
-// clic de nuevo sobre el mismo chip lo saca.
-var CAB_ESTADO_FILTRO = '';
+// Los chips del resumen son CHECKBOXES (multi-selección): cada uno prende/apaga
+// si ese estado se muestra en la tabla. Por defecto se ESCONDEN los estados
+// "ruidosos" (ya transmitido + desestimado): son cientos y no hay nada que hacer
+// con ellos; todo lo demás (lo accionable) se muestra. La elección queda guardada
+// en el navegador, por usuario.
+var CAB_OCULTOS_DEFAULT = ['ya_transmitido', 'desestimado'];
+function cabOcultosKey(){ return 'ns-cabina-ocultos-' + (ME && ME.username || ''); }
+function cabEstadosOcultos(){
+  try { var v = JSON.parse(localStorage.getItem(cabOcultosKey()) || 'null'); if (Array.isArray(v)) return v; } catch(e){}
+  return CAB_OCULTOS_DEFAULT.slice();
+}
+function cabGuardarOcultos(arr){ try { localStorage.setItem(cabOcultosKey(), JSON.stringify(arr)); } catch(e){} }
+function cabEstadoOculto(k){ return cabEstadosOcultos().indexOf(k) >= 0; }
+// Buscador de paciente (nombre, DNI, archivo u OME). Vacío = no filtra.
+var CAB_BUSCAR = '';
+function cabSetBuscar(v){ CAB_BUSCAR = String(v || '').trim().toLowerCase(); aplicarFiltroCabina(); }
+function cabMatchBusca(it){
+  if (!CAB_BUSCAR) return true;
+  var ex = it.extract || {};
+  var omes = (it.resuelto && it.resuelto.omes) ? it.resuelto.omes.join(' ') : ((it.match && it.match.ome) || '');
+  var hay = [ex.nombre, ex.dni, it.filename, omes].join(' ').toLowerCase();
+  return hay.indexOf(CAB_BUSCAR) >= 0;
+}
 async function loadCabinaView(){
   var sel = document.getElementById('cabCliente');
   if (sel && !sel.options.length){
@@ -8491,7 +8510,8 @@ function descargarCabina(fmt){
 function cabIdsParaTarea(tipo){
   var de=(document.getElementById('cabDesde')||{}).value||'', ha=(document.getElementById('cabHasta')||{}).value||'';
   var vis=CAB_ITEMS.filter(function(it){ var f=cabFecha(it); if(!f)return true; if(de&&f<de)return false; if(ha&&f>ha)return false; return true; });
-  if (CAB_ESTADO_FILTRO) vis=vis.filter(function(it){ return cabEstadoDe(it)===CAB_ESTADO_FILTRO; });
+  // Solo lo que se está VIENDO: estados no ocultos + lo que matchee el buscador.
+  vis=vis.filter(function(it){ return !cabEstadoOculto(cabEstadoDe(it)) && cabMatchBusca(it); });
   if (tipo==='subir-informes'){
     return vis.filter(function(it){ var e=cabEstadoDe(it); return e==='ok'||e==='resuelto'; }).map(function(it){return it.id;});
   }
@@ -9225,27 +9245,33 @@ function aplicarFiltroCabina(){
     if (ha && f > ha) return false;      // "hasta" INCLUSIVE al mostrar
     return true;
   });
+  // El resumen (los chips con sus conteos) muestra SIEMPRE todos los estados del
+  // rango, prendidos o apagados — si no, no habría cómo volver a mostrar uno.
   var resumen = cabResumenDe(vis);
-  // Si el estado elegido ya no tiene informes en este rango (p.ej. se achicó
-  // el rango de fechas), soltamos el filtro en vez de dejar la tabla vacía
-  // sin ningún chip prendido que lo explique.
-  if (CAB_ESTADO_FILTRO && !resumen[CAB_ESTADO_FILTRO]) CAB_ESTADO_FILTRO = '';
   renderCabinaResumen(resumen, vis.length);
-  var filtrados = CAB_ESTADO_FILTRO
-    ? vis.filter(function(it){ return cabEstadoDe(it) === CAB_ESTADO_FILTRO; })
-    : vis;
+  var filtrados = vis.filter(function(it){
+    if (cabEstadoOculto(cabEstadoDe(it))) return false;   // estado destildado
+    if (!cabMatchBusca(it)) return false;                 // no matchea el buscador
+    return true;
+  });
   renderCabinaRows(slug, filtrados);
   var meta = document.getElementById('cabResultMeta');
   if (meta) {
     var motivos = [];
     if (vis.length !== CAB_ITEMS.length) motivos.push('del rango de fechas');
-    if (filtrados.length !== vis.length) motivos.push('del filtro de estado');
+    var ocultosPorEstado = vis.filter(function(it){ return cabEstadoOculto(cabEstadoDe(it)); }).length;
+    if (ocultosPorEstado) motivos.push('de estados destildados');
+    if (CAB_BUSCAR) motivos.push('de la búsqueda');
     meta.textContent = filtrados.length + ' informe(s)' +
       (motivos.length ? ' (de ' + CAB_ITEMS.length + ' — el resto queda fuera ' + motivos.join(' o ') + ')' : '');
   }
 }
+// Prende/apaga un estado (checkbox del chip). Queda guardado en el navegador.
 function toggleCabEstadoFiltro(k){
-  CAB_ESTADO_FILTRO = CAB_ESTADO_FILTRO === k ? '' : k;
+  var arr = cabEstadosOcultos();
+  var i = arr.indexOf(k);
+  if (i >= 0) arr.splice(i, 1); else arr.push(k);
+  cabGuardarOcultos(arr);
   aplicarFiltroCabina();
 }
 var CAB_ESTADOS = {
@@ -9262,10 +9288,10 @@ function renderCabinaResumen(resumen, total){
   var orden = ['ok','falta_validar','factura','revisar_practica','revisar_nombre','sin_ome','reclamado','ya_transmitido','desestimado','sin_match'];
   var chips = orden.filter(function(k){ return resumen[k]; }).map(function(k){
     var m = CAB_ESTADOS[k] || {t:k,c:'muted'};
-    var on = CAB_ESTADO_FILTRO === k;
-    return '<button type="button" class="cab-chip '+m.c+(on?' on':'')+'" '
-      + 'aria-pressed="'+on+'" title="'+(on?'Clic para sacar el filtro':'Clic para filtrar por este estado')+'" '
-      + 'onclick="toggleCabEstadoFiltro(\''+k+'\')">'+resumen[k]+' '+esc(m.t)+'</button>';
+    var on = !cabEstadoOculto(k);   // tildado = se muestra
+    return '<button type="button" class="cab-chip '+m.c+(on?' on':' off')+'" '
+      + 'aria-pressed="'+on+'" title="'+(on?'Se está mostrando. Clic para ocultarlo.':'Oculto. Clic para mostrarlo.')+'" '
+      + 'onclick="toggleCabEstadoFiltro(\''+k+'\')"><span class="cab-chip-box" aria-hidden="true">'+(on?'✓':'')+'</span>'+resumen[k]+' '+esc(m.t)+'</button>';
   });
   res.innerHTML = total ? chips.join('') : '';
 }

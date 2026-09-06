@@ -1931,6 +1931,15 @@
   .cab-chip.muted{opacity:.8}
   .cab-chip:hover{border-color:var(--turq);opacity:1}
   .cab-chip.on{border-color:var(--turq);box-shadow:0 0 0 3px var(--ring);opacity:1}
+  /* Los chips son checkboxes: cuadradito ✓ tildado = se muestra; destildado = gris. */
+  .cab-chip-box{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;border:1.5px solid currentColor;font-size:10px;line-height:1;flex:0 0 auto;opacity:.6}
+  .cab-chip.on .cab-chip-box{background:var(--turq);border-color:var(--turq);color:#fff;opacity:1}
+  .cab-chip.off{opacity:.5}
+  .cab-chip.off:hover{opacity:.85}
+  /* Buscador de paciente al lado del título "Informes". */
+  .cab-buscador{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-2)}
+  .cab-buscador input{border:none;background:transparent;padding:2px 0;font-size:12.5px;min-width:210px;color:var(--text)}
+  .cab-buscador input:focus{outline:none}
   .cab-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:750;padding:3px 9px;border-radius:999px;white-space:nowrap}
   /* Estado de la tarea (subiendo/auditando): chip notable, texto en llano. */
   .cab-estado{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;padding:6px 14px;border-radius:999px;white-space:nowrap}

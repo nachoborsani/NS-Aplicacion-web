@@ -1163,6 +1163,10 @@
           <div class="tablecard nom-table">
             <div class="table-head">
               <div><b id="cabResultTitle">Informes</b><span id="cabResultMeta">Elegí un cliente.</span></div>
+              <div class="cab-buscador">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                <input class="inp" id="cabBuscar" type="search" placeholder="Buscar paciente, DNI, archivo u OME" oninput="cabSetBuscar(this.value)">
+              </div>
               <div style="display:flex;gap:6px;align-items:center">
                 <span id="cabTareaEstado" class="cab-estado" hidden></span>
                 <span id="cabToolbarNormal" style="display:contents">
