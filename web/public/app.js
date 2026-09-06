@@ -1308,18 +1308,26 @@ function iniTareaHTML(t, opts){
     ? (est==='vencida' ? 'venció '+iniVenceLabel(t.vence) : (est==='hoy' ? 'vence hoy' : 'vence '+iniVenceLabel(t.vence)))
     : 'fecha';
   var cal = '<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4.5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  // Reprogramar una tarea vencida es cosa de un admin - un operador puede
+  // resolverla pero no correrle la fecha (mismo criterio que aplica el server
+  // en POST .../vence). Una tarea sin vencer todavía se puede reprogramar igual.
+  var esAdmin = iniEsAdmin();
+  var puedeCambiarFecha = esAdmin || est !== 'vencida';
   // Chip de vencimiento: un <input type="date"> transparente encima abre el calendario
-  // nativo al tocarlo y guarda al cambiar. En las hechas se muestra fijo, sin editar.
+  // nativo al tocarlo y guarda al cambiar. En las hechas, o vencidas sin permiso, se
+  // muestra fijo, sin editar.
   var due = t.hecha
     ? (t.vence ? '<span class="ini-due set done">'+cal+'<span>'+esc(iniVenceLabel(t.vence))+'</span></span>' : '')
-    : '<label class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span>'
-      + '<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>';
+    : (puedeCambiarFecha
+      ? '<label class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span>'
+        + '<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>'
+      : '<span class="ini-due '+(t.vence?(est||'futuro'):'none')+'">'+cal+'<span>'+esc(txt)+'</span></span>');
   // Vencida: no se la deja en rojo pasivo - pide explícitamente resolverla o
-  // pasarla a otra fecha (no alcanza con el chip de fecha, poco visible).
+  // (solo un admin) pasarla a otra fecha (no alcanza con el chip de fecha, poco visible).
   var urgente = est==='vencida'
-    ? '<div class="ini-task-urgent"><span>Venció — ¿la resolvés o la pasás para otra fecha?</span>'
+    ? '<div class="ini-task-urgent"><span>Venció — ¿la resolvés'+(esAdmin?' o la pasás para otra fecha':'')+'?</span>'
       + '<button type="button" class="btn btn-primary btn-sm" onclick="iniToggleTarea(\''+esc(t.id)+'\')">✓ Resuelta</button>'
-      + '<label class="ini-due-btn">📅 Nueva fecha<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>'
+      + (esAdmin ? '<label class="ini-due-btn">📅 Nueva fecha<input type="date" value="'+esc(t.vence||'')+'" onchange="iniSetVence(\''+esc(t.id)+'\', this.value)"></label>' : '')
       + '</div>'
     : '';
   return '<li class="ini-task'+(t.hecha?' done':'')+(est==='vencida'?' venc':'')+'">'

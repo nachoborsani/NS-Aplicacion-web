@@ -5286,7 +5286,9 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, tarea: t });
   }
   // Poner / cambiar / quitar la fecha de vencimiento. (POST .../tareas/<id>/vence)
-  // Mismo criterio que toggle: un operador solo reprograma lo suyo.
+  // Mismo criterio que toggle: un operador solo reprograma lo suyo. Además, si
+  // ya está vencida, reprogramarla queda reservado a un admin (el operador
+  // solo puede resolverla) - un admin sí puede siempre, sea o no la suya.
   if (p.startsWith("/api/inicio/tareas/") && p.endsWith("/vence") && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
@@ -5298,6 +5300,11 @@ const server = http.createServer(async (req, res) => {
     const t = (store.tareas || []).find((x) => x.id === id);
     if (!t) return json(res, 404, { error: "Tarea no encontrada." });
     if (me.role === "operador" && !tareaEsDe(t, me.username)) return json(res, 403, { error: "Esa tarea no es tuya." });
+    // Reprogramar una tarea ya vencida es cosa de un admin - un operador puede
+    // resolverla (toggle) pero no correrle la fecha.
+    if (me.role === "operador" && t.vence && t.vence < actividadDiaKey(new Date())) {
+      return json(res, 403, { error: "Una tarea vencida solo la puede reprogramar un administrador." });
+    }
     t.vence = vence;
     saveInicio(store);
     return json(res, 200, { ok: true, tarea: t });
