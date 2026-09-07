@@ -5874,6 +5874,52 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo enriquecer la planilla." }); }
   }
 
+  // Plan Salud: matchear por NOMBRE las filas sin beneficio contra la planilla de
+  // Dube (que tiene benef+dni+nombre) para traer el beneficio. Solo lectura (simulación).
+  const planSaludMatchDubeMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/match-dube$/);
+  if (planSaludMatchDubeMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(planSaludMatchDubeMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    const nameKey = (v) => String(v == null ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const C = credCfg("dubesarky-ezequiel");
+      if (!C) return json(res, 400, { error: "No está configurada la planilla de Dube." });
+      const cc = C.cols;
+      const maxCol = Math.max(cc.benef || 0, cc.dni || 0, cc.nombre || 0, cc.credencial || 0);
+      const dubeRows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(maxCol)}`);
+      const idx = new Map();
+      for (const r of dubeRows) {
+        const nombre = String(r[cc.nombre] || "").trim();
+        const benef = dig(r[cc.benef]);
+        if (!nombre || !benef) continue;
+        const k = nameKey(nombre);
+        if (!idx.has(k)) idx.set(k, []);
+        idx.get(k).push({ dubeNombre: nombre, benef, dni: dig(r[cc.dni]), descargada: /descargada/i.test(String(r[cc.credencial] || "")) });
+      }
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      const cimaRows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+      const conMatch = [], sinMatch = [];
+      cimaRows.forEach((r, i) => {
+        const fila = i + 2, benef = dig(r[3]), nombre = String(r[1] || "").trim();
+        if (benef || !nombre) return; // solo las que FALTAN beneficio
+        const m = idx.get(nameKey(nombre)) || [];
+        if (!m.length) { sinMatch.push({ fila, nombre }); return; }
+        const benefs = [...new Set(m.map((x) => x.benef))];
+        conMatch.push({ fila, nombre, unico: benefs.length === 1, matches: m.slice(0, 4) });
+      });
+      return json(res, 200, { ok: true, hoja: tab, conMatch: conMatch.length, sinMatch: sinMatch.length, detalle: conMatch, sinMatchDetalle: sinMatch });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo matchear contra Dube." }); }
+  }
+
   // Plan Salud: escribir beneficios/DNI encontrados (ej. los que trajo la búsqueda
   // en PAMI). Body: { fills: [{fila, beneficio?, dni?}] }.
   const planSaludAplicarMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/aplicar-benef$/);
