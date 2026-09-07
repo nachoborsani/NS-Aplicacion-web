@@ -3055,37 +3055,38 @@ async function toggleMedicoPreferido(id){
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
-  if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="6" class="muted-cell">Sin médicos cargados.</td></tr>'; return; }
+  if (!MEDICOS.length){ body.innerHTML = '<tr><td colspan="5" class="muted-cell">Sin médicos cargados.</td></tr>'; return; }
   var ojo = '<svg viewBox="0 0 24 24" fill="none">' + EYE_ON + '</svg>';
   var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
   var llave = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M11 12l9-9M17 3l3 3M15 5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var esAdminMed = ME && ME.role === 'admin';
   body.innerHTML = MEDICOS.map(function(m){
+    var mid = esc(m.id);
     var claveCell;
     if (m.tieneClave){
-      claveCell = '<span id="medClaveTxt_' + m.id + '">•••••• guardada</span>' +
-        (esAdminMed ? ' <button class="icon-btn mini" type="button" title="Ver" onclick="revealMedicoClave(\'' + m.id + '\')">' + ojo + '</button>' : '');
+      claveCell = '<span class="med-pass saved"><span id="medClaveTxt_' + mid + '">Clave guardada</span>' +
+        (esAdminMed ? '<button class="icon-btn mini" type="button" title="Ver" onclick="revealMedicoClave(\'' + mid + '\')">' + ojo + '</button>' : '') + '</span>';
     } else {
-      claveCell = '<span class="nom-muted">sin clave</span>';
+      claveCell = '<span class="med-pass missing">Sin clave</span>';
     }
     var usuarioCell = m.usuario
-      ? esc(m.usuario) + (esAdminMed ? ' <button class="icon-btn mini" type="button" title="Copiar" onclick="copiarTexto(\'' + esc(m.usuario) + '\', this)">' + copiar + '</button>' : '')
-      : '-';
+      ? '<span class="med-user"><code>' + esc(m.usuario) + '</code>' + (esAdminMed ? '<button class="icon-btn mini" type="button" title="Copiar" data-copy="' + esc(m.usuario) + '" onclick="copiarTexto(this.dataset.copy, this)">' + copiar + '</button>' : '') + '</span>'
+      : '<span class="med-user muted">Sin usuario</span>';
+    var accesoCell = '<div class="med-access">' + usuarioCell + claveCell + '</div>';
     var acciones = esAdminMed
-      ? '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button> ' +
-          (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + m.id + '\')">' + llave + '</button> ' : '') +
-          '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
+      ? '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+          (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + mid + '\')">' + llave + '</button>' : '') +
+          '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       : '<span class="nom-muted">—</span>';
     var prefBtn = (esAdminMed && m.especialidad)
-      ? ' <button class="icon-btn mini" type="button" title="' + (m.preferido ? 'Médico preferido de esta especialidad (clic para sacar)' : 'Marcar como preferido de esta especialidad') + '" onclick="toggleMedicoPreferido(\'' + m.id + '\')" style="color:' + (m.preferido ? '#e8a13a' : 'var(--text-2)') + '">' + (m.preferido ? '★' : '☆') + '</button>'
-      : (m.preferido ? ' <span title="Preferido de esta especialidad" style="color:#e8a13a">★</span>' : '');
-    return '<tr>' +
-      '<td>' + esc(m.nombre) + '</td>' +
-      '<td>' + (esc(m.especialidad) || '-') + prefBtn + '</td>' +
-      '<td>' + usuarioCell + '</td>' +
-      '<td>' + claveCell + '</td>' +
-      '<td>' + (esc(m.telefono) || '-') + '</td>' +
-      '<td class="row-actions">' + acciones + '</td>' +
+      ? '<button class="med-star ' + (m.preferido ? 'on' : '') + '" type="button" title="' + (m.preferido ? 'Médico preferido de esta especialidad' : 'Marcar como preferido') + '" onclick="toggleMedicoPreferido(\'' + mid + '\')">' + (m.preferido ? '★' : '☆') + '</button>'
+      : (m.preferido ? '<span class="med-star on" title="Preferido de esta especialidad">★</span>' : '');
+    return '<tr' + (m.tieneClave ? '' : ' class="medico-sin-clave"') + '>' +
+      '<td><div class="med-main"><b>' + esc(m.nombre || '-') + '</b></div></td>' +
+      '<td><div class="med-spec-wrap"><span class="med-spec">' + (esc(m.especialidad) || 'Sin especialidad') + '</span>' + prefBtn + '</div></td>' +
+      '<td>' + accesoCell + '</td>' +
+      '<td><span class="med-phone">' + (esc(m.telefono) || '-') + '</span></td>' +
+      '<td class="row-actions medico-actions">' + acciones + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -8723,8 +8724,11 @@ function omeLeerPedido(texto){
 function omeResolverMedico(esp){
   var meds = (OME_WEB.medicos||[]).filter(function(m){ return esp && esp.med.test(omeNorm(m.especialidad)); });
   if (!meds.length) return { medico:null, varios:false };
-  var pick = meds.find(function(m){ return m.preferido && m.tieneClave; })
-          || meds.find(function(m){ return m.preferido; })
+  var hab = function(m){ return !m.deshabilitado; };
+  var pick = meds.find(function(m){ return m.preferido && m.tieneClave && hab(m); })
+          || meds.find(function(m){ return m.tieneClave && hab(m); })
+          || meds.find(function(m){ return hab(m); })
+          || meds.find(function(m){ return m.preferido && m.tieneClave; })
           || meds.find(function(m){ return m.tieneClave; })
           || meds[0];
   return { medico: pick, varios: meds.length>1 };

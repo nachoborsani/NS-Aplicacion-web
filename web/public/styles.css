@@ -1339,6 +1339,36 @@
   .saved-report-table th:nth-child(3){width:90px}
   .saved-report-table th:nth-child(4){width:135px}
   .saved-report-table th:nth-child(5){width:640px}
+  .medicos-table{min-width:920px;table-layout:fixed}
+  .medicos-table th{padding:7px 12px;font-size:9.5px;background:#f7f9fc}
+  .medicos-table td{padding:9px 12px;font-size:12.5px;line-height:1.25}
+  .medicos-table th:nth-child(1){width:23%}
+  .medicos-table th:nth-child(2){width:21%}
+  .medicos-table th:nth-child(3){width:31%}
+  .medicos-table th:nth-child(4){width:10%}
+  .medicos-table th:nth-child(5){width:15%;text-align:right}
+  .medicos-table tbody tr:hover{background:#fbfdff}
+  .medicos-table .muted-cell{padding:22px 12px;text-align:center}
+  .med-main{min-width:0}
+  .med-main b{display:block;font-size:12.5px;font-weight:800;color:var(--text);white-space:normal}
+  .med-spec-wrap{display:flex;align-items:center;gap:7px;min-width:0}
+  .med-spec{display:inline-flex;align-items:center;max-width:100%;min-height:26px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:4px 8px;color:var(--text);font-size:12px;font-weight:650;line-height:1.2}
+  .med-star{width:28px;height:28px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-2);display:grid;place-items:center;font-size:15px;font-weight:800;cursor:pointer;flex:0 0 auto}
+  .med-star:hover{border-color:var(--warning);color:var(--warning)}
+  .med-star.on{background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 40%,var(--border));color:var(--warning)}
+  .med-access{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .med-user,.med-pass{display:inline-flex;align-items:center;gap:5px;min-height:28px}
+  .med-user code,.med-pass.saved{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:5px 8px;font-family:inherit;font-size:12px;font-weight:750;color:var(--text)}
+  .med-pass.saved{background:var(--success-bg);border-color:color-mix(in srgb,var(--success) 28%,var(--border));color:var(--success)}
+  .med-pass.missing,.med-user.muted{color:var(--text-2);font-size:12px;font-weight:650}
+  .med-user .icon-btn.mini,.med-pass .icon-btn.mini{width:28px;height:28px;border-radius:7px}
+  .med-user .icon-btn.mini svg,.med-pass .icon-btn.mini svg{width:14px;height:14px}
+  .med-phone{color:var(--text-2);font-weight:650;white-space:nowrap}
+  .medico-actions{gap:6px;align-items:center;justify-content:flex-end;white-space:nowrap}
+  .medico-actions .icon-btn.mini,.medico-actions .icon-danger-btn.mini{width:31px;height:31px}
+  .medico-sin-clave td{background:color-mix(in srgb,var(--warning-bg) 42%,var(--surface))}
+  [data-theme="dark"] .medicos-table th{background:#132840}
+  [data-theme="dark"] .medicos-table tbody tr:hover{background:#142942}
   .report-open-btn{height:32px;border-radius:8px;font-size:12px;padding:0 10px}
   .report-row-actions{display:flex;gap:6px;flex-wrap:wrap}
   .client-report-controls{display:grid;grid-template-columns:minmax(240px,360px) 220px minmax(0,1fr);gap:12px;align-items:end}
