@@ -5713,6 +5713,96 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Enriquecer la planilla de Plan Salud: completar beneficio/DNI (padrón + otras
+  // hojas) y N° de trámite (solo los que tienen credencial DESCARGADA, cruzando
+  // todas las hojas de la planilla + Dube + Scheffelaar). Con {escribir:true}
+  // escribe en la planilla; sin eso es SIMULACIÓN (devuelve qué llenaría).
+  const planSaludEnriqMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/enriquecer$/);
+  if (planSaludEnriqMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || !esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(planSaludEnriqMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    const body = await readBody(req);
+    const escribir = !!(body && body.escribir);
+    const auth = gcreds.makeAuth(gcfg);
+    const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    const esDescargada = (v) => /descargada/i.test(String(v || ""));
+    try {
+      // Índices de fuentes: benef↔dni (padrón + cualquier fila con ambos) y
+      // trámite válido (credencial DESCARGADA) por dni y por benef.
+      const benefPorDni = new Map(), dniPorBenef = new Map(), tramPorDni = new Map(), tramPorBenef = new Map();
+      const addBenefDni = (dniRaw, benefRaw) => {
+        const dni = dig(dniRaw), benef = dig(benefRaw);
+        if (dni && benef) { if (!benefPorDni.has(dni)) benefPorDni.set(dni, benef); if (!dniPorBenef.has(benef)) dniPorBenef.set(benef, dni); }
+      };
+      const addTram = (dniRaw, benefRaw, tramRaw, cred) => {
+        const tram = dig(tramRaw);
+        if (!tram || !esDescargada(cred)) return;
+        const dni = dig(dniRaw), benef = dig(benefRaw);
+        if (dni && !tramPorDni.has(dni)) tramPorDni.set(dni, tram);
+        if (benef && !tramPorBenef.has(benef)) tramPorBenef.set(benef, tram);
+      };
+      // Padrón (todos los clientes): solo benef↔dni (no tiene estado de credencial).
+      const padron = loadPadron();
+      for (const s of Object.keys(padron)) for (const dniK of Object.keys(padron[s] || {})) addBenefDni(dniK, (padron[s][dniK] || {}).beneficio);
+      // Todas las hojas (meses) de la planilla de CIMA: cols 2=dni,3=benef,4=tram,7=cred.
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      for (const t of (meta.tabsInfo || [])) {
+        const rows = await gcreds.readValues(auth, cfg.spreadsheetId, t.title, "A2:K5000");
+        for (const r of rows) { addBenefDni(r[2], r[3]); addTram(r[2], r[3], r[4], r[7]); }
+      }
+      // Dube + Scheffelaar (planillas de credenciales).
+      for (const key of ["dubesarky-ezequiel", "scheffelaar-mc"]) {
+        const C = credCfg(key); if (!C) continue;
+        const cc = C.cols;
+        const maxCol = Math.max(cc.benef || 0, cc.dni || 0, cc.tramite || 0, cc.nombre || 0, cc.credencial || 0);
+        let rows = [];
+        try { rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(maxCol)}`); } catch { rows = []; }
+        for (const r of rows) { addBenefDni(r[cc.dni], r[cc.benef]); addTram(r[cc.dni], r[cc.benef], r[cc.tramite], r[cc.credencial]); }
+      }
+      // Target: la hoja configurada (gid) de CIMA.
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      const targetRows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+      const propuestas = [], necesitanPami = [];
+      targetRows.forEach((r, i) => {
+        const fila = i + 2;
+        const dni = dig(r[2]), benef = dig(r[3]), tram = dig(r[4]), nombre = String(r[1] || "").trim();
+        if (!nombre && !dni && !benef) return; // fila vacía
+        const prop = { fila, nombre };
+        let cambio = false;
+        if (!benef && dni && benefPorDni.has(dni)) { prop.benef = benefPorDni.get(dni); cambio = true; }
+        if (!dni && benef && dniPorBenef.has(benef)) { prop.dni = dniPorBenef.get(benef); cambio = true; }
+        const dEff = prop.dni || dni, bEff = prop.benef || benef;
+        if (!tram) {
+          const t2 = (dEff && tramPorDni.get(dEff)) || (bEff && tramPorBenef.get(bEff)) || "";
+          if (t2) { prop.tram = t2; cambio = true; }
+        }
+        if (cambio) propuestas.push(prop);
+        const faltaBenef = !benef && !prop.benef, faltaDni = !dni && !prop.dni;
+        if (faltaBenef || faltaDni) necesitanPami.push({ fila, nombre, dni: prop.dni || dni, benef: prop.benef || benef, faltaBenef, faltaDni });
+      });
+      let escritas = 0;
+      if (escribir) {
+        for (const p2 of propuestas) {
+          if (p2.dni) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "C" + p2.fila, p2.dni); escritas++; }
+          if (p2.benef) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "D" + p2.fila, p2.benef); escritas++; }
+          if (p2.tram) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "E" + p2.fila, p2.tram); escritas++; }
+        }
+      }
+      return json(res, 200, {
+        ok: true, modo: escribir ? "escritura" : "simulacion", hoja: tab, totalFilas: targetRows.length,
+        aCompletar: propuestas.length, celdasEscritas: escritas,
+        detalle: propuestas.slice(0, 500),
+        necesitanPami: necesitanPami.length, pamiDetalle: necesitanPami.slice(0, 200),
+      });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo enriquecer la planilla." }); }
+  }
+
   // ===== Bot de OMEs (Telegram) =====
   // Webhook: Telegram POSTea cada mensaje/botón. Verificamos el secret por header
   // (Telegram lo manda en x-telegram-bot-api-secret-token) y contestamos 200 rápido.
