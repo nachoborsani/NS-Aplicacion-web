@@ -878,6 +878,7 @@
   .mod-share-row{display:flex;align-items:center;gap:7px;margin-top:5px}
   .mod-neto-line{display:flex;align-items:center;gap:8px}
   .mod-neto-line b{white-space:nowrap}
+  .mod-fuera-corte{font-size:11px;font-weight:700;color:var(--warning);white-space:nowrap;font-variant-numeric:tabular-nums}
   .mod-bar{flex:0 0 120px;height:4px;border-radius:3px;background:var(--hover);overflow:hidden;margin-left:auto}
   .mod-bar-fill{height:100%;border-radius:3px;background:var(--turq)}
   .mod-share{font-size:11px;font-weight:750;color:var(--turq-d);font-variant-numeric:tabular-nums;min-width:30px;text-align:right}

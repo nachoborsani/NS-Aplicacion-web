@@ -4318,6 +4318,7 @@ function addRowToDashboardPeriod(target, row) {
       _sv: {},
       debit: 0,
       net: 0,
+      nextPeriodCutoff: 0,
       rows: [],
     };
   }
@@ -4333,6 +4334,7 @@ function addRowToDashboardPeriod(target, row) {
   }
   module.debit += debit;
   module.net += net;
+  module.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
   module.rows.push({
     patientName: row.patientName || "",
     benefit: row.benefit || "",
@@ -4370,6 +4372,7 @@ function finalizeDashboardPeriod(target) {
         gross: money(module.gross),
         debit: money(module.debit),
         net: money(module.net),
+        nextPeriodCutoff: money(module.nextPeriodCutoff),
         sinValorCodigos: Object.values(_sv || {}),
         rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),
       };

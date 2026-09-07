@@ -5984,6 +5984,7 @@ function renderClientDashboard(data){
         + '<td class="tnum"><div class="mod-metric">' + countButton('Consulta', consNow) + consDelta + consPrev + '</div></td>'
         + '<td class="tnum"><div class="mod-metric">' + countButton('Practica', pracNow) + pracDelta + pracPrev + '</div></td>'
         + '<td class="nom-money"><div class="mod-neto-line"><b>' + esc(moneyFmt(module.net || 0)) + '</b>'
+        + (Number(module.nextPeriodCutoff || 0) > 0 ? '<span class="mod-fuera-corte" title="Facturado fuera de corte: se cobra el próximo período">+ ' + esc(moneyFmt(module.nextPeriodCutoff)) + ' fuera de corte</span>' : '')
         + '<div class="mod-bar"><div class="mod-bar-fill" style="width:' + barW + '%"></div></div><span class="mod-share" title="' + esc(shareTitle) + '">' + share + '%</span></div>' + netoPrev + '</td>'
         + '</tr>'
         + detailRow('Consulta', 'Consultas', consultationRows, prevConsRows)
