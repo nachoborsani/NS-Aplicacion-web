@@ -3900,6 +3900,7 @@ function faltanInformesDe(panelId){
 var MESCURSO_OMES_GEN = {}; // OMEs que ya tienen informe generado (para no crear/subir de nuevo)
 var MESCURSO_FALTANTES_DESEST = {}; // OMEs de faltantes desestimados (no se crea informe; el monto igual cuenta)
 function accionCrearInforme(panelId){
+  if (!puedeAccionesGestionCliente()) return null;
   return function(idx){
     var x = faltanInformesDe(panelId)[idx];
     if (!x) return '';
@@ -3971,7 +3972,16 @@ function fechaAusenteIso(fila){
   var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String((fila && fila.turno) || ''));
   return m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
 }
+// Clínica (dueño del centro) y colaborador ven los listados (quién falta, quién
+// faltó) igual que siempre, pero NO las acciones de gestión (crear/subir/
+// desestimar informe, liberar cupo) - eso sigue siendo trabajo de NS. Central
+// en un solo lugar para poder habilitarlo más adelante por configuración
+// puntual, si hace falta, sin tocar cada botón por separado.
+function puedeAccionesGestionCliente(){
+  return !(ME && (ME.role === 'clinica' || ME.role === 'colaborador'));
+}
 function accionLiberarCupoAusente(panelId){
+  if (!puedeAccionesGestionCliente()) return null;
   return function(idx){
     var x = ausentesDePanel(panelId)[idx];
     if (!x) return '';
