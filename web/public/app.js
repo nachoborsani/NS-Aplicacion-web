@@ -2204,6 +2204,10 @@ function setDashSection(sec){
     var s = document.getElementById(secc[k]); if (s) s.style.display = (k === sec) ? '' : 'none';
     var t = document.getElementById(tabs[k]); if (t) t.classList.toggle('active', k === sec);
   });
+  // Los controles Mes/Comparar/Comparativa son del comparativo de Resumen y Módulos.
+  // El Nomenclador tiene su propio selector de período, así que ahí no van.
+  var hdr = document.getElementById('clientDashHeaderControls');
+  if (hdr) hdr.style.display = (sec === 'nomenclador') ? 'none' : '';
 }
 function renderNomencladorRows(rows, bodyId, metaId, total){
   var body = document.getElementById(bodyId);
