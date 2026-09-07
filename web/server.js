@@ -1123,6 +1123,8 @@ function credCfg(key) {
 }
 const gcreds = require("./google_creds.js");
 const telegram = require("./telegram.js");
+const omeParser = require("./ome_parser.js");
+const omeBot = require("./ome_bot.js");
 // Config de Telegram: solo el chat_id (a quién le escribe el bot). El token vive
 // en la variable de entorno TELEGRAM_BOT_TOKEN. Nunca guardamos el token en disco.
 const telegramFile = path.join(dataDir, "telegram.json");
@@ -1135,6 +1137,116 @@ function loadTelegramCfg() {
   } catch { return { chats: [] }; }
 }
 function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramFile, JSON.stringify({ chats: cfg.chats || [] }, null, 2)); }
+// ---- Bot de OMEs (Telegram) ----
+// Cliente que pide OMEs por chat (por ahora el único). Chats autorizados y secret
+// del webhook viven en el volumen; el token del bot en TELEGRAM_OME_BOT_TOKEN.
+const OME_BOT_CLIENTE = "caballito-pediatrico";
+const omeBotFile = path.join(dataDir, "ome_bot.json");
+function loadOmeBotCfg() {
+  try { const j = JSON.parse(fs.readFileSync(omeBotFile, "utf8")); return { chats: Array.isArray(j.chats) ? j.chats : [], secret: String(j.secret || "") }; }
+  catch { return { chats: [], secret: "" }; }
+}
+function saveOmeBotCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(omeBotFile, JSON.stringify({ chats: cfg.chats || [], secret: cfg.secret || "" }, null, 2)); }
+function omeBotChatAutorizado(chatId) { return loadOmeBotCfg().chats.some((c) => String(c.chatId) === String(chatId)); }
+// Pedidos parseados esperando confirmación (en memoria; expiran a los 30 min).
+const OME_BOT_PENDIENTES = new Map();
+function omeBotGuardarPendiente(pend) {
+  const id = crypto.randomBytes(6).toString("hex");
+  const lim = Date.now() - 30 * 60 * 1000;
+  for (const [k, v] of OME_BOT_PENDIENTES) if (v.at < lim) OME_BOT_PENDIENTES.delete(k);
+  OME_BOT_PENDIENTES.set(id, { ...pend, at: Date.now() });
+  return id;
+}
+// Avisa por Telegram el resultado de una OME pedida desde el bot. Nunca lanza.
+function notificarOmeTelegram(task, ok) {
+  try {
+    const chatId = task.payload && task.payload.telegramChatId;
+    if (!chatId || !omeBot.hayToken()) return;
+    const r = task.result || {};
+    const row = r.row || {};
+    const nro = r.nro_ome || row.nro_ome || "";
+    const resultado = String(r.resultado || row.resultado || "").toUpperCase();
+    const bien = ok && nro && ["OK", "GENERADA", "YA_TIENE_OME"].includes(resultado);
+    const nombre = task.payload.nombre || row.nombre || "";
+    let txt;
+    if (bien) txt = `✅ <b>OME lista</b>\n${escapeHtml(nombre)}\nN° <b>${escapeHtml(String(nro))}</b>`;
+    else txt = `⚠️ <b>No se pudo generar la OME</b>\n${escapeHtml(nombre)}\n${escapeHtml(task.error || resultado || "PAMI no devolvió número.")}`;
+    omeBot.enviar(chatId, txt).catch(() => {});
+  } catch { /* nunca corta el /complete */ }
+}
+function escapeHtml(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+// Procesa un update del bot de OMEs (mensaje de texto o botón). Nunca bloquea la
+// respuesta a Telegram: el webhook contesta 200 y esto corre aparte.
+async function omeBotProcesarUpdate(update) {
+  if (update && update.message && update.message.text) return omeBotMensaje(update.message);
+  if (update && update.callback_query) return omeBotCallback(update.callback_query);
+}
+async function omeBotMensaje(msg) {
+  const chatId = msg.chat && msg.chat.id;
+  if (!chatId) return;
+  const text = String(msg.text || "").trim();
+  if (/^\/(start|id|chatid|ayuda|help)\b/i.test(text)) {
+    const hab = omeBotChatAutorizado(chatId);
+    return omeBot.enviar(chatId, `Bot de OMEs de NS.\nTu ID de chat es <b>${chatId}</b>.\n` + (hab ? "Estás habilitado ✅. Pegá el pedido tal cual llega por WhatsApp y te devuelvo la OME." : "Todavía no estás habilitado. Pasale este ID al admin para que te agregue.")).catch(() => {});
+  }
+  if (!omeBotChatAutorizado(chatId)) {
+    return omeBot.enviar(chatId, `No estás habilitado para generar OMEs.\nTu ID de chat es <b>${chatId}</b>. Pedile al admin que te agregue.`).catch(() => {});
+  }
+  const parsed = omeParser.parsePedido(text);
+  if (!parsed || (!parsed.especialidad && !parsed.dni && !parsed.beneficio)) {
+    return omeBot.enviar(chatId, "No entendí el pedido. Mandá algo como:\n<i>necesito una OME de cardiología para PEREZ JUAN DNI 12345678</i>").catch(() => {});
+  }
+  const medicosStore = loadClientMedicos();
+  const medicos = Array.isArray(medicosStore[OME_BOT_CLIENTE]) ? medicosStore[OME_BOT_CLIENTE] : [];
+  const { medico, varios } = omeParser.resolverMedico(parsed.especialidad, medicos);
+  const faltan = [];
+  if (!parsed.especialidad) faltan.push("no reconocí la especialidad");
+  if (!parsed.dni && !parsed.beneficio) faltan.push("falta DNI o beneficio");
+  if (!parsed.nombre) faltan.push("falta el nombre del paciente");
+  if (parsed.especialidad && !medico) faltan.push(`no hay médico de ${parsed.especialidad.key} cargado`);
+  if (medico && !medico.usuario) faltan.push(`el médico ${medico.nombre} no tiene usuario PAMI`);
+  if (medico && !medico.claveEnc) faltan.push(`el médico ${medico.nombre} está sin clave`);
+  const ident = parsed.beneficio ? `Benef ${parsed.beneficio}` : (parsed.dni ? `DNI ${parsed.dni}` : "sin identidad");
+  const resumen = "<b>Pedido de OME</b>\n👤 " + escapeHtml(parsed.nombre || "—") +
+    "\n🪪 " + escapeHtml(ident) +
+    "\n🩺 " + escapeHtml(parsed.especialidad ? parsed.especialidad.key : "—") + (parsed.especialidad ? " (" + parsed.especialidad.codigo + ")" : "") +
+    "\n👨‍⚕️ " + escapeHtml(medico ? medico.nombre : "—");
+  if (faltan.length) {
+    return omeBot.enviar(chatId, resumen + "\n\n⚠️ No puedo crearla: " + escapeHtml(faltan.join("; ")) + ".").catch(() => {});
+  }
+  const payload = {
+    medicoId: medico.id, medicoNombre: medico.nombre || "", medicoEspecialidad: medico.especialidad || "",
+    modo: parsed.beneficio ? "BENEF" : "DNI", afiliado: parsed.beneficio || parsed.dni,
+    beneficio: parsed.beneficio || "", dni: parsed.dni || "", nombre: parsed.nombre || "",
+    diagnostico: "Z000", codigo: parsed.especialidad.codigo,
+    practica: "CONSULTA CON ESPECIALISTA EN " + parsed.especialidad.key.toUpperCase(),
+    mensaje: parsed.raw, telegramChatId: chatId,
+  };
+  const id = omeBotGuardarPendiente({ chatId, payload });
+  const extra = (varios && !medico.preferido) ? "\n<i>(hay varios médicos de esta especialidad; verificá que sea el correcto o marcá un preferido en la web)</i>" : "";
+  return omeBot.enviar(chatId, resumen + extra + "\n\n¿La genero?", [[{ text: "✅ Crear OME", data: "ok:" + id }, { text: "❌ Cancelar", data: "no:" + id }]]).catch(() => {});
+}
+async function omeBotCallback(cb) {
+  const chatId = cb.message && cb.message.chat && cb.message.chat.id;
+  const messageId = cb.message && cb.message.message_id;
+  const data = String(cb.data || "");
+  try { await omeBot.responderCallback(cb.id, ""); } catch {}
+  if (!chatId || !omeBotChatAutorizado(chatId)) return;
+  const m = data.match(/^(ok|no):(.+)$/);
+  if (!m) return;
+  const pend = OME_BOT_PENDIENTES.get(m[2]);
+  if (!pend) { try { await omeBot.editar(chatId, messageId, "⌛ Ese pedido expiró. Reenvialo, por favor."); } catch {} return; }
+  OME_BOT_PENDIENTES.delete(m[2]);
+  if (m[1] === "no") { try { await omeBot.editar(chatId, messageId, "❌ Cancelado. No se generó nada."); } catch {} return; }
+  enqueueWorkerTask({
+    type: "crear-ome",
+    label: `Generar OME ${pend.payload.codigo} (${pend.payload.medicoNombre || "médico"}) [Telegram]`,
+    clientSlug: OME_BOT_CLIENTE, createdBy: "telegram:" + chatId,
+    initialLog: `Pedido por Telegram. Paciente: ${pend.payload.nombre || pend.payload.afiliado}. Práctica ${pend.payload.codigo}.`,
+    payload: pend.payload,
+  });
+  try { await omeBot.editar(chatId, messageId, "⏳ Generando la OME… te aviso el número apenas esté."); } catch {}
+}
 // Manda un aviso a TODOS los destinatarios. NUNCA lanza: un aviso que falla no
 // puede tumbar el proceso que lo reportaba.
 async function avisarTelegram(texto) {
@@ -5218,6 +5330,10 @@ const server = http.createServer(async (req, res) => {
     if (task.type === "subir-informes") {
       acumularSubidaTelegram(task, ok);
     }
+    // OME pedida desde el bot de Telegram: avisar el resultado (OK + N° o el error).
+    if (task.type === "crear-ome" && task.payload && task.payload.telegramChatId) {
+      notificarOmeTelegram(task, ok);
+    }
     // Marcar como transmitidos los informes subidos OK: salen de "Listo para subir"
     // al instante (sin esperar el refresco de la bandeja) y no se re-suben. El worker
     // igual nunca re-transmite (chequea antes de subir); esto es para reflejarlo en la UI.
@@ -5537,6 +5653,54 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     return json(res, 200, { token: WORKER_TOKEN || "" });
   }
+  // ===== Bot de OMEs (Telegram) =====
+  // Webhook: Telegram POSTea cada mensaje/botón. Verificamos el secret por header
+  // (Telegram lo manda en x-telegram-bot-api-secret-token) y contestamos 200 rápido.
+  if (p === "/api/telegram/ome/webhook" && req.method === "POST") {
+    const cfg = loadOmeBotCfg();
+    const secret = String(req.headers["x-telegram-bot-api-secret-token"] || "");
+    if (!cfg.secret || secret !== cfg.secret) return json(res, 401, { ok: false });
+    let update = {};
+    try { update = await readBody(req); } catch { update = {}; }
+    omeBotProcesarUpdate(update).catch((e) => { try { console.error("[ome-bot]", (e && e.message) || e); } catch {} });
+    return json(res, 200, { ok: true });
+  }
+  // Alta del webhook (una vez): genera el secret si falta y lo registra en Telegram.
+  if (p === "/api/admin/ome-bot/setup" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    if (!omeBot.hayToken()) return json(res, 400, { error: "Falta TELEGRAM_OME_BOT_TOKEN en Railway." });
+    const cfg = loadOmeBotCfg();
+    if (!cfg.secret) { cfg.secret = crypto.randomBytes(24).toString("hex"); saveOmeBotCfg(cfg); }
+    const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+    const url = `https://${host}/api/telegram/ome/webhook`;
+    try {
+      const info = await omeBot.getMe();
+      await omeBot.setWebhook(url, cfg.secret);
+      return json(res, 200, { ok: true, bot: info && info.username, webhook: url, chats: cfg.chats });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo registrar el webhook." }); }
+  }
+  // Estado + chats autorizados del bot de OMEs.
+  if (p === "/api/admin/ome-bot/estado" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const cfg = loadOmeBotCfg();
+    return json(res, 200, { hayToken: omeBot.hayToken(), webhookListo: !!cfg.secret, chats: cfg.chats, cliente: OME_BOT_CLIENTE });
+  }
+  // Autorizar (o quitar con {quitar:true}) un chat para usar el bot.
+  if (p === "/api/admin/ome-bot/autorizar" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
+    const b = await readBody(req);
+    const chatId = String((b && b.chatId) || "").trim();
+    if (!chatId) return json(res, 400, { error: "Falta el chatId." });
+    const cfg = loadOmeBotCfg();
+    cfg.chats = (cfg.chats || []).filter((c) => String(c.chatId) !== chatId);
+    if (!(b && b.quitar)) cfg.chats.push({ chatId, nombre: String((b && b.nombre) || "").trim() });
+    saveOmeBotCfg(cfg);
+    return json(res, 200, { ok: true, chats: cfg.chats });
+  }
+
   if (p === "/api/admin/worker/tasks" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
