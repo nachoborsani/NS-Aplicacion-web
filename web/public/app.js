@@ -1495,17 +1495,63 @@ async function iniRenderPendientesEn(listId, metaId){
   var clientes = d.clientes || [];
   var metaTxt = (d.totalPendientes||0) + ' pendientes · ' + (d.totalSinTransmitir||0) + ' sin transmitir';
   if (d.totalCup) metaTxt += ' · ' + d.totalCup + ' del CUP';
+  // Lo que se vence va primero en el texto: es lo único con fecha de caducidad.
+  if (d.totalPorVencer) metaTxt = '⏳ ' + d.totalPorVencer + ' por vencer · ' + metaTxt;
   if (meta) meta.textContent = metaTxt;
   list.innerHTML = clientes.length ? clientes.map(function(c){
+    // "Por vencer": OMEs validadas sin transmitir a las que les quedan pocos
+    // días del plazo de PAMI. Se puede tocar para ver cuáles son.
+    var venc = '';
+    if (c.porVencer){
+      var dr = c.diasRestantesMin;
+      var t = c.porVencer + ' OME(s) por vencer' + (dr != null ? ' — la más urgente vence en ' + dr + (dr === 1 ? ' día' : ' días') : '') + '. Tocá para ver cuáles.';
+      venc += '<button type="button" class="ini-pendop-badge vence" title="' + esc(t) + '" onclick="abrirOmesPorVencer(\'' + esc(c.slug) + '\')">⏳ ' + c.porVencer + (dr != null ? ' · ' + dr + 'd' : '') + '</button>';
+    }
+    if (c.vencidas){
+      venc += '<button type="button" class="ini-pendop-badge vencida" title="' + esc(c.vencidas + ' OME(s) que ya pasaron los 60 días sin transmitir: no se pueden transmitir más. Tocá para verlas.') + '" onclick="abrirOmesPorVencer(\'' + esc(c.slug) + '\')">✖ ' + c.vencidas + '</button>';
+    }
     return '<li class="ini-pendop-row">'
       + '<span class="ini-pendop-nombre">'+esc(c.nombre)+'</span>'
       + '<span class="ini-pendop-badges">'
+      + venc
       + (c.pendientes ? '<span class="ini-pendop-badge pend" title="Informes pendientes">'+c.pendientes+'</span>' : '')
       + (c.sinTransmitir ? '<span class="ini-pendop-badge transm" title="Sin transmitir">'+c.sinTransmitir+'</span>' : '')
       + (c.cup ? '<span class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir">'+c.cup+'</span>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }
+// Detalle de las OMEs por vencer de un cliente: el contador solo sirve si se
+// puede ver qué hay atrás para ir a buscarlas.
+async function abrirOmesPorVencer(slug){
+  var body = document.getElementById('omesVencerBody');
+  var meta = document.getElementById('omesVencerMeta');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="5" class="muted-cell">Cargando…</td></tr>';
+  if (meta) meta.textContent = '';
+  showModal('omesVencerModal', 'omesVencerScrim');
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/omes-por-vencer');
+  if (!res.ok){
+    body.innerHTML = '<tr><td colspan="5" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
+    return;
+  }
+  var d = res.data || {}, filas = d.filas || [];
+  if (meta) meta.textContent = (d.nombre || slug) + ' · ' + (d.porVencer || 0) + ' por vencer'
+    + (d.vencidas ? ' · ' + d.vencidas + ' ya vencida(s)' : '')
+    + ' · PAMI da ' + (d.diasLimite || 60) + ' días desde la validación para transmitir';
+  body.innerHTML = filas.length ? filas.map(function(f){
+    var estado = f.vencida
+      ? '<span class="ov-estado vencida" title="Pasaron los ' + (d.diasLimite || 60) + ' días: ya no se puede transmitir">Vencida</span>'
+      : '<span class="ov-estado" title="Días que quedan para transmitirla">Quedan ' + f.diasRestantes + (f.diasRestantes === 1 ? ' día' : ' días') + '</span>';
+    return '<tr>'
+      + '<td>' + esc(f.nombre || '-') + (f.benef ? '<div class="nom-muted">' + esc(f.benef) + '</div>' : '') + '</td>'
+      + '<td class="tnum">' + estado + '</td>'
+      + '<td class="ov-practica" title="' + esc(f.practica || '') + '">' + esc(f.practica || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.ome || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.validada || '-') + '</td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="5" class="muted-cell">No hay OMEs por vencer en este cliente.</td></tr>';
+}
+function cerrarOmesPorVencer(){ hideModal('omesVencerModal', 'omesVencerScrim'); }
 function iniCargarPendientesOperador(){ return iniRenderPendientesEn('iniPendOpList', 'iniPendOpMeta'); }
 function iniCargarMisPendientes(){ return iniRenderPendientesEn('opPendList', 'opPendMeta'); }
 

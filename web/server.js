@@ -768,6 +768,73 @@ function estadoInforme(it) {
   }
   return (it && it.match && it.match.estado) || "sin_match";
 }
+// ---- OMEs por vencer -------------------------------------------------------
+// PAMI da 60 días DESDE LA VALIDACIÓN para transmitir una OME. Pasado ese plazo
+// ya no se puede transmitir: la prestación se pierde y no se cobra nunca más.
+// El aviso arranca cuando quedan 5 días o menos (día 55 en adelante); antes no
+// se muestra nada a propósito - un aviso que aparece 50 días antes es ruido y
+// se deja de mirar.
+const OME_DIAS_LIMITE = 60;
+const OME_DIAS_AVISO = 55;
+function normCol(v) {
+  return String(v == null ? "" : v).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+}
+// OMEs de una bandeja que están por vencer (o ya vencidas): validadas, todavía
+// SIN transmitir, y con la validación cerca de cumplir el plazo. Una OME ya
+// transmitida no corre riesgo, y una sin validar todavía no arrancó el reloj.
+// Devuelve los conteos y el detalle (para poder mostrar CUÁLES son, que es lo
+// único que hace accionable el aviso).
+function omesEnRiesgoDeBandeja(bandeja, hoy) {
+  const vacio = { porVencer: 0, vencidas: 0, diasRestantesMin: null, filas: [] };
+  const rows = (bandeja && Array.isArray(bandeja.rows)) ? bandeja.rows : [];
+  if (!rows.length) return vacio;
+  const keys = Object.keys(rows[0] || {});
+  // Ojo con las columnas parecidas: "VALIDADA" (S/N) vs "F VALIDACION" (fecha),
+  // y "TRASMITIDA" (S/N) vs "F TRANSMITIDA" / "USUARIO TRANSMITIO".
+  const kValidada = keys.find((k) => normCol(k) === "VALIDADA");
+  const kFValidacion = keys.find((k) => /VALIDACION/.test(normCol(k)));
+  const kTransmitida = keys.find((k) => /^TRA[SN]MITIDA$/.test(normCol(k)));
+  // Sin estas 3 columnas no podemos calcular nada: devolvemos vacío en vez de
+  // inventar un estado (una bandeja vieja o de otro formato no debe disparar
+  // avisos falsos).
+  if (!kValidada || !kFValidacion || !kTransmitida) return vacio;
+  const kOrden = keys.find((k) => /ORDEN/.test(normCol(k)));
+  const kNombre = keys.find((k) => /APELLIDO/.test(normCol(k)));
+  const kPractica = keys.find((k) => /PRACTICA/.test(normCol(k)));
+  const kBenef = keys.find((k) => /BENEFICIO/.test(normCol(k)));
+  const ref = (hoy instanceof Date && !Number.isNaN(hoy.getTime())) ? hoy : new Date();
+  const filas = [];
+  let porVencer = 0, vencidas = 0, diasRestantesMin = null;
+  for (const r of rows) {
+    if (normCol(r[kValidada]) !== "S") continue;
+    if (normCol(r[kTransmitida]) === "S") continue;
+    const fv = parseDateTime(r[kFValidacion], { preferDayMonth: true });
+    if (!fv) continue;
+    const dias = Math.floor((ref - fv) / 86400000);
+    if (dias < OME_DIAS_AVISO) continue;
+    const restan = OME_DIAS_LIMITE - dias;
+    if (restan > 0) {
+      porVencer += 1;
+      if (diasRestantesMin === null || restan < diasRestantesMin) diasRestantesMin = restan;
+    } else {
+      vencidas += 1;
+    }
+    if (filas.length < 500) filas.push({
+      ome: kOrden ? cleanIdentifier(r[kOrden]) : "",
+      benef: kBenef ? cleanIdentifier(r[kBenef]) : "",
+      nombre: kNombre ? String(r[kNombre] || "").trim() : "",
+      practica: kPractica ? String(r[kPractica] || "").trim() : "",
+      validada: displayDateTime(fv),
+      dias,
+      diasRestantes: restan,
+      vencida: restan <= 0,
+    });
+  }
+  // Primero lo más urgente (menos días quedan), y las ya vencidas al final:
+  // sobre esas no hay nada que hacer, la plata ya se perdió.
+  filas.sort((a, b) => (a.vencida === b.vencida ? a.diasRestantes - b.diasRestantes : (a.vencida ? 1 : -1)));
+  return { porVencer, vencidas, diasRestantesMin, filas };
+}
 // Pendientes de UN cliente: cuántos informes de la Cabina siguen "en juego"
 // (ni transmitidos ni desestimados), cuántos están listos pero sin transmitir
 // (`sinTransmitir`), y - solo para médico de cabecera - lo que surge directo
@@ -784,15 +851,19 @@ function pendientesDeCliente(slug, cliente, informes, bandejas) {
     if (e !== "ya_transmitido" && e !== "desestimado") pendientes += 1;
     if (e === "ok") sinTransmitir += 1;
   }
+  const bandeja = (bandejas || {})[slug];
   let cup = 0;
   if (cliente && cliente.tipo === "med_cabecera") {
-    const bandeja = (bandejas || {})[slug];
     if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
       const r = bandejaResumenCup(bandeja);
       cup = r.pendienteValidar + r.pendienteTransmitir;
     }
   }
-  return { pendientes, sinTransmitir, cup };
+  // Las OMEs por vencer se miran en TODOS los clientes (no solo médicos de
+  // cabecera): el plazo de PAMI corre igual para cualquier centro.
+  const riesgo = omesEnRiesgoDeBandeja(bandeja);
+  return { pendientes, sinTransmitir, cup,
+    porVencer: riesgo.porVencer, vencidas: riesgo.vencidas, diasRestantesMin: riesgo.diasRestantesMin };
 }
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
 function informesExportRows(items) {
@@ -6098,19 +6169,44 @@ const server = http.createServer(async (req, res) => {
     const informes = loadInformes();
     const bandejas = loadClientBandejas();
     const filas = [];
-    let totalPendientes = 0, totalSinTransmitir = 0, totalCup = 0;
+    let totalPendientes = 0, totalSinTransmitir = 0, totalCup = 0, totalPorVencer = 0, totalVencidas = 0;
     for (const slug of slugsVisibles) {
       const cliente = todosClientes.find((c) => c.slug === slug);
-      const { pendientes, sinTransmitir, cup } = pendientesDeCliente(slug, cliente, informes, bandejas);
-      if (pendientes || sinTransmitir || cup) {
-        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir, cup });
+      const { pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin } =
+        pendientesDeCliente(slug, cliente, informes, bandejas);
+      if (pendientes || sinTransmitir || cup || porVencer || vencidas) {
+        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir, cup,
+          porVencer, vencidas, diasRestantesMin });
         totalPendientes += pendientes;
         totalSinTransmitir += sinTransmitir;
         totalCup += cup;
+        totalPorVencer += porVencer;
+        totalVencidas += vencidas;
       }
     }
-    filas.sort((a, b) => (b.pendientes + b.sinTransmitir + b.cup) - (a.pendientes + a.sinTransmitir + a.cup));
-    return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir, totalCup });
+    // Lo que está por vencer manda en el orden: es lo único con fecha de
+    // caducidad (a los 60 días la OME no se puede transmitir más).
+    filas.sort((a, b) => (b.porVencer - a.porVencer)
+      || ((b.pendientes + b.sinTransmitir + b.cup) - (a.pendientes + a.sinTransmitir + a.cup)));
+    return json(res, 200, { clientes: filas, totalPendientes, totalSinTransmitir, totalCup,
+      totalPorVencer, totalVencidas, diasAviso: OME_DIAS_AVISO, diasLimite: OME_DIAS_LIMITE });
+  }
+
+  // Detalle de las OMEs por vencer de un cliente: cuáles son, para poder ir a
+  // buscarlas. El conteo solo sirve si se puede ver qué hay atrás.
+  const omesPorVencerMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/omes-por-vencer$/);
+  if (omesPorVencerMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = omesPorVencerMatch[1];
+    const cliente = loadClientsStore().find((c) => c.slug === slug);
+    if (!cliente) return json(res, 404, { error: "Cliente no encontrado." });
+    if (!clientesVisiblesPara(me, [cliente]).length) return json(res, 403, { error: "No tenés acceso a este cliente." });
+    const riesgo = omesEnRiesgoDeBandeja(loadClientBandejas()[slug]);
+    return json(res, 200, { slug, nombre: clientDisplayName(slug) || slug, filas: riesgo.filas,
+      porVencer: riesgo.porVencer, vencidas: riesgo.vencidas,
+      diasAviso: OME_DIAS_AVISO, diasLimite: OME_DIAS_LIMITE });
   }
 
   // Mismo cálculo de arriba, para UN solo centro: lo usa el "operador_clinica"

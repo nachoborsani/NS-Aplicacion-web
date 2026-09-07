@@ -552,6 +552,18 @@
   .ini-pendop-badge.pend{background:var(--warning)}
   .ini-pendop-badge.transm{background:var(--error)}
   .ini-pendop-badge.cup{background:var(--info)}
+  /* Por vencer / vencida: estos dos SON botones (abren el detalle), no un número
+     suelto como los otros - por eso el hover y el cursor. */
+  .ini-pendop-badge.vence,.ini-pendop-badge.vencida{border:0;cursor:pointer;font:inherit;font-size:11px;font-weight:800}
+  .ini-pendop-badge.vence{background:#b45309;box-shadow:0 0 0 2px rgba(180,83,9,.3)}
+  .ini-pendop-badge.vence:hover{background:#92400e}
+  .ini-pendop-badge.vencida{background:var(--text-2);opacity:.85}
+  .ini-pendop-badge.vencida:hover{opacity:1}
+  .ov-estado{font-weight:700;white-space:nowrap}
+  .ov-estado.vencida{color:var(--error)}
+  /* La práctica es el texto largo: que se recorte ella (con el nombre completo
+     en el tooltip) y no empuje al plazo fuera de la pantalla. */
+  .ov-practica{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cup-informe-upload{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:10px 0}
   .cup-informe-upload .field-inline{display:flex;flex-direction:column;gap:4px;font-size:12px}
   .cup-informe-upload .field-inline input{width:170px}

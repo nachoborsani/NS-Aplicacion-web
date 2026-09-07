@@ -1922,6 +1922,29 @@
       </div>
     </div>
 
+    <!-- ===== Modal: OMEs por vencer =====
+         PAMI da 60 días desde la validación para transmitir; pasado ese plazo la
+         OME no se puede transmitir más y la prestación se pierde. Acá se ve
+         cuáles son las que están en ese borde. -->
+    <div class="scrim" id="omesVencerScrim" onclick="cerrarOmesPorVencer()"></div>
+    <div class="modal wide" id="omesVencerModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>OMEs por vencer</h3><button class="x" onclick="cerrarOmesPorVencer()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <div class="ini-meta" id="omesVencerMeta"></div>
+        <div class="table-scroll" style="margin-top:10px">
+          <table class="saved-report-table">
+            <!-- El plazo va segundo, no último: es el dato por el que se abre esta
+                 pantalla, y en un monitor angosto la última columna se corta. -->
+            <thead><tr><th>Paciente</th><th class="num">Plazo</th><th>Práctica</th><th class="num">OME</th><th class="num">Validada</th></tr></thead>
+            <tbody id="omesVencerBody"><tr><td colspan="5" class="muted-cell">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" onclick="cerrarOmesPorVencer()">Listo</button>
+      </div>
+    </div>
+
     <!-- ===== Modal: editar Accesos rápidos (Inicio) =====
          Vive en un modal (y no adentro de la tarjeta, de alto fijo) para que
          se vea completo el catálogo entero sin importar la resolución de
