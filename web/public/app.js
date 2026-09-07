@@ -2529,6 +2529,10 @@ function renderClientList(){
     VISIBLES = CLIENTS.filter(function(c){ return permitidos.indexOf(c.slug) >= 0; });
   }
   var consultorios = VISIBLES.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
+  // Al operador, de los consultorios le aparecen SOLO aquellos en los que tiene
+  // algo para hacer: hoy, los que tienen Plan Salud. Sin esto no podría entrar
+  // a Plan Salud, porque el grupo Consultorios está oculto para su rol.
+  if (ME && ME.role === 'operador') consultorios = consultorios.filter(function(c){ return slugTienePlanSalud(c.slug); });
   var medCab = VISIBLES.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
   // Potenciales clientes: el usuario de DEMOSTRACIÓN no los ve nunca (no le
   // mostramos a un prospecto el pipeline comercial). El colaborador sí, pero
@@ -2537,10 +2541,12 @@ function renderClientList(){
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
-  // Un operador por ahora solo trabaja con Med. Cabecera - se le oculta
-  // Consultorios entero (no por falta de datos, es una decisión de alcance).
+  // Al operador se le oculta Consultorios salvo que le haya quedado alguno
+  // arriba (los de Plan Salud): antes se ocultaba siempre, porque solo
+  // trabajaba con Med. Cabecera - sigue siendo una decisión de alcance, no
+  // falta de datos, pero ahora el alcance incluye Plan Salud.
   var consGroup = document.getElementById('navGroupConsultorios');
-  if (consGroup) consGroup.style.display = (ME && ME.role === 'operador') ? 'none' : '';
+  if (consGroup) consGroup.style.display = (ME && ME.role === 'operador' && !consultorios.length) ? 'none' : '';
   if (pot) pot.innerHTML = potenciales.map(itemHtml).join('');
   if (potGroup) potGroup.style.display = potenciales.length ? '' : 'none';
   // Para el colaborador la separación interna de NS (consultorios vs médicos de
@@ -2614,6 +2620,11 @@ function clientSeccionesPermitidas(){
   // heredar la lista del admin. De un consultorio normal sigue viendo SOLO
   // la información básica: nada de dashboards, adjuntar reporte, honorarios
   // ni usuarios médicos.
+  // Plan Salud: en un centro que lo tenga, el operador suma esa solapa a la
+  // Información básica que ya veía. Va primero en la lista a propósito: es la
+  // que usa para trabajar, así que es donde aterriza por defecto
+  // (setClientSection cae en permitidas[0]) - la básica queda a un clic.
+  if (esOperador && !esMC && clienteTienePlanSalud()) return ['plansalud', 'basica'];
   if (esOperador) return esMC ? ['mescurso', 'basica', 'general'] : ['basica'];
   if (esMC) {
     var seccionesMC = ['mescurso', 'basica'];
@@ -2629,8 +2640,14 @@ function clientSeccionesPermitidas(){
   if (ME && ME.role === 'admin') base.push('medicos');
   // Plan Salud: en desarrollo, solo CIMA y solo para los usuarios habilitados
   // a mano en PLAN_SALUD_USUARIOS — es un allowlist por persona, no por rol.
-  if (ACTIVE_CLIENT && ACTIVE_CLIENT.slug === 'cima' && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
+  if (clienteTienePlanSalud() && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
   return base;
+}
+// Qué centros tienen el módulo de Plan Salud (hoy solo CIMA, igual que
+// PLAN_SALUD_SHEETS en el server). Un solo lugar para cuando se sume otro.
+function slugTienePlanSalud(slug){ return String(slug || '') === 'cima'; }
+function clienteTienePlanSalud(){
+  return !!(ACTIVE_CLIENT && slugTienePlanSalud(ACTIVE_CLIENT.slug));
 }
 // Muestra/oculta las pestañas según el tipo de cliente.
 function aplicarPestanasCliente(){
