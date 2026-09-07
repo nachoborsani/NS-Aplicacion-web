@@ -272,6 +272,54 @@ def tarea_subir(web, slug, payload, tlog, cola=None, tid=None):
     return {"total": len(items), "subidos": ok, "detalle": detalle}
 
 
+def tarea_plan_salud_benef(web, slug, payload, tlog):
+    """Busca en PAMI el beneficio por DNI (padrón autenticado) con el login de un
+    cliente (ej. Dubesarky), para completar la planilla de Plan Salud. Solo BUSCA
+    y devuelve resultados; la escritura la decide la web. No crea nada en PAMI."""
+    import asyncio
+    from pami_ome_generator import PamiOmeGenerator, PatientInput
+
+    login_slug = str(payload.get("loginSlug") or "").strip()
+    if not login_slug:
+        raise RuntimeError("Falta el cliente cuyo login PAMI usar (loginSlug).")
+    cred = web.client_pami(login_slug)
+    user = str((cred or {}).get("pamiUser", "")).strip()
+    clave = str((cred or {}).get("pamiPassword", "") or "")
+    if not user or not clave:
+        raise RuntimeError(f"El cliente {login_slug} no tiene usuario/clave PAMI cargados en la web.")
+    items = payload.get("items") or []
+    resultados = []
+
+    async def _run():
+        async with PamiOmeGenerator(user=user, password=clave, headless=True) as gen:
+            for i, it in enumerate(items, 1):
+                dni = "".join(ch for ch in str(it.get("dni", "") or "") if ch.isdigit())
+                fila = it.get("fila")
+                nombre = str(it.get("nombre", "") or "")
+                if not dni:
+                    resultados.append({"fila": fila, "dni": "", "beneficio": "", "nombre": nombre, "resultado": "SIN_DNI"})
+                    continue
+                tlog(f"[{i}/{len(items)}] fila {fila} · {nombre} · DNI {dni} …")
+                try:
+                    res = await gen.process_patient(PatientInput(
+                        modo="DNI", afiliado=dni, diagnostico="", practica="",
+                        dni=dni, nombre=nombre, completar_benef=True,
+                    ))
+                    benef = str(getattr(res, "beneficio", "") or "").strip()
+                    resultados.append({
+                        "fila": fila, "dni": dni, "beneficio": benef,
+                        "nombre": str(getattr(res, "nombre", "") or "") or nombre,
+                        "resultado": str(getattr(res, "resultado", "") or ""),
+                    })
+                    tlog(f"    {benef or 'no encontrado'}")
+                except Exception as e:  # noqa: BLE001
+                    resultados.append({"fila": fila, "dni": dni, "beneficio": "", "nombre": nombre, "resultado": f"ERROR: {str(e)[:120]}"})
+                    tlog(f"    error: {e}")
+
+    asyncio.run(_run())
+    return {"resultados": resultados}
+
+
 def tarea_verificar_medicos(web, slug, payload, tlog):
     """Prueba el login a CUP PAMI de uno o varios médicos y devuelve su estado."""
     from pami_ome_generator import verificar_login_sync
@@ -434,6 +482,8 @@ def dispatch(task, web, cola):
         return tarea_crear_ome(web, slug, payload, tlog)
     if tipo == "verificar-medico":
         return tarea_verificar_medicos(web, slug, payload, tlog)
+    if tipo == "plan-salud-benef":
+        return tarea_plan_salud_benef(web, slug, payload, tlog)
     if tipo == "liberar-cupo":
         return tarea_liberar_cupo(web, slug, payload, tlog)
     raise RuntimeError(f"Tipo de tarea no soportado por este worker: {tipo}")

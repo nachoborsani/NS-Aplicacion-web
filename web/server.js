@@ -5874,6 +5874,44 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo enriquecer la planilla." }); }
   }
 
+  // Plan Salud: buscar en PAMI (padrón autenticado) los beneficios faltantes por
+  // DNI, usando el login de otro cliente (por defecto Dubesarky). Encola una tarea
+  // al worker; devuelve los resultados por task.result (la escritura es aparte).
+  const planSaludBuscarMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/buscar-pami$/);
+  if (planSaludBuscarMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(planSaludBuscarMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    const body = await readBody(req);
+    const loginSlug = String((body && body.loginSlug) || "dubesarky-ezequiel").trim();
+    const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+      // Filas con DNI y SIN beneficio → se pueden buscar en el padrón.
+      const items = [];
+      rows.forEach((r, i) => {
+        const dni = dig(r[2]), benef = dig(r[3]);
+        if (dni && !benef) items.push({ fila: i + 2, dni, nombre: String(r[1] || "").trim() });
+      });
+      if (!items.length) return json(res, 200, { ok: true, cantidad: 0, mensaje: "No hay filas con DNI y sin beneficio para buscar." });
+      const task = enqueueWorkerTask({
+        type: "plan-salud-benef",
+        label: `Plan Salud: buscar ${items.length} beneficio(s) en PAMI (login ${loginSlug})`,
+        clientSlug: slug, createdBy: me.username,
+        payload: { loginSlug, hoja: tab, items },
+      });
+      return json(res, 201, { ok: true, cantidad: items.length, task: publicWorkerTask(task) });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo preparar la búsqueda." }); }
+  }
+
   // ===== Bot de OMEs (Telegram) =====
   // Webhook: Telegram POSTea cada mensaje/botón. Verificamos el secret por header
   // (Telegram lo manda en x-telegram-bot-api-secret-token) y contestamos 200 rápido.
