@@ -4332,10 +4332,10 @@ function mesCursoTogglePanel(tipo){
     html = au.length ? mesCursoTablaHtml('Ausentes · ' + au.length, 'warn', 'copiarAusentes', cols, au.map(mapInformes), 'ausentes', accionLiberarCupoAusente('ausentes')) : mesCursoVacioHtml('Ausentes', 'warn');
   } else if (tipo === 'ausentes-julio'){
     var auj = MESCURSO_AUSENTES_JULIO || [];
-    html = auj.length ? mesCursoTablaHtml('Ausentes sin activar (mes anterior) · ' + auj.length, 'warn', 'copiarAusentesJulio', cols, auj.map(mapInformes), 'ausentes-julio', accionLiberarCupoAusente('ausentes-julio')) : mesCursoVacioHtml('Ausentes sin activar (mes anterior)', 'warn');
+    html = auj.length ? mesCursoTablaHtml('Ausentes sin validar (mes anterior) · ' + auj.length, 'warn', 'copiarAusentesJulio', cols, auj.map(mapInformes), 'ausentes-julio', accionLiberarCupoAusente('ausentes-julio')) : mesCursoVacioHtml('Ausentes sin validar (mes anterior)', 'warn');
   } else if (tipo === 'ausentes-cerrado'){
     var auc = MESCURSO_AUSENTES_CERRADO || [];
-    html = auc.length ? mesCursoTablaHtml('Ausentes sin activar (mes cerrado) · ' + auc.length, 'warn', 'copiarAusentesCerrado', cols, auc.map(mapInformes), 'ausentes-cerrado', accionLiberarCupoAusente('ausentes-cerrado')) : mesCursoVacioHtml('Ausentes sin activar (mes cerrado)', 'warn');
+    html = auc.length ? mesCursoTablaHtml('Ausentes sin validar (mes cerrado) · ' + auc.length, 'warn', 'copiarAusentesCerrado', cols, auc.map(mapInformes), 'ausentes-cerrado', accionLiberarCupoAusente('ausentes-cerrado')) : mesCursoVacioHtml('Ausentes sin validar (mes cerrado)', 'warn');
   } else if (tipo === 'fueracorte-julio'){
     var fcj = MESCURSO_FUERACORTE_JULIO || [];
     html = fcj.length ? mesCursoTablaHtml('A facturar fuera de corte (mes anterior) · ' + fcj.length, 'warn', 'copiarFueraCorteJulio', cols, fcj.map(mapInformes), 'fueracorte-julio') : mesCursoVacioHtml('A facturar fuera de corte (mes anterior)', 'warn');
@@ -4464,8 +4464,8 @@ function mesCursoDescargarDatos(panelId){
   var mapDeb = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), Number(x.monto) || 0]; };
   var cli = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
   if (panelId === 'ausentes') return { titulo: 'Ausentes - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES || []).map(mapInfo), moneyCols: [4] };
-  if (panelId === 'ausentes-julio') return { titulo: 'Ausentes sin activar (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_JULIO || []).map(mapInfo), moneyCols: [4] };
-  if (panelId === 'ausentes-cerrado') return { titulo: 'Ausentes sin activar (mes cerrado) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_CERRADO || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'ausentes-julio') return { titulo: 'Ausentes sin validar (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_JULIO || []).map(mapInfo), moneyCols: [4] };
+  if (panelId === 'ausentes-cerrado') return { titulo: 'Ausentes sin validar (mes cerrado) - ' + cli, columnas: infoCols, filas: (MESCURSO_AUSENTES_CERRADO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'fueracorte-julio') return { titulo: 'A facturar fuera de corte (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FUERACORTE_JULIO || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes') return { titulo: 'Faltan informes - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES || []).map(mapInfo), moneyCols: [4] };
   if (panelId === 'informes-julio') return { titulo: 'Faltan informes (mes anterior) - ' + cli, columnas: infoCols, filas: (MESCURSO_FALTAN_INFORMES_JULIO || []).map(mapInfo), moneyCols: [4] };
@@ -4926,7 +4926,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line warn' + djClick + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + fjClick + '"><span>Faltan informes' + fjCaret + '</span>'
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
-    + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin activar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
+    + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line wide mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
     + '</div>' + syncSc + foot + '</div>';
@@ -4967,7 +4967,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span></span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()"><span>Faltan informes <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span></span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
-    + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin activar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
+    + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>' + syncSc + foot + '</div>';
 }
 function medCabEstadoMes(d){

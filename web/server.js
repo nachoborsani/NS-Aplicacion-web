@@ -4299,7 +4299,7 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
     const periodRows = [...item._rowsByKey.values()];
     for (const row of periodRows) addRowToDashboardPeriod(item, row);
     item.posiblesDebitosRows = buildDebitoDetalle(periodRows);
-    // Detalle de ausentes sin activar (con turno pero no validadas, fuera de corte no
+    // Detalle de ausentes sin validar (con turno pero no validadas, fuera de corte no
     // cuenta): para desplegarlo abajo de la card igual que el del mes en curso.
     const detalleFila = (r) => ({
       benef: cleanIdentifier(r.benefit),
