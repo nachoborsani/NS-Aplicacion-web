@@ -5682,17 +5682,29 @@ async function descargarComparativa(format){
   } catch (e){ nsAlert('No se pudo generar el archivo.'); }
 }
 // Resumen ejecutivo en texto: qué facturó y por qué cambió (arriba de todo).
+// Cuenta las prestaciones COBRADAS (net > 0) de un período, sumando desde los rows
+// de sus módulos — misma definición que el encabezado y el desglose por práctica.
+function dashCobradasCount(periodo, kind){
+  var n = 0;
+  ((periodo && periodo.modules) || []).forEach(function(m){
+    (m.rows || []).forEach(function(r){ if (r.kind === kind && Number(r.net || 0) > 0) n++; });
+  });
+  return n;
+}
 function renderDashResumen(current, compare, deltas){
   var box = document.getElementById('clientDashboardResumen');
   if (!box) return;
   if (!current.period){ box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = '';
   var curL = current.label || current.period;
-  var totalPrest = (current.consultations || 0) + (current.practices || 0);
+  var curCons = dashCobradasCount(current, 'Consulta');   // solo cobradas, coherente con el neto
+  var curPrac = dashCobradasCount(current, 'Practica');
+  var totalPrest = curCons + curPrac;
+  var promedio = totalPrest ? (Number(current.net || 0) / totalPrest) : 0;
   if (!compare.period){
     box.innerHTML = '<b>' + esc(curL) + '</b> facturó <b>' + esc(moneyFmt(current.net || 0)) + '</b> en '
-      + esc(numberFmt(totalPrest)) + ' prestaciones (' + esc(numberFmt(current.consultations || 0)) + ' consultas · '
-      + esc(numberFmt(current.practices || 0)) + ' prácticas). Promedio por prestación ' + esc(moneyFmt(current.averageNet || 0)) + '. '
+      + esc(numberFmt(totalPrest)) + ' prestaciones cobradas (' + esc(numberFmt(curCons)) + ' consultas · '
+      + esc(numberFmt(curPrac)) + ' prácticas). Promedio por prestación ' + esc(moneyFmt(promedio)) + '. '
       + '<span class="resumen-hint">Elegí un mes en “Comparar con” para ver qué cambió.</span>';
     return;
   }
@@ -5703,14 +5715,16 @@ function renderDashResumen(current, compare, deltas){
   var pct = dn.percent == null ? '' : ' (' + (up ? '+' : '−') + percentFmt(Math.abs(dn.percent)) + ')';
   var varHtml = '<span class="resumen-var ' + (up ? 'pos' : 'neg') + '">' + (up ? '▲' : '▼') + ' '
     + esc((up ? '+' : '−') + moneyFmt(Math.abs(v)) + pct) + '</span>';
-  var dc = Number((deltas.consultations || {}).value || 0);
-  var dp = Number((deltas.practices || {}).value || 0);
+  var dc = curCons - dashCobradasCount(compare, 'Consulta');   // deltas de cobradas
+  var dp = curPrac - dashCobradasCount(compare, 'Practica');
   var drv = [];
   if (dc) drv.push((dc > 0 ? '+' : '−') + numberFmt(Math.abs(dc)) + ' consultas');
   if (dp) drv.push((dp > 0 ? '+' : '−') + numberFmt(Math.abs(dp)) + ' prácticas');
   var drvPhrase = drv.length ? ' Movimiento de volumen: ' + esc(drv.join(' · ')) + '.' : '';
-  var avgPhrase = ' Promedio por prestación ' + esc(moneyFmt(current.averageNet || 0))
-    + (compare.averageNet ? ' (antes ' + esc(moneyFmt(compare.averageNet)) + ').' : '.');
+  var cmpCons = dashCobradasCount(compare, 'Consulta') + dashCobradasCount(compare, 'Practica');
+  var cmpProm = cmpCons ? (Number(compare.net || 0) / cmpCons) : 0;
+  var avgPhrase = ' Promedio por prestación ' + esc(moneyFmt(promedio))
+    + (cmpProm ? ' (antes ' + esc(moneyFmt(cmpProm)) + ').' : '.');
   box.innerHTML = '<b>' + esc(curL) + '</b> facturó <b>' + esc(moneyFmt(current.net || 0)) + '</b>, ' + varHtml
     + ' frente a <b>' + esc(cmpL) + '</b> (' + esc(moneyFmt(compare.net || 0)) + ').' + drvPhrase + avgPhrase;
 }
@@ -5838,10 +5852,14 @@ function renderClientDashboard(data){
   if (kpis) {
     var hc = !!compare.period;
     function kprev(txt){ return hc ? '<small class="kpi-prev">' + esc(cmpShort + ': ' + txt) + '</small>' : ''; }
+    // Solo cobradas (net > 0), coherente con la facturación neta y el resto del dashboard.
+    var kConsCur = dashCobradasCount(current, 'Consulta'), kConsCmp = dashCobradasCount(compare, 'Consulta');
+    var kPracCur = dashCobradasCount(current, 'Practica'), kPracCmp = dashCobradasCount(compare, 'Practica');
+    var kDelta = function(cur, cmp){ return dashboardDelta({ value: cur - cmp, percent: cmp ? (cur - cmp) / cmp : null }, false); };
     kpis.innerHTML = ''
       + '<div><b>' + esc(moneyFmt(current.net || 0)) + '</b><span>Facturación neta</span>' + kprev(moneyFmt(compare.net || 0)) + dashboardDelta(deltas.net, true) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.consultations || 0)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + kprev(numberFmt(compare.consultations || 0)) + dashboardDelta(deltas.consultations, false) + '</div>'
-      + '<div><b>' + esc(numberFmt(current.practices || 0)) + '</b><span>Prácticas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(compare.practices || 0)) + dashboardDelta(deltas.practices, false) + '</div>'
+      + '<div><b>' + esc(numberFmt(kConsCur)) + '</b><span>Consultas</span><small>' + esc(moneyFmt(current.consultationNet || 0)) + '</small>' + kprev(numberFmt(kConsCmp)) + kDelta(kConsCur, kConsCmp) + '</div>'
+      + '<div><b>' + esc(numberFmt(kPracCur)) + '</b><span>Prácticas / estudios</span><small>' + esc(moneyFmt(current.practiceNet || 0)) + '</small>' + kprev(numberFmt(kPracCmp)) + kDelta(kPracCur, kPracCmp) + '</div>'
       + '<div' + (Number(current.debit) > 0 ? ' class="kpi-clickable" role="button" tabindex="0" onclick="openDebitosModal()" title="Ver debitos"' : '') + '><b>' + esc(moneyFmt(current.debit || 0)) + '</b><span>Débitos</span>' + kprev(moneyFmt(compare.debit || 0)) + dashboardDelta(deltas.debit, true, true) + '<div class="debit-breakdown">' + debitBreakdownHtml(current.debitUmbral || 0, current.debitExcluyente || 0, current.debitOtros || 0) + '</div></div>'
       + '<div><b>' + esc(numberFmt(current.absent || 0)) + '</b><span>Ausentes</span>' + kprev(numberFmt(compare.absent || 0)) + dashboardDelta(deltas.absent, false, true) + '</div>'
       + '<div><b>' + esc(numberFmt(current.outsideCutoff || 0)) + '</b><span>Fuera de corte</span><small>' + esc(moneyFmt(current.nextPeriodCutoff || 0)) + '</small>' + kprev(numberFmt(compare.outsideCutoff || 0)) + dashboardDelta(deltas.outsideCutoff, false) + '</div>';
