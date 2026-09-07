@@ -23,6 +23,7 @@ async function api(metodo, params) {
 }
 
 function getMe() { return api("getMe", {}); }
+function getWebhookInfo() { return api("getWebhookInfo", {}); }
 
 // Envía texto. `botones` opcional: matriz de filas de { text, data } -> inline_keyboard.
 async function enviar(chatId, texto, botones) {
@@ -42,4 +43,4 @@ async function setWebhook(url, secret) {
   return api("setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
 }
 
-module.exports = { hayToken, getMe, enviar, editar, responderCallback, setWebhook };
+module.exports = { hayToken, getMe, getWebhookInfo, enviar, editar, responderCallback, setWebhook };

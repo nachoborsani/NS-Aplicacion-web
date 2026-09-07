@@ -5685,7 +5685,9 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 401, { error: "no-auth" });
     const cfg = loadOmeBotCfg();
-    return json(res, 200, { hayToken: omeBot.hayToken(), webhookListo: !!cfg.secret, chats: cfg.chats, cliente: OME_BOT_CLIENTE });
+    let webhook = null;
+    try { if (omeBot.hayToken()) webhook = await omeBot.getWebhookInfo(); } catch (e) { webhook = { error: (e && e.message) || String(e) }; }
+    return json(res, 200, { hayToken: omeBot.hayToken(), webhookListo: !!cfg.secret, chats: cfg.chats, cliente: OME_BOT_CLIENTE, webhook });
   }
   // Autorizar (o quitar con {quitar:true}) un chat para usar el bot.
   if (p === "/api/admin/ome-bot/autorizar" && req.method === "POST") {
