@@ -5874,6 +5874,51 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo enriquecer la planilla." }); }
   }
 
+  // Plan Salud: filas donde quedó un NÚMERO (DNI) en la columna del nombre y sin DNI
+  // → mueve el número a la columna DNI (C) y limpia el nombre (B). Sin escribir=true
+  // es simulación (muestra qué movería).
+  const planSaludMoverMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/mover-dni$/);
+  if (planSaludMoverMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(planSaludMoverMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    const body = await readBody(req);
+    const escribir = !!(body && body.escribir);
+    const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+      const moves = [];
+      rows.forEach((r, i) => {
+        const fila = i + 2;
+        const nombre = String(r[1] || "").trim();
+        const dni = dig(r[2]);
+        const nombreDig = dig(nombre);
+        const tieneLetras = /[a-zA-Z]/.test(nombre);
+        // El "nombre" es puramente un número de 6-9 dígitos (DNI) y la fila no tiene DNI.
+        if (nombre && !tieneLetras && nombreDig.length >= 6 && nombreDig.length <= 9 && !dni) {
+          moves.push({ fila, dni: nombreDig });
+        }
+      });
+      let escritas = 0;
+      if (escribir) {
+        for (const m of moves) {
+          await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "C" + m.fila, m.dni);
+          await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "B" + m.fila, "");
+          escritas++;
+        }
+      }
+      return json(res, 200, { ok: true, modo: escribir ? "escritura" : "simulacion", hoja: tab, cantidad: moves.length, moves, escritas });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo mover." }); }
+  }
+
   // Plan Salud: matchear por NOMBRE las filas sin beneficio contra la planilla de
   // Dube (que tiene benef+dni+nombre) para traer el beneficio. Solo lectura (simulación).
   const planSaludMatchDubeMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/match-dube$/);
