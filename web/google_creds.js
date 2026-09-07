@@ -46,9 +46,11 @@ async function getSheetMeta(auth, spreadsheetId) {
   };
 }
 
-async function readValues(auth, spreadsheetId, tab, range) {
+async function readValues(auth, spreadsheetId, tab, range, valueRenderOption) {
   const sheets = google.sheets({ version: "v4", auth });
-  const r = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${tab}'!${range}` });
+  const params = { spreadsheetId, range: `'${tab}'!${range}` };
+  if (valueRenderOption) params.valueRenderOption = valueRenderOption; // ej. "FORMULA" para ver =HYPERLINK(...)
+  const r = await sheets.spreadsheets.values.get(params);
   return r.data.values || [];
 }
 

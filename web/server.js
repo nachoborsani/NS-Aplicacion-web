@@ -6191,6 +6191,66 @@ const server = http.createServer(async (req, res) => {
           pendientesAntes: pendientes.length, hechas, faltanDatos,
         });
       }
+      // Para los pacientes SIN credencial DESCARGADA en la hoja target, busca si ya
+      // tienen una credencial bajada (con link) en Dube, Scheffelaar o en las OTRAS
+      // hojas mensuales del Plan Salud, cruzando por DNI y por beneficiario. Con
+      // ?escribir=1 copia el =HYPERLINK encontrado a la celda de la hoja target.
+      if (accion === "cruzar" && req.method === "GET") {
+        const escribir = /[?&]escribir=1/.test(req.url || "");
+        const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+        const linkDe = (formula) => (String(formula || "").match(/HYPERLINK\("([^"]+)"/i) || [])[1] || "";
+        const esDesc = (v) => /descargada/i.test(String(v || ""));
+        // Índice de credenciales ya bajadas: dni/benef -> { link, hoja, texto }.
+        const porDni = new Map(), porBenef = new Map();
+        const indexar = async (sid, tabName, cols, startRow) => {
+          const maxCol = Math.max(cols.dni || 0, cols.benef || 0, cols.credencial || 0, cols.nombre || 0);
+          let vals = [], forms = [];
+          try { vals = await gcreds.readValues(auth, sid, tabName, `A${startRow}:${gcreds.indexToCol(maxCol)}`); } catch { return; }
+          try { forms = await gcreds.readValues(auth, sid, tabName, `${gcreds.indexToCol(cols.credencial)}${startRow}:${gcreds.indexToCol(cols.credencial)}`, "FORMULA"); } catch { forms = []; }
+          vals.forEach((r, i) => {
+            const credTxt = r[cols.credencial];
+            if (!esDesc(credTxt)) return;
+            const link = linkDe(forms[i] && forms[i][0]) || "";
+            const rec = { link, hoja: tabName, conLink: !!link };
+            const dni = dig(r[cols.dni]), benef = dig(r[cols.benef]);
+            if (dni && !porDni.has(dni)) porDni.set(dni, rec);
+            if (benef && !porBenef.has(benef)) porBenef.set(benef, rec);
+          });
+        };
+        // Fuentes: Dube, Scheffelaar y las otras hojas del Plan Salud.
+        for (const key of ["dubesarky-ezequiel", "scheffelaar-mc"]) {
+          const CC = credCfg(key); if (CC) await indexar(CC.spreadsheetId, CC.tab, CC.cols, CC.startRow);
+        }
+        for (const t of (meta.tabsInfo || [])) {
+          if (String(t.sheetId) === String(cfg.gid)) continue; // saltear la hoja target
+          await indexar(cfg.spreadsheetId, t.title, { dni: 2, benef: 3, credencial: 7, nombre: 1 }, 2);
+        }
+        // Recorre la hoja target: filas con dni/benef y credencial que NO es DESCARGADA.
+        const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+        const encontrados = [], sinRastro = [];
+        let escritas = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i], fila = i + 2;
+          const nombre = String(r[1] || "").trim(), dni = dig(r[2]), benef = dig(r[3]), cred = r[7];
+          if (!nombre && !dni && !benef) continue;
+          if (esDesc(cred)) continue;            // ya está descargada acá
+          if (!dni && !benef) continue;
+          const hit = (dni && porDni.get(dni)) || (benef && porBenef.get(benef)) || null;
+          if (!hit) { if (cred) sinRastro.push({ fila, nombre, dni, estadoActual: String(cred).slice(0, 40) }); continue; }
+          const item = { fila, nombre, dni, benef, encontradoEn: hit.hoja, link: hit.link || "", conLink: hit.conLink };
+          if (escribir && hit.link) {
+            try { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "H" + fila, `=HYPERLINK("${hit.link}";"DESCARGADA")`); item.escrito = true; escritas++; }
+            catch (e) { item.escrito = false; item.error = (e && e.message) || "no pude escribir"; }
+          }
+          encontrados.push(item);
+        }
+        return json(res, 200, {
+          modo: escribir ? "escritura" : "diagnostico",
+          encontrados: encontrados.length, conLink: encontrados.filter((x) => x.conLink).length,
+          escritas, detalle: encontrados.slice(0, 300),
+          sinRastro: sinRastro.length, sinRastroDetalle: sinRastro.slice(0, 100),
+        });
+      }
       return json(res, 404, { error: "Acción no soportada." });
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo procesar." }); }
   }
