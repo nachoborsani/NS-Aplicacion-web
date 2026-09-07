@@ -956,6 +956,10 @@
           <div class="tablecard nom-table">
             <div class="table-head">
               <div><b id="nomResultTitle">Resultados</b><span id="nomResultMeta">Todavía no hay búsqueda.</span></div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost btn-sm" type="button" onclick="descargarNomencladorCompleto('xlsx')" title="Descargar el nomenclador completo (todos los módulos) en Excel">📊 Excel</button>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="descargarNomencladorCompleto('pdf')" title="Descargar el nomenclador completo (todos los módulos) en PDF">📄 PDF</button>
+              </div>
             </div>
             <div class="table-scroll">
               <table class="nom-results-table">

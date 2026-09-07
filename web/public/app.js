@@ -5326,6 +5326,21 @@ async function loadClientNomenclador(){
 }
 // Descarga el nomenclador del cliente (la vista resumida, filtrada por sus
 // módulos activos) en Excel o PDF, respetando el período y la búsqueda actual.
+// Descarga el nomenclador COMPLETO (todos los módulos) en el formato limpio, como
+// el del cliente pero sin filtrar. Usa el período elegido arriba (nomPeriod).
+async function descargarNomencladorCompleto(format){
+  var period = (document.getElementById('nomPeriod') || {}).value || NOM_ACTIVE_PERIOD || '';
+  if (!period){ nsAlert('Primero elegí un nomenclador (período).'); return; }
+  var params = new URLSearchParams({ period: period, format: format });
+  try {
+    var r = await fetch('/api/nomencladores/export?' + params.toString());
+    if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} nsAlert((d && d.error) || 'No se pudo generar el archivo.'); return; }
+    var blob = await r.blob();
+    var cd = r.headers.get('content-disposition') || '';
+    var m = cd.match(/filename="([^"]+)"/);
+    bajarBlob(blob, m ? m[1] : ('nomenclador.' + (format === 'pdf' ? 'pdf' : 'xlsx')));
+  } catch (e){ nsAlert('No se pudo generar el archivo.'); }
+}
 async function exportClientNomenclador(format){
   if (!ACTIVE_CLIENT) return;
   var period = document.getElementById('clientNomPeriod').value || NOM_ACTIVE_PERIOD || '';

@@ -8440,6 +8440,26 @@ const server = http.createServer(async (req, res) => {
     const store = loadNomencladorStore();
     const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
+    const labelExp = payload.label || periodLabel(payload.period);
+    // Excel/PDF: mismo formato limpio que el del cliente, pero COMPLETO (todos los
+    // módulos, sin filtrar). Sin format (o json) devuelve el JSON crudo de siempre.
+    const formatExp = String(url.searchParams.get("format") || "json").toLowerCase();
+    if (formatExp === "xlsx" || formatExp === "pdf") {
+      const rowsExp = (payload.rows || []).map(({ search, ...row }) => row);
+      const modCount = new Set(rowsExp.map((r) => String(r.moduleCode || r.moduleDescription || ""))).size;
+      const pseudoClient = { name: "todos los módulos", activeModules: new Array(modCount) };
+      const base = downloadName("Nomenclador PAMI " + labelExp) || "nomenclador";
+      try {
+        if (formatExp === "pdf") {
+          const buf = Buffer.from(await nomExport.buildPdf(pseudoClient, labelExp, rowsExp));
+          res.writeHead(200, { "content-type": "application/pdf", "content-length": buf.length, "content-disposition": `attachment; filename="${base}.pdf"`, "cache-control": "no-store" });
+          return res.end(buf);
+        }
+        const buf = nomExport.buildXlsx(pseudoClient, labelExp, rowsExp);
+        res.writeHead(200, { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-length": buf.length, "content-disposition": `attachment; filename="${base}.xlsx"`, "cache-control": "no-store" });
+        return res.end(buf);
+      } catch (error) { console.log("[nom-export-full] error:", error && error.message); return json(res, 500, { error: "No se pudo generar el archivo." }); }
+    }
     // Respondemos con Content-Length explicito (no el chunked del helper json):
     // en respuestas grandes, sin Content-Length el cliente hace un recv de mas
     // tras los datos y en Windows eso termina en un reset (ECONNRESET 10054).
