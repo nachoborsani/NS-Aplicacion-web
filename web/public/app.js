@@ -1581,9 +1581,10 @@ function iniAccesosCatalogo(){
 // así que no pueden compartir id. El resto de la lógica (catálogo, guardado,
 // render) es exactamente la misma para las 2.
 function iniAccesosIds(scope){
-  return scope === 'op'
-    ? { grid:'opAccesosGrid', editor:'opAccesosEditor', contador:'opAccesosContador', catalogo:'opAccesosCatalogo', editBtn:'opAccesosEditBtn' }
-    : { grid:'iniAccesosGrid', editor:'iniAccesosEditor', contador:'iniAccesosContador', catalogo:'iniAccesosCatalogo', editBtn:'iniAccesosEditBtn' };
+  // El editor ya no vive adentro de la tarjeta (ver #accesosModal, compartido
+  // por las 2 vistas) - acá solo queda la grilla, que sigue siendo propia de
+  // cada una (admin y operador conviven en el DOM, no pueden compartir id).
+  return { grid: scope === 'op' ? 'opAccesosGrid' : 'iniAccesosGrid' };
 }
 function iniAccesosKey(){ return 'ns_accesos_rapidos_' + (ME && ME.username || ''); }
 function iniAccesosElegidos(){
@@ -1615,19 +1616,20 @@ async function iniAccesosRender(scope){
   iniAccesosRenderEditor(scope);
 }
 function iniAccesosIr(i){ var t = (window.__iniAccesosTiles||[])[i]; if (t) t.run(); }
-function iniAccesosToggleEditor(scope){
-  var ids = iniAccesosIds(scope);
-  var ed = document.getElementById(ids.editor); if (!ed) return;
-  var abierto = ed.style.display !== 'none';
-  ed.style.display = abierto ? 'none' : '';
-  document.getElementById(ids.editBtn).textContent = abierto ? 'Editar' : 'Listo';
+// El editor vive en un modal compartido (#accesosModal): así el catálogo
+// entero (puede ser largo - un ítem por cliente) queda siempre visible con
+// scroll propio acotado al viewport, sin depender del alto fijo de la
+// tarjeta ni de en qué resolución esté mirando la pantalla.
+function iniAccesosAbrirModal(scope){
+  iniAccesosRenderEditor(scope);
+  showModal('accesosModal', 'accesosScrim');
 }
+function iniAccesosCerrarModal(){ hideModal('accesosModal', 'accesosScrim'); }
 function iniAccesosRenderEditor(scope){
-  var ids = iniAccesosIds(scope);
-  var cont = document.getElementById(ids.catalogo); if (!cont) return;
+  var cont = document.getElementById('accesosModalCatalogo'); if (!cont) return;
   var catalogo = iniAccesosCatalogo();
   var elegidos = iniAccesosElegidos();
-  var cnt = document.getElementById(ids.contador); if (cnt) cnt.textContent = elegidos.length + ' / 9 elegidos';
+  var cnt = document.getElementById('accesosModalContador'); if (cnt) cnt.textContent = elegidos.length + ' / 9 elegidos';
   var lleno = elegidos.length >= 9;
   var htmlGeneral = catalogo.filter(function(it){ return it.grupo!=='clientes'; }).map(function(it){
     return iniAccesoOptHtml(it, elegidos, lleno, scope);

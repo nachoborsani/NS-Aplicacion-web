@@ -587,9 +587,11 @@
   .ini-acceso-tile:hover{border-color:var(--turq);background:var(--hover)}
   .ini-acceso-tile .ic{font-size:19px;line-height:1}
   .ini-acceso-tile .tx{font-size:11px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
-  .ini-accesos-editor{border-top:1px solid var(--border);background:var(--surface-2)}
-  .ini-accesos-editor .ini-meta{padding:10px 16px 0}
-  .ini-accesos-catalogo{max-height:260px;overflow-y:auto;padding:8px 16px 14px;display:flex;flex-direction:column;gap:1px}
+  /* Catálogo de Accesos rápidos: vive en el modal-body de #accesosModal (no
+     adentro de la tarjeta de alto fijo, que lo recortaba) - el tope de alto es
+     relativo al viewport para que entre completo en cualquier resolución, con
+     scroll propio si aun así no alcanza. */
+  .ini-accesos-catalogo{max-height:min(420px,55vh);overflow-y:auto;padding:8px 0 0;display:flex;flex-direction:column;gap:1px}
   .ini-acceso-opt{display:flex;align-items:center;gap:9px;padding:6px 4px;font-size:13px;cursor:pointer;color:var(--text)}
   .ini-acceso-opt input{flex:0 0 auto}
   .ini-acceso-opt.disabled{opacity:.4;cursor:not-allowed}

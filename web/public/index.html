@@ -266,18 +266,16 @@
               </div>
               <ul class="ini-pendop-list" id="iniPendOpList"><li class="ini-empty">Cargando…</li></ul>
             </section>
-            <!-- Accesos rápidos: catálogo configurable de atajos (ver iniAccesos* en app.js). -->
+            <!-- Accesos rápidos: catálogo configurable de atajos (ver iniAccesos* en app.js).
+                 El editor vive en un modal aparte (#accesosModal) - adentro de esta tarjeta
+                 de alto fijo no entraba entero en pantallas chicas y quedaba cortado. -->
             <section class="card ini-card ini-panel-accesos" data-panel="accesos">
               <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">⚡</span>
                 <div><h2>Accesos rápidos</h2></div>
-                <button class="btn btn-ghost btn-sm" id="iniAccesosEditBtn" onclick="iniAccesosToggleEditor()">Editar</button>
+                <button class="btn btn-ghost btn-sm" id="iniAccesosEditBtn" onclick="iniAccesosAbrirModal()">Editar</button>
               </div>
               <div class="ini-accesos-grid" id="iniAccesosGrid"></div>
-              <div class="ini-accesos-editor" id="iniAccesosEditor" style="display:none">
-                <div class="ini-meta" id="iniAccesosContador">0 / 9 elegidos</div>
-                <div class="ini-accesos-catalogo" id="iniAccesosCatalogo"></div>
-              </div>
             </section>
             <!-- Actividad de operadores (solo admin): horas conectado HOY. Es una
                  tarjeta más del mismo sistema de arrastrar/redimensionar (data-panel) -
@@ -349,13 +347,9 @@
               <div class="ini-head ini-drag-handle">
                 <span class="ini-ic">⚡</span>
                 <div><h2>Accesos rápidos</h2></div>
-                <button class="btn btn-ghost btn-sm" id="opAccesosEditBtn" onclick="iniAccesosToggleEditor('op')">Editar</button>
+                <button class="btn btn-ghost btn-sm" id="opAccesosEditBtn" onclick="iniAccesosAbrirModal('op')">Editar</button>
               </div>
               <div class="ini-accesos-grid" id="opAccesosGrid"></div>
-              <div class="ini-accesos-editor" id="opAccesosEditor" style="display:none">
-                <div class="ini-meta" id="opAccesosContador">0 / 9 elegidos</div>
-                <div class="ini-accesos-catalogo" id="opAccesosCatalogo"></div>
-              </div>
             </section>
           </div>
         </section>
@@ -1922,6 +1916,22 @@
       <div class="modal-foot">
         <button class="btn btn-ghost" onclick="closeClientModulesModal()">Cancelar</button>
         <button class="btn btn-primary" id="clientModulesSave" onclick="saveClientModules()">Guardar módulos</button>
+      </div>
+    </div>
+
+    <!-- ===== Modal: editar Accesos rápidos (Inicio) =====
+         Vive en un modal (y no adentro de la tarjeta, de alto fijo) para que
+         se vea completo el catálogo entero sin importar la resolución de
+         pantalla - el modal ya tiene su propio scroll acotado al viewport. -->
+    <div class="scrim" id="accesosScrim" onclick="iniAccesosCerrarModal()"></div>
+    <div class="modal wide" id="accesosModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3>Accesos rápidos</h3><button class="x" onclick="iniAccesosCerrarModal()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <div class="ini-meta" id="accesosModalContador">0 / 9 elegidos</div>
+        <div class="ini-accesos-catalogo" id="accesosModalCatalogo"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" onclick="iniAccesosCerrarModal()">Listo</button>
       </div>
     </div>
 
