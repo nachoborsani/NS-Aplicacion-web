@@ -5926,13 +5926,19 @@ const server = http.createServer(async (req, res) => {
       const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
       const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
       const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
-      const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
-      // Filas con DNI y SIN beneficio → se pueden buscar en el padrón.
-      const items = [];
-      rows.forEach((r, i) => {
-        const dni = dig(r[2]), benef = dig(r[3]);
-        if (dni && !benef) items.push({ fila: i + 2, dni, nombre: String(r[1] || "").trim() });
-      });
+      // Se puede pasar una lista de {fila, dni, nombre} explícita (ej. DNI recién
+      // corregidos que todavía no están en la planilla); si no, se arma leyendo las
+      // filas con DNI y SIN beneficio.
+      let items = [];
+      if (Array.isArray(body && body.items) && body.items.length) {
+        items = body.items.map((it) => ({ fila: parseInt(it.fila, 10) || 0, dni: dig(it.dni), nombre: String(it.nombre || "").trim() })).filter((it) => it.dni);
+      } else {
+        const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A2:K5000");
+        rows.forEach((r, i) => {
+          const dni = dig(r[2]), benef = dig(r[3]);
+          if (dni && !benef) items.push({ fila: i + 2, dni, nombre: String(r[1] || "").trim() });
+        });
+      }
       if (!items.length) return json(res, 200, { ok: true, cantidad: 0, mensaje: "No hay filas con DNI y sin beneficio para buscar." });
       const task = enqueueWorkerTask({
         type: "plan-salud-benef",
