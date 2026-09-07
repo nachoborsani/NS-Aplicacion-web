@@ -217,7 +217,7 @@ function saveClientMedicos(store) {
 }
 // Vista pública de un médico (sin la clave; solo si tiene una guardada).
 function medicoPublico(m) {
-  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc };
+  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido };
 }
 function loadFacturas() {
   try {
@@ -6379,8 +6379,37 @@ const server = http.createServer(async (req, res) => {
         nombre: String(m.nombre || ""),
         especialidad: String(m.especialidad || ""),
         tieneClave: !!m.claveEnc,
+        preferido: !!m.preferido,
       })),
     });
+  }
+  // Marcar/desmarcar un médico como "preferido" de su especialidad (para que el
+  // parseo de pedidos elija ese cuando hay varios médicos de la misma especialidad).
+  // Al marcar uno, se desmarcan los demás de esa especialidad (uno por especialidad).
+  const clientMedicoPrefMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)\/preferido$/);
+  if (clientMedicoPrefMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(clientMedicoPrefMatch[1]);
+    const id = decodeURIComponent(clientMedicoPrefMatch[2]);
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    const m = lista.find((x) => x.id === id);
+    if (!m) return json(res, 404, { error: "Médico no encontrado." });
+    const body = await readBody(req);
+    const nuevo = typeof body.preferido === "boolean" ? body.preferido : !m.preferido;
+    const espNorm = String(m.especialidad || "").trim().toUpperCase();
+    if (nuevo && espNorm) {
+      // un solo preferido por especialidad
+      for (const otro of lista) {
+        if (otro !== m && String(otro.especialidad || "").trim().toUpperCase() === espNorm) otro.preferido = false;
+      }
+    }
+    m.preferido = nuevo;
+    store[slug] = lista;
+    saveClientMedicos(store);
+    return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
   }
   // Borrar un médico.
   const clientMedicoDelMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)$/);

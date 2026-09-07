@@ -3042,6 +3042,14 @@ async function loadClientMedicos(){
   MEDICOS = (res.ok && res.data && res.data.medicos) ? res.data.medicos : [];
   renderClientMedicos();
 }
+// Marca/desmarca un médico como preferido de su especialidad (para el parseo de OMEs).
+async function toggleMedicoPreferido(id){
+  if (!ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id) + '/preferido', {});
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo marcar.'); return; }
+  MEDICOS = (res.data && res.data.medicos) || MEDICOS;
+  renderClientMedicos();
+}
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
@@ -3066,9 +3074,12 @@ function renderClientMedicos(){
           (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + m.id + '\')">' + llave + '</button> ' : '') +
           '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + m.id + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       : '<span class="nom-muted">—</span>';
+    var prefBtn = (esAdminMed && m.especialidad)
+      ? ' <button class="icon-btn mini" type="button" title="' + (m.preferido ? 'Médico preferido de esta especialidad (clic para sacar)' : 'Marcar como preferido de esta especialidad') + '" onclick="toggleMedicoPreferido(\'' + m.id + '\')" style="color:' + (m.preferido ? '#e8a13a' : 'var(--text-2)') + '">' + (m.preferido ? '★' : '☆') + '</button>'
+      : (m.preferido ? ' <span title="Preferido de esta especialidad" style="color:#e8a13a">★</span>' : '');
     return '<tr>' +
       '<td>' + esc(m.nombre) + '</td>' +
-      '<td>' + (esc(m.especialidad) || '-') + '</td>' +
+      '<td>' + (esc(m.especialidad) || '-') + prefBtn + '</td>' +
       '<td>' + usuarioCell + '</td>' +
       '<td>' + claveCell + '</td>' +
       '<td>' + (esc(m.telefono) || '-') + '</td>' +
@@ -8675,6 +8686,72 @@ function omeClearNotice(){
 function omeClienteActual(){
   var slug = (document.getElementById('omeCliente') || {}).value || '';
   return (CLIENTS || []).find(function(c){ return c.slug === slug; }) || null;
+}
+// ===== Leer un pedido de OME (mensaje de WhatsApp) y completar el formulario =====
+// Todo por reglas, sin IA. Cada especialidad: cómo la nombran en el mensaje (rx),
+// cómo figura en el médico (med), y el código de consulta del nomenclador.
+var OME_ESPECIALIDADES = [
+  { key:'Cardiología',       codigo:'570129', rx:/cardiolog/,           med:/cardiolog/ },
+  { key:'Neumonología',      codigo:'820157', rx:/neumonolog|neumolog/, med:/neumonolog|neumolog/ },
+  { key:'Urología',          codigo:'820167', rx:/urolog/,              med:/urolog/ },
+  { key:'Traumatología',     codigo:'820165', rx:/traumato|ortopedia/,  med:/traumatolog|ortopedia/ },
+  { key:'Ginecología',       codigo:'820145', rx:/ginec/,               med:/ginecolog/ },
+  { key:'Gastroenterología', codigo:'820139', rx:/gastro/,              med:/gastroenterolog/ },
+  { key:'ORL',               codigo:'820168', rx:/\borl\b|otorrino/,    med:/otorrinolaring/ }
+];
+function omeNorm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function omeLeerPedido(texto){
+  var raw = String(texto||'').trim();
+  if (!raw) return null;
+  var n = omeNorm(raw);
+  var dni = ''; var mDni = n.match(/dni\s*[:.\-]?\s*(\d{6,9})/); if (mDni) dni = mDni[1];
+  var benef = ''; var mBen = n.match(/\b(\d{11,14})\b/); if (mBen) benef = mBen[1];
+  var esp = null; for (var i=0;i<OME_ESPECIALIDADES.length;i++){ if (OME_ESPECIALIDADES[i].rx.test(n)){ esp = OME_ESPECIALIDADES[i]; break; } }
+  // Nombre por resta: saco números, "dni", relleno y las palabras de especialidad.
+  var t = ' ' + raw.replace(/[,.;]/g,' ') + ' ';
+  t = t.replace(/\d+/g,' ');
+  var ESPSTRIP = /\b(cardiolog|neumonolog|neumolog|urolog|traumato|ortopedia|ginec|gastro|otorrino|orl)[a-zñáéíóúü]*/gi;
+  var STRIP = /\b(hola|buen|buenas|buenos|dia|dias|día|días|tarde|tardes|noche|noches|necesito|necesita|necesitamos|queria|quería|quisiera|solicitar|solicito|solicitamos|pedir|pido|una|un|unas|unos|ome|omes|orden|ordenes|órden|de|del|para|el|la|los|las|al|con|sin|pcte|paciente|pac|favor|por|derivacion|derivación|me|y|se|su|le|es|este|esta|dni)\b/gi;
+  t = t.replace(ESPSTRIP,' ').replace(STRIP,' ');
+  var nombre = t.replace(/\s+/g,' ').trim();
+  return { especialidad: esp, dni: dni, beneficio: benef, nombre: nombre, raw: raw };
+}
+function omeResolverMedico(esp){
+  var meds = (OME_WEB.medicos||[]).filter(function(m){ return esp && esp.med.test(omeNorm(m.especialidad)); });
+  if (!meds.length) return { medico:null, varios:false };
+  var pick = meds.find(function(m){ return m.preferido && m.tieneClave; })
+          || meds.find(function(m){ return m.preferido; })
+          || meds.find(function(m){ return m.tieneClave; })
+          || meds[0];
+  return { medico: pick, varios: meds.length>1 };
+}
+function omeParsearYCompletar(){
+  var texto = (document.getElementById('omeMensaje')||{}).value || '';
+  var d = omeLeerPedido(texto);
+  if (!d){ omeNotice('warn','Pegá el pedido','Poné el mensaje de WhatsApp en la cajita y volvé a tocar el botón.'); return; }
+  var set = function(id,val){ var el=document.getElementById(id); if (el) el.value = val; };
+  set('omeNombre', d.nombre || '');
+  set('omeDni', d.dni || '');
+  set('omeBenef', d.beneficio || '');
+  if (!(document.getElementById('omeDiagnostico')||{}).value) set('omeDiagnostico','Z000');
+  var avisos = [];
+  if (!d.dni && !d.beneficio) avisos.push('no encontré DNI ni beneficio');
+  if (!d.nombre) avisos.push('no pude sacar el nombre');
+  if (d.especialidad){
+    set('omeCodigo', d.especialidad.codigo);
+    set('omePractica', 'Consulta ' + d.especialidad.key + ' (' + d.especialidad.codigo + ')');
+    var rm = omeResolverMedico(d.especialidad);
+    if (rm.medico){ set('omeMedico', rm.medico.id);
+      if (!rm.medico.tieneClave) avisos.push('el médico de ' + d.especialidad.key + ' (' + rm.medico.nombre + ') está SIN CLAVE — no vas a poder crear hasta cargarla');
+      else if (rm.varios && !rm.medico.preferido) avisos.push('hay varios médicos de ' + d.especialidad.key + '; verificá el elegido o marcá uno como preferido');
+    } else avisos.push('no hay médico de ' + d.especialidad.key + ' cargado');
+  } else {
+    avisos.push('no reconocí la especialidad — poné el código y el médico a mano');
+  }
+  var ident = d.beneficio ? ('Benef ' + d.beneficio) : (d.dni ? ('DNI ' + d.dni) : 'sin identidad');
+  var resumen = 'Paciente: ' + (d.nombre||'—') + ' · ' + ident + (d.especialidad ? (' · ' + d.especialidad.key) : '');
+  if (avisos.length) omeNotice('warn','Revisá antes de generar', resumen + '. Ojo: ' + avisos.join('; ') + '.');
+  else omeNotice('ok','Listo para revisar', resumen + '. Confirmá y dale Generar OME.');
 }
 async function loadOmeWebView(){
   if (!OME_WEB.closeSearchWired) {

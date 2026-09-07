@@ -1221,9 +1221,10 @@
               <label class="field ome-span-2 ome-practice-field"><span>Práctica</span><input class="inp" id="omePractica" placeholder="Buscar por código o nombre..." oninput="omeBuscarPracticasDebounced()" autocomplete="off">
                 <div class="ome-suggestions" id="omeSuggestions" style="display:none"></div>
               </label>
-              <label class="field ome-span-all"><span>Pedido / mensaje</span><textarea class="inp ome-textarea" id="omeMensaje" placeholder="Texto libre para dejar contexto. Más adelante se podrá parsear desde WhatsApp o Telegram."></textarea></label>
+              <label class="field ome-span-all"><span>Pedido / mensaje</span><textarea class="inp ome-textarea" id="omeMensaje" placeholder="Pegá acá el mensaje de WhatsApp (ej: &quot;necesito una OME de cardiología para PEREZ JUAN DNI 12345678&quot;) y tocá Autocompletar."></textarea></label>
             </div>
             <div class="ome-actions-row">
+              <button class="btn btn-primary btn-sm" type="button" onclick="omeParsearYCompletar()">⤵️ Autocompletar del mensaje</button>
               <button class="btn btn-ghost btn-sm" type="button" onclick="omeBuscarPracticas()">Buscar práctica</button>
               <span class="nom-muted" id="omeNomInfo"></span>
             </div>
