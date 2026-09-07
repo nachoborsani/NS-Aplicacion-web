@@ -5435,7 +5435,9 @@ const server = http.createServer(async (req, res) => {
     // afuera al instante — no puede loguearse NI usar una sesión ya abierta, y no
     // llega a ningún endpoint aunque alguno se olvidara de chequear. Corte de
     // servicio impenetrable (si dejan de pagar, active=false y quedan bloqueados).
-    const RUTAS_PUBLICAS = new Set(["/api/login", "/api/logout", "/api/me", "/api/version", "/api/forgot", "/api/reset"]);
+    // El webhook del bot de OMEs no tiene sesión (lo llama Telegram); se protege con
+    // su propio secret por header (ver el handler más abajo).
+    const RUTAS_PUBLICAS = new Set(["/api/login", "/api/logout", "/api/me", "/api/version", "/api/forgot", "/api/reset", "/api/telegram/ome/webhook"]);
     if (!RUTAS_PUBLICAS.has(p) && !meGate) return json(res, 401, { error: "no-auth" });
 
     // --- Gate de "debe cambiar la clave": mientras mustChange esté prendido, la
