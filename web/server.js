@@ -6113,6 +6113,57 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo preparar la búsqueda." }); }
   }
 
+  // Descarga de credenciales sobre la planilla de Plan Salud (mismo mecanismo que
+  // el módulo de credenciales por cliente, pero apuntando a la hoja del Plan Salud
+  // y guardando las imágenes en la carpeta de Drive del cliente). Columnas fijas
+  // del layout Plan Salud (0-based): B=1 nombre, C=2 dni, D=3 benef, E=4 trámite,
+  // H=7 credencial. La carpeta: la configurada (folderId) o, por defecto, la
+  // carpeta donde vive la planilla. Se maneja fila por fila desde el navegador.
+  const planSaludCredMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/credenciales\/([a-z-]+)$/);
+  if (planSaludCredMatch) {
+    const me = getSessionUser(req);
+    if (!me || !esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(planSaludCredMatch[1]);
+    const accion = planSaludCredMatch[2];
+    const cfg = planSaludSheet(slug);
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      if (!tab) return json(res, 400, { error: "No encontré la pestaña de la planilla." });
+      // Carpeta destino: la configurada o la carpeta padre de la planilla.
+      let folderId = cfg.folderId || "", folderName = cfg.folderName || "";
+      if (!folderId) {
+        const par = await gcreds.getFileParent(auth, cfg.spreadsheetId);
+        if (!par) return json(res, 400, { error: "No pude resolver la carpeta de la planilla. Configurá una carpeta (folderId) para este cliente." });
+        folderId = par.id; folderName = par.name || "";
+      }
+      const C = {
+        slug, spreadsheetId: cfg.spreadsheetId, tab, folderId, startRow: 2,
+        cols: { nombre: 1, dni: 2, benef: 3, tramite: 4, credencial: 7 },
+      };
+      if (accion === "pendientes" && req.method === "GET") {
+        const info = await leerPendientesCred(auth, C, 0);
+        return json(res, 200, { ...info, hoja: tab, folder: { id: folderId, name: folderName } });
+      }
+      if (accion === "procesar-fila" && req.method === "POST") {
+        const body = await readBody(req);
+        const row = {
+          sheetRow: Number(body.sheetRow) || 0, nombre: String(body.nombre || ""),
+          sexo: String(body.sexo || ""), benef: String(body.benef || ""),
+          dni: String(body.dni || ""), tramite: String(body.tramite || ""),
+        };
+        if (!row.sheetRow) return json(res, 400, { error: "Falta la fila." });
+        return json(res, 200, await procesarCredencialFila(auth, C, row));
+      }
+      return json(res, 404, { error: "Acción no soportada." });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo procesar." }); }
+  }
+
   // ===== Bot de OMEs (Telegram) =====
   // Webhook: Telegram POSTea cada mensaje/botón. Verificamos el secret por header
   // (Telegram lo manda en x-telegram-bot-api-secret-token) y contestamos 200 rápido.

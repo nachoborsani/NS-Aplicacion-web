@@ -94,7 +94,20 @@ async function getFolder(auth, folderId) {
   return r.data;
 }
 
+// Carpeta(s) padre de un archivo (ej. la carpeta donde vive una planilla).
+// Devuelve { id, name } de la primera, o null si no tiene (raíz / sin acceso).
+async function getFileParent(auth, fileId) {
+  const drive = google.drive({ version: "v3", auth });
+  const r = await drive.files.get({ fileId, fields: "id,name,parents", supportsAllDrives: true });
+  const parents = (r.data && r.data.parents) || [];
+  if (!parents.length) return null;
+  try {
+    const p = await drive.files.get({ fileId: parents[0], fields: "id,name", supportsAllDrives: true });
+    return { id: p.data.id, name: p.data.name };
+  } catch { return { id: parents[0], name: "" }; }
+}
+
 module.exports = {
   makeAuth, connectedEmail, colToIndex, indexToCol,
-  getSheetMeta, readValues, writeCell, uploadPdf, getFolder,
+  getSheetMeta, readValues, writeCell, uploadPdf, getFolder, getFileParent,
 };
