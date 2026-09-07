@@ -5806,9 +5806,15 @@ const server = http.createServer(async (req, res) => {
       const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(gid)) || (meta.tabsInfo || [])[0];
       if (!hoja) return json(res, 400, { error: "La planilla no tiene hojas legibles." });
       if (!gid) gid = Number(hoja.sheetId) || 0;
-      store[slug] = { spreadsheetId, gid };
+      // Carpeta de Drive donde se guardan las credenciales (opcional). Se puede
+      // pasar el ID directo o un link de carpeta; se preserva si ya estaba.
+      const prev = store[slug] || {};
+      let folderId = String((b && b.folderId) || "").trim();
+      if (!folderId && b && b.folderUrl) folderId = (String(b.folderUrl).match(/\/folders\/([a-zA-Z0-9_-]+)/) || [])[1] || "";
+      if (!folderId) folderId = prev.folderId || "";
+      store[slug] = { spreadsheetId, gid, ...(folderId ? { folderId } : {}) };
       savePlanSaludSheets(store);
-      return json(res, 200, { ok: true, sheet: { spreadsheetId, gid }, titulo: meta.title || "", hoja: hoja.title });
+      return json(res, 200, { ok: true, sheet: store[slug], titulo: meta.title || "", hoja: hoja.title });
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No pude leer esa planilla. ¿Está compartida con gestion.nssalud@gmail.com?" }); }
   }
 
