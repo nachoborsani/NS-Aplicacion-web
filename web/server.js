@@ -6057,7 +6057,11 @@ const server = http.createServer(async (req, res) => {
         if (!fila) continue;
         const benef = dig(f.beneficio), dni = dig(f.dni);
         const nombre = String(f.nombre == null ? "" : f.nombre).replace(/\s+/g, " ").trim();
+        // Texto libre para la celda de beneficiario (ej. "no tiene PAMI" en un
+        // paciente del plan privado que no es afiliado): se escribe tal cual.
+        const benefTexto = String(f.beneficioTexto == null ? "" : f.beneficioTexto).replace(/\s+/g, " ").trim();
         if (benef) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "D" + fila, benef); escritas++; }
+        else if (benefTexto) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "D" + fila, benefTexto); escritas++; }
         if (dni) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "C" + fila, dni); escritas++; }
         if (nombre) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "B" + fila, nombre); escritas++; }
       }
