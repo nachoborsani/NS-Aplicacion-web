@@ -37,10 +37,12 @@ function indexToCol(idx) {
 
 async function getSheetMeta(auth, spreadsheetId) {
   const sheets = google.sheets({ version: "v4", auth });
-  const r = await sheets.spreadsheets.get({ spreadsheetId, fields: "properties(title),sheets(properties(title))" });
+  const r = await sheets.spreadsheets.get({ spreadsheetId, fields: "properties(title),sheets(properties(sheetId,title))" });
+  const hojas = (r.data.sheets || []).map((s) => s.properties || {});
   return {
     title: (r.data.properties && r.data.properties.title) || "",
-    tabs: (r.data.sheets || []).map((s) => s.properties && s.properties.title).filter(Boolean),
+    tabs: hojas.map((p) => p.title).filter(Boolean),
+    tabsInfo: hojas.map((p) => ({ title: p.title || "", sheetId: p.sheetId })),
   };
 }
 

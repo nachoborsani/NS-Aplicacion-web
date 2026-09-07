@@ -1093,6 +1093,13 @@ function saveGoogleCfg(cfg) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(googleOauthFile, JSON.stringify({ enc: encryptSecret(JSON.stringify(cfg)) }, null, 2));
 }
+// Planilla de Plan Salud por cliente (Google Sheet). Se lee con la cuenta de
+// Google de NS (la planilla tiene que estar compartida con gestion.nssalud@gmail.com,
+// o al menos "cualquiera con el link"). El `gid` es la pestaña; se resuelve a su
+// nombre con getSheetMeta al leer.
+const PLAN_SALUD_SHEETS = {
+  "cima": { spreadsheetId: "1o1wAF5zXPWESa3eB6rqsh-uQUxq9u97yAzsw_UR5AVU", gid: 745017814 },
+};
 // Planilla + carpeta de Scheffelaar (columnas 0-based: B=1 nombre, C=2 sexo,
 // D=3 benef, F=5 dni, G=6 trámite, I=8 credencial/resultado).
 // Config del módulo de credenciales por cliente (Médico de cabecera). Cada uno
@@ -5679,6 +5686,33 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     return json(res, 200, { token: WORKER_TOKEN || "" });
   }
+  // ===== Plan Salud (CIMA): leer la planilla de Google Sheets configurada =====
+  // Deja la conexión lista y verificable; la UI/uso se define después.
+  const planSaludPlanillaMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/planilla$/);
+  if (planSaludPlanillaMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    const slug = decodeURIComponent(planSaludPlanillaMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada en la web." });
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      if (!tab) return json(res, 400, { error: "No encontré la pestaña de la planilla." });
+      const rows = await gcreds.readValues(auth, cfg.spreadsheetId, tab, "A1:K5000");
+      const columnas = rows[0] || [];
+      const filas = rows.slice(1).filter((r) => Array.isArray(r) && r.some((c) => String(c || "").trim()));
+      return json(res, 200, { ok: true, titulo: meta.title || "", hoja: tab, columnas, total: filas.length, filas: filas.slice(0, 2000) });
+    } catch (e) {
+      return json(res, 400, { error: (e && e.message) || "No se pudo leer la planilla. ¿Está compartida con gestion.nssalud@gmail.com?" });
+    }
+  }
+
   // ===== Bot de OMEs (Telegram) =====
   // Webhook: Telegram POSTea cada mensaje/botón. Verificamos el secret por header
   // (Telegram lo manda en x-telegram-bot-api-secret-token) y contestamos 200 rápido.
