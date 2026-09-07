@@ -1202,7 +1202,6 @@ async function omeBotMensaje(msg) {
   const faltan = [];
   if (!parsed.especialidad) faltan.push("no reconocí la especialidad");
   if (!parsed.dni && !parsed.beneficio) faltan.push("falta DNI o beneficio");
-  if (!parsed.nombre) faltan.push("falta el nombre del paciente");
   if (parsed.especialidad && !medico) faltan.push(`no hay médico de ${parsed.especialidad.key} cargado`);
   if (medico && !medico.usuario) faltan.push(`el médico ${medico.nombre} no tiene usuario PAMI`);
   if (medico && !medico.claveEnc) faltan.push(`el médico ${medico.nombre} está sin clave`);
@@ -1223,7 +1222,9 @@ async function omeBotMensaje(msg) {
     mensaje: parsed.raw, telegramChatId: chatId,
   };
   const id = omeBotGuardarPendiente({ chatId, payload });
-  const extra = (varios && !medico.preferido) ? "\n<i>(hay varios médicos de esta especialidad; verificá que sea el correcto o marcá un preferido en la web)</i>" : "";
+  let extra = "";
+  if (varios && !medico.preferido) extra += "\n<i>(hay varios médicos de esta especialidad; verificá que sea el correcto o marcá un preferido en la web)</i>";
+  if (!parsed.nombre) extra += "\n<i>(sin nombre — PAMI lo resuelve por el DNI/beneficio)</i>";
   return omeBot.enviar(chatId, resumen + extra + "\n\n¿La genero?", [[{ text: "✅ Crear OME", data: "ok:" + id }, { text: "❌ Cancelar", data: "no:" + id }]]).catch(() => {});
 }
 async function omeBotCallback(cb) {

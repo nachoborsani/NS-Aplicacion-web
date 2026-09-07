@@ -8706,6 +8706,8 @@ function omeLeerPedido(texto){
   var n = omeNorm(raw);
   var dni = ''; var mDni = n.match(/dni\s*[:.\-]?\s*(\d{6,9})/); if (mDni) dni = mDni[1];
   var benef = ''; var mBen = n.match(/\b(\d{11,14})\b/); if (mBen) benef = mBen[1];
+  // Formato corto: sin "DNI xxxx" ni beneficio largo, un número suelto de 7-9 díg = DNI.
+  if (!dni && !benef){ var m2 = n.match(/\b(\d{7,9})\b/); if (m2) dni = m2[1]; }
   var esp = null; for (var i=0;i<OME_ESPECIALIDADES.length;i++){ if (OME_ESPECIALIDADES[i].rx.test(n)){ esp = OME_ESPECIALIDADES[i]; break; } }
   // Nombre por resta: saco números, "dni", relleno y las palabras de especialidad.
   var t = ' ' + raw.replace(/[,.;]/g,' ') + ' ';

@@ -29,6 +29,9 @@ function parsePedido(texto) {
   let beneficio = "";
   const mBen = n.match(/\b(\d{11,14})\b/);
   if (mBen) beneficio = mBen[1];
+  // Formato corto: si no vino "DNI xxxx" ni un beneficio largo, un número suelto
+  // de 7-9 dígitos se toma como DNI (ej. "urología 14125790").
+  if (!dni && !beneficio) { const m2 = n.match(/\b(\d{7,9})\b/); if (m2) dni = m2[1]; }
   let especialidad = null;
   for (const e of ESPECIALIDADES) { if (e.rx.test(n)) { especialidad = e; break; } }
   // Nombre por resta: saco números, "dni", relleno y las palabras de especialidad.
