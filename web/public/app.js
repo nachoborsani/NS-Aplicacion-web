@@ -5964,17 +5964,20 @@ function renderClientDashboard(data){
       var netAbs = Math.abs(Number(module.net || 0));
       var barW = Math.round(netAbs / maxNet * 100);
       var share = totalNet ? Math.round(netAbs / totalNet * 100) : 0;
-      var consNow = module.consultations || consultationRows.length;
-      var pracNow = module.practices || practiceRows.length;
+      // Solo COBRADAS (net > 0), coherente con el NETO del módulo y con el desglose.
+      var soloCobradas = function(rs){ return (rs || []).filter(function(r){ return Number(r.net || 0) > 0; }).length; };
+      var consNow = soloCobradas(consultationRows);
+      var pracNow = soloCobradas(practiceRows);
+      var consPrevN = soloCobradas(prevConsRows), pracPrevN = soloCobradas(prevPracRows);
       var modDelta = '', consDelta = '', pracDelta = '';
       if (hayCompare){
         var mkDelta = function(now, prev, money){ var d = Number(now) - Number(prev || 0); return dashboardDelta({ value: d, percent: prev ? (d / Math.abs(prev)) : null }, money); };
         modDelta = mkDelta(module.net || 0, prevMod.net || 0, true);
-        consDelta = mkDelta(consNow, prevMod.consultations || 0, false);
-        pracDelta = mkDelta(pracNow, prevMod.practices || 0, false);
+        consDelta = mkDelta(consNow, consPrevN, false);
+        pracDelta = mkDelta(pracNow, pracPrevN, false);
       }
-      var consPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(prevMod.consultations || 0)) + '</div>' : '';
-      var pracPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(prevMod.practices || 0)) + '</div>' : '';
+      var consPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(consPrevN)) + '</div>' : '';
+      var pracPrev = hayCompare ? '<div class="mod-prev">' + esc(cmpLbl) + ' ' + esc(numberFmt(pracPrevN)) + '</div>' : '';
       var netoPrev = hayCompare ? '<div class="mod-neto-prev">' + esc(cmpLbl) + ' ' + esc(moneyFmt(prevMod.net || 0)) + ' ' + modDelta + '</div>' : '';
       return '<tr class="dashboard-module-row">'
         + '<td><span class="nom-code">' + esc(module.moduleCode || '-') + '</span> <span class="nom-muted">' + esc(module.moduleDescription || '') + '</span></td>'
@@ -5993,8 +5996,9 @@ function renderClientDashboard(data){
     if (DASH_MODULE_FILTER.length && modules.length > 1) {
       var fCons = 0, fPrac = 0, fNet = 0;
       modules.forEach(function(m){
-        fCons += Number(m.consultations || (m.rows || []).filter(function(r){ return r.kind === 'Consulta'; }).length || 0);
-        fPrac += Number(m.practices || (m.rows || []).filter(function(r){ return r.kind === 'Practica'; }).length || 0);
+        // Solo cobradas (net > 0), igual que en cada módulo.
+        fCons += (m.rows || []).filter(function(r){ return r.kind === 'Consulta' && Number(r.net || 0) > 0; }).length;
+        fPrac += (m.rows || []).filter(function(r){ return r.kind === 'Practica' && Number(r.net || 0) > 0; }).length;
         fNet += Number(m.net || 0);
       });
       // Sin badge de %: acá siempre daría 100% (el total ya se calcula sobre
