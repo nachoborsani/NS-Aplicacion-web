@@ -5917,6 +5917,10 @@ function renderClientDashboard(data){
         var groups = {};
         function acumular(rows, campoCount, campoNet){
           (rows || []).forEach(function(row){
+            // Solo las COBRADAS: las que suman al neto (net > 0). Las fuera de corte
+            // (van al próximo período) y las validadas sin transmitir tienen net 0 y
+            // no cuentan acá, así la cantidad cierra con la plata.
+            if (!(Number(row.net || 0) > 0)) return;
             var code = row.practiceCode || '-';
             var key = code + '|' + (row.practiceDescription || '');
             if (!groups[key]) groups[key] = { code: code, desc: row.practiceDescription || '', count: 0, net: 0, pcount: 0, pnet: 0 };
