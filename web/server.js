@@ -5874,6 +5874,38 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo enriquecer la planilla." }); }
   }
 
+  // Plan Salud: escribir beneficios/DNI encontrados (ej. los que trajo la búsqueda
+  // en PAMI). Body: { fills: [{fila, beneficio?, dni?}] }.
+  const planSaludAplicarMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/aplicar-benef$/);
+  if (planSaludAplicarMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(planSaludAplicarMatch[1]);
+    const cfg = PLAN_SALUD_SHEETS[slug];
+    if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
+    const body = await readBody(req);
+    const fills = Array.isArray(body && body.fills) ? body.fills : [];
+    if (!fills.length) return json(res, 400, { error: "No mandaste valores para escribir." });
+    const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, cfg.spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(cfg.gid));
+      const tab = hoja ? hoja.title : ((meta.tabs && meta.tabs[0]) || "");
+      let escritas = 0;
+      for (const f of fills) {
+        const fila = parseInt(f && f.fila, 10);
+        if (!fila) continue;
+        const benef = dig(f.beneficio), dni = dig(f.dni);
+        if (benef) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "D" + fila, benef); escritas++; }
+        if (dni) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "C" + fila, dni); escritas++; }
+      }
+      return json(res, 200, { ok: true, hoja: tab, celdasEscritas: escritas });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo escribir." }); }
+  }
+
   // Plan Salud: buscar en PAMI (padrón autenticado) los beneficios faltantes por
   // DNI, usando el login de otro cliente (por defecto Dubesarky). Encola una tarea
   // al worker; devuelve los resultados por task.result (la escritura es aparte).
