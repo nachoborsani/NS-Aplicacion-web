@@ -5916,7 +5916,18 @@ const server = http.createServer(async (req, res) => {
         const benefs = [...new Set(m.map((x) => x.benef))];
         conMatch.push({ fila, nombre, unico: benefs.length === 1, matches: m.slice(0, 4) });
       });
-      return json(res, 200, { ok: true, hoja: tab, conMatch: conMatch.length, sinMatch: sinMatch.length, detalle: conMatch, sinMatchDetalle: sinMatch });
+      const out = { ok: true, hoja: tab, conMatch: conMatch.length, sinMatch: sinMatch.length, detalle: conMatch, sinMatchDetalle: sinMatch };
+      if (url.searchParams.get("debug")) {
+        const nombresDube = [];
+        for (const r of dubeRows) { const n = String(r[cc.nombre] || "").trim(); if (n) nombresDube.push(n); }
+        const hit = (sub) => nombresDube.filter((n) => n.toLowerCase().includes(sub)).slice(0, 5);
+        out.debug = {
+          dubeFilas: dubeRows.length, dubeConNombre: nombresDube.length,
+          muestraNombresDube: nombresDube.slice(0, 8),
+          hits: { gallo: hit("gallo"), ayala: hit("ayala"), vallejo: hit("vallejo"), saucedo: hit("saucedo") },
+        };
+      }
+      return json(res, 200, out);
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo matchear contra Dube." }); }
   }
 
