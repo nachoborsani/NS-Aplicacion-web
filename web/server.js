@@ -6001,8 +6001,10 @@ const server = http.createServer(async (req, res) => {
         const fila = parseInt(f && f.fila, 10);
         if (!fila) continue;
         const benef = dig(f.beneficio), dni = dig(f.dni);
+        const nombre = String(f.nombre == null ? "" : f.nombre).replace(/\s+/g, " ").trim();
         if (benef) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "D" + fila, benef); escritas++; }
         if (dni) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "C" + fila, dni); escritas++; }
+        if (nombre) { await gcreds.writeCell(auth, cfg.spreadsheetId, tab, "B" + fila, nombre); escritas++; }
       }
       return json(res, 200, { ok: true, hoja: tab, celdasEscritas: escritas });
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo escribir." }); }
