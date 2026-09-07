@@ -272,6 +272,33 @@ def tarea_subir(web, slug, payload, tlog, cola=None, tid=None):
     return {"total": len(items), "subidos": ok, "detalle": detalle}
 
 
+def tarea_verificar_medicos(web, slug, payload, tlog):
+    """Prueba el login a CUP PAMI de uno o varios médicos y devuelve su estado."""
+    from pami_ome_generator import verificar_login_sync
+
+    ids = payload.get("medicoIds") or ([payload.get("medicoId")] if payload.get("medicoId") else [])
+    ids = [str(x).strip() for x in ids if str(x or "").strip()]
+    if not ids:
+        raise RuntimeError("No llegaron médicos para verificar.")
+    resultados = []
+    for mid in ids:
+        try:
+            cred = _medico_creds(web, slug, mid)
+            user, clave, nombre = cred["usuario"], cred["clave"], (cred.get("nombre") or mid)
+            if not user or not clave:
+                resultados.append({"medicoId": mid, "estado": "inactivo", "detalle": "Sin usuario o clave cargados."})
+                tlog(f"{nombre}: sin usuario/clave")
+                continue
+            tlog(f"Verificando {nombre}…")
+            r = verificar_login_sync(user=user, password=clave, headless=True)
+            resultados.append({"medicoId": mid, "estado": r.get("estado", "error"), "detalle": r.get("detalle", "")})
+            tlog(f"{nombre}: {r.get('estado')}")
+        except Exception as exc:  # noqa: BLE001
+            resultados.append({"medicoId": mid, "estado": "error", "detalle": str(exc)[:300]})
+            tlog(f"{mid}: error {exc}")
+    return {"resultados": resultados}
+
+
 def tarea_crear_ome(web, slug, payload, tlog):
     from pami_ome_generator import run_batch_sync
 
@@ -405,6 +432,8 @@ def dispatch(task, web, cola):
         return tarea_subir(web, slug, payload, tlog, cola, tid)
     if tipo == "crear-ome":
         return tarea_crear_ome(web, slug, payload, tlog)
+    if tipo == "verificar-medico":
+        return tarea_verificar_medicos(web, slug, payload, tlog)
     if tipo == "liberar-cupo":
         return tarea_liberar_cupo(web, slug, payload, tlog)
     raise RuntimeError(f"Tipo de tarea no soportado por este worker: {tipo}")

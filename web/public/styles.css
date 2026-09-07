@@ -1360,6 +1360,14 @@
   .icon-btn.mini.med-deshab-on{background:color-mix(in srgb,var(--error) 14%,var(--surface));border-color:color-mix(in srgb,var(--error) 45%,var(--border))}
   .med-deshab-badge{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--error);background:color-mix(in srgb,var(--error) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--error) 35%,var(--border));border-radius:999px;padding:2px 8px;vertical-align:middle}
   tr.medico-deshabilitado{opacity:.62}
+  /* Estado del acceso a PAMI del médico (verificación). */
+  .med-estado{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:750;border-radius:999px;padding:3px 9px;border:1px solid var(--border);white-space:nowrap}
+  .med-estado-when{font-weight:600;opacity:.8}
+  .med-estado.ok{background:var(--success-bg);border-color:color-mix(in srgb,var(--success) 30%,var(--border));color:var(--success)}
+  .med-estado.bad{background:color-mix(in srgb,var(--error) 12%,var(--surface));border-color:color-mix(in srgb,var(--error) 38%,var(--border));color:var(--error)}
+  .med-estado.warn{background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 38%,var(--border));color:var(--warning)}
+  .med-estado.prog{background:var(--surface-2);color:var(--text-2)}
+  .med-estado.muted{background:var(--surface-2);color:var(--text-2);border-style:dashed}
   .med-access{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .med-user,.med-pass{display:inline-flex;align-items:center;gap:5px;min-height:28px}
   .med-user code,.med-pass.saved{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:5px 8px;font-family:inherit;font-size:12px;font-weight:750;color:var(--text)}

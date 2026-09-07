@@ -2726,6 +2726,28 @@ async def run_batch(
     return result
 
 
+async def verificar_login(*, user: str, password: str, headless: bool = True) -> dict:
+    """Solo prueba el login a CUP PAMI con esas credenciales (no genera ninguna OME).
+    Devuelve {estado: 'activo'|'inactivo'|'error', detalle}. 'inactivo' = PAMI rechazó
+    (clave mal/vencida o usuario bloqueado); 'error' = falla técnica (red, timeout)."""
+    try:
+        async with PamiOmeGenerator(user=user, password=password, headless=headless):
+            return {"estado": "activo", "detalle": ""}
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        low = msg.lower()
+        estado = "inactivo" if ("iniciar sesion" in low or "credencial" in low) else "error"
+        return {"estado": estado, "detalle": msg[:300]}
+
+
+def verificar_login_sync(*, user: str, password: str, headless: bool = True) -> dict:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(verificar_login(user=user, password=password, headless=headless))
+    raise RuntimeError("verificar_login_sync no puede correr dentro de un loop activo")
+
+
 def run_batch_sync(
     *,
     input_path: Path,

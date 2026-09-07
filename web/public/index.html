@@ -848,7 +848,10 @@
                 <div class="client-card">
                   <div class="client-card-head">
                     <h3>Usuarios médicos</h3>
-                    <button class="btn btn-primary ns-only" type="button" onclick="openMedicoModal()">Agregar médico</button>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn btn-ghost btn-sm ns-only" type="button" onclick="verificarTodosMedicos()" title="Probar el acceso a PAMI de todos los médicos con clave">🔎 Verificar todos</button>
+                      <button class="btn btn-primary ns-only" type="button" onclick="openMedicoModal()">Agregar médico</button>
+                    </div>
                   </div>
                   <p class="nom-muted">Médicos de este consultorio con su acceso PAMI. Más adelante se van a usar para generar OME de especialista. La clave se guarda encriptada.</p>
                   <div class="msg err" id="medicosError" style="display:none"></div>

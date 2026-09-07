@@ -3060,6 +3060,48 @@ async function toggleMedicoDeshabilitado(id){
   MEDICOS = (res.data && res.data.medicos) || MEDICOS;
   renderClientMedicos();
 }
+// Verificación de acceso a PAMI por médico: chip de estado + "última verificación".
+var MED_VERIFICANDO = {};
+function medHace(iso){
+  try{ var d=new Date(iso); var diff=(Date.now()-d.getTime())/1000;
+    if(diff<90) return 'recién'; if(diff<3600) return 'hace '+Math.round(diff/60)+' min';
+    if(diff<86400) return 'hace '+Math.round(diff/3600)+' h';
+    return d.toLocaleDateString('es-AR'); }catch(e){ return ''; }
+}
+function medEstadoChip(m){
+  if (MED_VERIFICANDO[m.id]) return '<span class="med-estado prog">⏳ Verificando…</span>';
+  var e = m.estado || '';
+  var cuando = m.verificadoAt ? (' · ' + medHace(m.verificadoAt)) : '';
+  var det = m.verificadoDetalle ? (' — ' + m.verificadoDetalle) : '';
+  if (e === 'activo') return '<span class="med-estado ok" title="El login a CUP PAMI funcionó' + esc(cuando) + '">🟢 Activo<span class="med-estado-when">' + esc(cuando) + '</span></span>';
+  if (e === 'inactivo') return '<span class="med-estado bad" title="PAMI rechazó el login (usuario/clave)' + esc(det) + '">🔴 Inactivo<span class="med-estado-when">' + esc(cuando) + '</span></span>';
+  if (e === 'error') return '<span class="med-estado warn" title="No se pudo verificar' + esc(det) + '">⚠️ Sin poder verificar<span class="med-estado-when">' + esc(cuando) + '</span></span>';
+  return '<span class="med-estado muted">⚪ Sin verificar</span>';
+}
+function verificarMedico(id){ return verificarMedicosEnqueue({ medicoId: id }); }
+function verificarTodosMedicos(){ return verificarMedicosEnqueue({}); }
+async function verificarMedicosEnqueue(body){
+  if (!ACTIVE_CLIENT) return;
+  var slug = ACTIVE_CLIENT.slug;
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/medicos/verificar', body || {});
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo iniciar la verificación.'); return; }
+  var ids = (res.data && res.data.medicoIds) || [];
+  if (!ids.length) return;
+  var antes = {}; (MEDICOS||[]).forEach(function(m){ antes[m.id]=m.verificadoAt||''; });
+  ids.forEach(function(x){ MED_VERIFICANDO[x]=true; });
+  renderClientMedicos();
+  var vueltas = 0;
+  var timer = setInterval(async function(){
+    vueltas++;
+    var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/medicos');
+    if (r.ok && r.data && r.data.medicos){
+      MEDICOS = r.data.medicos;
+      var listos = ids.every(function(x){ var m=MEDICOS.find(function(y){return y.id===x;}); return m && (m.verificadoAt||'')!==(antes[x]||''); });
+      if (listos || vueltas > 90){ clearInterval(timer); ids.forEach(function(x){ delete MED_VERIFICANDO[x]; }); }
+      renderClientMedicos();
+    }
+  }, 4000);
+}
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
@@ -3080,9 +3122,10 @@ function renderClientMedicos(){
     var usuarioCell = m.usuario
       ? '<span class="med-user"><code>' + esc(m.usuario) + '</code>' + (esAdminMed ? '<button class="icon-btn mini" type="button" title="Copiar" data-copy="' + esc(m.usuario) + '" onclick="copiarTexto(this.dataset.copy, this)">' + copiar + '</button>' : '') + '</span>'
       : '<span class="med-user muted">Sin usuario</span>';
-    var accesoCell = '<div class="med-access">' + usuarioCell + claveCell + '</div>';
+    var accesoCell = '<div class="med-access">' + usuarioCell + claveCell + medEstadoChip(m) + '</div>';
     var acciones = esAdminMed
       ? '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+          (m.tieneClave ? '<button class="icon-btn mini" type="button" title="Probar acceso a PAMI (activo/inactivo)"' + (MED_VERIFICANDO[m.id] ? ' disabled' : '') + ' onclick="verificarMedico(\'' + mid + '\')">' + (MED_VERIFICANDO[m.id] ? '⏳' : '🔎') + '</button>' : '') +
           (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + mid + '\')">' + llave + '</button>' : '') +
           '<button class="icon-btn mini' + (m.deshabilitado ? ' med-deshab-on' : '') + '" type="button" title="' + (m.deshabilitado ? 'Usuario DESHABILITADO — clic para rehabilitar' : 'Marcar usuario como deshabilitado (bloqueado o clave vencida en PAMI)') + '" onclick="toggleMedicoDeshabilitado(\'' + mid + '\')">🚫</button>' +
           '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'

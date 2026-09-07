@@ -217,7 +217,7 @@ function saveClientMedicos(store) {
 }
 // Vista pública de un médico (sin la clave; solo si tiene una guardada).
 function medicoPublico(m) {
-  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado };
+  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado, estado: m.estado || "", verificadoAt: m.verificadoAt || "", verificadoDetalle: m.verificadoDetalle || "" };
 }
 function loadFacturas() {
   try {
@@ -5336,6 +5336,25 @@ const server = http.createServer(async (req, res) => {
     if (task.type === "crear-ome" && task.payload && task.payload.telegramChatId) {
       notificarOmeTelegram(task, ok);
     }
+    // Verificación de médicos: guardar el estado (activo/inactivo/error) + fecha.
+    if (task.type === "verificar-medico" && task.result && Array.isArray(task.result.resultados)) {
+      try {
+        const vslug = task.clientSlug || "";
+        const vstore = loadClientMedicos();
+        const vlista = Array.isArray(vstore[vslug]) ? vstore[vslug] : [];
+        const vnow = new Date().toISOString();
+        let vcambios = 0;
+        for (const r of task.result.resultados) {
+          const vm = vlista.find((x) => String(x.id) === String(r.medicoId));
+          if (!vm) continue;
+          vm.estado = String(r.estado || "").slice(0, 20);
+          vm.verificadoAt = vnow;
+          vm.verificadoDetalle = String(r.detalle || "").slice(0, 300);
+          vcambios++;
+        }
+        if (vcambios) { vstore[vslug] = vlista; saveClientMedicos(vstore); }
+      } catch { /* no cortar el /complete */ }
+    }
     // Marcar como transmitidos los informes subidos OK: salen de "Listo para subir"
     // al instante (sin esperar el refresco de la bandeja) y no se re-suben. El worker
     // igual nunca re-transmite (chequea antes de subir); esto es para reflejarlo en la UI.
@@ -6551,8 +6570,34 @@ const server = http.createServer(async (req, res) => {
         tieneClave: !!m.claveEnc,
         preferido: !!m.preferido,
         deshabilitado: !!m.deshabilitado,
+        estado: m.estado || "",
+        verificadoAt: m.verificadoAt || "",
+        verificadoDetalle: m.verificadoDetalle || "",
       })),
     });
+  }
+  // Verificar el login a CUP PAMI de uno/varios médicos (o todos los que tengan
+  // clave). Encola una tarea al worker; el resultado se guarda en cada médico.
+  const clientMedicoVerifMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/verificar$/);
+  if (clientMedicoVerifMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(clientMedicoVerifMatch[1]);
+    const client = loadClientsStore().find((item) => item.slug === slug);
+    if (!client) return json(res, 404, { error: "Cliente no encontrado." });
+    const b = await readBody(req);
+    const lista = Array.isArray(loadClientMedicos()[slug]) ? loadClientMedicos()[slug] : [];
+    let ids = Array.isArray(b && b.medicoIds) ? b.medicoIds.map(String) : (b && b.medicoId ? [String(b.medicoId)] : []);
+    if (!ids.length) ids = lista.filter((m) => m.claveEnc).map((m) => String(m.id)); // todos los que tienen clave
+    ids = ids.filter((id) => lista.some((m) => String(m.id) === id));
+    if (!ids.length) return json(res, 400, { error: "No hay médicos con clave para verificar." });
+    const task = enqueueWorkerTask({
+      type: "verificar-medico",
+      label: `Verificar acceso PAMI (${ids.length} médico${ids.length === 1 ? "" : "s"})`,
+      clientSlug: slug, createdBy: me.username,
+      payload: { medicoIds: ids },
+    });
+    return json(res, 201, { ok: true, task: publicWorkerTask(task), medicoIds: ids });
   }
   // Marcar/desmarcar el usuario PAMI de un médico como DESHABILITADO (bloqueado /
   // clave vencida). El parseo de OMEs lo evita y avisa claramente en vez de fallar
