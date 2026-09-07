@@ -2642,14 +2642,26 @@ function clientSeccionesPermitidas(){
   if (!esClinica) base.push('reportes');
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
-  // Plan Salud: en desarrollo, solo CIMA y solo para los usuarios habilitados
-  // a mano en PLAN_SALUD_USUARIOS — es un allowlist por persona, no por rol.
-  if (clienteTienePlanSalud() && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
+  // Plan Salud: el admin ve la solapa en CUALQUIER centro (para conectar la
+  // planilla); los demás habilitados (PLAN_SALUD_USUARIOS), solo en los centros que
+  // ya la tienen conectada.
+  if (ME && ME.role === 'admin') base.push('plansalud');
+  else if (clienteTienePlanSalud() && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
   return base;
 }
-// Qué centros tienen el módulo de Plan Salud (hoy solo CIMA, igual que
-// PLAN_SALUD_SHEETS en el server). Un solo lugar para cuando se sume otro.
-function slugTienePlanSalud(slug){ return String(slug || '') === 'cima'; }
+// Qué centros tienen el módulo de Plan Salud = los que tienen planilla conectada
+// en el server (se cargan con cargarPlanSaludSlugs; CIMA viene sembrado).
+var PLAN_SALUD_SLUGS = ['cima'];
+function slugTienePlanSalud(slug){ return PLAN_SALUD_SLUGS.indexOf(String(slug || '')) >= 0; }
+async function cargarPlanSaludSlugs(){
+  try {
+    var r = await api('/api/plan-salud/clientes');
+    if (r.ok && r.data && Array.isArray(r.data.slugs)) {
+      PLAN_SALUD_SLUGS = r.data.slugs;
+      if (typeof ACTIVE_CLIENT !== 'undefined' && ACTIVE_CLIENT) aplicarPestanasCliente();
+    }
+  } catch (e) {}
+}
 function clienteTienePlanSalud(){
   return !!(ACTIVE_CLIENT && slugTienePlanSalud(ACTIVE_CLIENT.slug));
 }
@@ -2729,18 +2741,47 @@ async function loadClientPendientesCentro(){
 // Plan Salud (CIMA): etapa 1, todavía en desarrollo. Por ahora solo confirma
 // qué archivo se eligió — el parseo real se suma cuando tengamos un reporte
 // de ejemplo del sistema CIMA para saber el formato exacto de columnas.
-function renderPlanSalud(){
+async function renderPlanSalud(){
+  var box = document.getElementById('planSaludConfigBox');
   var estado = document.getElementById('planSaludEstado');
   if (estado) estado.textContent = '';
-  var nombre = document.getElementById('planSaludArchivoNombre');
-  if (nombre) nombre.textContent = '';
+  if (!box || !ACTIVE_CLIENT) return;
+  var esAdmin = ME && ME.role === 'admin';
+  box.innerHTML = '<span class="nom-muted">Cargando…</span>';
+  var r = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/plan-salud/config');
+  var sheet = (r.ok && r.data && r.data.sheet) || null;
+  if (sheet && sheet.spreadsheetId){
+    var url = 'https://docs.google.com/spreadsheets/d/' + sheet.spreadsheetId + '/edit#gid=' + (sheet.gid || 0);
+    box.innerHTML = '<div class="ps-conn"><span class="ps-badge ok">✅ Planilla conectada</span> '
+      + '<a href="' + esc(url) + '" target="_blank" rel="noopener">Abrir planilla</a>'
+      + (esAdmin ? ' <button class="btn btn-ghost btn-sm" type="button" onclick="planSaludConectar()">Cambiar</button> <button class="btn btn-ghost btn-sm" type="button" onclick="planSaludDesconectar()">Desconectar</button>' : '')
+      + '</div>';
+  } else if (!esAdmin){
+    box.innerHTML = '<span class="nom-muted">Este centro todavía no tiene una planilla de Plan Salud conectada.</span>';
+  } else {
+    box.innerHTML = '<div class="ps-conn"><input class="inp" id="planSaludUrl" placeholder="Pegá el link de la planilla de Google (con #gid de la hoja)" style="min-width:320px;flex:1">'
+      + '<button class="btn btn-primary btn-sm" type="button" onclick="planSaludConectar()">Conectar</button></div>';
+  }
 }
-function planSaludArchivoElegido(input){
-  var nombre = document.getElementById('planSaludArchivoNombre');
+async function planSaludConectar(){
+  if (!ACTIVE_CLIENT) return;
+  var input = document.getElementById('planSaludUrl');
+  var url = input ? input.value.trim() : '';
+  if (!url){ url = await nsPrompt('Link de la planilla de Google', { titulo:'Conectar planilla', placeholder:'https://docs.google.com/spreadsheets/d/…#gid=…', okLabel:'Conectar' }); if (url === null) return; }
   var estado = document.getElementById('planSaludEstado');
-  var archivo = input && input.files && input.files[0];
-  if (nombre) nombre.textContent = archivo ? archivo.name : '';
-  if (estado) estado.textContent = archivo ? 'Archivo recibido. El lector de este reporte todavía está en desarrollo — por ahora solo queda guardado el nombre.' : '';
+  if (estado) estado.textContent = 'Conectando y verificando la planilla…';
+  var r = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/plan-salud/config', { url: url });
+  if (!r.ok){ if (estado) estado.textContent = ''; nsAlert((r.data && r.data.error) || 'No se pudo conectar la planilla.'); return; }
+  if (estado) estado.textContent = 'Conectada: ' + (r.data.titulo || '') + ' · hoja ' + (r.data.hoja || '');
+  await cargarPlanSaludSlugs();
+  renderPlanSalud();
+}
+async function planSaludDesconectar(){
+  if (!ACTIVE_CLIENT) return;
+  if (!await nsConfirm('¿Desconectar la planilla de Plan Salud de este centro?', { titulo:'Desconectar', okLabel:'Desconectar', peligro:true })) return;
+  try { await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/plan-salud/config', { method:'DELETE', headers:{'content-type':'application/json'} }); } catch(e){}
+  await cargarPlanSaludSlugs();
+  renderPlanSalud();
 }
 // OSDOP (Scheffelaar): calculadora simple valor x cantidad por concepto, para
 // saber cuánto debería facturar la médica. Vive solo en el navegador (localStorage
@@ -10043,7 +10084,7 @@ async function toggleReclamar(id, esta){
 var ME = null;         // usuario EFECTIVO (el espejado si el modo espejo está activo)
 var ME_REAL = null;    // usuario realmente logueado (siempre el admin real)
 var ESPEJO = false;    // modo espejo activo (solo lectura)
-function setUser(u){ ME_REAL = u; aplicarUsuario(u); actividadArrancarHeartbeat(); }
+function setUser(u){ ME_REAL = u; aplicarUsuario(u); actividadArrancarHeartbeat(); cargarPlanSaludSlugs(); }
 // ---------- Actividad (heartbeat de horas conectado) ----------
 // Solo tiene efecto real en el backend para el rol "operador" (ver
 // ROLES_MONITOREADOS en server.js); para cualquier otro rol el ping no hace

@@ -1381,6 +1381,10 @@
   .med-estado.warn{background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 38%,var(--border));color:var(--warning)}
   .med-estado.prog{background:var(--surface-2);color:var(--text-2)}
   .med-estado.muted{background:var(--surface-2);color:var(--text-2);border-style:dashed}
+  /* Plan Salud: conexión de la planilla. */
+  .ps-conn{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+  .ps-badge{display:inline-flex;align-items:center;font-size:12px;font-weight:750;border-radius:999px;padding:3px 10px}
+  .ps-badge.ok{background:var(--success-bg);color:var(--success);border:1px solid color-mix(in srgb,var(--success) 30%,var(--border))}
   .med-access{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .med-user,.med-pass{display:inline-flex;align-items:center;gap:5px;min-height:28px}
   .med-user code,.med-pass.saved{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:5px 8px;font-family:inherit;font-size:12px;font-weight:750;color:var(--text)}

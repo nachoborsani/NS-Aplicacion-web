@@ -1167,10 +1167,29 @@ function saveGoogleCfg(cfg) {
 // Planilla de Plan Salud por cliente (Google Sheet). Se lee con la cuenta de
 // Google de NS (la planilla tiene que estar compartida con gestion.nssalud@gmail.com,
 // o al menos "cualquiera con el link"). El `gid` es la pestaña; se resuelve a su
-// nombre con getSheetMeta al leer.
-const PLAN_SALUD_SHEETS = {
+// nombre con getSheetMeta al leer. Config persistida por cliente (se conecta desde
+// la web) — CIMA viene sembrado; los demás se agregan con /plan-salud/config.
+const PLAN_SALUD_SHEETS_SEED = {
   "cima": { spreadsheetId: "1o1wAF5zXPWESa3eB6rqsh-uQUxq9u97yAzsw_UR5AVU", gid: 745017814 },
 };
+const planSaludSheetsFile = path.join(dataDir, "plan_salud_sheets.json");
+function loadPlanSaludSheets() {
+  let fromFile = {};
+  try { const j = JSON.parse(fs.readFileSync(planSaludSheetsFile, "utf8")); if (j && typeof j === "object") fromFile = j; } catch {}
+  return { ...PLAN_SALUD_SHEETS_SEED, ...fromFile };
+}
+function savePlanSaludSheets(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(planSaludSheetsFile, JSON.stringify(store || {}, null, 2));
+}
+function planSaludSheet(slug) { return loadPlanSaludSheets()[slug] || null; }
+// De una URL de Google Sheets saca { spreadsheetId, gid }.
+function parseSheetUrl(url) {
+  const s = String(url || "");
+  const id = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || [])[1] || "";
+  const gid = (s.match(/[#&?]gid=(\d+)/) || [])[1] || "";
+  return { spreadsheetId: id, gid: gid ? Number(gid) : 0 };
+}
 // Planilla + carpeta de Scheffelaar (columnas 0-based: B=1 nombre, C=2 sexo,
 // D=3 benef, F=5 dni, G=6 trámite, I=8 credencial/resultado).
 // Config del módulo de credenciales por cliente (Médico de cabecera). Cada uno
@@ -5757,7 +5776,43 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     return json(res, 200, { token: WORKER_TOKEN || "" });
   }
-  // ===== Plan Salud (CIMA): leer la planilla de Google Sheets configurada =====
+  // ===== Plan Salud =====
+  // Qué clientes tienen Plan Salud configurado (para mostrar la solapa en el front).
+  if (p === "/api/plan-salud/clientes" && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    return json(res, 200, { slugs: Object.keys(loadPlanSaludSheets()) });
+  }
+  // Config de la planilla de un cliente (admin): ver / conectar (por URL) / desconectar.
+  const planSaludCfgMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/config$/);
+  if (planSaludCfgMatch && (req.method === "GET" || req.method === "POST" || req.method === "DELETE")) {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(planSaludCfgMatch[1]);
+    if (!loadClientsStore().find((c) => c.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    if (req.method === "GET") return json(res, 200, { sheet: planSaludSheet(slug) });
+    const store = loadPlanSaludSheets();
+    if (req.method === "DELETE") { delete store[slug]; savePlanSaludSheets(store); return json(res, 200, { ok: true, sheet: planSaludSheet(slug) }); }
+    const b = await readBody(req);
+    let spreadsheetId = String((b && b.spreadsheetId) || "").trim();
+    let gid = Number((b && b.gid) || 0) || 0;
+    if (b && b.url) { const pu = parseSheetUrl(b.url); if (pu.spreadsheetId) spreadsheetId = pu.spreadsheetId; if (pu.gid) gid = pu.gid; }
+    if (!spreadsheetId) return json(res, 400, { error: "Pegá el link (o el ID) de la planilla de Google." });
+    const gcfg = loadGoogleCfg();
+    if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada en la web." });
+    try {
+      const auth = gcreds.makeAuth(gcfg);
+      const meta = await gcreds.getSheetMeta(auth, spreadsheetId);
+      const hoja = (meta.tabsInfo || []).find((t) => String(t.sheetId) === String(gid)) || (meta.tabsInfo || [])[0];
+      if (!hoja) return json(res, 400, { error: "La planilla no tiene hojas legibles." });
+      if (!gid) gid = Number(hoja.sheetId) || 0;
+      store[slug] = { spreadsheetId, gid };
+      savePlanSaludSheets(store);
+      return json(res, 200, { ok: true, sheet: { spreadsheetId, gid }, titulo: meta.title || "", hoja: hoja.title });
+    } catch (e) { return json(res, 400, { error: (e && e.message) || "No pude leer esa planilla. ¿Está compartida con gestion.nssalud@gmail.com?" }); }
+  }
+
+  // ===== Plan Salud: leer la planilla de Google Sheets configurada =====
   // Deja la conexión lista y verificable; la UI/uso se define después.
   const planSaludPlanillaMatch = p.match(/^\/api\/clientes\/([^/]+)\/plan-salud\/planilla$/);
   if (planSaludPlanillaMatch && req.method === "GET") {
@@ -5765,7 +5820,7 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
     const slug = decodeURIComponent(planSaludPlanillaMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada en la web." });
@@ -5793,7 +5848,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || !esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
     const slug = decodeURIComponent(planSaludEnriqMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
@@ -5882,7 +5937,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const slug = decodeURIComponent(planSaludMoverMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
@@ -5926,7 +5981,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const slug = decodeURIComponent(planSaludMatchDubeMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
@@ -5983,7 +6038,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const slug = decodeURIComponent(planSaludAplicarMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
@@ -6018,7 +6073,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
     const slug = decodeURIComponent(planSaludBuscarMatch[1]);
-    const cfg = PLAN_SALUD_SHEETS[slug];
+    const cfg = planSaludSheet(slug);
     if (!cfg) return json(res, 404, { error: "Este cliente no tiene planilla de Plan Salud configurada." });
     const gcfg = loadGoogleCfg();
     if (!gcfg) return json(res, 400, { error: "No hay conexión con Google configurada." });
