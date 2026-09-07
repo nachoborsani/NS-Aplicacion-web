@@ -1356,6 +1356,10 @@
   .med-star{width:28px;height:28px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-2);display:grid;place-items:center;font-size:15px;font-weight:800;cursor:pointer;flex:0 0 auto}
   .med-star:hover{border-color:var(--warning);color:var(--warning)}
   .med-star.on{background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 40%,var(--border));color:var(--warning)}
+  /* Médico con el usuario PAMI deshabilitado (bloqueado / clave vencida). */
+  .icon-btn.mini.med-deshab-on{background:color-mix(in srgb,var(--error) 14%,var(--surface));border-color:color-mix(in srgb,var(--error) 45%,var(--border))}
+  .med-deshab-badge{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--error);background:color-mix(in srgb,var(--error) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--error) 35%,var(--border));border-radius:999px;padding:2px 8px;vertical-align:middle}
+  tr.medico-deshabilitado{opacity:.62}
   .med-access{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .med-user,.med-pass{display:inline-flex;align-items:center;gap:5px;min-height:28px}
   .med-user code,.med-pass.saved{border:1px solid var(--border);border-radius:8px;background:var(--surface-2);padding:5px 8px;font-family:inherit;font-size:12px;font-weight:750;color:var(--text)}

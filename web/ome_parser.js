@@ -50,10 +50,13 @@ function parsePedido(texto) {
 function resolverMedico(especialidad, medicos) {
   if (!especialidad) return { medico: null, varios: false };
   const conClave = (m) => !!(m.tieneClave || m.claveEnc);
+  const hab = (m) => !m.deshabilitado;
   const dela = (Array.isArray(medicos) ? medicos : []).filter((m) => especialidad.med.test(norm(m.especialidad)));
   if (!dela.length) return { medico: null, varios: false };
-  const pick = dela.find((m) => m.preferido && conClave(m))
-    || dela.find((m) => m.preferido)
+  const pick = dela.find((m) => m.preferido && conClave(m) && hab(m))
+    || dela.find((m) => conClave(m) && hab(m))
+    || dela.find((m) => hab(m))
+    || dela.find((m) => m.preferido && conClave(m))
     || dela.find((m) => conClave(m))
     || dela[0];
   return { medico: pick, varios: dela.length > 1 };

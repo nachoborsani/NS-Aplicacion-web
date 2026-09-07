@@ -217,7 +217,7 @@ function saveClientMedicos(store) {
 }
 // Vista pública de un médico (sin la clave; solo si tiene una guardada).
 function medicoPublico(m) {
-  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido };
+  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado };
 }
 function loadFacturas() {
   try {
@@ -1203,6 +1203,7 @@ async function omeBotMensaje(msg) {
   if (!parsed.especialidad) faltan.push("no reconocí la especialidad");
   if (!parsed.dni && !parsed.beneficio) faltan.push("falta DNI o beneficio");
   if (parsed.especialidad && !medico) faltan.push(`no hay médico de ${parsed.especialidad.key} cargado`);
+  if (medico && medico.deshabilitado) faltan.push(`el usuario PAMI del médico ${medico.nombre} está DESHABILITADO`);
   if (medico && !medico.usuario) faltan.push(`el médico ${medico.nombre} no tiene usuario PAMI`);
   if (medico && !medico.claveEnc) faltan.push(`el médico ${medico.nombre} está sin clave`);
   const ident = parsed.beneficio ? `Benef ${parsed.beneficio}` : (parsed.dni ? `DNI ${parsed.dni}` : "sin identidad");
@@ -6549,8 +6550,28 @@ const server = http.createServer(async (req, res) => {
         especialidad: String(m.especialidad || ""),
         tieneClave: !!m.claveEnc,
         preferido: !!m.preferido,
+        deshabilitado: !!m.deshabilitado,
       })),
     });
+  }
+  // Marcar/desmarcar el usuario PAMI de un médico como DESHABILITADO (bloqueado /
+  // clave vencida). El parseo de OMEs lo evita y avisa claramente en vez de fallar
+  // en el login de CUP PAMI.
+  const clientMedicoDeshabMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)\/deshabilitado$/);
+  if (clientMedicoDeshabMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me || me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(clientMedicoDeshabMatch[1]);
+    const id = decodeURIComponent(clientMedicoDeshabMatch[2]);
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    const m = lista.find((x) => x.id === id);
+    if (!m) return json(res, 404, { error: "Médico no encontrado." });
+    const body = await readBody(req);
+    m.deshabilitado = typeof body.deshabilitado === "boolean" ? body.deshabilitado : !m.deshabilitado;
+    store[slug] = lista;
+    saveClientMedicos(store);
+    return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
   }
   // Marcar/desmarcar un médico como "preferido" de su especialidad (para que el
   // parseo de pedidos elija ese cuando hay varios médicos de la misma especialidad).

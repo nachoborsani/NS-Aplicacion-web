@@ -3052,6 +3052,14 @@ async function toggleMedicoPreferido(id){
   MEDICOS = (res.data && res.data.medicos) || MEDICOS;
   renderClientMedicos();
 }
+// Marca/desmarca el usuario PAMI del médico como deshabilitado (bloqueado/vencido).
+async function toggleMedicoDeshabilitado(id){
+  if (!ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id) + '/deshabilitado', {});
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo marcar.'); return; }
+  MEDICOS = (res.data && res.data.medicos) || MEDICOS;
+  renderClientMedicos();
+}
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
@@ -3076,13 +3084,14 @@ function renderClientMedicos(){
     var acciones = esAdminMed
       ? '<button class="icon-btn mini" type="button" title="Editar" onclick="openMedicoModal(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
           (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + mid + '\')">' + llave + '</button>' : '') +
+          '<button class="icon-btn mini' + (m.deshabilitado ? ' med-deshab-on' : '') + '" type="button" title="' + (m.deshabilitado ? 'Usuario DESHABILITADO — clic para rehabilitar' : 'Marcar usuario como deshabilitado (bloqueado o clave vencida en PAMI)') + '" onclick="toggleMedicoDeshabilitado(\'' + mid + '\')">🚫</button>' +
           '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       : '<span class="nom-muted">—</span>';
     var prefBtn = (esAdminMed && m.especialidad)
       ? '<button class="med-star ' + (m.preferido ? 'on' : '') + '" type="button" title="' + (m.preferido ? 'Médico preferido de esta especialidad' : 'Marcar como preferido') + '" onclick="toggleMedicoPreferido(\'' + mid + '\')">' + (m.preferido ? '★' : '☆') + '</button>'
       : (m.preferido ? '<span class="med-star on" title="Preferido de esta especialidad">★</span>' : '');
-    return '<tr' + (m.tieneClave ? '' : ' class="medico-sin-clave"') + '>' +
-      '<td><div class="med-main"><b>' + esc(m.nombre || '-') + '</b></div></td>' +
+    return '<tr class="' + (m.tieneClave ? '' : 'medico-sin-clave ') + (m.deshabilitado ? 'medico-deshabilitado' : '') + '">' +
+      '<td><div class="med-main"><b>' + esc(m.nombre || '-') + '</b>' + (m.deshabilitado ? ' <span class="med-deshab-badge">deshabilitado</span>' : '') + '</div></td>' +
       '<td><div class="med-spec-wrap"><span class="med-spec">' + (esc(m.especialidad) || 'Sin especialidad') + '</span>' + prefBtn + '</div></td>' +
       '<td>' + accesoCell + '</td>' +
       '<td><span class="med-phone">' + (esc(m.telefono) || '-') + '</span></td>' +
@@ -8750,7 +8759,8 @@ function omeParsearYCompletar(){
     set('omePractica', 'Consulta ' + d.especialidad.key + ' (' + d.especialidad.codigo + ')');
     var rm = omeResolverMedico(d.especialidad);
     if (rm.medico){ set('omeMedico', rm.medico.id);
-      if (!rm.medico.tieneClave) avisos.push('el médico de ' + d.especialidad.key + ' (' + rm.medico.nombre + ') está SIN CLAVE — no vas a poder crear hasta cargarla');
+      if (rm.medico.deshabilitado) avisos.push('el usuario de ' + rm.medico.nombre + ' está DESHABILITADO — no vas a poder crear hasta rehabilitarlo');
+      else if (!rm.medico.tieneClave) avisos.push('el médico de ' + d.especialidad.key + ' (' + rm.medico.nombre + ') está SIN CLAVE — no vas a poder crear hasta cargarla');
       else if (rm.varios && !rm.medico.preferido) avisos.push('hay varios médicos de ' + d.especialidad.key + '; verificá el elegido o marcá uno como preferido');
     } else avisos.push('no hay médico de ' + d.especialidad.key + ' cargado');
   } else {
