@@ -6166,6 +6166,31 @@ const server = http.createServer(async (req, res) => {
         if (!row.sheetRow) return json(res, 400, { error: "Falta la fila." });
         return json(res, 200, await procesarCredencialFila(auth, C, row));
       }
+      // Procesa varias filas en una sola llamada, con un presupuesto de tiempo
+      // (Railway corta a los 60s). Devuelve lo hecho y cuántas quedan, para que
+      // el navegador vuelva a llamar hasta drenar. Salta filas ya intentadas que
+      // volvieron "reintentables" en el body (`saltar`), para no trabarse.
+      if (accion === "procesar-lote" && req.method === "POST") {
+        const body = await readBody(req);
+        const maxSeg = Math.min(45, Math.max(5, Number(body && body.maxSegundos) || 35));
+        const saltar = new Set((Array.isArray(body && body.saltar) ? body.saltar : []).map((n) => Number(n)));
+        const { pendientes, hechas, faltanDatos } = await leerPendientesCred(auth, C, 0);
+        const t0 = Date.now();
+        let ok = 0, sinCred = 0, reintentables = 0;
+        const reintentablesFilas = [], sinCredFilas = [];
+        for (const row of pendientes) {
+          if ((Date.now() - t0) > maxSeg * 1000) break;
+          if (saltar.has(Number(row.sheetRow))) continue;
+          const r = await procesarCredencialFila(auth, C, row);
+          if (r.ok) ok++;
+          else if (r.definitivo) { sinCred++; sinCredFilas.push({ fila: row.sheetRow, nombre: row.nombre }); }
+          else { reintentables++; reintentablesFilas.push(row.sheetRow); }
+        }
+        return json(res, 200, {
+          ok, sinCred, reintentables, reintentablesFilas, sinCredFilas,
+          pendientesAntes: pendientes.length, hechas, faltanDatos,
+        });
+      }
       return json(res, 404, { error: "Acción no soportada." });
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo procesar." }); }
   }
