@@ -1474,6 +1474,36 @@ async function procesarCredencialFila(auth, C, row) {
     return { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero };
   } catch (e) { return { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) }; }
 }
+// Cruce contra el padrón para CUALQUIER planilla de credenciales (usa C.cols): para
+// cada fila con DNI/beneficiario y credencial NO descargada, si el padrón la tiene
+// (con link) la reporta y, con escribir=true, copia el =HYPERLINK a la celda. El
+// padrón ya agrega Dube + Scheffelaar + Plan Salud, así que es la fuente única.
+async function cruzarCredConPadron(auth, C, escribir) {
+  const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+  const esDesc = (v) => /descargada/i.test(String(v || ""));
+  const cc = C.cols;
+  const maxCol = Math.max(cc.dni || 0, cc.benef || 0, cc.credencial || 0, cc.nombre || 0);
+  const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(maxCol)}`);
+  const colCred = gcreds.indexToCol(cc.credencial);
+  const encontrados = []; let sinRastro = 0, escritas = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], sheetRow = C.startRow + i;
+    const nombre = String((cc.nombre != null ? r[cc.nombre] : "") || "").trim();
+    const dni = dig(r[cc.dni]), benef = dig(r[cc.benef]), cred = r[cc.credencial];
+    if (!nombre && !dni && !benef) continue;
+    if (esDesc(cred)) continue;
+    if (!dni && !benef) continue;
+    const rec = credPadronBuscar(dni, benef);
+    if (!rec || !rec.link) { if (cred) sinRastro++; continue; }
+    const item = { fila: sheetRow, nombre, dni, benef, link: rec.link, fecha: rec.fecha || "" };
+    if (escribir) {
+      try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, colCred + sheetRow, `=HYPERLINK("${rec.link}";"DESCARGADA")`); item.escrito = true; escritas++; }
+      catch (e) { item.escrito = false; item.error = (e && e.message) || "no pude escribir"; }
+    }
+    encontrados.push(item);
+  }
+  return { encontrados, escritas, sinRastro, detalle: encontrados.slice(0, 300) };
+}
 // Programador de la corrida diaria de credenciales (hora Argentina), POR CLIENTE.
 // El archivo guarda un objeto { slug: {enabled, hora, ...} }. Migra el formato
 // viejo (flat = scheffelaar).
@@ -9983,6 +10013,32 @@ const server = http.createServer(async (req, res) => {
       const g = needGoogle(); if (g) return g;
       const body = await readBody(req);
       return json(res, 200, await procesarCredencialFila(gcreds.makeAuth(gcfg), C, body));
+    }
+    // Procesa varias filas pendientes en una llamada (presupuesto de tiempo). Cada
+    // una pasa por el padrón antes de PAMI (procesarCredencialFila).
+    if (action === "procesar-lote" && req.method === "POST") {
+      const g = needGoogle(); if (g) return g;
+      const body = await readBody(req);
+      const maxSeg = Math.min(45, Math.max(5, Number(body && body.maxSegundos) || 35));
+      const auth = gcreds.makeAuth(gcfg);
+      const { pendientes, hechas, faltanDatos } = await leerPendientesCred(auth, C, Number(body && body.desde) || 0);
+      const t0 = Date.now();
+      let ok = 0, sinCred = 0, reintentables = 0, reuso = 0;
+      for (const row of pendientes) {
+        if ((Date.now() - t0) > maxSeg * 1000) break;
+        const r = await procesarCredencialFila(auth, C, row);
+        if (r.ok) { ok++; if (r.reuso) reuso++; }
+        else if (r.definitivo) sinCred++;
+        else reintentables++;
+      }
+      return json(res, 200, { ok, reuso, sinCred, reintentables, pendientesAntes: pendientes.length, hechas, faltanDatos });
+    }
+    // Cruce contra el padrón (llena las filas sin credencial con lo que ya tenemos).
+    if (action === "cruzar" && req.method === "GET") {
+      const g = needGoogle(); if (g) return g;
+      const escribir = /[?&]escribir=1/.test(req.url || "");
+      const out = await cruzarCredConPadron(gcreds.makeAuth(gcfg), C, escribir);
+      return json(res, 200, { modo: escribir ? "escritura" : "diagnostico", encontrados: out.encontrados.length, escritas: out.escritas, sinRastro: out.sinRastro, detalle: out.detalle });
     }
     if (action === "set-benef" && req.method === "POST") {
       const g = needGoogle(); if (g) return g;
