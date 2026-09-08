@@ -1218,6 +1218,53 @@ function credCfg(key) {
   const c = CRED_CONFIGS[key];
   return c ? { slug: key, ...c } : null;
 }
+
+// ---- Padrón de credenciales propio: "base de datos" de credenciales ya bajadas
+// (link en Drive + datos del paciente), keyed por DNI y por beneficiario, común a
+// todos los clientes. La descarga consulta esto ANTES de ir a PAMI: si ya la
+// tenemos y está fresca (< CRED_PADRON_DIAS), la reusa. Si PAMI no la tiene pero
+// nosotros sí (aunque vieja), la usamos igual (la provisoria no se re-emite). ----
+const credPadronFile = path.join(dataDir, "cred_padron.json");
+const CRED_PADRON_DIAS = 60;
+function loadCredPadron() {
+  try { const j = JSON.parse(fs.readFileSync(credPadronFile, "utf8")); return j && j.registros ? j : { registros: {} }; }
+  catch { return { registros: {} }; }
+}
+function saveCredPadron(store) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(credPadronFile, JSON.stringify(store || { registros: {} }, null, 2));
+}
+function credPadronBuscar(dni, benef) {
+  const d = String(dni || "").replace(/\D+/g, ""), b = String(benef || "").replace(/\D+/g, "");
+  const s = loadCredPadron();
+  return (d && s.registros["d" + d]) || (b && s.registros["b" + b]) || null;
+}
+// ¿La credencial guardada sigue vigente? Sin fecha => no (se re-baja la 1ra vez).
+function credPadronVigente(rec, dias) {
+  if (!rec || !rec.link || !rec.fecha) return false;
+  const ms = Date.parse(rec.fecha); if (isNaN(ms)) return false;
+  const d = (Date.now() - ms) / 86400000;
+  return d >= 0 && d <= (dias || CRED_PADRON_DIAS);
+}
+// Guarda/actualiza un registro (solo si trae link). No pisa una fecha buena con
+// una vacía: si el existente tiene fecha y el nuevo no, conserva la fecha.
+function credPadronGuardar(rec) {
+  const dni = String(rec && rec.dni || "").replace(/\D+/g, ""), benef = String(rec && rec.benef || "").replace(/\D+/g, "");
+  const link = String(rec && rec.link || "").trim();
+  if (!link || (!dni && !benef)) return false;
+  const s = loadCredPadron();
+  const prev = (dni && s.registros["d" + dni]) || (benef && s.registros["b" + benef]) || {};
+  const r = {
+    dni, benef, nombre: String(rec.nombre || prev.nombre || "").trim(),
+    tramite: String(rec.tramite || prev.tramite || "").replace(/\D+/g, ""),
+    sexo: String(rec.sexo || prev.sexo || "").trim(),
+    link, fecha: rec.fecha || prev.fecha || "", fuente: rec.fuente || prev.fuente || "",
+  };
+  if (dni) s.registros["d" + dni] = r;
+  if (benef) s.registros["b" + benef] = r;
+  saveCredPadron(s);
+  return true;
+}
 const gcreds = require("./google_creds.js");
 const telegram = require("./telegram.js");
 const omeParser = require("./ome_parser.js");
@@ -1398,14 +1445,32 @@ async function leerFaltanBenefCred(auth, C) {
 async function procesarCredencialFila(auth, C, row) {
   const sheetRow = Number(row.sheetRow) || 0;
   const marcar = async (t) => { if (sheetRow) { try { await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, t); } catch {} } };
+  const escribirLink = async (link) => { if (sheetRow) await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, `=HYPERLINK("${link}";"DESCARGADA")`); };
+  // 1) ¿La tenemos ya en el padrón y sigue fresca (< 60 días)? Reusar sin tocar PAMI.
+  const rec = credPadronBuscar(row.dni, row.benef);
+  if (credPadronVigente(rec, CRED_PADRON_DIAS)) {
+    try { await escribirLink(rec.link); return { ok: true, sheetRow, url: rec.link, reuso: "padron", fecha: rec.fecha }; }
+    catch (e) { return { ok: false, sheetRow, error: "Reuso del padrón pero falló la planilla: " + ((e && e.message) || e) }; }
+  }
+  // 2) Bajar de PAMI.
   let dl;
   try { dl = await credDescargar(row.benef, row.dni, row.tramite, row.sexo); }
   catch (e) { await marcar("DATOS INVÁLIDOS"); return { ok: false, sheetRow, error: e.message, definitivo: true }; }
-  if (!dl.ok) { if (dl.definitivo) await marcar("SIN CREDENCIAL"); return { ok: false, sheetRow, error: dl.error, definitivo: !!dl.definitivo }; }
+  if (!dl.ok) {
+    // 3) PAMI no la tiene, pero si la tenemos guardada (aunque vieja), la usamos:
+    // la provisoria no se re-emite, la copia nuestra es lo mejor disponible.
+    if (rec && rec.link) {
+      try { await escribirLink(rec.link); return { ok: true, sheetRow, url: rec.link, reuso: "padron-viejo", fecha: rec.fecha || "" }; } catch {}
+    }
+    if (dl.definitivo) await marcar("SIN CREDENCIAL");
+    return { ok: false, sheetRow, error: dl.error, definitivo: !!dl.definitivo };
+  }
   try {
     const fname = credNombreArchivo(row.nombre, credNormDni(row.dni));
     const up = await gcreds.uploadPdf(auth, C.folderId, fname, dl.buf);
-    if (sheetRow) await gcreds.writeCell(auth, C.spreadsheetId, C.tab, gcreds.indexToCol(C.cols.credencial) + sheetRow, `=HYPERLINK("${up.webViewLink}";"DESCARGADA")`);
+    await escribirLink(up.webViewLink);
+    // Guardar en el padrón para la próxima (con fecha real de descarga).
+    try { credPadronGuardar({ dni: row.dni, benef: row.benef, nombre: row.nombre, tramite: row.tramite, sexo: dl.genero || row.sexo, link: up.webViewLink, fecha: new Date().toISOString(), fuente: "pami:" + (C.slug || "") }); } catch {}
     return { ok: true, sheetRow, archivo: up.name, url: up.webViewLink, genero: dl.genero };
   } catch (e) { return { ok: false, sheetRow, error: "Bajó la credencial pero falló Drive/planilla: " + ((e && e.message) || e) }; }
 }
@@ -6250,6 +6315,48 @@ const server = http.createServer(async (req, res) => {
           escritas, detalle: encontrados.slice(0, 300),
           sinRastro: sinRastro.length, sinRastroDetalle: sinRastro.slice(0, 100),
         });
+      }
+      // Siembra el padrón de credenciales con todo lo ya bajado (con link) en
+      // Dube + Scheffelaar + TODAS las hojas del Plan Salud. Las viejas van sin
+      // fecha (fallback), las nuevas descargas guardan fecha real y habilitan el
+      // reuso rápido. Idempotente: se puede correr las veces que haga falta.
+      if (accion === "padron-backfill" && req.method === "POST") {
+        const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+        const linkDe = (formula) => (String(formula || "").match(/HYPERLINK\("([^"]+)"/i) || [])[1] || "";
+        const esDesc = (v) => /descargada/i.test(String(v || ""));
+        let sembrados = 0, conLink = 0, sinLink = 0;
+        const sembrar = async (sid, tabName, cols, startRow, fuente) => {
+          const maxCol = Math.max(cols.dni || 0, cols.benef || 0, cols.credencial || 0, cols.nombre || 0, cols.tramite || 0);
+          let vals = [], forms = [];
+          try { vals = await gcreds.readValues(auth, sid, tabName, `A${startRow}:${gcreds.indexToCol(maxCol)}`); } catch { return; }
+          try { forms = await gcreds.readValues(auth, sid, tabName, `${gcreds.indexToCol(cols.credencial)}${startRow}:${gcreds.indexToCol(cols.credencial)}`, "FORMULA"); } catch { forms = []; }
+          vals.forEach((r, i) => {
+            if (!esDesc(r[cols.credencial])) return;
+            const link = linkDe(forms[i] && forms[i][0]);
+            if (!link) { sinLink++; return; } // "DESCARGADA" sin hipervínculo: no sirve para reusar
+            const dni = dig(r[cols.dni]), benef = dig(r[cols.benef]);
+            if (!dni && !benef) return;
+            const ok = credPadronGuardar({
+              dni, benef, nombre: cols.nombre != null ? r[cols.nombre] : "",
+              tramite: cols.tramite != null ? r[cols.tramite] : "", link, fecha: "", fuente,
+            });
+            if (ok) { sembrados++; conLink++; }
+          });
+        };
+        for (const key of ["dubesarky-ezequiel", "scheffelaar-mc"]) {
+          const CC = credCfg(key); if (CC) await sembrar(CC.spreadsheetId, CC.tab, CC.cols, CC.startRow, key);
+        }
+        for (const t of (meta.tabsInfo || [])) {
+          await sembrar(cfg.spreadsheetId, t.title, { dni: 2, benef: 3, credencial: 7, nombre: 1, tramite: 4 }, 2, "plan-salud:" + slug + ":" + t.title);
+        }
+        const total = Object.keys(loadCredPadron().registros || {}).length;
+        return json(res, 200, { ok: true, sembrados, conLink, sinLinkIgnorados: sinLink, clavesEnPadron: total });
+      }
+      if (accion === "padron-estado" && req.method === "GET") {
+        const s = loadCredPadron();
+        const regs = Object.values(s.registros || {});
+        const conFecha = regs.filter((r) => r && r.fecha).length;
+        return json(res, 200, { claves: Object.keys(s.registros || {}).length, conFecha, sinFecha: regs.length - conFecha, diasFrescura: CRED_PADRON_DIAS });
       }
       return json(res, 404, { error: "Acción no soportada." });
     } catch (e) { return json(res, 400, { error: (e && e.message) || "No se pudo procesar." }); }
