@@ -217,7 +217,7 @@ function saveClientMedicos(store) {
 }
 // Vista pública de un médico (sin la clave; solo si tiene una guardada).
 function medicoPublico(m) {
-  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado, estado: m.estado || "", verificadoAt: m.verificadoAt || "", verificadoDetalle: m.verificadoDetalle || "" };
+  return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado, comodin: !!m.comodin, estado: m.estado || "", verificadoAt: m.verificadoAt || "", verificadoDetalle: m.verificadoDetalle || "" };
 }
 function loadFacturas() {
   try {
@@ -7495,6 +7495,28 @@ const server = http.createServer(async (req, res) => {
       }
     }
     m.preferido = nuevo;
+    store[slug] = lista;
+    saveClientMedicos(store);
+    return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });
+  }
+  // Marcar/desmarcar un médico como "comodín": el que cubre las especialidades que
+  // NO tienen un médico activo propio (ver resolverMedico en ome_parser.js). Uno
+  // solo por cliente: al marcar uno, se desmarcan los demás.
+  const clientMedicoComodinMatch = p.match(/^\/api\/clientes\/([^/]+)\/medicos\/([^/]+)\/comodin$/);
+  if (clientMedicoComodinMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const slug = decodeURIComponent(clientMedicoComodinMatch[1]);
+    const id = decodeURIComponent(clientMedicoComodinMatch[2]);
+    const store = loadClientMedicos();
+    const lista = Array.isArray(store[slug]) ? store[slug] : [];
+    const m = lista.find((x) => x.id === id);
+    if (!m) return json(res, 404, { error: "Médico no encontrado." });
+    const body = await readBody(req);
+    const nuevo = typeof body.comodin === "boolean" ? body.comodin : !m.comodin;
+    if (nuevo) { for (const otro of lista) { if (otro !== m) otro.comodin = false; } } // uno por cliente
+    m.comodin = nuevo;
     store[slug] = lista;
     saveClientMedicos(store);
     return json(res, 200, { ok: true, medicos: lista.map(medicoPublico) });

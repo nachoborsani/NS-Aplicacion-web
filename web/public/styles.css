@@ -1401,6 +1401,7 @@
   .med-star.on{background:var(--warning-bg);border-color:color-mix(in srgb,var(--warning) 40%,var(--border));color:var(--warning)}
   /* Médico con el usuario PAMI deshabilitado (bloqueado / clave vencida). */
   .icon-btn.mini.med-deshab-on{background:color-mix(in srgb,var(--error) 14%,var(--surface));border-color:color-mix(in srgb,var(--error) 45%,var(--border))}
+  .icon-btn.mini.med-comodin-on{background:color-mix(in srgb,var(--turq) 16%,var(--surface));border-color:color-mix(in srgb,var(--turq) 45%,var(--border))}
   .med-deshab-badge{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--error);background:color-mix(in srgb,var(--error) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--error) 35%,var(--border));border-radius:999px;padding:2px 8px;vertical-align:middle}
   tr.medico-deshabilitado{opacity:.62}
   /* Estado del acceso a PAMI del médico (verificación). */

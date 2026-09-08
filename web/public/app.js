@@ -3291,6 +3291,15 @@ async function toggleMedicoDeshabilitado(id){
   MEDICOS = (res.data && res.data.medicos) || MEDICOS;
   renderClientMedicos();
 }
+// Marca/desmarca el médico "comodín": cubre las especialidades que NO tienen médico
+// activo propio (uno solo por cliente).
+async function toggleMedicoComodin(id){
+  if (!ACTIVE_CLIENT) return;
+  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos/' + encodeURIComponent(id) + '/comodin', {});
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo marcar.'); return; }
+  MEDICOS = (res.data && res.data.medicos) || MEDICOS;
+  renderClientMedicos();
+}
 // Verificación de acceso a PAMI por médico: chip de estado + "última verificación".
 var MED_VERIFICANDO = {};
 function medHace(iso){
@@ -3359,6 +3368,7 @@ function renderClientMedicos(){
           (m.tieneClave ? '<button class="icon-btn mini" type="button" title="Probar acceso a PAMI (activo/inactivo)"' + (MED_VERIFICANDO[m.id] ? ' disabled' : '') + ' onclick="verificarMedico(\'' + mid + '\')">' + (MED_VERIFICANDO[m.id] ? '⏳' : '🔎') + '</button>' : '') +
           (m.usuario ? '<button class="icon-btn mini" type="button" title="Blanquear" onclick="blanquearMedicoClave(\'' + mid + '\')">' + llave + '</button>' : '') +
           '<button class="icon-btn mini' + (m.deshabilitado ? ' med-deshab-on' : '') + '" type="button" title="' + (m.deshabilitado ? 'Usuario DESHABILITADO — clic para rehabilitar' : 'Marcar usuario como deshabilitado (bloqueado o clave vencida en PAMI)') + '" onclick="toggleMedicoDeshabilitado(\'' + mid + '\')">🚫</button>' +
+          '<button class="icon-btn mini' + (m.comodin ? ' med-comodin-on' : '') + '" type="button" title="' + (m.comodin ? 'Comodín — cubre especialidades sin médico activo (clic para quitar)' : 'Marcar como comodín (cubre especialidades sin médico activo)') + '" onclick="toggleMedicoComodin(\'' + mid + '\')">🃏</button>' +
           '<button class="icon-danger-btn mini" type="button" title="Borrar" onclick="deleteMedico(\'' + mid + '\')"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>'
       : '<span class="nom-muted">—</span>';
     var prefBtn = (esAdminMed && m.especialidad)
@@ -9085,15 +9095,21 @@ function omeLeerPedido(texto){
   return { especialidad: esp, dni: dni, beneficio: benef, nombre: nombre, raw: raw };
 }
 function omeResolverMedico(esp){
-  var meds = (OME_WEB.medicos||[]).filter(function(m){ return esp && esp.med.test(omeNorm(m.especialidad)); });
-  if (!meds.length) return { medico:null, varios:false };
+  if (!esp) return { medico:null, varios:false };
+  var all = (OME_WEB.medicos||[]);
+  var meds = all.filter(function(m){ return esp.med.test(omeNorm(m.especialidad)); });
   var hab = function(m){ return !m.deshabilitado; };
-  var pick = meds.find(function(m){ return m.preferido && m.tieneClave && hab(m); })
-          || meds.find(function(m){ return m.tieneClave && hab(m); })
-          || meds.find(function(m){ return hab(m); })
+  // Médico activo propio de la especialidad (preferido primero).
+  var activo = meds.find(function(m){ return m.preferido && m.tieneClave && hab(m); })
+            || meds.find(function(m){ return m.tieneClave && hab(m); });
+  if (activo) return { medico: activo, varios: meds.length>1 };
+  // Sin médico activo propio → comodín (cubre especialidades sin médico activo).
+  var comodin = all.find(function(m){ return m.comodin && m.tieneClave && hab(m); });
+  if (comodin) return { medico: comodin, varios:false, comodin:true };
+  var pick = meds.find(function(m){ return hab(m); })
           || meds.find(function(m){ return m.preferido && m.tieneClave; })
           || meds.find(function(m){ return m.tieneClave; })
-          || meds[0];
+          || meds[0] || null;
   return { medico: pick, varios: meds.length>1 };
 }
 function omeParsearYCompletar(){

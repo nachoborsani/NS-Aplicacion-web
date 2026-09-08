@@ -51,14 +51,21 @@ function resolverMedico(especialidad, medicos) {
   if (!especialidad) return { medico: null, varios: false };
   const conClave = (m) => !!(m.tieneClave || m.claveEnc);
   const hab = (m) => !m.deshabilitado;
-  const dela = (Array.isArray(medicos) ? medicos : []).filter((m) => especialidad.med.test(norm(m.especialidad)));
-  if (!dela.length) return { medico: null, varios: false };
-  const pick = dela.find((m) => m.preferido && conClave(m) && hab(m))
-    || dela.find((m) => conClave(m) && hab(m))
-    || dela.find((m) => hab(m))
+  const lista = Array.isArray(medicos) ? medicos : [];
+  const dela = lista.filter((m) => especialidad.med.test(norm(m.especialidad)));
+  // Médico ACTIVO propio de la especialidad (con clave y habilitado): preferido primero.
+  const activo = dela.find((m) => m.preferido && conClave(m) && hab(m))
+    || dela.find((m) => conClave(m) && hab(m));
+  if (activo) return { medico: activo, varios: dela.length > 1 };
+  // Sin médico activo propio → usar el COMODÍN (cubre las especialidades que no
+  // tienen médico activo), si hay uno con clave y habilitado.
+  const comodin = lista.find((m) => m.comodin && conClave(m) && hab(m));
+  if (comodin) return { medico: comodin, varios: false, comodin: true };
+  // Ni activo ni comodín: caer a lo que haya de la especialidad (como antes).
+  const pick = dela.find((m) => hab(m))
     || dela.find((m) => m.preferido && conClave(m))
     || dela.find((m) => conClave(m))
-    || dela[0];
+    || dela[0] || null;
   return { medico: pick, varios: dela.length > 1 };
 }
 
