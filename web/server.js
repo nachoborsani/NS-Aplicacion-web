@@ -3121,8 +3121,14 @@ function applyAutomaticExclusionDebits(rows) {
           const candidatos = groupRows.filter((r) => expandedPamiExclusionCodes(r).some((c) => cods.includes(c)) && !yaCargado(r));
           if (candidatos.length < 2) continue;
           // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
+          // Si una del par YA está transmitida (cobrada), el débito cae sobre la
+          // que NO está transmitida (la que se transmite después = la que PAMI
+          // debita). Así una "falta informe" excluyente con una ya transmitida
+          // queda correctamente marcada como "iría a débito". Si están todas en
+          // el mismo estado, se mantiene la última (comportamiento previo).
           const reason = `${regla.codigosNombre || "Par de estudios"} ${cuando}: PAMI paga uno al 40%.`;
-          marcar(candidatos[candidatos.length - 1], regla.monto || "pay40", regla, reason, cods.join("/"));
+          const objetivo = candidatos.find((r) => !r.transmitted) || candidatos[candidatos.length - 1];
+          marcar(objetivo, regla.monto || "pay40", regla, reason, cods.join("/"));
         }
       }
     }
