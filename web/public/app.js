@@ -5243,7 +5243,9 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line wide mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
-    + '</div>' + syncSc + foot + '</div>';
+    + '</div>'
+    + (current.transmittedToday > 0 ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(current.transmittedToday)) + '</b></div>' : '')
+    + syncSc + foot + '</div>';
 }
 function irAReporteSinCerrar(){
   if (!MESCURSO_REPORTE_ID) return;
@@ -5282,7 +5284,9 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line warn mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span></span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()"><span>Faltan informes <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span></span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
-    + '</div>' + syncSc + foot + '</div>';
+    + '</div>'
+    + (current.transmittedToday > 0 ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(current.transmittedToday)) + '</b></div>' : '')
+    + syncSc + foot + '</div>';
 }
 function medCabEstadoMes(d){
   var validar = Number(d && d.pendienteValidar) || 0;

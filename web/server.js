@@ -3177,6 +3177,18 @@ function displayDateTime(date) {
   const hhmm = date.getHours() || date.getMinutes() ? ` ${pad(date.getHours())}:${pad(date.getMinutes())}` : "";
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}${hhmm}`;
 }
+// Fecha de HOY en Argentina (YYYY-MM-DD), robusta ante la TZ del server (Railway
+// corre en UTC). Se usa para contar "transmitidas hoy": las F TRANSMITIDA de PAMI
+// se guardan como fecha literal (isoDateTime, sin TZ), así que se comparan por el
+// tramo YYYY-MM-DD contra este valor. Cacheado 1 min para no reformatear por fila.
+let _hoyArgCache = { at: 0, val: "" };
+function hoyArgentinaISO() {
+  const now = Date.now();
+  if (!_hoyArgCache.val || now - _hoyArgCache.at > 60000) {
+    _hoyArgCache = { at: now, val: new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }) };
+  }
+  return _hoyArgCache.val;
+}
 function prestationPeriod(date) {
   if (!date) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -4453,6 +4465,7 @@ function emptyDashboardPeriod(period) {
     practices: 0,
     validated: 0,
     transmitted: 0,
+    transmittedToday: 0,
     facturable: 0,
     billable: 0,
     absent: 0,
@@ -4501,6 +4514,7 @@ function addRowToDashboardPeriod(target, row) {
   else target.practices += 1;
   if (row.validated) target.validated += 1;
   if (row.transmitted) target.transmitted += 1;
+  if (row.transmitted && String(row.transmittedAt || "").slice(0, 10) === hoyArgentinaISO()) target.transmittedToday += 1;
   if (row.facturable) target.facturable += 1;
   if (row.billable) target.billable += 1;
   if (row.absent) { target.absent += 1; target.absentAmount += money(row.valueGross); }
