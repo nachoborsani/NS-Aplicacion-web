@@ -1807,6 +1807,15 @@
           <div class="module-edit-list" id="umClientes" style="max-height:180px"></div>
           <div class="hint" id="umClientesHint">Solo ve estos clientes. Puede mirar todo y descargar, pero no modificar nada.</div>
         </div>
+        <div class="field" id="umModulosField" style="display:none">
+          <label>Pantallas habilitadas</label>
+          <div class="module-edit-list" id="umModulos">
+            <label class="module-edit-option"><input type="checkbox" value="padron"><span>Afiliados</span></label>
+            <label class="module-edit-option"><input type="checkbox" value="informes"><span>Informes (generar)</span></label>
+            <label class="module-edit-option"><input type="checkbox" value="liberarcupo"><span>Liberar cupo</span></label>
+          </div>
+          <div class="hint">Además de "Datos del centro", siempre a nivel básico (sin plata, sin gráficas). Ninguna tildada = solo Datos del centro, como hasta ahora.</div>
+        </div>
         <div class="field">
           <label>Email <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label>
           <input class="inp" id="umEmail" type="email" spellcheck="false" autocomplete="off">

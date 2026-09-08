@@ -84,6 +84,10 @@ function togglePagosGroup(el){
   var group = document.getElementById('navGroupPagos');
   if (group) group.classList.toggle('open');
 }
+// Módulos que ESTE operador_clinica puntual tiene habilitados (afiliados/
+// informes/liberar cupo) - a diferencia del resto de los roles, esto es por
+// usuario, no por rol (ver server.js, publicUser/OPERADOR_CLINICA_MODULOS).
+function opClinicaModulos(){ return (ME && ME.role === 'operador_clinica' && Array.isArray(ME.modulos)) ? ME.modulos : []; }
 function go(v, el){
   // Credencial provisoria se fusionó dentro de Afiliados (Padrón). Cualquier link viejo
   // a 'credencial' abre Afiliados.
@@ -94,9 +98,10 @@ function go(v, el){
     return;
   }
   // Operador Clínica (empleado del centro, no el dueño): mismo encierro que
-  // clínica, pero aterriza en "Datos del centro" - no tiene ninguna pantalla
-  // con plata ni gráficas habilitada todavía (ver PDF "Empleado Cliente").
-  if (ME && ME.role === 'operador_clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0){
+  // clínica (nunca dashboards/honorarios/reportes/plata), salvo los módulos
+  // puntuales que se le hayan habilitado (afiliados/informes/liberar cupo) -
+  // esos SÍ pueden abrirse, y siguen de largo a los chequeos de más abajo.
+  if (ME && ME.role === 'operador_clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0 && opClinicaModulos().indexOf(v) < 0){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'pendientes'); }
     return;
   }
@@ -105,11 +110,11 @@ function go(v, el){
   if (ME && ME.role === 'colaborador' && ['dash', 'clientes'].indexOf(v) < 0){ go('dash'); return; }
   // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
   if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
-  if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
+  if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || opClinicaModulos().indexOf('liberarcupo') >= 0))){ go('dash'); return; }
   if (v === 'omeweb' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
-  // el backend le bloquea las acciones). El resto, afuera.
-  if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo'))){ go('dash'); return; }
+  // el backend le bloquea las acciones). El resto, afuera (salvo operador_clinica habilitado).
+  if (v === 'padron' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || ME.role === 'demo' || opClinicaModulos().indexOf('padron') >= 0))){ go('dash'); return; }
   // Cruzas: solo admin (herramienta nueva, maneja montos y datos de pacientes).
   if (v === 'cruzas' && !(ME && ME.role === 'admin')){ go('dash'); return; }
   // Nomencladores: por ahora un operador no lo necesita.
@@ -7762,6 +7767,7 @@ function openUserModal(mode, un){
   document.getElementById('umActiveField').style.display = isEdit ? 'flex' : 'none';
   umPintarClientes(u && u.clientes);
   umPintarCentro(u && u.centro);
+  umPintarModulos(u && u.modulos);
   umToggleClientes();
   showModal('userModal','umScrim');
   document.getElementById('umName').focus();
@@ -7785,12 +7791,26 @@ function umPintarCentro(sel){
   }).join('') || '<option value="">No hay clientes cargados.</option>';
   cont.value = sel || '';
 }
+// Pantallas habilitadas para un operador_clinica (afiliados/informes/liberar
+// cupo): por usuario puntual, no por rol (ver OPERADOR_CLINICA_MODULOS en
+// server.js) - cada centro/operador puede necesitar un set distinto.
+function umPintarModulos(sel){
+  var elegidos = Array.isArray(sel) ? sel : [];
+  [].slice.call(document.querySelectorAll('#umModulos input')).forEach(function(i){
+    i.checked = elegidos.indexOf(i.value) >= 0;
+  });
+}
+function umModulosElegidos(){
+  return [].slice.call(document.querySelectorAll('#umModulos input:checked')).map(function(i){ return i.value; });
+}
 function umToggleClientes(){
   var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
   if (f) f.style.display = (role === 'demo' || role === 'operador' || role === 'colaborador') ? '' : 'none';
   var cf = document.getElementById('umCentroField');
   if (cf) cf.style.display = (role === 'clinica' || role === 'operador_clinica') ? '' : 'none';
+  var mf = document.getElementById('umModulosField');
+  if (mf) mf.style.display = (role === 'operador_clinica') ? '' : 'none';
   var chint = document.getElementById('umCentroHint');
   if (chint) chint.textContent = (role === 'operador_clinica')
     ? 'A qué centro pertenece. Por ahora este perfil no ve gráficas ni valores, solo Datos del centro.'
@@ -7816,10 +7836,10 @@ async function saveUser(){
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos() });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos() });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos() });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos() });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
@@ -10245,6 +10265,20 @@ function aplicarUsuario(u){
   document.body.classList.toggle('role-demo', u.role === 'demo');
   // Operador Clínica: mismo encierro visual que clínica (oculta lo interno de NS).
   document.body.classList.toggle('role-operador_clinica', u.role === 'operador_clinica');
+  // Módulos puntuales habilitados para ESTE operador_clinica (afiliados/informes/
+  // liberar cupo): el CSS de arriba oculta TODO lo .ns-only con !important, así
+  // que para destapar un ítem hay que sacarle la clase (un display inline no le
+  // gana al !important).
+  if (u.role === 'operador_clinica') {
+    var opMods = Array.isArray(u.modulos) ? u.modulos : [];
+    [['navPadron', 'padron'], ['navInformes', 'informes'], ['navLiberarCupo', 'liberarcupo']].forEach(function(par){
+      var el = document.getElementById(par[0]);
+      if (!el) return;
+      var habilitado = opMods.indexOf(par[1]) >= 0;
+      el.classList.toggle('ns-only', !habilitado);
+      el.style.display = habilitado ? '' : 'none';
+    });
+  }
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
   // El login normal NO pasa por go('dash') (el dashboard se ve por defecto), así que
   // marcamos la clase de la vista de inicio acá según qué sección está visible.

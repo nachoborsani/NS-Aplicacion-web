@@ -2283,23 +2283,33 @@ function tieneClientesRestringidos(me) {
   if (!me) return false;
   if (SOLO_LECTURA.has(me.role)) return true;
   if (me.role === "operador") return Array.isArray(me.clientes) && me.clientes.length > 0;
+  // "operador_clinica" siempre está atado a UN centro (me.centro), nunca ve el
+  // resto - mismo espíritu que un operador con lista, pero fijo (no lo carga el
+  // admin a mano en una lista, ya viene del alta del usuario).
+  if (me.role === "operador_clinica") return true;
   return false;
+}
+// Slugs que un usuario restringido puede ver: la lista a mano (me.clientes) para
+// demo/colaborador/operador-con-lista, o su único centro para operador_clinica.
+function clientesPermitidosSet(me) {
+  if (me.role === "operador_clinica") return new Set(me.centro ? [me.centro] : []);
+  return new Set(Array.isArray(me.clientes) ? me.clientes : []);
 }
 function clientesVisiblesPara(me, clientes) {
   if (!tieneClientesRestringidos(me)) return clientes;
-  const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
+  const permitidos = clientesPermitidosSet(me);
   return clientes.filter((c) => permitidos.has(c.slug));
 }
 // Mismo criterio que clientesVisiblesPara, pero para médicos de la config de
 // Informes (cada médico puede estar atado a uno o más clientes en m.clientes;
 // vacío = médico "global", no asociado a ningún cliente en particular, se
 // muestra siempre). Un usuario con clientes restringidos (operador con lista,
-// demo, colaborador) NO debe ver médicos/firmas de una clínica que no le
-// asignamos, aunque no esté en la sección "Clientes" (esto viaja también por
-// /api/informes/config, que arma el desplegable de la pantalla de Informes).
+// demo, colaborador, operador_clinica) NO debe ver médicos/firmas de una
+// clínica que no le asignamos, aunque no esté en la sección "Clientes" (esto
+// viaja también por /api/informes/config, que arma el desplegable de Informes).
 function medicosVisiblesPara(me, medicos) {
   if (!tieneClientesRestringidos(me)) return medicos;
-  const permitidos = new Set(Array.isArray(me.clientes) ? me.clientes : []);
+  const permitidos = clientesPermitidosSet(me);
   return medicos.filter((m) => !Array.isArray(m.clientes) || m.clientes.length === 0 || m.clientes.some((c) => permitidos.has(c)));
 }
 function getSessionUser(req) {
@@ -2583,7 +2593,19 @@ function readBody(req) {
 }
 function publicUser(u) {
   return { username: u.username, name: u.name, role: u.role, centro: u.centro || "",
-           clientes: Array.isArray(u.clientes) ? u.clientes : [], mustChange: !!u.mustChange };
+           clientes: Array.isArray(u.clientes) ? u.clientes : [],
+           modulos: Array.isArray(u.modulos) ? u.modulos : [], mustChange: !!u.mustChange };
+}
+// Módulos que un "operador_clinica" puede tener habilitados A MANO, por usuario
+// puntual (acá SÍ es por persona, no por rol: bo.26 de Baimed puede tener un set
+// distinto que otro operador de otro centro - a diferencia del resto de los
+// roles, donde el estándar del proyecto es "todo el rol igual"). Mismos nombres
+// que los ids de vista del front (padron=Afiliados, informes=Generar informes,
+// liberarcupo=Liberar cupo). Nivel básico siempre: nada de dashboards, honorarios
+// ni reportes, tenga los módulos que tenga.
+const OPERADOR_CLINICA_MODULOS = new Set(["padron", "informes", "liberarcupo"]);
+function opClinicaTieneModulo(me, modulo) {
+  return !!(me && me.role === "operador_clinica" && Array.isArray(me.modulos) && me.modulos.includes(modulo));
 }
 
 // Perfiles validos y reglas de nombre de usuario
@@ -5692,9 +5714,32 @@ const server = http.createServer(async (req, res) => {
     if (meGate && meGate.role === "operador_clinica") {
       const esGet = (req.method === "GET" || !req.method);
       const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
-      const permitido = permitidoSiempre || (esGet && p === "/api/clientes")
-        || (esGet && p === `/api/clientes/${encodeURIComponent(meGate.centro)}/pendientes-centro`);
-      if (!permitido) return json(res, 403, { error: "Tu usuario todavía no tiene pantallas habilitadas (en desarrollo)." });
+      const centroCod = encodeURIComponent(meGate.centro);
+      let permitido = permitidoSiempre || (esGet && p === "/api/clientes")
+        || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro`);
+      // Módulos por usuario (ver OPERADOR_CLINICA_MODULOS): cada uno solo destapa
+      // lo mínimo de esa pantalla, siempre restringido a SU centro. El resto de
+      // cada módulo (subir turnera, borrar afiliado, cabina/matching, médicos,
+      // etc.) sigue "en desarrollo" para este rol.
+      if (!permitido && opClinicaTieneModulo(meGate, "padron") && esGet) {
+        permitido = p === `/api/clientes/${centroCod}/padron` || p === `/api/clientes/${centroCod}/padron/lookup`;
+      }
+      if (!permitido && opClinicaTieneModulo(meGate, "padron") && req.method === "POST") {
+        permitido = p === "/api/pami/capita" || p === "/api/credencial-provisoria";
+      }
+      // Ojo: NO se incluye /api/informes/generar-y-subir - encola una tarea
+      // "subir-informes" y escribe en el mismo store que usa la Cabina, que es
+      // terreno de Nacho en paralelo (ver memoria). Este módulo solo genera/
+      // descarga el PDF; subirlo a PAMI sigue siendo tarea de NS.
+      if (!permitido && opClinicaTieneModulo(meGate, "informes")) {
+        permitido = (esGet && p === "/api/informes/config")
+          || (req.method === "POST" && (p === "/api/informes/generar" || p === "/api/informes/lote"));
+      }
+      if (!permitido && opClinicaTieneModulo(meGate, "liberarcupo")) {
+        permitido = (esGet && (p === `/api/clientes/${centroCod}/liberar-cupo/candidatos` || p === `/api/clientes/${centroCod}/liberar-cupo/reporte.xlsx`))
+          || (req.method === "POST" && p === `/api/clientes/${centroCod}/liberar-cupo/liberar`);
+      }
+      if (!permitido) return json(res, 403, { error: "Tu usuario todavía no tiene esa pantalla habilitada." });
     }
 
     // --- Gate de los roles de SOLO LECTURA ("demo" y "colaborador").
@@ -6777,6 +6822,7 @@ const server = http.createServer(async (req, res) => {
         role: u.role,
         centro: u.centro || "",
         clientes: Array.isArray(u.clientes) ? u.clientes : [],
+        modulos: Array.isArray(u.modulos) ? u.modulos : [],
         email: u.email || "",
         active: u.active !== false,
         mustChange: !!u.mustChange,
@@ -6789,7 +6835,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password, email, centro, clientes } = await readBody(req);
+    const { username, name, role, password, email, centro, clientes, modulos } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
@@ -6799,6 +6845,9 @@ const server = http.createServer(async (req, res) => {
     // Clientes que puede ver el usuario de demostración (solo slugs que existen).
     const slugsExistentes = new Set(loadClientsStore().map((c) => c.slug));
     const cls = (Array.isArray(clientes) ? clientes : []).map((s) => String(s || "").trim()).filter((s) => slugsExistentes.has(s));
+    // Módulos de un operador_clinica (afiliados/informes/liberar cupo): por
+    // usuario puntual, no por rol - ver OPERADOR_CLINICA_MODULOS.
+    const mods = (Array.isArray(modulos) ? modulos : []).map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
@@ -6817,7 +6866,8 @@ const server = http.createServer(async (req, res) => {
     // para el resto de los roles el formulario lo manda vacío igual, así que no
     // hace falta filtrar por rol acá - guardamos lo que vino.
     users.push({ username: uname, name: nm, role: rl, email: em, centro: (rl === "clinica" || rl === "operador_clinica") ? ce : "",
-                 clientes: cls, password: hashPassword(pw), mustChange: true, active: true });
+                 clientes: cls, modulos: rl === "operador_clinica" ? mods : [],
+                 password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
   }
@@ -6874,6 +6924,14 @@ const server = http.createServer(async (req, res) => {
         const existentes = new Set(loadClientsStore().map((c) => c.slug));
         users[idx].clientes = (Array.isArray(body.clientes) ? body.clientes : [])
           .map((s) => String(s || "").trim()).filter((s) => existentes.has(s));
+      }
+      // Módulos de un operador_clinica (afiliados/informes/liberar cupo): por
+      // usuario puntual. Solo tiene efecto en ese rol (los gates lo chequean
+      // solo para operador_clinica), así que guardarlo igual para otro rol no
+      // rompe nada, pero no tiene sentido - se ignora si no es ese rol.
+      if (body.modulos !== undefined && users[idx].role === "operador_clinica") {
+        users[idx].modulos = (Array.isArray(body.modulos) ? body.modulos : [])
+          .map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
       }
       // Un usuario clínica u operador_clinica siempre debe tener un centro válido.
       if ((users[idx].role === "clinica" || users[idx].role === "operador_clinica") && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {
@@ -8253,7 +8311,7 @@ const server = http.createServer(async (req, res) => {
   if (liberarCupoMatch && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    if (!esOperativo(me) && !opClinicaTieneModulo(me, "liberarcupo")) return json(res, 403, { error: "Solo un administrador u operador." });
     const slug = decodeURIComponent(liberarCupoMatch[1]);
     const data = buildLiberarCupoCandidates(slug, {
       period: url.searchParams.get("period"),
@@ -8275,7 +8333,7 @@ const server = http.createServer(async (req, res) => {
   if (liberarCupoReporteMatch && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    if (!esOperativo(me) && !opClinicaTieneModulo(me, "liberarcupo")) return json(res, 403, { error: "Solo un administrador u operador." });
     const slug = decodeURIComponent(liberarCupoReporteMatch[1]);
     const data = buildLiberarCupoCandidates(slug, {
       period: url.searchParams.get("period"),
@@ -8317,7 +8375,7 @@ const server = http.createServer(async (req, res) => {
   if (liberarCupoRunMatch && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador u operador." });
+    if (!esOperativo(me) && !opClinicaTieneModulo(me, "liberarcupo")) return json(res, 403, { error: "Solo un administrador u operador." });
     const slug = decodeURIComponent(liberarCupoRunMatch[1]);
     const body = await readBody(req);
     const data = buildLiberarCupoCandidates(slug, { period: body && body.period });
@@ -9330,7 +9388,7 @@ const server = http.createServer(async (req, res) => {
   if (padronList && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (!esOperativo(me) && me.role !== "demo") return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me) && me.role !== "demo" && !opClinicaTieneModulo(me, "padron")) return json(res, 403, { error: "Solo un administrador." });
     const slug = padronList[1];
     const store = loadPadron();
     const cli = store[slug] || {};
@@ -9439,7 +9497,7 @@ const server = http.createServer(async (req, res) => {
   if (p === "/api/pami/capita" && req.method === "POST") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
-    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
+    if (!esOperativo(me) && !opClinicaTieneModulo(me, "padron")) return json(res, 403, { error: "Solo un administrador." });
     let body = {};
     try { body = JSON.parse((await readBuffer(req)).toString("utf8") || "{}"); } catch {}
     let beneficio, dni;
@@ -10253,6 +10311,12 @@ const server = http.createServer(async (req, res) => {
     if (!informes.MODELOS[modelo]) return json(res, 400, { error: "No se encontró la plantilla del modelo seleccionado." });
     const cliente = loadClientsStore().find((c) => c.slug === String(body.clienteSlug || ""));
     if (!cliente) return json(res, 400, { error: "Elegí para qué cliente es el informe." });
+    // El clienteSlug viaja en el body (no en la URL), así que el gate de arriba
+    // no lo restringe: acá SÍ hay que chequear a mano que un operador_clinica no
+    // arme un informe (con firma de médico) para un centro que no es el suyo.
+    if (me.role === "operador_clinica" && cliente.slug !== me.centro) {
+      return json(res, 403, { error: "No tenés acceso a ese cliente." });
+    }
     const pac = body.paciente || {};
     const faltan = [];
     if (!String(pac.nombre || "").trim()) faltan.push("el nombre");
@@ -10261,7 +10325,9 @@ const server = http.createServer(async (req, res) => {
     if (faltan.length) return json(res, 400, { error: "Falta completar " + faltan.join(", ") + "." });
     try {
       const cfg = loadInformesConfig();
-      const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
+      // Mismo filtro que /informes/config: un médico atado a otro cliente (o su
+      // firma) no debe poder usarse desde acá, aunque el id se mande a mano.
+      const medico = medicosVisiblesPara(me, cfg.medicos || []).find((m) => m.id === body.medicoId);
       const membrete = membreteDeCliente(cliente);
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: body.paciente || {},
@@ -10392,6 +10458,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const cfg = loadInformesConfig();
       const clientes = loadClientsStore();
+      const medicosOk = medicosVisiblesPara(me, cfg.medicos || []);
       const archivos = [];
       const usados = {};
       for (const it of items) {
@@ -10401,7 +10468,12 @@ const server = http.createServer(async (req, res) => {
         if (!String(pac.nombre || "").trim() || !String(pac.fecha || "").trim()) continue;
         const cliente = clientes.find((c) => c.slug === String(it.clienteSlug || ""));
         if (!cliente) continue; // sin cliente no sabemos qué membrete ponerle: se salta
-        const medico = (cfg.medicos || []).find((m) => m.id === it.medicoId);
+        // Un operador_clinica no puede armar (ni de a uno en el lote) el informe
+        // de un centro que no es el suyo - mismo chequeo que /informes/generar.
+        if (me.role === "operador_clinica" && cliente.slug !== me.centro) continue;
+        // Mismo filtro que /informes/config: no usar un médico (ni su firma) de
+        // otro cliente aunque el id se mande a mano.
+        const medico = medicosOk.find((m) => m.id === it.medicoId);
         const bytes = await informes.buildInformePdf(modelo, {
           paciente: pac,
           textoInforme: it.textoInforme,
