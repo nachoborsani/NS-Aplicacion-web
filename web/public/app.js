@@ -5097,8 +5097,7 @@ function mesCursoCardMesEnCurso(r, estado){
   var debitosCaret = ' <span class="mescurso-caret" id="mescursoDebitosCaret">▸</span>';
   var cobroReal = r.grossTransmitido || 0;
   var faltaInf = r.missingInformeAmount || 0;
-  var porTransmitirMonto = r.porTransmitirAmount || 0;
-  var estimado = cobroReal + faltaInf + porTransmitirMonto;
+  var estimado = cobroReal + faltaInf;
   // En un cliente EN ANÁLISIS no transmitimos, así que lo validado-sin-transmitir
   // no es "falta informe" (deuda) sino "faltante de transmisión" (potencial).
   var enAnalisisCli = ACTIVE_CLIENT && ACTIVE_CLIENT.enAnalisis;
@@ -5117,14 +5116,12 @@ function mesCursoCardMesEnCurso(r, estado){
     + '<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
     + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
     + '<div class="mescurso-val-note">+ ' + lblFaltaNota + ' <b>' + esc(moneyFmt(faltaInf)) + '</b>'
-    + (porTransmitirMonto ? ' + Por transmitir <b>' + esc(moneyFmt(porTransmitirMonto)) + '</b>' : '')
     + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
     + '<div class="mescurso-lines duo">'
     + '<div class="mescurso-line mescurso-click" onclick="toggleModulos()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCaret">▸</span></span><b>' + esc(numberFmt(r.consultations || 0)) + ' · ' + esc(numberFmt(r.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + (r.posiblesDebitos ? ' · ' + esc(moneyFmt(r.posiblesDebitos)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + faltanClick + '"><span>' + lblFalta + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + (r.missingInformeAmount ? ' · ' + esc(moneyFmt(r.missingInformeAmount)) : '') + '</b>' + ((r.missingInformeDebito || 0) ? '<small class="mescurso-debnote">' + esc(numberFmt(r.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(r.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + ((r.porTransmitir || 0) ? '<div class="mescurso-line wide"><span>Por transmitir (consultas · sin informe)</span><b>' + esc(numberFmt(r.porTransmitir)) + (r.porTransmitirAmount ? ' · ' + esc(moneyFmt(r.porTransmitirAmount)) : '') + '</b></div>' : '')
     + '</div>'
     + ausentesHtml
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
@@ -5244,7 +5241,6 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line warn' + djClick + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + djCaret + '</span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert' + fjClick + '"><span>Faltan informes' + fjCaret + '</span>'
     + '<b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b>' + ((current.missingInformeDebito || 0) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + ((current.porTransmitir || 0) ? '<div class="mescurso-line wide"><span>Por transmitir (consultas · sin informe)</span><b>' + esc(numberFmt(current.porTransmitir)) + (current.porTransmitirAmount ? ' · ' + esc(moneyFmt(current.porTransmitirAmount)) : '') + '</b></div>' : '')
     + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
     + '<b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line wide mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + ' · ' + esc(moneyFmt(fueraCorteMonto)) + '</b></div>' : '')
@@ -5288,7 +5284,6 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span></span><b>' + esc(numberFmt(debCount)) + (debMonto ? ' · ' + esc(moneyFmt(debMonto)) : '') + '</b></div>'
     + '<div class="mescurso-line alert mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()"><span>Faltan informes <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span></span><b>' + esc(numberFmt(faltan)) + (faltanMonto ? ' · ' + esc(moneyFmt(faltanMonto)) : '') + '</b>' + ((current.missingInformeDebito || 0) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + ((current.porTransmitir || 0) ? '<div class="mescurso-line wide"><span>Por transmitir (consultas · sin informe)</span><b>' + esc(numberFmt(current.porTransmitir)) + (current.porTransmitirAmount ? ' · ' + esc(moneyFmt(current.porTransmitirAmount)) : '') + '</b></div>' : '')
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + (ausMonto ? ' · ' + esc(moneyFmt(ausMonto)) : '') + '</b></div>'
     + '</div>'
     + (current.transmittedToday > 0 ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(current.transmittedToday)) + '</b></div>' : '')
