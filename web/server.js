@@ -4733,6 +4733,23 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
   for (const item of byPeriod.values()) {
     const periodRows = [...item._rowsByKey.values()];
     for (const row of periodRows) addRowToDashboardPeriod(item, row);
+    // "Irían a débito": las falta-informe que se debitarían si se transmiten. Se
+    // proyectan las reglas de exclusión sobre una COPIA (no toca los totales del
+    // reporte guardado: facturación/net/posibles débitos quedan igual), igual que
+    // el mes en curso proyecta en vivo. Así una falta-informe que cruza con una ya
+    // transmitida (ver débito de par mixto) queda contada acá también.
+    {
+      const proj = periodRows.map((r) => ({ ...r }));
+      applyAutomaticExclusionDebits(proj);
+      let midCount = 0, midAmount = 0;
+      for (const r of proj) {
+        if (!reportRowMissingInforme(r)) continue;
+        const d = reportRowDebit(r);
+        if (d > 0) { midCount += 1; midAmount += d; }
+      }
+      item.missingInformeDebito = midCount;
+      item.missingInformeDebitoAmount = midAmount; // finalizeDashboardPeriod lo pasa por money()
+    }
     item.posiblesDebitosRows = buildDebitoDetalle(periodRows);
     // Detalle de ausentes sin validar (con turno pero no validadas, fuera de corte no
     // cuenta): para desplegarlo abajo de la card igual que el del mes en curso.
