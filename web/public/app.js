@@ -2753,12 +2753,13 @@ function clientSeccionesPermitidas(){
   if (!esClinica) base.push('reportes');
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
-  // Plan Salud: el admin ve la solapa en CUALQUIER centro (para conectar la
-  // planilla); el operador entra por rol (mismo estándar: todo el rol tiene
-  // lo mismo) y los admin/socios en PLAN_SALUD_USUARIOS mientras el módulo
-  // esté en desarrollo, solo en los centros que ya la tienen conectada.
-  if (ME && ME.role === 'admin') base.push('plansalud');
-  else if (clienteTienePlanSalud() && puedeVerPlanSalud()) base.push('plansalud');
+  // Plan Salud: SOLO en centros que ya la tienen conectada (hoy: CIMA -
+  // clienteTienePlanSalud) y solo para quien puede verla (el operador entra
+  // por rol; el admin/socio, solo si está en PLAN_SALUD_USUARIOS). Antes el
+  // admin la veía en CUALQUIER centro "para poder conectar la planilla", pero
+  // eso terminaba mostrando la pestaña en todos los clientes sin planilla -
+  // nadie sin acceso a un centro con Plan Salud debe verla ahí.
+  if (clienteTienePlanSalud() && puedeVerPlanSalud()) base.push('plansalud');
   return base;
 }
 // Quién entra a Plan Salud además del admin: el operador POR ROL (es su
