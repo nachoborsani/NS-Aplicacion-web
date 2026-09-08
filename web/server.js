@@ -3127,7 +3127,13 @@ function applyAutomaticExclusionDebits(rows) {
           // queda correctamente marcada como "iría a débito". Si están todas en
           // el mismo estado, se mantiene la última (comportamiento previo).
           const reason = `${regla.codigosNombre || "Par de estudios"} ${cuando}: PAMI paga uno al 40%.`;
-          const objetivo = candidatos.find((r) => !r.transmitted) || candidatos[candidatos.length - 1];
+          // Solo si HAY una transmitida en el par redirigimos el débito a la NO
+          // transmitida (la que PAMI debita al transmitirla después). Si están
+          // todas en el mismo estado, se mantiene la última (comportamiento previo,
+          // para no mover totales de pares que ya venían proyectados).
+          const objetivo = candidatos.some((r) => r.transmitted)
+            ? (candidatos.find((r) => !r.transmitted) || candidatos[candidatos.length - 1])
+            : candidatos[candidatos.length - 1];
           marcar(objetivo, regla.monto || "pay40", regla, reason, cods.join("/"));
         }
       }
