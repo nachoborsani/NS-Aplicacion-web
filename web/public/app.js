@@ -4041,6 +4041,7 @@ var MESCURSO_AUSENTES = [];          // detalle de ausentes (con turno pero sin 
 var MESCURSO_AUSENTES_JULIO = [];    // ausentes del reporte "sin cerrar"
 var MESCURSO_AUSENTES_CERRADO = [];  // ausentes del mes cerrado
 var MESCURSO_FUERACORTE_JULIO = [];  // prácticas a facturar fuera de corte (reporte "sin cerrar")
+var MESCURSO_MEDCAB_HISTORIAL = [];  // historial por mes del dashboard de médico de cabecera (para exportar)
 var MESCURSO_PERIODO_ACTUAL = '';
 var MESCURSO_PERIODO_JULIO = '';
 var MESCURSO_PERIODO_CERRADO = '';
@@ -4774,6 +4775,13 @@ function mesCursoDescargarDatos(panelId){
     return { titulo: modTit + ' - ' + cli, columnas: ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'],
       filas: (modArr || []).map(function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.monto) || 0]; }), moneyCols: [3] };
   }
+  if (panelId === 'medcab-historial') return { titulo: 'Dashboard médico de cabecera - ' + cli,
+    columnas: ['MES', 'FALTAN VALIDAR', 'FALTAN TRANSMITIR', 'TRANSMITIDAS', 'TOTAL EN BANDEJA'],
+    filas: (MESCURSO_MEDCAB_HISTORIAL || []).map(function(d){
+      var validar = Number(d.pendienteValidar) || 0, transmitir = Number(d.pendienteTransmitir) || 0, listas = Number(d.listas) || 0;
+      var total = Number(d.count) || (validar + transmitir + listas);
+      return [d.monthLabel || d.month || 'Mes', validar, transmitir, listas, total];
+    }) };
   if (panelId === 'debitos-adelante') return { titulo: 'Posibles débitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [7] };
   if (String(panelId).indexOf('debitos-futuro:') === 0) {
     var perF = String(panelId).slice('debitos-futuro:'.length);
@@ -5335,12 +5343,15 @@ async function loadMedCabMesCurso(){
   var totalValidar = historial.reduce(function(a, d){ return a + (Number(d.pendienteValidar) || 0); }, 0);
   var totalTransmitir = historial.reduce(function(a, d){ return a + (Number(d.pendienteTransmitir) || 0); }, 0);
   var totalListas = historial.reduce(function(a, d){ return a + (Number(d.listas) || 0); }, 0);
+  MESCURSO_MEDCAB_HISTORIAL = historial;
   box.innerHTML = '<div class="client-card medcab-dashboard-head">'
     + '<div><h3>Dashboard médico de cabecera</h3><p>Control por bandejas del CUP. No se valoriza por práctica porque el pago es fijo.</p></div>'
     + '<div class="medcab-totals">'
     + '<div><b>' + esc(numberFmt(totalValidar)) + '</b><span>faltan validar</span></div>'
     + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan transmitir</span></div>'
     + '<div><b>' + esc(numberFmt(totalListas)) + '</b><span>transmitidas</span></div>'
+    + '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'medcab-historial\',this)">📄 PDF</button>'
+    + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'medcab-historial\',this)">📊 Excel</button>'
     + mesCursoBotonRefresco('Actualizar bandeja')
     + '</div></div>'
     + '<div class="mescurso-cards medcab-grid">' + cards + '</div>'
