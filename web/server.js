@@ -1485,6 +1485,7 @@ async function cruzarCredConPadron(auth, C, escribir) {
   const maxCol = Math.max(cc.dni || 0, cc.benef || 0, cc.credencial || 0, cc.nombre || 0);
   const rows = await gcreds.readValues(auth, C.spreadsheetId, C.tab, `A${C.startRow}:${gcreds.indexToCol(maxCol)}`);
   const colCred = gcreds.indexToCol(cc.credencial);
+  const padron = loadCredPadron().registros || {}; // una sola lectura del archivo
   const encontrados = []; let sinRastro = 0, escritas = 0;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], sheetRow = C.startRow + i;
@@ -1493,7 +1494,7 @@ async function cruzarCredConPadron(auth, C, escribir) {
     if (!nombre && !dni && !benef) continue;
     if (esDesc(cred)) continue;
     if (!dni && !benef) continue;
-    const rec = credPadronBuscar(dni, benef);
+    const rec = (dni && padron["d" + dni]) || (benef && padron["b" + benef]) || null;
     if (!rec || !rec.link) { if (cred) sinRastro++; continue; }
     const item = { fila: sheetRow, nombre, dni, benef, link: rec.link, fecha: rec.fecha || "" };
     if (escribir) {
