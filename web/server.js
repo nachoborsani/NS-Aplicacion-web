@@ -8084,9 +8084,18 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     const st = loadBandejaRefresco();
     const pendiente = !!st.pedidoAt && st.pedidoAt !== st.ackAt;
+    // Un `corriendo` pegado (una corrida que murió sin ackear el "terminó")
+    // bloqueaba el poller para SIEMPRE — no volvía a tomar ningún pedido. Se
+    // considera VENCIDO si pasaron más de 30 min desde que arrancó (o si no
+    // tiene marca de arranque, formato viejo): así el poller vuelve a arrancar
+    // solo, sin que nadie tenga que destrabarlo a mano.
+    const CORRIENDO_VENCE_MIN = 30;
+    const corriendoStale = !!st.corriendo && (!st.corriendoAt
+      || (Date.now() - Date.parse(st.corriendoAt)) > CORRIENDO_VENCE_MIN * 60000);
     return json(res, 200, {
       pedidoAt: st.pedidoAt || null, ackAt: st.ackAt || null,
-      corriendo: !!st.corriendo, pendiente, terminadoAt: st.terminadoAt || null,
+      corriendo: !!st.corriendo && !corriendoStale, pendiente, terminadoAt: st.terminadoAt || null,
+      corriendoAt: st.corriendoAt || null, corriendoStale,
       slugs: Array.isArray(st.slugs) ? st.slugs : [],
       forzarTransmision: !!st.forzarTransmision,
     });
@@ -8098,9 +8107,10 @@ const server = http.createServer(async (req, res) => {
     if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
     const b = await readBody(req);
     const st = loadBandejaRefresco();
-    if (b && b.corriendo) { st.corriendo = true; }
+    if (b && b.corriendo) { st.corriendo = true; st.corriendoAt = new Date().toISOString(); }
     else {
       st.corriendo = false;
+      st.corriendoAt = "";
       st.terminadoAt = new Date().toISOString();
       st.ackAt = (b && b.pedidoAt) ? String(b.pedidoAt) : (st.pedidoAt || st.ackAt);
     }
