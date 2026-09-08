@@ -4069,6 +4069,22 @@ function buildBandejaResumen(slug) {
   }
   // Posibles débitos: proyección de las reglas de cruce mismo-día (Panel Débitos).
   applyAutomaticExclusionDebits(synth);
+  // Cuáles de las "falta informe" (prácticas validadas sin transmitir) irían a
+  // DÉBITO si se suben y transmiten: la regla de cruce ya se proyectó sobre synth,
+  // así que se cruzan por afiliado+turno+práctica y se marca el monto en la fila.
+  let missingInformeDebito = 0, missingInformeDebitoAmount = 0;
+  {
+    const debitoPorClave = new Map();
+    for (const r of synth) {
+      if (!(r.validated && !r.transmitted)) continue;
+      const d = reportRowDebit(r);
+      if (d > 0) debitoPorClave.set(r.benefit + "|" + (r._turno || "") + "|" + (r._practica || ""), d);
+    }
+    for (const mr of missingInformeRows) {
+      const d = debitoPorClave.get(mr.benef + "|" + (mr.turno || "") + "|" + (mr.practica || "")) || 0;
+      if (d > 0) { mr.debito = money(d); missingInformeDebito++; missingInformeDebitoAmount += d; }
+    }
+  }
   // Grupos afiliado+día para reconstruir con qué OME(s) cruza cada débito.
   const grupoMap = new Map();
   for (const s of synth) {
@@ -4140,6 +4156,7 @@ function buildBandejaResumen(slug) {
     grossTransmitido: money(grossTransmitido), grossTurno: money(grossTurno),
     ausentesConsultas, ausentesPracticas,
     missingInforme, missingInformeAmount: money(missingInformeAmount),
+    missingInformeDebito, missingInformeDebitoAmount: money(missingInformeDebitoAmount),
     missingInformeRows, ausentesRows,
     porTransmitir, porTransmitirAmount: money(porTransmitirAmount), porTransmitirRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
@@ -4495,6 +4512,8 @@ function emptyDashboardPeriod(period) {
     nextPeriodCutoff: 0,
     missingInforme: 0,
     missingInformeAmount: 0,
+    missingInformeDebito: 0,
+    missingInformeDebitoAmount: 0,
     missingInformeRows: [],
     porTransmitir: 0,
     porTransmitirAmount: 0,
@@ -4547,12 +4566,18 @@ function addRowToDashboardPeriod(target, row) {
   if (reportRowMissingInforme(row)) {
     target.missingInforme += 1;
     target.missingInformeAmount += reportRowMissingInformeAmount(row);
+    // ¿Iría a débito si se sube el informe y se transmite? La regla de cruce ya
+    // está aplicada en la fila (reportRowDebit): si debita, subir el informe no
+    // recupera el valor entero.
+    const debFila = reportRowDebit(row);
+    if (debFila > 0) { target.missingInformeDebito += 1; target.missingInformeDebitoAmount += debFila; }
     if (target.missingInformeRows.length < 2000) target.missingInformeRows.push({
       benef: String(row.benefit || ""),
       nombre: String(row.patientName || ""),
       practica: [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - "),
       turno: String(row.appointmentLabel || row.appointmentAt || ""),
       valor: money(row.valueGross),
+      debito: money(debFila),
       ome: cleanIdentifier(row.order),
     });
   } else if (reportRowPorTransmitir(row)) {
@@ -4643,6 +4668,7 @@ function finalizeDashboardPeriod(target) {
   target.consultationShare = target.totalRows ? target.consultations / target.totalRows : 0;
   target.nextPeriodCutoff = money(target.nextPeriodCutoff);
   target.missingInformeAmount = money(target.missingInformeAmount);
+  target.missingInformeDebitoAmount = money(target.missingInformeDebitoAmount);
   target.porTransmitirAmount = money(target.porTransmitirAmount);
   target.modules = Object.values(target._modules || {})
     .map((module) => {
