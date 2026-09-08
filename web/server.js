@@ -6706,8 +6706,11 @@ const server = http.createServer(async (req, res) => {
       const { pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin } =
         pendientesDeCliente(slug, cliente, informes, bandejas);
       if (pendientes || sinTransmitir || cup || porVencer || vencidas) {
-        filas.push({ slug, nombre: clientDisplayName(slug) || slug, pendientes, sinTransmitir, cup,
-          porVencer, vencidas, diasRestantesMin });
+        // `tipo` viaja para que el panel sepa a dónde mandar al hacer clic: el
+        // médico de cabecera se trabaja en SU dashboard (bandejas del CUP), el
+        // consultorio en la Cabina de informes.
+        filas.push({ slug, nombre: clientDisplayName(slug) || slug, tipo: (cliente && cliente.tipo) || "consultorio",
+          pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin });
         totalPendientes += pendientes;
         totalSinTransmitir += sinTransmitir;
         totalCup += cup;

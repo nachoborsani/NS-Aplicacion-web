@@ -546,6 +546,12 @@
   .ini-pendop-list{list-style:none;margin:0;padding:6px 10px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1;min-height:0}
   .ini-pendop-row{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:10px}
   .ini-pendop-row:hover{background:var(--hover)}
+  /* Fila clickeable: lleva a donde ESE pendiente se trabaja (dashboard del
+     médico de cabecera o Cabina de informes). Los chips de vencimiento son
+     botones adentro con su propio onclick (cortan la propagación). */
+  .ini-pendop-row.is-link{cursor:pointer}
+  .ini-pendop-row.is-link:hover .ini-pendop-nombre{color:var(--turq)}
+  .ini-pendop-row.is-link:focus-visible{outline:2px solid var(--turq);outline-offset:-2px}
   .ini-pendop-nombre{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ini-pendop-badges{display:flex;gap:6px;flex:0 0 auto}
   .ini-pendop-badge{min-width:22px;height:22px;padding:0 6px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}

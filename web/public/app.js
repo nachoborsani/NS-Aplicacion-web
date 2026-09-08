@@ -410,7 +410,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes'].indexOf(section) >= 0) setClientSection(section);
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -1505,12 +1505,20 @@ async function iniRenderPendientesEn(listId, metaId){
     if (c.porVencer){
       var dr = c.diasRestantesMin;
       var t = c.porVencer + ' OME(s) por vencer' + (dr != null ? ' — la más urgente vence en ' + dr + (dr === 1 ? ' día' : ' días') : '') + '. Tocá para ver cuáles.';
-      venc += '<button type="button" class="ini-pendop-badge vence" title="' + esc(t) + '" onclick="abrirOmesPorVencer(\'' + esc(c.slug) + '\')">⏳ ' + c.porVencer + (dr != null ? ' · ' + dr + 'd' : '') + '</button>';
+      venc += '<button type="button" class="ini-pendop-badge vence" title="' + esc(t) + '" onclick="event.stopPropagation();abrirOmesPorVencer(\'' + esc(c.slug) + '\')">⏳ ' + c.porVencer + (dr != null ? ' · ' + dr + 'd' : '') + '</button>';
     }
     if (c.vencidas){
-      venc += '<button type="button" class="ini-pendop-badge vencida" title="' + esc(c.vencidas + ' OME(s) que ya pasaron los 60 días sin transmitir: no se pueden transmitir más. Tocá para verlas.') + '" onclick="abrirOmesPorVencer(\'' + esc(c.slug) + '\')">✖ ' + c.vencidas + '</button>';
+      venc += '<button type="button" class="ini-pendop-badge vencida" title="' + esc(c.vencidas + ' OME(s) que ya pasaron los 60 días sin transmitir: no se pueden transmitir más. Tocá para verlas.') + '" onclick="event.stopPropagation();abrirOmesPorVencer(\'' + esc(c.slug) + '\')">✖ ' + c.vencidas + '</button>';
     }
-    return '<li class="ini-pendop-row">'
+    // Toda la fila (nombre y números) lleva a donde se trabaja ese pendiente.
+    // Los chips de vencimiento son la excepción: abren su propio detalle y
+    // cortan la propagación para no disparar también la navegación.
+    var esMC = c.tipo === 'med_cabecera';
+    var destino = esMC ? 'Abre el dashboard de ' + c.nombre + ' para trabajar las bandejas del CUP.'
+                       : 'Abre Informes recibidos de ' + c.nombre + '.';
+    return '<li class="ini-pendop-row is-link" role="button" tabindex="0" title="' + esc(destino) + '"'
+      + ' onclick="iniPendOpIr(\'' + esc(c.slug) + '\',' + (esMC ? 'true' : 'false') + ')"'
+      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();iniPendOpIr(\'' + esc(c.slug) + '\',' + (esMC ? 'true' : 'false') + ');}">'
       + '<span class="ini-pendop-nombre">'+esc(c.nombre)+'</span>'
       + '<span class="ini-pendop-badges">'
       + venc
@@ -1519,6 +1527,26 @@ async function iniRenderPendientesEn(listId, metaId){
       + (c.cup ? '<span class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir">'+c.cup+'</span>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
+}
+// Desde el panel de pendientes, ir a donde ESE pendiente se trabaja: el médico
+// de cabecera tiene su propio dashboard (bandejas del CUP, faltan validar /
+// faltan transmitir); un consultorio se trabaja en la Cabina de informes, que
+// además queda filtrada por ese cliente.
+function iniPendOpIr(slug, esMC){
+  if (esMC){ go('clientes'); selectClientWhenReady(slug, 'mescurso'); return; }
+  go('cabina');
+  cabinaElegirCliente(slug);
+}
+// La Cabina arma su lista de clientes recién al entrar (async): esperamos a que
+// exista la opción antes de seleccionarla, igual que selectClientWhenReady.
+function cabinaElegirCliente(slug, tries){
+  tries = tries || 0;
+  var sel = document.getElementById('cabCliente');
+  if (sel && [].slice.call(sel.options).some(function(o){ return o.value === slug; })){
+    if (sel.value !== slug){ sel.value = slug; loadCabinaView(); }
+    return;
+  }
+  if (tries < 40) setTimeout(function(){ cabinaElegirCliente(slug, tries + 1); }, 100);
 }
 // Detalle de las OMEs por vencer de un cliente: el contador solo sirve si se
 // puede ver qué hay atrás para ir a buscarlas.
@@ -1610,6 +1638,15 @@ function iniAccesosCatalogo(){
     items.push({ id:'v:resumen', ic:'💰', tx:'Resumen de cuenta', run:function(){ go('resumen'); } });
     items.push({ id:'v:facturas', ic:'🧾', tx:'Facturas', run:function(){ go('facturas'); } });
     items.push({ id:'a:bandejas', ic:'🔄', tx:'Actualizar bandejas', run:function(){ abrirActualizarBandejas(); } });
+  }
+  // Plan Salud: entra derecho a la solapa del centro que lo tiene, sin pasar
+  // por la lista de clientes. Solo aparece si ese centro está entre los suyos.
+  if (puedeVerPlanSalud()) {
+    var clientesPS = (typeof CLIENTS !== 'undefined' && CLIENTS ? CLIENTS : []).filter(function(c){ return slugTienePlanSalud(c.slug); });
+    if (restringido) clientesPS = clientesPS.filter(function(c){ return ((ME && ME.clientes) || []).indexOf(c.slug) >= 0; });
+    clientesPS.forEach(function(c){
+      items.push({ id:'ps:' + c.slug, ic:'🩺', tx:'Plan Salud', run:function(){ go('clientes'); selectClientWhenReady(c.slug, 'plansalud'); } });
+    });
   }
   // Configuración general: mismo criterio que navGeneral (oculto si tiene clientes restringidos).
   if (esAdmin || (role === 'operador' && !restringido)) {
@@ -2643,14 +2680,25 @@ function clientSeccionesPermitidas(){
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
   // Plan Salud: el admin ve la solapa en CUALQUIER centro (para conectar la
-  // planilla); los demás habilitados (PLAN_SALUD_USUARIOS), solo en los centros que
-  // ya la tienen conectada.
+  // planilla); el operador entra por rol (mismo estándar: todo el rol tiene
+  // lo mismo) y los admin/socios en PLAN_SALUD_USUARIOS mientras el módulo
+  // esté en desarrollo, solo en los centros que ya la tienen conectada.
   if (ME && ME.role === 'admin') base.push('plansalud');
-  else if (clienteTienePlanSalud() && ME && PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0) base.push('plansalud');
+  else if (clienteTienePlanSalud() && puedeVerPlanSalud()) base.push('plansalud');
   return base;
 }
-// Qué centros tienen el módulo de Plan Salud = los que tienen planilla conectada
-// en el server (se cargan con cargarPlanSaludSlugs; CIMA viene sembrado).
+// Quién entra a Plan Salud además del admin: el operador POR ROL (es su
+// trabajo, y el estándar del proyecto es que todos los de un rol tengan lo
+// mismo), y los admin/socios que estén en el allowlist por persona mientras
+// el módulo esté en desarrollo.
+function puedeVerPlanSalud(){
+  if (!ME) return false;
+  if (ME.role === 'operador') return true;
+  return PLAN_SALUD_USUARIOS.indexOf(ME.username) >= 0;
+}
+// Qué centros tienen el módulo de Plan Salud = los que tienen planilla
+// conectada en el server (se cargan con cargarPlanSaludSlugs; CIMA viene
+// sembrado).
 var PLAN_SALUD_SLUGS = ['cima'];
 function slugTienePlanSalud(slug){ return PLAN_SALUD_SLUGS.indexOf(String(slug || '')) >= 0; }
 async function cargarPlanSaludSlugs(){
