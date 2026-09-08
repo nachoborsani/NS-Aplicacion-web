@@ -6324,7 +6324,25 @@ const server = http.createServer(async (req, res) => {
         const dig = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
         const linkDe = (formula) => (String(formula || "").match(/HYPERLINK\("([^"]+)"/i) || [])[1] || "";
         const esDesc = (v) => /descargada/i.test(String(v || ""));
-        let sembrados = 0, conLink = 0, sinLink = 0;
+        let sembrados = 0, sinLink = 0;
+        // Se arma todo en memoria y se graba UNA sola vez al final (evita el
+        // O(n²) de reescribir el archivo por cada registro; no conserva fechas
+        // porque el backfill siembra sin fecha).
+        const store = loadCredPadron();
+        const poner = (rec) => {
+          const dni = dig(rec.dni), benef = dig(rec.benef), link = String(rec.link || "").trim();
+          if (!link || (!dni && !benef)) return false;
+          const prev = (dni && store.registros["d" + dni]) || (benef && store.registros["b" + benef]) || {};
+          const r = {
+            dni, benef, nombre: String(rec.nombre || prev.nombre || "").trim(),
+            tramite: String(rec.tramite || prev.tramite || "").replace(/\D+/g, ""),
+            sexo: String(prev.sexo || "").trim(), link,
+            fecha: prev.fecha || "", fuente: rec.fuente || prev.fuente || "",
+          };
+          if (dni) store.registros["d" + dni] = r;
+          if (benef) store.registros["b" + benef] = r;
+          return true;
+        };
         const sembrar = async (sid, tabName, cols, startRow, fuente) => {
           const maxCol = Math.max(cols.dni || 0, cols.benef || 0, cols.credencial || 0, cols.nombre || 0, cols.tramite || 0);
           let vals = [], forms = [];
@@ -6334,13 +6352,7 @@ const server = http.createServer(async (req, res) => {
             if (!esDesc(r[cols.credencial])) return;
             const link = linkDe(forms[i] && forms[i][0]);
             if (!link) { sinLink++; return; } // "DESCARGADA" sin hipervínculo: no sirve para reusar
-            const dni = dig(r[cols.dni]), benef = dig(r[cols.benef]);
-            if (!dni && !benef) return;
-            const ok = credPadronGuardar({
-              dni, benef, nombre: cols.nombre != null ? r[cols.nombre] : "",
-              tramite: cols.tramite != null ? r[cols.tramite] : "", link, fecha: "", fuente,
-            });
-            if (ok) { sembrados++; conLink++; }
+            if (poner({ dni: r[cols.dni], benef: r[cols.benef], nombre: cols.nombre != null ? r[cols.nombre] : "", tramite: cols.tramite != null ? r[cols.tramite] : "", link, fuente })) sembrados++;
           });
         };
         for (const key of ["dubesarky-ezequiel", "scheffelaar-mc"]) {
@@ -6349,8 +6361,8 @@ const server = http.createServer(async (req, res) => {
         for (const t of (meta.tabsInfo || [])) {
           await sembrar(cfg.spreadsheetId, t.title, { dni: 2, benef: 3, credencial: 7, nombre: 1, tramite: 4 }, 2, "plan-salud:" + slug + ":" + t.title);
         }
-        const total = Object.keys(loadCredPadron().registros || {}).length;
-        return json(res, 200, { ok: true, sembrados, conLink, sinLinkIgnorados: sinLink, clavesEnPadron: total });
+        saveCredPadron(store);
+        return json(res, 200, { ok: true, sembrados, sinLinkIgnorados: sinLink, clavesEnPadron: Object.keys(store.registros || {}).length });
       }
       if (accion === "padron-estado" && req.method === "GET") {
         const s = loadCredPadron();
