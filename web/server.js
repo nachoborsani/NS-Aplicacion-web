@@ -3073,6 +3073,13 @@ function applyAutomaticExclusionDebits(rows) {
     row.autoDebitPairCode = "";
     row.autoDebitRuleCodes = "";
     row.debitWarning = "";
+    // "Iría a débito": la práctica se debitaría si se transmite (su par excluyente
+    // ya está transmitido). NO es un débito real todavía (no reduce el neto) — se
+    // usa para el aviso dentro de "Faltan informes".
+    row.iriaADebito = false;
+    row.iriaADebitoMonto = 0;
+    row.iriaADebitoReason = "";
+    row.iriaADebitoRuleCodes = "";
   });
   const reglas = loadDebitoReglas().filter((r) => r && r.activa);
   if (!reglas.length) return rows || [];
@@ -3102,39 +3109,58 @@ function applyAutomaticExclusionDebits(rows) {
     row.debitSource = "regla";
     return true;
   };
+  // Monto que se debitaría (sin marcarlo como débito real): pay40 = 60% del bruto,
+  // total = 100%. Igual que reportRowDebit pero sin tocar manualDebit/net.
+  const montoDebito = (row, monto) => {
+    const gross = reportRowGross(row);
+    return monto === "pay40" ? money(gross - gross * 0.4) : money(gross);
+  };
+  // "Iría a débito": la práctica se debitaría si se transmite (el par excluyente
+  // ya está transmitido). NO reduce el neto — es solo el aviso de "Faltan informes".
+  const marcarIria = (row, monto, regla, reason, pairCodes) => {
+    if (yaCargado(row) || row.manualDebit) return false;
+    row.iriaADebito = true;
+    row.iriaADebitoMonto = montoDebito(row, monto);
+    row.iriaADebitoReason = reason;
+    row.iriaADebitoRuleCodes = pairCodes || "";
+    return true;
+  };
   const aplicar = (groups, reglasSet) => {
     for (const groupRows of groups.values()) {
       const codes = new Set(groupRows.flatMap((r) => expandedPamiExclusionCodes(r)));
       for (const regla of reglasSet) {
         const cuando = regla.alcance === "periodo" ? "en el mes" : "el mismo día";
         if (regla.tipo === "inclusion") {
-          const hayGrande = (regla.conCodigos || []).some((c) => codes.has(cleanIdentifier(c)));
-          if (!hayGrande) continue;
+          // El débito solo existe si la GRANDE ya está transmitida (recién ahí PAMI
+          // cruza). Con la grande transmitida: la debitada transmitida = débito real;
+          // la debitada sin transmitir = "iría a débito" (si la transmiten).
+          const grandeCods = (regla.conCodigos || []).map((c) => cleanIdentifier(c));
+          const grandeRows = groupRows.filter((r) => expandedPamiExclusionCodes(r).some((c) => grandeCods.includes(c)));
+          if (!grandeRows.some((r) => r.transmitted)) continue;
           const dc = cleanIdentifier(regla.debita);
-          const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || (regla.conCodigos || []).join("/")}.`;
-          groupRows.filter((r) => expandedPamiExclusionCodes(r).includes(dc))
-            .forEach((r) => marcar(r, "total", regla, reason, (regla.conCodigos || []).join("/")));
+          const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || grandeCods.join("/")}.`;
+          for (const r of groupRows.filter((x) => expandedPamiExclusionCodes(x).includes(dc))) {
+            if (r.transmitted) marcar(r, "total", regla, reason, grandeCods.join("/"));
+            else marcarIria(r, "total", regla, reason, grandeCods.join("/"));
+          }
         } else if (regla.tipo === "par") {
           const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
           const presentes = new Set(cods.filter((c) => codes.has(c)));
           if (presentes.size < 2) continue;
           const candidatos = groupRows.filter((r) => expandedPamiExclusionCodes(r).some((c) => cods.includes(c)) && !yaCargado(r));
           if (candidatos.length < 2) continue;
-          // PAMI debita UNO solo del par: proyectamos el débito en una práctica.
-          // Si una del par YA está transmitida (cobrada), el débito cae sobre la
-          // que NO está transmitida (la que se transmite después = la que PAMI
-          // debita). Así una "falta informe" excluyente con una ya transmitida
-          // queda correctamente marcada como "iría a débito". Si están todas en
-          // el mismo estado, se mantiene la última (comportamiento previo).
           const reason = `${regla.codigosNombre || "Par de estudios"} ${cuando}: PAMI paga uno al 40%.`;
-          // Solo si HAY una transmitida en el par redirigimos el débito a la NO
-          // transmitida (la que PAMI debita al transmitirla después). Si están
-          // todas en el mismo estado, se mantiene la última (comportamiento previo,
-          // para no mover totales de pares que ya venían proyectados).
-          const objetivo = candidatos.some((r) => r.transmitted)
-            ? (candidatos.find((r) => !r.transmitted) || candidatos[candidatos.length - 1])
-            : candidatos[candidatos.length - 1];
-          marcar(objetivo, regla.monto || "pay40", regla, reason, cods.join("/"));
+          const transmitidas = candidatos.filter((r) => r.transmitted);
+          if (transmitidas.length >= 2) {
+            // Las DOS transmitidas → débito REAL (PAMI ya cruza y debita una).
+            marcar(transmitidas[transmitidas.length - 1], regla.monto || "pay40", regla, reason, cods.join("/"));
+          } else if (transmitidas.length === 1) {
+            // Una transmitida + la otra sin transmitir → la que falta IRÍA a débito
+            // si se transmite (todavía NO es débito real, no baja el neto).
+            const objetivo = candidatos.find((r) => !r.transmitted);
+            if (objetivo) marcarIria(objetivo, regla.monto || "pay40", regla, reason, cods.join("/"));
+          }
+          // Las dos sin transmitir → nada (el débito solo aparece si se transmiten ambas).
         }
       }
     }
@@ -4088,9 +4114,11 @@ function buildBandejaResumen(slug) {
   {
     const debitoPorClave = new Map();
     for (const r of synth) {
-      if (!(r.validated && !r.transmitted)) continue;
-      const d = reportRowDebit(r);
-      if (d > 0) debitoPorClave.set(r.benefit + "|" + (r._turno || "") + "|" + (r._practica || ""), d);
+      // iriaADebito lo setea applyAutomaticExclusionDebits en la NO transmitida
+      // cuyo par excluyente YA está transmitido (ver marcarIria).
+      if (r.iriaADebito && r.iriaADebitoMonto > 0) {
+        debitoPorClave.set(r.benefit + "|" + (r._turno || "") + "|" + (r._practica || ""), r.iriaADebitoMonto);
+      }
     }
     for (const mr of missingInformeRows) {
       const d = debitoPorClave.get(mr.benef + "|" + (mr.turno || "") + "|" + (mr.practica || "")) || 0;
@@ -4743,9 +4771,11 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
       applyAutomaticExclusionDebits(proj);
       let midCount = 0, midAmount = 0;
       for (const r of proj) {
-        if (!reportRowMissingInforme(r)) continue;
-        const d = reportRowDebit(r);
-        if (d > 0) { midCount += 1; midAmount += d; }
+        // iriaADebito = falta-informe (validada sin transmitir) cuyo par excluyente
+        // ya está transmitido → se debitaría al transmitirla.
+        if (reportRowMissingInforme(r) && r.iriaADebito && r.iriaADebitoMonto > 0) {
+          midCount += 1; midAmount += r.iriaADebitoMonto;
+        }
       }
       item.missingInformeDebito = midCount;
       item.missingInformeDebitoAmount = midAmount; // finalizeDashboardPeriod lo pasa por money()
