@@ -3702,10 +3702,16 @@ function reportRowNextPeriodCutoff(row) {
   return row && row.outsideCutoff ? money(row.valueGross) : 0;
 }
 function reportRowMissingInforme(row) {
-  return !!(row && row.validated && !row.transmitted && !row.absent);
+  // Falta informe = validada sin transmitir Y es PRÁCTICA. Las consultas no
+  // necesitan informe (solo transmitirse) → NO son "falta informe".
+  return !!(row && row.validated && !row.transmitted && !row.absent && !isConsultationRow(row));
 }
 function reportRowMissingInformeAmount(row) {
   return reportRowMissingInforme(row) ? money(row.valueGross) : 0;
+}
+// "Por transmitir": consulta validada sin transmitir (no necesita informe).
+function reportRowPorTransmitir(row) {
+  return !!(row && row.validated && !row.transmitted && !row.absent && isConsultationRow(row));
 }
 function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
@@ -3945,6 +3951,12 @@ function buildBandejaResumen(slug) {
   let grossTransmitido = 0, grossTurno = 0;
   let ausentesConsultas = 0, ausentesPracticas = 0;
   let missingInforme = 0, missingInformeAmount = 0;
+  // "Por transmitir": CONSULTAS validadas sin transmitir. NO necesitan informe
+  // (a diferencia de las prácticas), solo falta transmitirlas — por eso van
+  // aparte y no cuentan como "falta informe". Igual son plata por cobrar, así
+  // que suman al estimado.
+  let porTransmitir = 0, porTransmitirAmount = 0;
+  const porTransmitirRows = [];
   // Rango de fechas que abarca la bandeja (del 01 al último turno con datos).
   let coversMin = "", coversMax = "";
   // Detalle copiable de las que faltan informe (validadas sin transmitir).
@@ -4005,16 +4017,24 @@ function buildBandejaResumen(slug) {
     // afiliado inactivo NO es falta de informe (el informe está): es débito, va
     // aparte en posibles débitos.
     if (esValidada && !esTransmitida && !esInactivo) {
-      missingInforme++;
-      missingInformeAmount += valueGross;
-      if (missingInformeRows.length < 2000) missingInformeRows.push({
+      const detalle = {
         benef: String(row[kBenef] || "").trim(),
         nombre: String(row[kNombre] || "").trim(),
         practica: pracRaw,
         turno: String(row[kTurno] || "").trim(),
         valor: money(valueGross),
         ome: kOme ? cleanIdentifier(row[kOme]) : "",
-      });
+      };
+      if (esConsulta) {
+        // Consulta validada sin transmitir: NO falta informe, solo transmitir.
+        porTransmitir++;
+        porTransmitirAmount += valueGross;
+        if (porTransmitirRows.length < 2000) porTransmitirRows.push(detalle);
+      } else {
+        missingInforme++;
+        missingInformeAmount += valueGross;
+        if (missingInformeRows.length < 2000) missingInformeRows.push(detalle);
+      }
     }
     // TURNO: "01/08/2026 - 08:15 - P" -> appointmentAt "2026-08-01" (para el mismo-día).
     const md = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(row[kTurno] || ""));
@@ -4121,6 +4141,7 @@ function buildBandejaResumen(slug) {
     ausentesConsultas, ausentesPracticas,
     missingInforme, missingInformeAmount: money(missingInformeAmount),
     missingInformeRows, ausentesRows,
+    porTransmitir, porTransmitirAmount: money(porTransmitirAmount), porTransmitirRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
     modules: [...moduloAgr.values()].map((m) => { const { _sv, ...rest } = m; return { ...rest, gross: money(m.gross), sinValorCodigos: Object.values(_sv || {}) }; }).sort((a, b) => b.gross - a.gross),
@@ -4475,6 +4496,9 @@ function emptyDashboardPeriod(period) {
     missingInforme: 0,
     missingInformeAmount: 0,
     missingInformeRows: [],
+    porTransmitir: 0,
+    porTransmitirAmount: 0,
+    porTransmitirRows: [],
     posiblesDebitosRows: [],
     unmatched: 0,
     gross: 0,
@@ -4524,6 +4548,17 @@ function addRowToDashboardPeriod(target, row) {
     target.missingInforme += 1;
     target.missingInformeAmount += reportRowMissingInformeAmount(row);
     if (target.missingInformeRows.length < 2000) target.missingInformeRows.push({
+      benef: String(row.benefit || ""),
+      nombre: String(row.patientName || ""),
+      practica: [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - "),
+      turno: String(row.appointmentLabel || row.appointmentAt || ""),
+      valor: money(row.valueGross),
+      ome: cleanIdentifier(row.order),
+    });
+  } else if (reportRowPorTransmitir(row)) {
+    target.porTransmitir += 1;
+    target.porTransmitirAmount += money(row.valueGross);
+    if (target.porTransmitirRows.length < 2000) target.porTransmitirRows.push({
       benef: String(row.benefit || ""),
       nombre: String(row.patientName || ""),
       practica: [row.practiceCode, row.practiceDescription].filter(Boolean).join(" - "),
@@ -4608,6 +4643,7 @@ function finalizeDashboardPeriod(target) {
   target.consultationShare = target.totalRows ? target.consultations / target.totalRows : 0;
   target.nextPeriodCutoff = money(target.nextPeriodCutoff);
   target.missingInformeAmount = money(target.missingInformeAmount);
+  target.porTransmitirAmount = money(target.porTransmitirAmount);
   target.modules = Object.values(target._modules || {})
     .map((module) => {
       const { _sv, ...rest } = module;
