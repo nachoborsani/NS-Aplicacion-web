@@ -7423,6 +7423,7 @@ const server = http.createServer(async (req, res) => {
         tieneClave: !!m.claveEnc,
         preferido: !!m.preferido,
         deshabilitado: !!m.deshabilitado,
+        comodin: !!m.comodin,
         estado: m.estado || "",
         verificadoAt: m.verificadoAt || "",
         verificadoDetalle: m.verificadoDetalle || "",
