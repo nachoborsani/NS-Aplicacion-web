@@ -2783,9 +2783,26 @@ function validCuit(value) {
   if (digit === 10) digit = 9;
   return digit === Number(cuit[10]);
 }
+const CLIENT_SECCIONES = new Set(["consultorio", "med_cabecera", "potencial"]);
 function normalizeClient(client, fallback) {
   const base = fallback || {};
   const modules = normalizeClientModules(client.activeModules);
+  // Tipo de cliente: "consultorio" (default) o "med_cabecera" (médico de cabecera).
+  // Gobierna el DASHBOARD (qué secciones/cálculos usa) - no dónde aparece en el menú.
+  const tipo = (String(client.tipo || base.tipo || "consultorio").trim() === "med_cabecera") ? "med_cabecera" : "consultorio";
+  // Cliente EN ANÁLISIS (potencial): se le baja la bandeja para analizar pero NUNCA
+  // se transmite (no somos su facturador todavía) - es un flag de FACTURACIÓN, no
+  // de menú (ver "seccion" abajo: un cliente puede estar en análisis y aun así
+  // aparecer listado en Consultorios si el admin lo movió ahí a propósito).
+  const enAnalisis = !!(client.enAnalisis !== undefined ? client.enAnalisis : base.enAnalisis);
+  // En qué grupo del menú aparece (Consultorios / Med. Cabecera / Potenciales
+  // clientes). Es independiente de "tipo" y "enAnalisis" - el admin la cambia
+  // libremente desde "Editar cliente" (o arrastrando en el menú), sin que eso
+  // toque si el cliente transmite o qué dashboard usa. Si nunca se seteó a mano
+  // (clientes viejos), se deriva del comportamiento de siempre para no mover a
+  // nadie de lugar el día que se desplegó esto.
+  const seccionGuardada = String(client.seccion !== undefined ? client.seccion : base.seccion || "").trim();
+  const seccion = CLIENT_SECCIONES.has(seccionGuardada) ? seccionGuardada : (enAnalisis ? "potencial" : tipo);
   return {
     slug: String(client.slug || base.slug || "").trim(),
     name: String(client.name || base.name || "").trim(),
@@ -2794,11 +2811,9 @@ function normalizeClient(client, fallback) {
     ugl: String(client.ugl || base.ugl || "").trim(),
     sap: String(client.sap || base.sap || "").trim(),
     status: String(client.status || base.status || "Activo").trim() || "Activo",
-    // Tipo de cliente: "consultorio" (default) o "med_cabecera" (médico de cabecera).
-    tipo: (String(client.tipo || base.tipo || "consultorio").trim() === "med_cabecera") ? "med_cabecera" : "consultorio",
-    // Cliente EN ANÁLISIS (potencial): va a la sección "Potenciales clientes", se le
-    // baja la bandeja para analizar pero NUNCA se transmite (no somos su facturador).
-    enAnalisis: !!(client.enAnalisis !== undefined ? client.enAnalisis : base.enAnalisis),
+    tipo,
+    enAnalisis,
+    seccion,
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
     // Membrete para los Informes (PDF): logo + dirección/teléfono al pie. Se
     // van cargando de a poco por cliente; sin ellos, el informe sale igual,
@@ -7095,6 +7110,26 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { client, clients });
   }
 
+  // Mover un cliente de sección de menú (Consultorios/Med. Cabecera/Potenciales)
+  // sin tocar el resto de sus datos - liviano a propósito para el drag&drop del
+  // menú (no exige nombre/CUIT como el PATCH general de "Editar cliente").
+  const clientSeccionMatch = p.match(/^\/api\/clientes\/([^/]+)\/seccion$/);
+  if (clientSeccionMatch && req.method === "PATCH") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador puede modificar clientes." });
+    const slug = decodeURIComponent(clientSeccionMatch[1]);
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((client) => client.slug === slug);
+    if (idx < 0) return json(res, 404, { error: "Cliente no encontrado." });
+    const body = await readBody(req);
+    const seccion = String(body.seccion || "").trim();
+    if (!CLIENT_SECCIONES.has(seccion)) return json(res, 400, { error: "Sección inválida." });
+    clients[idx] = normalizeClient({ ...clients[idx], seccion });
+    saveClientsStore(clients);
+    return json(res, 200, { client: clients[idx], clients });
+  }
+
   const clientModulesMatch = p.match(/^\/api\/clientes\/([^/]+)\/modules$/);
   if (clientModulesMatch && req.method === "PATCH") {
     const me = getSessionUser(req);
@@ -7139,6 +7174,9 @@ const server = http.createServer(async (req, res) => {
       // "consultorio", que fue el bug que devolvía a la dra a Consultorios).
       tipo: body.tipo !== undefined ? body.tipo : clients[idx].tipo,
       enAnalisis: body.enAnalisis !== undefined ? body.enAnalisis : clients[idx].enAnalisis,
+      // Sección de menú (Consultorios/Med. Cabecera/Potenciales): independiente
+      // de tipo/enAnalisis de arriba, ver normalizeClient.
+      seccion: body.seccion !== undefined ? body.seccion : clients[idx].seccion,
       activeModules: clients[idx].activeModules,
       // Dirección/teléfono para el membrete de Informes: se editan acá.
       direccion: body.direccion !== undefined ? String(body.direccion || "").replace(/\s+/g, " ").trim() : clients[idx].direccion,

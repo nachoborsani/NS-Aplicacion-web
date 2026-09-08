@@ -2500,6 +2500,57 @@ async function loadClients(options){
   if (options.detail === false) return;
   renderActiveClient();
 }
+// En qué grupo del menú va un cliente (Consultorios/Med. Cabecera/Potenciales) -
+// mismo campo que manda el server (client.seccion, ver normalizeClient). El
+// fallback es solo por las dudas; el server ya lo normaliza siempre.
+function clienteSeccion(c){
+  if (c && c.seccion) return c.seccion;
+  if (c && c.enAnalisis) return 'potencial';
+  return (c && c.tipo === 'med_cabecera') ? 'med_cabecera' : 'consultorio';
+}
+// Mover un cliente a otra sección de menú (drag&drop o cualquier otro caller).
+// Liviano: solo pega la sección nueva, no toca el resto de los datos.
+async function moverClienteSeccion(slug, seccion){
+  var r = await req('PATCH', '/api/clientes/' + encodeURIComponent(slug) + '/seccion', { seccion: seccion });
+  if (!r.ok) { alert((r.data && r.data.error) || 'No se pudo mover el cliente.'); return; }
+  CLIENTS = r.data.clients || CLIENTS;
+  if (ACTIVE_CLIENT && ACTIVE_CLIENT.slug === slug) ACTIVE_CLIENT = CLIENTS.filter(function(c){ return c.slug === slug; })[0] || ACTIVE_CLIENT;
+  renderClientList();
+}
+// Drag&drop entre las 3 listas del menú (Consultorios/Med. Cabecera/Potenciales):
+// arrastrar un cliente a otro grupo lo mueve de sección, sin abrir ningún modal.
+// Solo para admin (únicos que pueden editar clientes).
+function iniDragDropSecciones(){
+  var grupos = [
+    { id: 'clientNavListConsultorios', seccion: 'consultorio' },
+    { id: 'clientNavListMedCab', seccion: 'med_cabecera' },
+    { id: 'clientNavListPotenciales', seccion: 'potencial' }
+  ];
+  grupos.forEach(function(g){
+    var el = document.getElementById(g.id);
+    if (!el || el._dragHooked) return;
+    el._dragHooked = true;
+    el.addEventListener('dragover', function(e){ e.preventDefault(); el.classList.add('drop-target'); });
+    el.addEventListener('dragleave', function(){ el.classList.remove('drop-target'); });
+    el.addEventListener('drop', function(e){
+      e.preventDefault();
+      el.classList.remove('drop-target');
+      var slug = e.dataTransfer.getData('text/plain');
+      if (!slug) return;
+      var actual = CLIENTS.filter(function(c){ return c.slug === slug; })[0];
+      if (actual && clienteSeccion(actual) === g.seccion) return; // ya está ahí
+      moverClienteSeccion(slug, g.seccion);
+    });
+  });
+  document.addEventListener('dragstart', function(e){
+    var a = e.target.closest && e.target.closest('.client-nav-item[draggable="true"]');
+    if (!a) return;
+    var slug = a.getAttribute('data-client-slug');
+    if (!slug) return;
+    e.dataTransfer.setData('text/plain', slug);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+}
 function renderClientList(){
   var cons = document.getElementById('clientNavListConsultorios');
   var med = document.getElementById('clientNavListMedCab');
@@ -2555,9 +2606,15 @@ function renderClientList(){
     });
     return;
   }
+  // Sección de menú de un cliente (ver normalizeClient/seccion en server.js):
+  // fallback defensivo por si algo viejo llegara sin normalizar, pero el
+  // server siempre la manda ya calculada.
+  var esAdminReal = !!(ME && ME.role === 'admin');
   var itemHtml = function(client){
     var active = ACTIVE_CLIENT && ACTIVE_CLIENT.slug === client.slug ? ' active' : '';
-    return '<a class="client-nav-item' + active + '" href="#clientes/' + esc(client.slug) + '" data-client-slug="' + esc(client.slug) + '">' + esc(client.name) + '</a>';
+    // Arrastrable solo para el admin (es quien puede moverlo de sección).
+    var drag = esAdminReal ? ' draggable="true"' : '';
+    return '<a class="client-nav-item' + active + '" href="#clientes/' + esc(client.slug) + '" data-client-slug="' + esc(client.slug) + '"' + drag + '>' + esc(client.name) + '</a>';
   };
   var pot = document.getElementById('clientNavListPotenciales');
   var potGroup = document.getElementById('navGroupPotenciales');
@@ -2574,16 +2631,21 @@ function renderClientList(){
     var permitidos = (ME && ME.clientes) || [];
     VISIBLES = CLIENTS.filter(function(c){ return permitidos.indexOf(c.slug) >= 0; });
   }
-  var consultorios = VISIBLES.filter(function(c){ return c.tipo !== 'med_cabecera' && !c.enAnalisis; });
+  // Sección de menú: campo propio del cliente (seccion), independiente de tipo/
+  // enAnalisis - el admin la cambia desde "Editar cliente" o arrastrando en el
+  // menú (ver clienteSeccion() y moverClienteSeccion()). Default 'consultorio'
+  // por si algo viejo llega sin normalizar (no debería pasar: el server siempre
+  // la manda).
+  var consultorios = VISIBLES.filter(function(c){ return clienteSeccion(c) === 'consultorio'; });
   // Al operador, de los consultorios le aparecen SOLO aquellos en los que tiene
   // algo para hacer: hoy, los que tienen Plan Salud. Sin esto no podría entrar
   // a Plan Salud, porque el grupo Consultorios está oculto para su rol.
   if (ME && ME.role === 'operador') consultorios = consultorios.filter(function(c){ return slugTienePlanSalud(c.slug); });
-  var medCab = VISIBLES.filter(function(c){ return c.tipo === 'med_cabecera' && !c.enAnalisis; });
+  var medCab = VISIBLES.filter(function(c){ return clienteSeccion(c) === 'med_cabecera'; });
   // Potenciales clientes: el usuario de DEMOSTRACIÓN no los ve nunca (no le
   // mostramos a un prospecto el pipeline comercial). El colaborador sí, pero
   // solo los que estén dentro de su propia lista asignada.
-  var potenciales = (restringido && !esColaborador) ? [] : VISIBLES.filter(function(c){ return c.enAnalisis; });
+  var potenciales = (restringido && !esColaborador) ? [] : VISIBLES.filter(function(c){ return clienteSeccion(c) === 'potencial'; });
   cons.innerHTML = consultorios.map(itemHtml).join('');
   if (med) med.innerHTML = medCab.map(itemHtml).join('');
   if (medGroup) medGroup.style.display = medCab.length ? '' : 'none';
@@ -2616,6 +2678,13 @@ function renderClientList(){
   // Los grupos de clientes arrancan SIEMPRE cerrados: el usuario los despliega cuando
   // quiere. Antes se abría el del cliente activo, pero como nunca se cerraba, el menú
   // quedaba desplegado solo (típico: "Consultorios" abierto sin haberlo tocado).
+  // Drag&drop entre secciones (solo admin - moverClienteSeccion/iniDragDropSecciones).
+  // Ojo: un grupo vacío (medGroup/potGroup arriba) queda con display:none y no
+  // sirve como blanco para soltar - hoy no es un caso real (siempre hay algo en
+  // Consultorios/Potenciales), pero si alguna vez Med. Cabecera queda en cero,
+  // no se le puede arrastrar nada hasta que tenga uno (se puede mover por el
+  // dropdown "Sección" de Editar cliente igual, ese camino no depende de esto).
+  if (esAdminReal) iniDragDropSecciones();
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
@@ -5570,6 +5639,7 @@ function openClientEditModal(){
   set('clientEditSap', ACTIVE_CLIENT.sap);
   set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
   var enAn = document.getElementById('clientEditEnAnalisis'); if (enAn) enAn.checked = !!ACTIVE_CLIENT.enAnalisis;
+  set('clientEditSeccion', ACTIVE_CLIENT.seccion || 'consultorio');
   set('clientEditDireccion', ACTIVE_CLIENT.direccion);
   set('clientEditTelefono', ACTIVE_CLIENT.telefono);
   set('clientEditLogoW', ACTIVE_CLIENT.logoW ? String(ACTIVE_CLIENT.logoW) : '');
@@ -5620,6 +5690,7 @@ async function saveClientEdit(){
     sap: (document.getElementById('clientEditSap') || {}).value || '',
     tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio',
     enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked),
+    seccion: (document.getElementById('clientEditSeccion') || {}).value || 'consultorio',
     direccion: (document.getElementById('clientEditDireccion') || {}).value || '',
     telefono: (document.getElementById('clientEditTelefono') || {}).value || '',
     logoW: Number((document.getElementById('clientEditLogoW') || {}).value) || 0

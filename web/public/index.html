@@ -1983,6 +1983,13 @@
           <label>SAP<input class="inp" id="clientEditSap" placeholder="Ej: 112553"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientEditTipo"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
           <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientEditEnAnalisis" style="width:auto;flex:0 0 auto"> En análisis (potencial) — no se transmite</label>
+          <label class="span-2">Sección del menú<select class="inp" id="clientEditSeccion">
+              <option value="consultorio">Consultorios</option>
+              <option value="med_cabecera">Med. Cabecera</option>
+              <option value="potencial">Potenciales clientes</option>
+            </select>
+            <span class="nom-muted" style="font-weight:400">Dónde aparece listado en el menú de la izquierda. Es independiente de "En análisis" — podés dejarlo en Potenciales clientes sin transmitir, o moverlo a Consultorios aunque todavía no le transmitas nada.</span>
+          </label>
         </div>
         <p class="modal-note">Para los Informes (PDF): logo, dirección y teléfono del cliente. Se pueden ir cargando de a poco — sin ellos, el informe sale igual, solo que sin esa parte del membrete.</p>
         <div class="form-grid two">
