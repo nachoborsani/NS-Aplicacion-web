@@ -684,6 +684,26 @@ var HOLTER_GRUPOS_META = [
   { id: 'vfc', titulo: 'VFC (avanzado)', open: false },
   { id: 'conclusion', titulo: 'Conclusión / observaciones', open: true },
 ];
+// Títulos de las secciones de TODOS los modelos con campos agrupados (no solo
+// Holter). El ecodoppler venoso de MMII se carga por lado, así que abre las dos
+// secciones: hay que completar las dos piernas, esconder una invita a olvidarla.
+var CAMPOS_GRUPOS_META = HOLTER_GRUPOS_META.concat([
+  { id: 'ladoDer', titulo: 'Miembro inferior derecho', open: true },
+  { id: 'ladoIzq', titulo: 'Miembro inferior izquierdo', open: true },
+  { id: 'obs', titulo: 'Observaciones', open: true },
+]);
+// Secciones a dibujar, EN EL ORDEN EN QUE APARECEN LOS CAMPOS del modelo (antes
+// se recorría la lista fija del Holter, así que los grupos de cualquier otro
+// modelo caían todos juntos en un "Otros"). El título sale de la meta; lo que no
+// esté declarado arranca abierto.
+function gruposDeCampos(campos){
+  var ids = [];
+  campos.forEach(function(c){ var g = c.grupo || ''; if (g && ids.indexOf(g) < 0) ids.push(g); });
+  return ids.map(function(id){
+    var m = CAMPOS_GRUPOS_META.find(function(x){ return x.id === id; }) || {};
+    return { id: id, titulo: m.titulo || id, open: m.open !== false };
+  });
+}
 // Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
 // Si los campos traen `grupo` (Holter), se arma en secciones plegables; si no,
 // va la grilla plana de siempre (resto de los modelos).
@@ -696,7 +716,8 @@ function renderCampos(key){
   if (agrupado){
     box.className = 'inf-grupos';
     var html = '';
-    HOLTER_GRUPOS_META.forEach(function(g){
+    var grupos = gruposDeCampos(campos);
+    grupos.forEach(function(g){
       var items = campos.filter(function(c){ return (c.grupo || '') === g.id; });
       if (!items.length) return;
       html += '<details class="inf-grupo"' + (g.open ? ' open' : '') + ' data-grupo="' + esc(g.id) + '">'
@@ -704,8 +725,8 @@ function renderCampos(key){
         + '<div class="inf-campos">' + items.map(_campoInputHTML).join('') + '</div>'
         + '</details>';
     });
-    // Defensivo: cualquier campo con un grupo desconocido va al final, visible.
-    var restantes = campos.filter(function(c){ return !HOLTER_GRUPOS_META.some(function(g){ return g.id === (c.grupo || ''); }); });
+    // Defensivo: los campos SIN grupo (en un modelo que sí agrupa) van al final.
+    var restantes = campos.filter(function(c){ return !grupos.some(function(g){ return g.id === (c.grupo || ''); }); });
     if (restantes.length) html += '<details class="inf-grupo" open><summary>Otros</summary><div class="inf-campos">' + restantes.map(_campoInputHTML).join('') + '</div></details>';
     box.innerHTML = html;
   } else {

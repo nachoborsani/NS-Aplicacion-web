@@ -321,6 +321,73 @@ const GINECO_CAMPOS = [
   { key: "anexos", label: "Anexos", default: "Sin imágenes anexiales patológicas" },
   { key: "douglas", label: "Fondo de saco de Douglas", default: "Libre" },
 ];
+// ===== Ecodoppler venoso de miembros inferiores (180202) =====
+// El estudio se informa POR LADO: los mismos hallazgos se cargan para el
+// miembro derecho y para el izquierdo. Se escriben una sola vez y se duplican
+// con sufijo Der/Izq, así no hay dos listas que se puedan ir despegando.
+// Los grados arrancan en "—" (estudio normal = sin reflujo / sin insuficiencia):
+// el "—" NO se imprime, es la forma de decir "no corresponde".
+const VENOSO_MMII_LADO = [
+  { key: "profundoPerm", label: "Sistema venoso profundo — permeabilidad", opciones: ["Permeable", "No permeable"] },
+  { key: "profundoCompr", label: "Sistema venoso profundo — compresibilidad", opciones: ["Compresible", "No compresible"] },
+  { key: "profundoCompet", label: "Sistema venoso profundo — competencia", opciones: ["Competente", "Incompetente"] },
+  { key: "cayadoIntPerm", label: "Cayado safena interna — permeabilidad", opciones: ["Permeable", "No permeable"] },
+  { key: "cayadoIntCompet", label: "Cayado safena interna — competencia", opciones: ["Competente", "Incompetente"] },
+  { key: "cayadoIntReflujo", label: "Cayado safena interna — grado de reflujo", opciones: ["—", "Leve", "Moderado", "Severo"] },
+  { key: "troncoIntPerm", label: "Tronco safena interna — permeabilidad", opciones: ["Permeable", "No permeable"] },
+  { key: "troncoIntSuf", label: "Tronco safena interna — suficiencia", opciones: ["Suficiente", "Insuficiente"] },
+  { key: "troncoIntGrado", label: "Tronco safena interna — grado de insuficiencia", opciones: ["—", "Leve", "Moderada", "Severa"] },
+  { key: "troncoIntFlebec", label: "Tronco safena interna — deriva reflujo a flebectasias", opciones: ["No", "Sí"] },
+  { key: "cayadoExtPerm", label: "Cayado safena externa — permeabilidad", opciones: ["Permeable", "No permeable"] },
+  { key: "cayadoExtCompet", label: "Cayado safena externa — competencia", opciones: ["Competente", "Incompetente"] },
+  { key: "troncoExtPerm", label: "Tronco safena externa — permeabilidad", opciones: ["Permeable", "No permeable"] },
+  { key: "troncoExtSuf", label: "Tronco safena externa — suficiencia", opciones: ["Suficiente", "Insuficiente"] },
+  { key: "perforantes", label: "Perforantes insuficientes", opciones: ["No", "Sí"] },
+];
+// Los dos lados del form (secciones plegables) + las observaciones comunes.
+// Ojo con las claves: el guardado solo acepta letras y números (hasta 30), así
+// que nada de guiones ni guiones bajos.
+const VENOSO_MMII_CAMPOS = [
+  ...VENOSO_MMII_LADO.map((c) => ({ key: c.key + "Der", label: c.label, default: c.opciones[0], tipo: "select", opciones: c.opciones, grupo: "ladoDer" })),
+  ...VENOSO_MMII_LADO.map((c) => ({ key: c.key + "Izq", label: c.label, default: c.opciones[0], tipo: "select", opciones: c.opciones, grupo: "ladoIzq" })),
+  // Observaciones: lo que NO es por segmento venoso. Las anatómicas piden el
+  // lado en vez de un sí/no — en un estudio bilateral "Sí" a secas no dice
+  // dónde, y el que lee el informe necesita saberlo.
+  { key: "obsDificultoso", label: "Estudio técnicamente dificultoso", default: "No", tipo: "select", opciones: ["No", "Sí"], grupo: "obs" },
+  { key: "obsTrombosis", label: "Signos de trombosis venosa", default: "No", tipo: "select", opciones: ["No", "Derecha", "Izquierda", "Bilateral"], grupo: "obs" },
+  { key: "obsTelangiectasias", label: "Telangiectasias", default: "No", tipo: "select", opciones: ["No", "Derecha", "Izquierda", "Bilateral"], grupo: "obs" },
+  { key: "obsFlebectasias", label: "Flebectasias", default: "No", tipo: "select", opciones: ["No", "Derecha", "Izquierda", "Bilateral"], grupo: "obs" },
+  { key: "obsEdema", label: "Edema de tejido celular subcutáneo", default: "No", tipo: "select", opciones: ["No", "Derecha", "Izquierda", "Bilateral"], grupo: "obs" },
+  { key: "obsLagos", label: "Lagos linfáticos", default: "No", tipo: "select", opciones: ["No", "Derecha", "Izquierda", "Bilateral"], grupo: "obs" },
+  // Texto libre. La clave `observaciones` es la que el PDF ya imprime debajo de
+  // la conclusión (sirve para cualquier modelo), no inventar otra.
+  { key: "observaciones", label: "Observaciones (texto libre)", default: "", wide: true, grupo: "obs" },
+];
+// Cómo se arma la tabla de hallazgos del PDF: una fila por segmento venoso, con
+// una columna por lado. Sin esto serían 30 renglones sueltos que no entran en la
+// hoja; así son 6 filas y se lee comparando un lado contra el otro.
+// `partes` se concatenan ("Permeable, compresible, competente"); `grado` agrega
+// el paréntesis solo si está cargado; `extra` agrega la frase solo si dice "Sí".
+// Los hallazgos de OBSERVACIONES no son por segmento venoso, así que no entran
+// en la tabla: se imprimen como renglones debajo de la conclusión, y SOLO los
+// que están cargados ("No" = no se observó, no se menciona). Los que piden lado
+// salen con el lado ("Flebectasias: derecha"); el sí/no sale como la frase sola.
+const VENOSO_MMII_OBS = [
+  { key: "obsDificultoso", texto: "Estudio técnicamente dificultoso" },
+  { key: "obsTrombosis", texto: "Signos de trombosis venosa" },
+  { key: "obsTelangiectasias", texto: "Telangiectasias" },
+  { key: "obsFlebectasias", texto: "Flebectasias" },
+  { key: "obsEdema", texto: "Edema de tejido celular subcutáneo" },
+  { key: "obsLagos", texto: "Lagos linfáticos" },
+];
+const VENOSO_MMII_FILAS = [
+  { label: "Sistema venoso profundo", partes: ["profundoPerm", "profundoCompr", "profundoCompet"] },
+  { label: "Cayado safena interna", partes: ["cayadoIntPerm", "cayadoIntCompet"], grado: { key: "cayadoIntReflujo", texto: "reflujo" } },
+  { label: "Tronco safena interna", partes: ["troncoIntPerm", "troncoIntSuf"], grado: { key: "troncoIntGrado", texto: "insuficiencia" }, extra: { key: "troncoIntFlebec", texto: "deriva reflujo a flebectasias" } },
+  { label: "Cayado safena externa", partes: ["cayadoExtPerm", "cayadoExtCompet"] },
+  { label: "Tronco safena externa", partes: ["troncoExtPerm", "troncoExtSuf"] },
+  { label: "Perforantes insuficientes", partes: ["perforantes"] },
+];
 // Catálogo de estudios (modelos), UNO por tipo de estudio — ya no uno por
 // cliente. Lo que cambiaba solo por cliente (logo, nombre/dirección/teléfono
 // al pie, y qué médico firma) sale ahora del Cliente elegido al generar, no
@@ -365,6 +432,10 @@ const MODELOS = {
     // Set completo con grupos (secciones plegables en el form) y `resumen` (qué
     // entra en la caja del PDF). El builder lista solo los `resumen: true`.
     campos: HOLTER_CAMPOS_FULL,
+    // Con este flag, el PDF del Holter reemplaza la grilla plana de datos
+    // técnicos por una sección visual "RESUMEN" (tarjetas + barras). Solo el
+    // Holter lo trae; el resto de los modelos sigue con la grilla de siempre.
+    graficosResumen: true,
   },
   // ===================== ORL / Otorrinolaringología =====================
   // Mismo layout que cardiología (sin caja técnica). Cambia el servicio y, en
@@ -683,7 +754,14 @@ const MODELOS = {
     practica: "Ecodoppler arterial de miembros superiores",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
+    // Los cuatro doppler de miembros (arterial/venoso, superiores/inferiores)
+    // se facturan con el mismo código 180202 (ecodoppler vascular periférico).
+    // Van todos con el código puesto A PROPÓSITO: si lo tuviera uno solo, el
+    // botón "Crear informe" de Faltan informes le mandaría a ese modelo
+    // CUALQUIER fila 180202 (el código con un único modelo no se desempata) y
+    // un arterial saldría con la plantilla del venoso. Con los cuatro cargados
+    // el desempate lo hace el nombre de la práctica de la fila.
+    codigoPractica: "180202",
     estudio: "ECODOPPLER ARTERIAL DE MIEMBROS SUPERIORES",
     estudioArchivo: "Ecodoppler arterial MMSS",
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS SUPERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS.",
@@ -694,7 +772,7 @@ const MODELOS = {
     practica: "Ecodoppler venoso de miembros superiores",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
+    codigoPractica: "180202",
     estudio: "ECODOPPLER VENOSO DE MIEMBROS SUPERIORES",
     estudioArchivo: "Ecodoppler venoso MMSS",
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS SUPERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES.",
@@ -706,20 +784,31 @@ const MODELOS = {
     practica: "Ecodoppler arterial de miembros inferiores",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
+    codigoPractica: "180202",
     estudio: "ECO-DOPPLER ARTERIAL DE MIEMBROS INFERIORES",
     estudioArchivo: "Ecodoppler arterial MMII",
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS.",
   },
+  // Se informa por lado (derecho / izquierdo) con la tabla de hallazgos, más la
+  // conclusión de siempre. Los presets de esta práctica llenan los dos lados.
   "eco-doppler-venoso-mmii": {
-    label: "Ecodoppler venoso de miembros inferiores",
+    label: "Ecodoppler venoso de miembros inferiores (180202)",
     short: "Doppler ven. MMII",
-    practica: "Ecodoppler venoso de miembros inferiores",
+    practica: "Ecodoppler venoso de miembros inferiores — 180202",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
-    estudio: "ECO-DOPPLER VENOSO DE MIEMBROS INFERIORES",
+    codigoPractica: "180202",
+    estudio: "ECO-DOPPLER COLOR VENOSO DE MIEMBROS INFERIORES",
     estudioArchivo: "Ecodoppler venoso MMII",
+    tecnicosTitulo: "HALLAZGOS",
+    campos: VENOSO_MMII_CAMPOS,
+    // Tabla de hallazgos con una columna por lado (en vez de la grilla plana).
+    hallazgosPorLado: VENOSO_MMII_FILAS,
+    // Hallazgos que van a OBSERVACIONES (no son por segmento venoso).
+    observacionesHallazgos: VENOSO_MMII_OBS,
+    // La conclusión se escribe por miembro ("MIEMBRO INFERIOR DERECHO:" y su
+    // detalle): se respetan los saltos de línea del preset en vez de reflowar.
+    respetaSaltos: true,
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES.",
   },
   "eco-doppler-aorta-abdominal": {
@@ -904,7 +993,9 @@ async function buildInformePdf(modeloKey, input) {
   const medicoMatricula = ((input && input.medicoMatricula) || "").trim();
 
   const doc = await PDFDocument.create();
-  const page = doc.addPage([595.28, 841.89]); // A4 vertical
+  // `let`, no `const`: si la conclusión no entra se agrega una hoja y se
+  // reapunta (los helpers de dibujo leen esta variable, así que siguen solos).
+  let page = doc.addPage([595.28, 841.89]); // A4 vertical
   const { width, height } = page.getSize();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -936,6 +1027,37 @@ async function buildInformePdf(modeloKey, input) {
   page.drawRectangle({ x: 28, y: 28, width: width - 56, height: height - 56, borderColor: border, borderWidth: 1 });
 
   let y = height - 50;
+
+  // Piso del texto: más abajo empieza la zona de FECHA/firma y el pie del centro.
+  // Hasta ahora un informe largo seguía escribiendo para abajo y se montaba
+  // encima de la firma. Se recalcula abajo, cuando se sabe cuánto ocupa el texto.
+  let PISO_TEXTO = 268;
+  const nuevaPagina = () => {
+    page = doc.addPage([595.28, 841.89]);
+    page.drawRectangle({ x: 28, y: 28, width: width - 56, height: height - 56, borderColor: border, borderWidth: 1 });
+    y = height - 60;
+  };
+  // Escribe renglones ya cortados, saltando de hoja si se termina el espacio.
+  // El renglón vacío es el separador de párrafos (solo baja el cursor).
+  const escribirLineas = (lineas, size = 10.5, lineH = 15) => {
+    for (const ln of lineas) {
+      if (y < PISO_TEXTO) nuevaPagina();
+      if (ln) { T(ln, LBLX, y, { size }); y -= lineH; }
+      else y -= lineH * 0.6;   // separador de párrafo (mismo alto que al medir)
+    }
+  };
+  // Corta un texto en renglones. `respetaSaltos` (ecodoppler venoso) mantiene los
+  // saltos del preset —ese informe se escribe por miembro y de corrido no se
+  // entiende—; el resto de los modelos reflowa todo junto, como siempre.
+  const cortarTexto = (txt, size = 10.5) => {
+    const parrafos = modelo.respetaSaltos ? String(txt == null ? "" : txt).split(/\r?\n/) : [String(txt == null ? "" : txt)];
+    const out = [];
+    for (const pr of parrafos) {
+      if (!pr.trim()) { out.push(""); continue; }
+      for (const ln of wrapText(pr, font, size, boxW - 2 * PADX)) out.push(ln);
+    }
+    return out;
+  };
 
   // Logo centrado (fondo blanco). Sale del cliente elegido al generar
   // (input.logoName); el modelo solo lo fija si necesita uno propio fijo.
@@ -1006,8 +1128,210 @@ async function buildInformePdf(modeloKey, input) {
     }
   }
 
-  // Caja: DATOS TÉCNICOS DEL REGISTRO (solo modelos con campos, ej. Holter)
-  if (modelo.campos && modelo.campos.length) {
+  // Sección visual "RESUMEN" (solo Holter, gateada por modelo.graficosResumen):
+  // reemplaza la grilla plana de datos técnicos por tarjetas + mini-gráficos de
+  // barras armados con los mismos valores resumen ya cargados. La conclusión
+  // ("INFORME") sigue abajo, sin perder protagonismo: esta sección es compacta.
+  // TODO: si algún día se cargan datos HORARIOS reales (FC/arritmias hora por
+  // hora), acá se habilitarían gráficos de evolución de 24 hs. Hoy NO hay tira
+  // de ECG ni curvas simuladas: solo barras/tarjetas de los valores resumen.
+  if (modelo.campos && modelo.campos.length && modelo.graficosResumen) {
+    const valores = (input && input.valores) || {};
+    const defs = {};
+    for (const c of modelo.campos) defs[c.key] = c.default || "";
+    // String original tal cual está cargado (con fallback al default del campo).
+    const S = (k) => {
+      const s = String(valores[k] == null ? "" : valores[k]).trim();
+      return s || defs[k] || "";
+    };
+    // Parseo de números para las barras: quedarse con [0-9.,], quitar puntos de
+    // miles y pasar la coma decimal a punto. "1.284"->1284, "54 lpm"->54,
+    // "<0,01%"->0.01, ""->0.
+    const numStr = (s) => {
+      const c = String(s == null ? "" : s).replace(/[^0-9.,]/g, "").replace(/\./g, "").replace(",", ".");
+      const n = parseFloat(c);
+      return isNaN(n) ? 0 : n;
+    };
+    const N = (k) => numStr(S(k));
+    const teal = rgb(0.16, 0.55, 0.55);
+    const cardBorder = rgb(0.78, 0.82, 0.85);
+    const axis = rgb(0.6, 0.62, 0.65);
+    const innerX = boxX + PADX;
+    const innerW = boxW - 2 * PADX;
+    const truncTo = (val, f, size, maxW) => {
+      if (f.widthOfTextAtSize(val, size) <= maxW) return val;
+      while (val.length > 1 && f.widthOfTextAtSize(val + "…", size) > maxW) val = val.slice(0, -1);
+      return val + "…";
+    };
+
+    // Título
+    T("RESUMEN", LBLX, y - 16, { bold: true, size: 11 });
+
+    // --- 1) Fila de tarjetas ---
+    const cardsTopY = y - 26;
+    const cardH = 34, cardGap = 10;
+    const cardW = (innerW - 2 * cardGap) / 3;
+    const drawCard = (idx, label, valor, extra) => {
+      const cx = innerX + idx * (cardW + cardGap);
+      page.drawRectangle({ x: cx, y: cardsTopY - cardH, width: cardW, height: cardH, borderColor: cardBorder, borderWidth: 1 });
+      centerIn(label.toUpperCase(), cx, cx + cardW, cardsTopY - 10, { size: 7.5, color: soft });
+      centerIn(truncTo(valor || "—", bold, 13, cardW - 6), cx, cx + cardW, cardsTopY - 24, { bold: true, size: 13 });
+      if (extra) centerIn(extra, cx, cx + cardW, cardsTopY - 31, { size: 6.5, color: soft });
+    };
+    drawCard(0, "Total de latidos", S("totalLatidos"));
+    const pausaMax = N("pausaMasLarga");
+    drawCard(1, "Pausas signif.", S("pausas"), pausaMax ? "máx " + S("pausaMasLarga") + " ms" : "");
+    drawCard(2, "Duración", S("duracion"));
+
+    // --- 2) Dos mini-gráficos de barras lado a lado ---
+    const chartsTopY = cardsTopY - cardH - 10;
+    const chartsH = 84;
+    const chartGap = 16;
+    const chartW = (innerW - chartGap) / 2;
+    const chart1X = innerX;
+    const chart2X = innerX + chartW + chartGap;
+    const chartsBottomY = chartsTopY - chartsH;
+    const baseY = chartsBottomY + 12;          // eje base (deja 12 px para etiquetas debajo)
+    const maxBarH = (chartsTopY - 14) - 10 - baseY; // arriba: título 14, valor 10
+
+    const drawBarChart = (cx, titulo, barras, notaVacia) => {
+      T(titulo, cx, chartsTopY - 8, { bold: true, size: 7.5, color: soft });
+      page.drawLine({ start: { x: cx, y: baseY }, end: { x: cx + chartW, y: baseY }, thickness: 0.6, color: axis });
+      const maxVal = Math.max(...barras.map((b) => b.num), 0);
+      const slotW = chartW / barras.length;
+      const barW = Math.min(slotW * 0.5, 42);
+      barras.forEach((b, i) => {
+        const bx = cx + i * slotW + (slotW - barW) / 2;
+        const bh = maxVal > 0 ? maxBarH * (b.num / maxVal) : 0;
+        if (bh > 0) page.drawRectangle({ x: bx, y: baseY, width: barW, height: bh, color: teal });
+        centerIn(b.etiquetaValor, bx, bx + barW, baseY + bh + 2, { size: 7 });
+        centerIn(b.label, bx, bx + barW, baseY - 9, { size: 7, color: soft });
+      });
+      if (notaVacia && maxVal === 0) centerIn(notaVacia, cx, cx + chartW, baseY + 16, { size: 7, color: soft });
+    };
+
+    drawBarChart(chart1X, "FRECUENCIA CARDÍACA (LPM)", [
+      { num: N("fcMin"), etiquetaValor: S("fcMin"), label: "Mín" },
+      { num: N("fcProm"), etiquetaValor: S("fcProm"), label: "Media" },
+      { num: N("fcMax"), etiquetaValor: S("fcMax"), label: "Máx" },
+    ]);
+    drawBarChart(chart2X, "EXTRASÍSTOLES", [
+      { num: N("ev"), etiquetaValor: S("ev"), label: "EV" },
+      { num: N("esv"), etiquetaValor: S("esv"), label: "ESV" },
+    ], "Sin extrasístoles");
+
+    // Caption de sub-cuentas de extrasístoles (solo las > 0), debajo del gráfico.
+    let cy = chartsBottomY;
+    {
+      const pares = N("evPares") + N("esvPares");
+      const tripletas = N("evTripletas") + N("esvTripletas");
+      const salva = N("salvaLatidos");
+      const partes = [];
+      if (pares > 0) partes.push("Pares: " + pares);
+      if (tripletas > 0) partes.push("Tripletas: " + tripletas);
+      if (salva > 0) partes.push("Salva: " + salva + " lat");
+      if (partes.length) { T(truncTo(partes.join(" · "), font, 7, chartW), chart2X, cy - 1, { size: 7, color: soft }); }
+    }
+    cy -= 10;
+
+    // --- 3) Tres líneas de texto de ancho completo ---
+    cy -= 3;
+    const lineas = [
+      ["Ritmo predominante:", S("ritmo")],
+      ["Conducción AV:", S("conduccionAV")],
+      ["ST-T:", S("stt")],
+    ];
+    for (const [lbl, valor] of lineas) {
+      T(lbl, innerX, cy, { bold: true, size: 9 });
+      const lblW = bold.widthOfTextAtSize(lbl + " ", 9);
+      T(truncTo(valor || "—", font, 9, innerW - lblW), innerX + lblW, cy, { size: 9 });
+      cy -= 13;
+    }
+
+    // --- 4) Caption final con lo que no entró (solo valores != vacío/0) ---
+    {
+      const extras = [];
+      if (N("evPct") !== 0) extras.push("EV %: " + S("evPct"));
+      if (N("esvPct") !== 0) extras.push("ESV %: " + S("esvPct"));
+      const sint = S("sintomas");
+      if (sint) extras.push("Síntomas: " + sint);
+      if (extras.length) {
+        cy -= 2;
+        T(truncTo(extras.join(" · "), font, 7.5, innerW), innerX, cy, { size: 7.5, color: soft });
+        cy -= 10;
+      }
+    }
+
+    // Caja envolvente (borde) alrededor de toda la sección.
+    const h = y - cy + 2;
+    drawBox(y, h);
+    y -= h + 16;
+  } else if (modelo.campos && modelo.campos.length && modelo.hallazgosPorLado) {
+    // Caja: HALLAZGOS con una columna por lado (ecodoppler venoso de MMII).
+    // Una fila por segmento venoso: los tres o cuatro campos del segmento se
+    // juntan en una frase ("Permeable, compresible, competente") en vez de ir
+    // como 30 celdas sueltas, que no entrarían en la hoja ni se podrían
+    // comparar lado contra lado.
+    const valores = (input && input.valores) || {};
+    const defs = {};
+    for (const c of modelo.campos) defs[c.key] = c.default || "";
+    const V = (k) => {
+      const s = String(valores[k] == null ? "" : valores[k]).trim();
+      return s || defs[k] || "";
+    };
+    // "—" es "no corresponde" (ej. grado de reflujo en un cayado competente):
+    // no se imprime. Si no queda nada cargado, la celda muestra "—".
+    const armarCelda = (fila, suf) => {
+      const partes = fila.partes.map((k) => V(k + suf)).filter((s) => s && s !== "—");
+      if (!partes.length) return "—";
+      let txt = partes[0];
+      for (let i = 1; i < partes.length; i++) txt += ", " + partes[i].toLowerCase();
+      if (fila.grado) {
+        const g = V(fila.grado.key + suf);
+        if (g && g !== "—") txt += " (" + fila.grado.texto + " " + g.toLowerCase() + ")";
+      }
+      if (fila.extra && V(fila.extra.key + suf) === "Sí") txt += ", " + fila.extra.texto;
+      return txt;
+    };
+    const labelW = 132;
+    const colW = (boxW - labelW) / 2;
+    const S = 8.5, lineH = 11, titleH = 20, headH = 14;
+    // Primero se mide (cuántos renglones ocupa cada celda) y después se dibuja:
+    // la caja necesita su altura antes de escribir adentro.
+    const filas = modelo.hallazgosPorLado.map((f) => {
+      const der = wrapText(armarCelda(f, "Der"), font, S, colW - 12);
+      const izq = wrapText(armarCelda(f, "Izq"), font, S, colW - 12);
+      const lbl = wrapText(f.label, bold, S, labelW - 12);
+      const lineas = Math.max(der.length, izq.length, lbl.length);
+      return { der, izq, lbl, lineas, h: lineas * lineH + 5 };
+    });
+    const h = titleH + headH + filas.reduce((s, f) => s + f.h, 0) + 3;
+    drawBox(y, h);
+    T(modelo.tecnicosTitulo || "HALLAZGOS", LBLX, y - 16, { bold: true, size: 11 });
+    const grid = rgb(0.75, 0.77, 0.8);
+    const headTop = y - titleH;
+    centerIn("MIEMBRO INFERIOR DERECHO", boxX + labelW, boxX + labelW + colW, headTop - 10, { bold: true, size: S });
+    centerIn("MIEMBRO INFERIOR IZQUIERDO", boxX + labelW + colW, boxX + boxW, headTop - 10, { bold: true, size: S });
+    let ry = headTop - headH;
+    page.drawLine({ start: { x: boxX, y: headTop }, end: { x: boxX + boxW, y: headTop }, thickness: 0.5, color: grid });
+    for (const f of filas) {
+      page.drawLine({ start: { x: boxX, y: ry }, end: { x: boxX + boxW, y: ry }, thickness: 0.5, color: grid });
+      let ty = ry - 11;
+      for (const ln of f.lbl) { T(ln, boxX + 8, ty, { bold: true, size: S }); ty -= lineH; }
+      ty = ry - 11;
+      for (const ln of f.der) { T(ln, boxX + labelW + 8, ty, { size: S }); ty -= lineH; }
+      ty = ry - 11;
+      for (const ln of f.izq) { T(ln, boxX + labelW + colW + 8, ty, { size: S }); ty -= lineH; }
+      ry -= f.h;
+    }
+    // Verticales: solo desde el encabezado (las dos columnas de lado) hasta
+    // la última fila.
+    for (const lx of [boxX + labelW, boxX + labelW + colW]) {
+      page.drawLine({ start: { x: lx, y: headTop }, end: { x: lx, y: ry }, thickness: 0.5, color: grid });
+    }
+    y -= h + 18;
+  } else if (modelo.campos && modelo.campos.length) {
+    // Caja: DATOS TÉCNICOS DEL REGISTRO (grilla plana — resto de los modelos)
     const valores = (input && input.valores) || {};
     // Si algún campo declara `resumen`, la caja lista SOLO esos (Holter: ~16
     // campos resumen en vez de los ~35). Si ninguno lo declara, se muestran
@@ -1065,26 +1389,91 @@ async function buildInformePdf(modeloKey, input) {
     y -= h + 18;
   }
 
+  // OBSERVACIONES (opcional): el texto libre del campo `observaciones`, y —si el
+  // modelo los declara (ecodoppler venoso)— los hallazgos sueltos que no entran
+  // en la tabla. Solo se listan los cargados: "No" es "no se observó" y no se
+  // menciona, para que la ausencia no ocupe media hoja. Todo vacío = no aparece.
+  const obsParrafos = [];
+  {
+    const vals = (input && input.valores) || {};
+    if (Array.isArray(modelo.observacionesHallazgos)) {
+      for (const o of modelo.observacionesHallazgos) {
+        const v = String(vals[o.key] == null ? "" : vals[o.key]).trim();
+        if (!v || v === "No" || v === "—") continue;
+        // "Sí" no aporta nada escrito ("Telangiectasias: sí"): va la frase sola.
+        obsParrafos.push(v === "Sí" ? o.texto + "." : o.texto + ": " + v.toLowerCase() + ".");
+      }
+    }
+    const obs = String(vals.observaciones || "").trim();
+    if (obs) obsParrafos.push(obs);
+  }
+
+  // Cuánto ocupa el cuerpo (conclusión + observaciones) y dónde termina cayendo
+  // la firma. Se mide ANTES de escribir, y se cede en este orden:
+  //   1) bajar la firma —entre la firma y el pie sobraban ~135 pt sin usar—,
+  //   2) achicar el cuerpo de letra hasta 8,5,
+  //   3) recién ahí, una segunda hoja.
+  // Un estudio normal tiene que entrar en UNA hoja: una segunda con nada más que
+  // la firma se lee como que el informe se cortó.
+  const ESCALAS = [[10.5, 15], [10, 14], [9.5, 13], [9, 12], [8.5, 11]];
+  const anchoTexto = boxW - 2 * PADX;
+  const FY_DEFAULT = 248;
+  // Piso de la firma: el pie del centro arranca en y=100, y con `firmaConMatricula`
+  // el renglón más bajo de la firma cae en fy-57. 172 deja aire entre los dos.
+  const FY_MIN = 172;
+  // Aire entre el último renglón y la línea de FECHA. Tiene que ser el MISMO
+  // número al medir y al decidir el salto de hoja: con dos valores distintos el
+  // texto "entraba" en la cuenta y el escritor igual cambiaba de hoja (le pasaba
+  // al Holter, que terminaba en 2 hojas sin necesidad).
+  const AIRE_FIRMA = 14;
+  const altoCuerpo = (lc, lo, lh) =>
+    20 + lc.reduce((s, ln) => s + (ln ? lh : lh * 0.6), 0)          // renglón vacío = separador
+      + (lo.length ? 10 + 18 + lo.reduce((s, arr) => s + arr.length * lh, 0) : 0);
+  let cuerpoSize = 10.5, cuerpoLineH = 15;
+  let lineasConcl = [], lineasObs = [];
+  let fy = FY_DEFAULT;
+  {
+    const yInforme = y;
+    let entro = false;
+    for (const [sz, lh] of ESCALAS) {
+      const lc = cortarTexto(texto, sz);
+      const lo = obsParrafos.map((pr) => wrapText(pr, font, sz, anchoTexto));
+      const fyNecesario = yInforme - altoCuerpo(lc, lo, lh) - AIRE_FIRMA;
+      if (fyNecesario >= FY_MIN) {
+        cuerpoSize = sz; cuerpoLineH = lh; lineasConcl = lc; lineasObs = lo;
+        fy = Math.min(FY_DEFAULT, fyNecesario);
+        entro = true;
+        break;
+      }
+    }
+    if (!entro) {
+      // No entra en una hoja ni con el cuerpo más chico: se pasa a la siguiente
+      // con el cuerpo NORMAL (achicar la letra y encima partir en dos es peor
+      // que partir en dos y que se lea bien).
+      const [sz, lh] = ESCALAS[0];
+      cuerpoSize = sz; cuerpoLineH = lh;
+      lineasConcl = cortarTexto(texto, sz);
+      lineasObs = obsParrafos.map((pr) => wrapText(pr, font, sz, anchoTexto));
+      fy = FY_DEFAULT;
+    }
+    PISO_TEXTO = fy + AIRE_FIRMA;
+  }
+
   // INFORME (sin caja)
   T("INFORME", LBLX, y, { bold: true, size: 10.5, color: soft });
   y -= 20;
-  const lines = wrapText(texto, font, 10.5, boxW - 2 * PADX);
-  for (const ln of lines) { T(ln, LBLX, y); y -= 15; }
+  escribirLineas(lineasConcl, cuerpoSize, cuerpoLineH);
 
-  // OBSERVACIONES (opcional): si el modelo tiene un campo `observaciones` con
-  // contenido cargado, se muestra debajo de la conclusión. Vacío = no aparece.
-  {
-    const obs = String(((input && input.valores) || {}).observaciones || "").trim();
-    if (obs) {
-      y -= 10;
-      T("OBSERVACIONES", LBLX, y, { bold: true, size: 10.5, color: soft });
-      y -= 18;
-      for (const ln of wrapText(obs, font, 10.5, boxW - 2 * PADX)) { T(ln, LBLX, y); y -= 15; }
-    }
+  if (obsParrafos.length) {
+    y -= 10;
+    if (y < PISO_TEXTO) nuevaPagina();
+    T("OBSERVACIONES", LBLX, y, { bold: true, size: 10.5, color: soft });
+    y -= 18;
+    for (const arr of lineasObs) escribirLineas(arr, cuerpoSize, cuerpoLineH);
   }
 
-  // FECHA + Firma (posición fija)
-  const fy = 248;
+  // FECHA + Firma. `fy` sale de la medición de arriba: 248 salvo que el texto
+  // necesite ese espacio, en cuyo caso la firma baja (hasta FY_MIN).
   T("FECHA:", LBLX, fy, { bold: true, size: 11 });
   T(p.fecha || "—", LBLX + 56, fy, { size: 11 });
   const firmaAreaW = 200, firmaAreaX = width - Mx - firmaAreaW;

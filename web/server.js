@@ -1987,6 +1987,55 @@ const ECO_SEED_PRESETS = [
     texto: "ESPIROMETRÍA COMPUTARIZADA, CURVA FLUJO-VOLUMEN, PRE Y POST BRONCODILATADORES. DÉFICIT VENTILATORIO OBSTRUCTIVO MODERADO CON PROBABLE COMPONENTE RESTRICTIVO. EL B2 AGONISTA NO PRODUCE CAMBIOS SIGNIFICATIVOS.",
     valores: { fvcPre: "2,51", fvcPost: "2,51", pctTeorFvc: "71", fev1Pre: "1,79", fev1Post: "1,79", pctTeorFev1: "65", fev1fvcPre: "76,9", fev1fvcPost: "76,9", pef: "5,20", fef2575: "1,45", fet: "6,00", broncodilatador: "Salbutamol", equipo: "Minispir II" } },
 ];
+// ===== Presets del ecodoppler venoso de MMII (180202) =====
+// Los hallazgos se escriben UNA vez por lado y `venosoVals` los expande a las
+// claves Der/Izq del modelo (ver VENOSO_MMII_LADO en informes.js). Así el preset
+// llena los dos miembros y el operador solo corrige lo que difiere.
+// "—" en un grado = no corresponde (no se imprime en la tabla).
+const VENOSO_MMII_NORMAL = {
+  profundoPerm: "Permeable", profundoCompr: "Compresible", profundoCompet: "Competente",
+  cayadoIntPerm: "Permeable", cayadoIntCompet: "Competente", cayadoIntReflujo: "—",
+  troncoIntPerm: "Permeable", troncoIntSuf: "Suficiente", troncoIntGrado: "—", troncoIntFlebec: "No",
+  cayadoExtPerm: "Permeable", cayadoExtCompet: "Competente",
+  troncoExtPerm: "Permeable", troncoExtSuf: "Suficiente", perforantes: "No",
+};
+function venosoVals(der, izq, obs) {
+  const out = {};
+  for (const k of Object.keys(der)) out[k + "Der"] = der[k];
+  for (const k of Object.keys(izq)) out[k + "Izq"] = izq[k];
+  return Object.assign(out, obs || {});
+}
+// Insuficiencia del sistema safeno INTERNO (cayado + tronco), safeno externo y
+// sistema profundo normales. Es el patrón de la insuficiencia venosa superficial.
+const VENOSO_MMII_INSUF_SI = {
+  ...VENOSO_MMII_NORMAL,
+  cayadoIntCompet: "Incompetente", cayadoIntReflujo: "Moderado",
+  troncoIntSuf: "Insuficiente", troncoIntGrado: "Moderada",
+};
+const VENOSO_MMII_SEED_PRESETS = [
+  {
+    id: "venoso-mmii-normal-bilateral", modelo: "eco-doppler-venoso-mmii", nombre: "Venoso bilateral normal",
+    texto: "SISTEMA VENOSO PROFUNDO BILATERAL PERMEABLE, COMPRESIBLE Y COMPETENTE.\nSISTEMA VENOSO SUPERFICIAL SIN EVIDENCIA DE REFLUJO PATOLÓGICO.\nCAYADOS Y TRONCOS SAFENOS INTERNOS Y EXTERNOS PERMEABLES Y COMPETENTES.\nNO SE EVIDENCIAN PERFORANTES INSUFICIENTES.\nSIN SIGNOS DE TROMBOSIS VENOSA.",
+    valores: venosoVals(VENOSO_MMII_NORMAL, VENOSO_MMII_NORMAL),
+  },
+  {
+    id: "venoso-mmii-insuf-superficial-bilateral", modelo: "eco-doppler-venoso-mmii", nombre: "Insuficiencia venosa superficial bilateral",
+    texto: "SISTEMA VENOSO PROFUNDO BILATERAL PERMEABLE, COMPRESIBLE Y COMPETENTE.\nSE EVIDENCIA INCOMPETENCIA DEL SISTEMA SAFENO INTERNO CON REFLUJO VENOSO.\nSISTEMA SAFENO EXTERNO PERMEABLE Y COMPETENTE.\nSIN SIGNOS DE TROMBOSIS VENOSA.",
+    valores: venosoVals(VENOSO_MMII_INSUF_SI, VENOSO_MMII_INSUF_SI),
+  },
+  {
+    // Asimétrico: a la derecha reflujo severo que deriva a flebectasias; a la
+    // izquierda solo el cayado incompetente (el grado va en "—" porque el
+    // informe de referencia no lo gradúa — lo pone el médico si corresponde).
+    id: "venoso-mmii-insuf-si-predominio-der", modelo: "eco-doppler-venoso-mmii", nombre: "Insuficiencia safena interna predominio derecho",
+    texto: "MIEMBRO INFERIOR DERECHO:\nSISTEMA VENOSO PROFUNDO PERMEABLE, COMPRESIBLE Y COMPETENTE.\nCAYADO DE SAFENA INTERNA PERMEABLE, CON INCOMPETENCIA Y REFLUJO SEVERO.\nTRONCO DE SAFENA INTERNA PERMEABLE, CON INSUFICIENCIA SEVERA Y DERIVACIÓN DEL REFLUJO A FLEBECTASIAS EN PIERNA Y MUSLO.\nSISTEMA SAFENO EXTERNO PERMEABLE Y COMPETENTE.\n\nMIEMBRO INFERIOR IZQUIERDO:\nSISTEMA VENOSO PROFUNDO PERMEABLE, COMPRESIBLE Y COMPETENTE.\nCAYADO DE SAFENA INTERNA PERMEABLE, CON INCOMPETENCIA Y REFLUJO.\nTRONCO DE SAFENA INTERNA Y SISTEMA SAFENO EXTERNO PERMEABLES Y SUFICIENTES.\n\nNO SE EVIDENCIAN PERFORANTES INSUFICIENTES.\nSIN SIGNOS DE TROMBOSIS VENOSA.",
+    valores: venosoVals(
+      { ...VENOSO_MMII_NORMAL, cayadoIntCompet: "Incompetente", cayadoIntReflujo: "Severo", troncoIntSuf: "Insuficiente", troncoIntGrado: "Severa", troncoIntFlebec: "Sí" },
+      { ...VENOSO_MMII_NORMAL, cayadoIntCompet: "Incompetente" },
+      { obsFlebectasias: "Derecha" },
+    ),
+  },
+];
 function loadInformesConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(informesConfigFile, "utf8")); } catch {}
@@ -2003,6 +2052,7 @@ function loadInformesConfig() {
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
       ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" })),
       ...URODINAMIA_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
+      ...VENOSO_MMII_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
     ];
   }
   // Motivos por los que un informe se desestima (no se sube). Configurables por
@@ -11264,6 +11314,24 @@ function ensureModelosUnificados() {
       saveInformesConfig(cfg);
     }
   } catch (e) { console.log("[baimed-duckwen-seed] omitido:", e && e.message); }
+
+  // Alta UNA SOLA VEZ del médico del ECOCARDIOGRAMA de Baimed: Dr. Ruano Martín
+  // (cardiólogo, MN 141327 / MP 454552), para el modelo `ecocardiograma` y solo
+  // para Baimed (dbaime). SIN firma en el seed (se sube por la UI: firma-ruano.png,
+  // un sello con firma+nombre+matrícula). Hasta que la suban sale "MÉDICO / Dr.
+  // Ruano Martín". One-time por flag.
+  try {
+    const cfg = loadInformesConfig();
+    if (!cfg._baimedRuanoSeedDone) {
+      if (!Array.isArray(cfg.medicos)) cfg.medicos = [];
+      if (!cfg.medicos.some((m) => m.id === "dr-ruano-martin")) {
+        cfg.medicos.push({ id: "dr-ruano-martin", nombre: "Dr. Ruano Martín", firma: "", matricula: "MN 141327 · MP 454552", modelos: ["ecocardiograma"], clientes: ["dbaime"] });
+        console.log("[baimed-ruano-seed] médico Dr. Ruano Martín creado (ecocardiograma, dbaime, sin firma - se sube por UI).");
+      }
+      cfg._baimedRuanoSeedDone = true;
+      saveInformesConfig(cfg);
+    }
+  } catch (e) { console.log("[baimed-ruano-seed] omitido:", e && e.message); }
 }
 ensureModelosUnificados();
 
@@ -11353,6 +11421,24 @@ function ensureOrlSeed() {
   } catch (e) { console.log("[orl-seed] omitido:", e && e.message); }
 }
 ensureOrlSeed();
+
+// Precarga los 3 presets del ecodoppler venoso de MMII en configs ya existentes
+// (producción). Idempotente y por id: no pisa uno que el admin haya editado.
+function ensureVenosoMmiiSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of VENOSO_MMII_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} });
+        cambio = true;
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[venoso-mmii-seed] omitido:", e && e.message); }
+}
+ensureVenosoMmiiSeed();
 
 // Rellena el nombre corto en presets ya existentes (configs previas al cambio).
 function ensureNombresPresets() {
