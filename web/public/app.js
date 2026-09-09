@@ -2603,6 +2603,14 @@ function renderClientList(){
         go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();
       });
     });
+    // Clínica no gestiona OTROS clientes de NS (ni siquiera el pipeline de
+    // "potenciales"): esa lista es interna nuestra. La limpiamos siempre acá,
+    // en vez de confiar en que haya quedado vacía de un render anterior (ej.
+    // el modo espejo del admin, que sí la puebla con TODOS los clientes).
+    var potGroupCli = document.getElementById('navGroupPotenciales');
+    var potListCli = document.getElementById('clientNavListPotenciales');
+    if (potListCli) potListCli.innerHTML = '';
+    if (potGroupCli) potGroupCli.style.display = 'none';
     return;
   }
   // --- Operador Clínica: mismo mecanismo que clínica (menú = secciones de su
@@ -2632,6 +2640,13 @@ function renderClientList(){
         go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();
       });
     });
+    // Ídem clínica: "potenciales" es el pipeline comercial de NS, no algo que un
+    // empleado del centro deba ver (mucho menos el nombre de otro cliente/
+    // prospecto). Se limpia siempre, no se asume que ya esté vacío.
+    var potGroupOp = document.getElementById('navGroupPotenciales');
+    var potListOp = document.getElementById('clientNavListPotenciales');
+    if (potListOp) potListOp.innerHTML = '';
+    if (potGroupOp) potGroupOp.style.display = 'none';
     return;
   }
   // Sección de menú de un cliente (ver normalizeClient/seccion en server.js):
