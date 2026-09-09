@@ -103,8 +103,10 @@ function opClinicaTieneModulo(me, modulo) {
 // Claves = las secciones del menú de la clínica + "omes" (Crear informes y
 // crear/subir informe). DEFAULT cuando el usuario no tiene nada guardado: TODO
 // menos "omes" (un centro nuevo no hace informes/OMEs hasta que NS lo habilite).
-const CLINICA_CAPACIDADES = ["dashboard", "reportes", "omes", "credencial", "honorarios", "usuarios", "datos"];
-const CLINICA_CAP_DEFAULT = CLINICA_CAPACIDADES.filter((c) => c !== "omes");
+const CLINICA_CAPACIDADES = ["dashboard", "reportes", "omes", "liberarcupo", "credencial", "honorarios", "usuarios", "datos"];
+// Default: TODO menos las herramientas de acción que NS habilita a mano por
+// centro ("omes" = crear/subir informes, y "liberarcupo").
+const CLINICA_CAP_DEFAULT = CLINICA_CAPACIDADES.filter((c) => c !== "omes" && c !== "liberarcupo");
 function capacidadesClinica(u) {
   if (!u) return [];
   if (Array.isArray(u.capacidades)) return u.capacidades.filter((c) => CLINICA_CAPACIDADES.includes(c));
@@ -152,15 +154,19 @@ function aplicarGateDeRol(req, meGate, p) {
     // centro, así que no puede crear un admin ni tocar otro centro.
     else if (suCentro && ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
              && /^\/api\/clientes\/[^/]+\/usuarios(?:\/[a-z0-9._-]+(?:\/password)?)?$/.test(p)) permitido = true;
+    // Liberar cupo: GET candidatos/reporte ya entra por "esGet && suCentro"; acá
+    // se habilita la acción (POST /liberar-cupo/liberar) — la gatea la capacidad.
+    else if (suCentro && req.method === "POST" && /\/liberar-cupo\/liberar$/.test(p)) permitido = true;
     // Capacidades del usuario (qué habilitó el admin): aunque el path esté
     // permitido arriba, si esa capacidad está apagada para ESTE usuario, se
     // bloquea. Es un "deny": la lista de arriba da el permiso base y esto solo
     // puede sacarlo. Cubre las herramientas con endpoint propio (informes/OMEs,
-    // credencial, honorarios+liquidación, usuarios); las secciones de solo
-    // lectura del propio centro (dashboard/reportes/datos) se ocultan en el front.
+    // credencial, honorarios+liquidación, usuarios, liberar cupo); las secciones
+    // de solo lectura del propio centro (dashboard/reportes/datos) se ocultan en el front.
     const capReq = /^\/api\/informes\//.test(p) ? "omes"
       : (p === "/api/credencial-provisoria") ? "credencial"
       : /\/honorarios(\/liquidacion)?$/.test(p) ? "honorarios"
+      : /\/liberar-cupo(\/|$)/.test(p) ? "liberarcupo"
       : /^\/api\/clientes\/[^/]+\/usuarios(\/|$)/.test(p) ? "usuarios"
       : null;
     if (permitido && capReq && !clinicaTieneCap(meGate, capReq)) {

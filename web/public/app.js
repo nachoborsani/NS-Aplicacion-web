@@ -93,10 +93,12 @@ function go(v, el){
   // a 'credencial' abre Afiliados.
   if (v === 'credencial') v = 'padron';
   // El rol clínica solo entra a su centro: cualquier vista interna de NS lo redirige.
-  // Excepción: "Informes" (crear informes con SUS médicos/firmas) - herramienta
-  // propia del centro, misma que usa su empleado operador_clinica con módulo
-  // informes. El backend scopea el config/generar/lote a su centro.
-  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0 && v !== 'informes'){
+  // Excepción: "Informes" (crear informes) y "Liberar cupo" - herramientas
+  // propias del centro que el admin habilita por capacidad. El backend scopea
+  // todo a su centro y corta si la capacidad está apagada.
+  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0
+      && !(v === 'informes' && clinicaTieneCap('omes'))
+      && !(v === 'liberarcupo' && clinicaTieneCap('liberarcupo'))){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
@@ -113,7 +115,7 @@ function go(v, el){
   if (ME && ME.role === 'colaborador' && ['dash', 'clientes'].indexOf(v) < 0){ go('dash'); return; }
   // Informes recibidos (cabina): admin y operador (que la trabaja). El resto, afuera.
   if (v === 'cabina' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
-  if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || opClinicaModulos().indexOf('liberarcupo') >= 0))){ go('dash'); return; }
+  if (v === 'liberarcupo' && !(ME && (ME.role === 'admin' || ME.role === 'operador' || opClinicaModulos().indexOf('liberarcupo') >= 0 || (ME.role === 'clinica' && clinicaTieneCap('liberarcupo'))))){ go('dash'); return; }
   if (v === 'omeweb' && !(ME && (ME.role === 'admin' || ME.role === 'operador'))){ go('dash'); return; }
   // Afiliados: admin y operador la USAN; el usuario de demostración la VE (solo lectura,
   // el backend le bloquea las acciones). El resto, afuera (salvo operador_clinica habilitado).
@@ -2609,16 +2611,20 @@ function renderClientList(){
       { label: 'Dashboard',            section: 'mescurso',     cap: 'dashboard' },
       { label: 'Reportes',             section: 'dashboard',    cap: 'reportes' },
       { label: 'Crear informes',       view: 'informes',        cap: 'omes' },
+      { label: 'Liberar cupo',         view: 'liberarcupo',     cap: 'liberarcupo' },
       { label: 'Credencial provisoria', section: 'credencialcli', cap: 'credencial' },
       { label: 'Usuarios del centro',  section: 'usuarioscli',  cap: 'usuarios' },
       { label: 'Honorarios',           section: 'honorarios',   cap: 'honorarios' },
       { label: 'Datos del centro',     section: 'basica',       cap: 'datos' },
     ].filter(function(s){ return clinicaTieneCap(s.cap); });
-    var enInformes = (document.getElementById('view-informes') && document.getElementById('view-informes').style.display === 'block');
+    // ¿Estamos parados en una vista aparte (Crear informes / Liberar cupo) y no
+    // en una sección del centro? Sirve para el resaltado del ítem activo.
+    var vistaActiva = function(v){ var el = document.getElementById('view-' + v); return !!(el && el.style.display === 'block'); };
+    var enVistaAparte = vistaActiva('informes') || vistaActiva('liberarcupo');
     cons.innerHTML = SECC_CLINICA.map(function(s){
       var active = s.view
-        ? (enInformes && s.view === 'informes' ? ' active' : '')
-        : (ACTIVE_CLIENT && !enInformes && CLIENT_SECTION === s.section ? ' active' : '');
+        ? (vistaActiva(s.view) ? ' active' : '')
+        : (ACTIVE_CLIENT && !enVistaAparte && CLIENT_SECTION === s.section ? ' active' : '');
       var attr = s.view ? ('data-cli-view="' + s.view + '"') : ('data-cli-section="' + s.section + '"');
       return '<button class="client-nav-item' + active + '" type="button" ' + attr + '>' + s.label + '</button>';
     }).join('');
@@ -2974,6 +2980,7 @@ async function loadClientPendientesCentro(){
 // crear, activar/desactivar, cambiar a qué entra (módulos), resetear clave, borrar.
 // El backend fuerza rol y centro; acá solo armamos la pantalla.
 var USR_MODULOS_LABEL = { padron:'Afiliados', informes:'Generar informes', liberarcupo:'Liberar cupo' };
+var USR_MODULOS_DISP = [];  // módulos que la clínica puede delegar (según sus capacidades; los manda el server)
 function cliUsrCentroSlug(){ return (ME && ME.centro) || (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || ''; }
 async function loadClientUsuarios(){
   var cont = document.getElementById('cliUsrList');
@@ -2984,9 +2991,27 @@ async function loadClientUsuarios(){
   var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/usuarios');
   if (!res.ok || !res.data){ cont.innerHTML = '<div class="cfg-empty">No se pudo cargar la lista.</div>'; return; }
   var users = res.data.users || [];
+  // Solo se pueden delegar las herramientas que el propio centro tiene (el
+  // server manda cuáles en modulosDisponibles). Mostramos esos checkboxes en el
+  // alta y escondemos el resto; si no hay ninguno, se avisa.
+  var disp = Array.isArray(res.data.modulosDisponibles) ? res.data.modulosDisponibles : [];
+  USR_MODULOS_DISP = disp;
+  var formBox = document.getElementById('cliUsrModulos');
+  if (formBox){
+    [].slice.call(formBox.querySelectorAll('input[type="checkbox"]')).forEach(function(i){
+      var ok = disp.indexOf(i.value) >= 0;
+      if (i.parentElement) i.parentElement.style.display = ok ? '' : 'none';
+      if (!ok) i.checked = false;
+    });
+    var vacio = document.getElementById('cliUsrModVacio');
+    if (!disp.length){
+      if (!vacio){ vacio = document.createElement('div'); vacio.id = 'cliUsrModVacio'; vacio.className = 'nom-muted'; vacio.textContent = 'Tu centro todavía no tiene herramientas para delegar (Afiliados / Informes / Liberar cupo). Se habilitan desde NS.'; formBox.parentNode.insertBefore(vacio, formBox.nextSibling); }
+      vacio.style.display = '';
+    } else if (vacio){ vacio.style.display = 'none'; }
+  }
   if (!users.length){ cont.innerHTML = '<div class="cfg-empty">Todavía no creaste ningún usuario.</div>'; return; }
   cont.innerHTML = users.map(function(u){
-    var mods = Object.keys(USR_MODULOS_LABEL).map(function(k){
+    var mods = Object.keys(USR_MODULOS_LABEL).filter(function(k){ return disp.indexOf(k) >= 0; }).map(function(k){
       var on = (u.modulos || []).indexOf(k) >= 0;
       return '<label class="inf-campo" style="flex-direction:row;align-items:center;gap:6px;margin:0">'
         + '<input type="checkbox" data-usr="' + esc(u.username) + '" value="' + k + '"' + (on ? ' checked' : '') + '> ' + esc(USR_MODULOS_LABEL[k]) + '</label>';

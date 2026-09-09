@@ -7026,11 +7026,20 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     const slug = decodeURIComponent(umClinica[1]);
-    // Solo la clínica dueña de ESE centro (el admin usa /api/users, no esto).
-    if (!(me.role === "clinica" && me.centro === slug)) return json(res, 403, { error: "forbidden" });
+    // La clínica dueña de ESE centro, o el admin (que puede gestionarlo desde el
+    // modo espejo o directamente). El admin igual tiene su panel /api/users.
+    const esAdmin = me.role === "admin";
+    if (!(esAdmin || (me.role === "clinica" && me.centro === slug))) return json(res, 403, { error: "forbidden" });
     const targetUname = umClinica[2] ? umClinica[2].toLowerCase() : "";
     const isPwd = !!umClinica[3];
     const users = loadUsers() || [];
+    // Qué módulos puede darle la clínica a su empleado = SOLO los que la clínica
+    // misma tiene habilitados (no puede dar una herramienta que ella no tiene).
+    // Mapa capacidad-de-la-clínica -> módulo-del-empleado. El admin puede dar todos.
+    const CAP_A_MODULO = { omes: "informes", credencial: "padron", liberarcupo: "liberarcupo" };
+    const modsPermitidos = esAdmin
+      ? new Set(OPERADOR_CLINICA_MODULOS)
+      : new Set(capacidadesClinica(me).map((c) => CAP_A_MODULO[c]).filter(Boolean));
 
     // Listar los empleados (operador_clinica) de su centro.
     if (!targetUname && (req.method === "GET" || !req.method)) {
@@ -7038,7 +7047,9 @@ const server = http.createServer(async (req, res) => {
         users: users.filter((u) => u.role === "operador_clinica" && u.centro === slug)
           .map((u) => ({ username: u.username, name: u.name, modulos: Array.isArray(u.modulos) ? u.modulos : [],
                          email: u.email || "", active: u.active !== false, mustChange: !!u.mustChange })),
-        modulosDisponibles: Array.from(OPERADOR_CLINICA_MODULOS),
+        // Solo los módulos que este usuario (clínica) puede otorgar — el front
+        // muestra esos checkboxes y esconde el resto.
+        modulosDisponibles: Array.from(modsPermitidos),
       });
     }
 
@@ -7049,7 +7060,7 @@ const server = http.createServer(async (req, res) => {
       const nm = String(name || "").trim();
       const pw = String(password || "");
       const em = String(email || "").trim().toLowerCase();
-      const mods = (Array.isArray(modulos) ? modulos : []).map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+      const mods = (Array.isArray(modulos) ? modulos : []).map((s) => String(s || "").trim()).filter((s) => modsPermitidos.has(s));
       if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
       if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
       if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
@@ -7096,7 +7107,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (body.modulos !== undefined) {
         users[idx].modulos = (Array.isArray(body.modulos) ? body.modulos : [])
-          .map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+          .map((s) => String(s || "").trim()).filter((s) => modsPermitidos.has(s));
       }
       saveUsers(users);
       return json(res, 200, { ok: true });
