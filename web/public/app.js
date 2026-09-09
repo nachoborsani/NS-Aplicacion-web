@@ -968,7 +968,7 @@ function renderInformesConfigLists(){
       centrosOrden.forEach(function(centro){
         var esps = Object.keys(grupos[centro]).sort(function(a, b){ return a.localeCompare(b); });
         var total = esps.reduce(function(s, e){ return s + grupos[centro][e].length; }, 0);
-        html += '<details open class="desc-esp"><summary class="desc-esp-head" style="cursor:pointer;font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(centro) + ' <span class="nom-muted" style="text-transform:none;font-weight:600">· ' + total + '</span></summary>';
+        html += '<details class="desc-esp"><summary class="desc-esp-head" style="cursor:pointer;font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(centro) + ' <span class="nom-muted" style="text-transform:none;font-weight:600">· ' + total + '</span></summary>';
         esps.forEach(function(esp){
           html += '<div class="desc-est"><div class="desc-est-head" style="font-weight:700;font-size:12px;color:var(--text-2);margin:8px 0 3px 2px">' + esc(esp) + ' <span class="nom-muted">· ' + grupos[centro][esp].length + '</span></div>';
           html += grupos[centro][esp].map(medItemHtml).join('');
