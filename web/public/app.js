@@ -907,7 +907,12 @@ function renderInformesConfigLists(){
       descs.forEach(function(d){
         var ests = (d.modelos || []).map(function(k){ return modeloDe[k]; }).filter(Boolean);
         if (!ests.length){ put('General', '__all__', 'Todos los estudios', d); return; }
-        ests.forEach(function(m){ put(m.especialidad || 'General', m.key, m.practica || m.key, d); });
+        // Cada resultado se muestra UNA sola vez, bajo su primer estudio (ordenado
+        // por nombre). Si aplica a varios estudios, esos se ven en los chips
+        // "Informes y valores" del propio resultado (antes se repetía bajo cada uno).
+        ests.sort(function(a, b){ return (a.practica || '').localeCompare(b.practica || ''); });
+        var m = ests[0];
+        put(m.especialidad || 'General', m.key, m.practica || m.key, d);
       });
       var esps = Object.keys(grupos).sort(function(a, b){ return a.localeCompare(b); });
       var html = '<div style="margin-bottom:6px"><input class="inp" id="infDescFiltro" placeholder="Buscar por nombre, estudio o especialidad… (ej: electro)" oninput="filtrarResultadosInforme()"></div>';
