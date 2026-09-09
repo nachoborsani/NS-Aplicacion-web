@@ -4825,9 +4825,14 @@ async function crearYSubirSeleccionadosPanel(panelId){
   nsAlert('Encolados ' + hechos + ' informe(s).' + (saltados ? ' ' + saltados + ' salteado(s) (sin OME/modelo o ya generados).' : ''));
 }
 function opcionesModelo(m){
+  var slug = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
+  // Un médico pertenece a ESTE centro si no tiene clientes (global) o si lo
+  // incluye. Antes el desplegable mostraba médicos de TODOS los centros.
+  var delCentro = function(md){ return !Array.isArray(md.clientes) || md.clientes.length === 0 || (slug && md.clientes.indexOf(slug) >= 0); };
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
-  var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key); });
-  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // sin médico propio → ofrecer todos
+  var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key) && delCentro(md); });
+  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []).filter(delCentro); // sin médico propio del modelo → los del centro
+  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // fallback: ninguno del centro → todos, para no dejar el selector vacío
   var camposReq = (m.campos || []).filter(function(c){ return c.requerido; });
   return { presets: presets, medicos: medicos, camposReq: camposReq,
     haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 };
@@ -4967,7 +4972,10 @@ function mcEnsureModalCss(){
 }
 function modalOpcionesInforme(x, m, op, subir, btn, visita){
   mcEnsureModalCss();
-  var medDef = loteMedicoParaModelo(m.key) || (op.medicos[0] && op.medicos[0].id) || '';
+  // Default: el médico habitual del modelo, pero solo si está entre los del
+  // centro (op.medicos ya viene filtrado); si no, el primero del centro.
+  var medDef = loteMedicoParaModelo(m.key);
+  if (!op.medicos.some(function(md){ return md.id === medDef; })) medDef = (op.medicos[0] && op.medicos[0].id) || '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
   var medOpts = op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
   var campoHtml = function(c){
