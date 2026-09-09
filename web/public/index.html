@@ -663,15 +663,18 @@
               </article>
               </section>
 
-              <!-- Pendientes del centro (operador_clinica): mismo contador que ve Javi
-                   de este cliente en su Inicio ("Pendientes de Javi") - sin plata ni
-                   detalle de pacientes, eso sigue viviendo en la Cabina de informes. -->
+              <!-- Pendientes del centro (operador_clinica): mismo contador que ve el
+                   operador de NS de este cliente en su Inicio - sin plata ni detalle de
+                   pacientes, eso sigue viviendo en la Cabina de informes. El título es un
+                   saludo (mismo estilo que el Inicio de NS) con el nombre DEL CENTRO, no
+                   con el nombre de la persona de NS que lo resuelve - de cara al centro
+                   eso es un detalle interno nuestro, no algo que tenga que ver en pantalla. -->
               <section id="client-section-pendientes" class="client-section" style="display:none">
                 <article class="client-card">
                   <div class="client-card-head">
-                    <h3>Pendientes con Javi</h3>
+                    <h3 id="centroPendSaludo">Pendientes</h3>
                   </div>
-                  <p class="nom-muted" style="margin-top:-6px">Lo que le falta a este centro es lo que Javi tiene pendiente de resolver.</p>
+                  <p class="nom-muted" style="margin-top:-6px">Esto es lo que todavía le falta resolver a este centro.</p>
                   <div id="centroPendCard"><p class="nom-muted">Cargando…</p></div>
                 </article>
               </section>
@@ -1298,7 +1301,7 @@
           <div class="nom-status card lc-head-card">
             <div id="lcStatusText"><span>Seleccioná OMEs no validadas de las bandejas CUP guardadas y encolá la cancelación de aceptación en PAMI.</span></div>
             <div class="nom-upload">
-              <label class="field" style="min-width:220px">
+              <label class="field" id="lcClienteWrap" style="min-width:220px">
                 <span>Cliente</span>
                 <select class="inp" id="lcCliente" onchange="onLiberarCupoCliente()"></select>
               </label>

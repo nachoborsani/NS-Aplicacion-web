@@ -1914,15 +1914,17 @@ async function iniRefrescarBell(){
 function iniRenderDrawer(){
   var body = document.getElementById('drawerBody'); if(!body) return;
   // Operador Clínica: la campana no avisa de mensajes del Inicio (no los ve),
-  // avisa de lo que el centro tiene pendiente con Javi - mismo número que la
-  // pantalla "Pendientes" del menú izquierdo.
+  // avisa de lo que el centro tiene pendiente - mismo número que la pantalla
+  // "Pendientes" del menú izquierdo. Sin nombre de NS: de cara al centro,
+  // quién de nuestro equipo lo resuelve es un detalle interno, no algo que
+  // tenga que verse acá.
   if (ME && ME.role === 'operador_clinica'){
     var np = OPCLI_PEND_TOTAL || 0;
     body.innerHTML = np>0
       ? '<div class="drawer-item" onclick="closeDrawer();go(\'clientes\');selectClientWhenReady(ME.centro,\'pendientes\')">'
-        + '<div class="di-ic">🔔</div><div class="di-tx"><b>' + np + ' pendiente' + (np>1?'s':'') + ' con Javi</b>'
+        + '<div class="di-ic">🔔</div><div class="di-tx"><b>' + np + ' pendiente' + (np>1?'s':'') + '</b>'
         + '<span>Tocá para ver el detalle.</span></div></div>'
-      : '<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>No hay notificaciones</b><span>Cuando tengas algo pendiente con Javi, te va a aparecer acá.</span></div>';
+      : '<div class="empty"><div class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><b>No hay notificaciones</b><span>Cuando tengas algo pendiente, te va a aparecer acá.</span></div>';
     return;
   }
   var n = iniTotalNoLeidos();
@@ -2898,20 +2900,25 @@ function clientSectionCrumb(found){
   }
   return found.crumb;
 }
-// Pendientes del centro (operador_clinica): mismos 3 números que ve Javi de
-// este cliente en su Inicio ("Pendientes de Javi"), sin plata ni detalle de
+// Pendientes del centro (operador_clinica): mismos 3 números que ve el
+// operador de NS de este cliente en su Inicio, sin plata ni detalle de
 // pacientes - eso sigue viviendo en la Cabina de informes, que no es de acá.
+// El título de la tarjeta es un saludo con el nombre DEL CENTRO (mismo estilo
+// que saludoHTML del Inicio de NS) - los informes que faltan son de/para ESE
+// centro, así que es lo que tiene que verse, no quién de NS los resuelve.
 async function loadClientPendientesCentro(){
   var box = document.getElementById('centroPendCard');
   if (!box || !ACTIVE_CLIENT) return;
+  var tit = document.getElementById('centroPendSaludo');
+  if (tit) tit.innerHTML = saludoHTML({ name: ACTIVE_CLIENT.name });
   box.innerHTML = '<p class="nom-muted">Cargando…</p>';
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/pendientes-centro');
   if (!res.ok || !res.data){ box.innerHTML = '<p class="nom-muted">No se pudo cargar.</p>'; return; }
   var d = res.data;
   var total = (d.pendientes||0) + (d.sinTransmitir||0) + (d.cup||0);
-  if (!total){ box.innerHTML = '<p class="nom-muted">Sin pendientes 🎉 Javi no te está esperando nada por ahora.</p>'; return; }
+  if (!total){ box.innerHTML = '<p class="nom-muted">Sin pendientes 🎉 No hay nada esperando resolución por ahora.</p>'; return; }
   var filas = [];
-  if (d.pendientes) filas.push({ n:d.pendientes, tx:'informe' + (d.pendientes===1?'':'s') + ' en gestión con Javi' });
+  if (d.pendientes) filas.push({ n:d.pendientes, tx:'informe' + (d.pendientes===1?'':'s') + ' asignado' + (d.pendientes===1?'':'s') + ' en gestión' });
   if (d.sinTransmitir) filas.push({ n:d.sinTransmitir, tx:'informe' + (d.sinTransmitir===1?'':'s') + ' resuelto' + (d.sinTransmitir===1?'':'s') + ', falta transmitir' });
   if (d.cup) filas.push({ n:d.cup, tx:'pendiente' + (d.cup===1?'':'s') + ' de validar o transmitir' });
   box.innerHTML = filas.map(function(f){
@@ -9628,6 +9635,14 @@ async function loadLiberarCupoView(){
       var raw = await r.json();
       var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
       list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+      // /api/clientes ya viene scopeado por rol (ver permissions.js): si a este
+      // usuario le queda un solo cliente posible (operador_clinica, atado a su
+      // centro), no tiene sentido mostrarle un selector - se ve como una
+      // herramienta de NS con un cliente de más, en vez de "el liberar cupo de
+      // este centro". Se oculta y se deja autoseleccionado.
+      var wrap = document.getElementById('lcClienteWrap');
+      if (wrap) wrap.style.display = (list.length <= 1) ? 'none' : '';
+      if (list.length === 1) sel.value = list[0].slug;
       try {
         var last = localStorage.getItem('ns-liberar-cupo-cliente') || '';
         if (last && Array.prototype.some.call(sel.options, function(o){ return o.value === last; })) sel.value = last;
