@@ -989,15 +989,20 @@ async function buildInformePdf(modeloKey, input) {
     const firma = await doc.embedPng(firmaBuf);
     const { w: fw, h: fh } = encajarImagen(firma, 150, 55);
     page.drawImage(firma, { x: firmaAreaX + (firmaAreaW - fw) / 2, y: fy - 22, width: fw, height: fh });
+    // Nombre + matrícula debajo de la firma (solo modelos que lo piden).
+    if (modelo.firmaConMatricula && (medicoNombre || medicoMatricula)) {
+      let my = fy - 44;
+      if (medicoNombre) { centerIn(medicoNombre, firmaAreaX, width - Mx, my, { bold: true, size: 10 }); my -= 13; }
+      if (medicoMatricula) { centerIn(medicoMatricula, firmaAreaX, width - Mx, my, { size: 9.5, color: soft }); }
+    }
+  } else if (medicoNombre) {
+    // Hay médico pero NO firma cargada: se muestra el nombre bajo la etiqueta
+    // "MÉDICO", sin línea de firma (no se simula una firma que no existe).
+    centerIn("MÉDICO", firmaAreaX, width - Mx, fy, { bold: true, size: 9, color: soft });
+    centerIn(medicoNombre, firmaAreaX, width - Mx, fy - 16, { bold: true, size: 10.5 });
+    if (medicoMatricula) centerIn("Mat. " + medicoMatricula, firmaAreaX, width - Mx, fy - 30, { size: 9, color: soft });
   }
-  // Si el médico no tiene firma cargada, NO se dibuja el placeholder "Firma
-  // Médico" ni la línea: el informe sale sin sector de firma (pedido del user).
-  // Nombre + matrícula del médico que firma (solo modelos que lo piden).
-  if (modelo.firmaConMatricula && (medicoNombre || medicoMatricula)) {
-    let my = fy - 44;
-    if (medicoNombre) { centerIn(medicoNombre, firmaAreaX, width - Mx, my, { bold: true, size: 10 }); my -= 13; }
-    if (medicoMatricula) { centerIn(medicoMatricula, firmaAreaX, width - Mx, my, { size: 9.5, color: soft }); }
-  }
+  // Si no hay firma NI médico, no se dibuja nada en el sector de firma.
 
   // Caja: pie del centro (abajo). Nombre/dirección/teléfono salen del cliente
   // elegido al generar (input.pieLines); el modelo solo lo fija si necesita

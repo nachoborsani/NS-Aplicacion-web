@@ -10638,7 +10638,10 @@ const server = http.createServer(async (req, res) => {
         paciente: body.paciente || {},
         textoInforme: body.textoInforme,
         // Si no se escribió un solicitante propio, se completa con el médico elegido.
-        solicitante: body.solicitante || (medico ? medico.nombre : ""),
+        // El médico se copia a "Médico Solicitante" SOLO si tiene firma (es el
+        // firmante tradicional). Un médico sin firma (ej. efector cargado sin
+        // firma) NO va acá: se muestra abajo como "MÉDICO" en el sector de firma.
+        solicitante: body.solicitante || (medico && firmaExiste(medico.firma) ? medico.nombre : ""),
         estudio: body.estudio,
         valores: sanitizarValores(body.valores),
         firmaArchivo: medico ? medico.firma : "",
@@ -10701,7 +10704,10 @@ const server = http.createServer(async (req, res) => {
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: pac,
         textoInforme: body.textoInforme,
-        solicitante: body.solicitante || (medico ? medico.nombre : ""),
+        // El médico se copia a "Médico Solicitante" SOLO si tiene firma (es el
+        // firmante tradicional). Un médico sin firma (ej. efector cargado sin
+        // firma) NO va acá: se muestra abajo como "MÉDICO" en el sector de firma.
+        solicitante: body.solicitante || (medico && firmaExiste(medico.firma) ? medico.nombre : ""),
         estudio: body.estudio,
         valores: sanitizarValores(body.valores),
         firmaArchivo: medico ? medico.firma : "",
@@ -10783,7 +10789,7 @@ const server = http.createServer(async (req, res) => {
         const bytes = await informes.buildInformePdf(modelo, {
           paciente: pac,
           textoInforme: it.textoInforme,
-          solicitante: it.solicitante || (medico ? medico.nombre : ""),
+          solicitante: it.solicitante || (medico && firmaExiste(medico.firma) ? medico.nombre : ""),
           estudio: it.estudio,
           valores: sanitizarValores(it.valores),
           firmaArchivo: medico ? medico.firma : "",
@@ -11200,6 +11206,23 @@ function ensureModelosUnificados() {
       if (!cambio) console.log("[baimed-firma-cleanup] nada para limpiar (ningún médico con firma estaba asociado a dbaime).");
     }
   } catch (e) { console.log("[baimed-firma-cleanup] omitido:", e && e.message); }
+
+  // Alta UNA SOLA VEZ del efector de electros de Baimed: "DOMINIQUE GONDIM", SIN
+  // firma (aparece como "MÉDICO" al pie del informe, no como firmante). Solo para
+  // el electro y solo para Baimed (dbaime). One-time (flag): si el admin lo edita
+  // o le carga una firma después, el próximo deploy no lo vuelve a tocar.
+  try {
+    const cfg = loadInformesConfig();
+    if (!cfg._baimedGondimSeedDone) {
+      if (!Array.isArray(cfg.medicos)) cfg.medicos = [];
+      if (!cfg.medicos.some((m) => m.id === "dominique-gondim")) {
+        cfg.medicos.push({ id: "dominique-gondim", nombre: "DOMINIQUE GONDIM", firma: "", matricula: "", modelos: ["electro"], clientes: ["dbaime"] });
+        console.log("[baimed-gondim-seed] médico DOMINIQUE GONDIM creado (electro, dbaime, sin firma).");
+      }
+      cfg._baimedGondimSeedDone = true;
+      saveInformesConfig(cfg);
+    }
+  } catch (e) { console.log("[baimed-gondim-seed] omitido:", e && e.message); }
 }
 ensureModelosUnificados();
 
