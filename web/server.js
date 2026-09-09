@@ -34,6 +34,9 @@ const {
   medicosVisiblesPara,
   OPERADOR_CLINICA_MODULOS,
   opClinicaTieneModulo,
+  CLINICA_CAPACIDADES,
+  capacidadesClinica,
+  clinicaTieneCap,
   aplicarGateDeRol,
 } = require("./permissions.js");
 
@@ -2559,7 +2562,8 @@ function readBody(req) {
 function publicUser(u) {
   return { username: u.username, name: u.name, role: u.role, centro: u.centro || "",
            clientes: Array.isArray(u.clientes) ? u.clientes : [],
-           modulos: Array.isArray(u.modulos) ? u.modulos : [], mustChange: !!u.mustChange };
+           modulos: Array.isArray(u.modulos) ? u.modulos : [],
+           capacidades: u.role === "clinica" ? capacidadesClinica(u) : [], mustChange: !!u.mustChange };
 }
 // OPERADOR_CLINICA_MODULOS/opClinicaTieneModulo: movidos a permissions.js.
 
@@ -6868,6 +6872,7 @@ const server = http.createServer(async (req, res) => {
         centro: u.centro || "",
         clientes: Array.isArray(u.clientes) ? u.clientes : [],
         modulos: Array.isArray(u.modulos) ? u.modulos : [],
+        capacidades: u.role === "clinica" ? capacidadesClinica(u) : [],
         email: u.email || "",
         active: u.active !== false,
         mustChange: !!u.mustChange,
@@ -6880,7 +6885,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password, email, centro, clientes, modulos } = await readBody(req);
+    const { username, name, role, password, email, centro, clientes, modulos, capacidades } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
@@ -6893,6 +6898,9 @@ const server = http.createServer(async (req, res) => {
     // Módulos de un operador_clinica (afiliados/informes/liberar cupo): por
     // usuario puntual, no por rol - ver OPERADOR_CLINICA_MODULOS.
     const mods = (Array.isArray(modulos) ? modulos : []).map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+    // Capacidades del rol clínica (qué ve). Si no viene el campo, se deja sin
+    // guardar => aplica el default (todo menos "omes"); si viene, se filtra a las válidas.
+    const caps = Array.isArray(capacidades) ? capacidades.map((s) => String(s || "").trim()).filter((s) => CLINICA_CAPACIDADES.includes(s)) : null;
     if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
     if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
     if (!ROLES.has(rl)) return json(res, 400, { error: "Elegí un perfil válido." });
@@ -6912,6 +6920,7 @@ const server = http.createServer(async (req, res) => {
     // hace falta filtrar por rol acá - guardamos lo que vino.
     users.push({ username: uname, name: nm, role: rl, email: em, centro: (rl === "clinica" || rl === "operador_clinica") ? ce : "",
                  clientes: cls, modulos: rl === "operador_clinica" ? mods : [],
+                 ...(rl === "clinica" && caps ? { capacidades: caps } : {}),
                  password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
     return json(res, 201, { ok: true });
@@ -6977,6 +6986,11 @@ const server = http.createServer(async (req, res) => {
       if (body.modulos !== undefined && users[idx].role === "operador_clinica") {
         users[idx].modulos = (Array.isArray(body.modulos) ? body.modulos : [])
           .map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+      }
+      // Capacidades (qué ve) del rol clínica: idem, solo aplica a ese rol.
+      if (body.capacidades !== undefined && users[idx].role === "clinica") {
+        users[idx].capacidades = (Array.isArray(body.capacidades) ? body.capacidades : [])
+          .map((s) => String(s || "").trim()).filter((s) => CLINICA_CAPACIDADES.includes(s));
       }
       // Un usuario clínica u operador_clinica siempre debe tener un centro válido.
       if ((users[idx].role === "clinica" || users[idx].role === "operador_clinica") && !loadClientsStore().some((c) => c.slug === users[idx].centro)) {

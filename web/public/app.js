@@ -2578,15 +2578,17 @@ function renderClientList(){
     // este menú de la izquierda ES su navegación. Por eso todo lo que la clínica
     // puede abrir tiene que estar acá (una sección de su centro con `section`, o
     // una vista propia de la herramienta con `view`, como Crear informes).
+    // Cada ítem lleva su capacidad; el admin prende/apaga cada una por usuario.
+    // "Crear informes" (y todo lo de OMEs) va bajo la capacidad 'omes'.
     var SECC_CLINICA = [
-      { label: 'Dashboard',            section: 'mescurso' },
-      { label: 'Reportes',             section: 'dashboard' },
-      { label: 'Crear informes',       view: 'informes' },
-      { label: 'Credencial provisoria', section: 'credencialcli' },
-      { label: 'Usuarios del centro',  section: 'usuarioscli' },
-      { label: 'Honorarios',           section: 'honorarios' },
-      { label: 'Datos del centro',     section: 'basica' },
-    ];
+      { label: 'Dashboard',            section: 'mescurso',     cap: 'dashboard' },
+      { label: 'Reportes',             section: 'dashboard',    cap: 'reportes' },
+      { label: 'Crear informes',       view: 'informes',        cap: 'omes' },
+      { label: 'Credencial provisoria', section: 'credencialcli', cap: 'credencial' },
+      { label: 'Usuarios del centro',  section: 'usuarioscli',  cap: 'usuarios' },
+      { label: 'Honorarios',           section: 'honorarios',   cap: 'honorarios' },
+      { label: 'Datos del centro',     section: 'basica',       cap: 'datos' },
+    ].filter(function(s){ return clinicaTieneCap(s.cap); });
     var enInformes = (document.getElementById('view-informes') && document.getElementById('view-informes').style.display === 'block');
     cons.innerHTML = SECC_CLINICA.map(function(s){
       var active = s.view
@@ -2766,6 +2768,14 @@ var CLIENT_SECTIONS = [
 // usuarios puntuales (no es un tema de rol — ni "Dube" ni ningún otro admin
 // nuevo lo debe ver por default). Sumar a alguien es agregar su username acá.
 var PLAN_SALUD_USUARIOS = ['seba', 'nacho'];
+// Capacidades del rol clínica (qué ve): las configura el admin por usuario.
+// ME.capacidades ya viene resuelto del server (default = todo menos "omes").
+var CLINICA_CAP_DEFAULT_FRONT = ['dashboard', 'reportes', 'credencial', 'honorarios', 'usuarios', 'datos'];
+function capacidadesCliente(){
+  if (!(ME && ME.role === 'clinica')) return [];
+  return Array.isArray(ME.capacidades) ? ME.capacidades : CLINICA_CAP_DEFAULT_FRONT.slice();
+}
+function clinicaTieneCap(cap){ return capacidadesCliente().indexOf(cap) >= 0; }
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera tienen tablero
 // propio desde la bandeja automática; no usan valorización ni reportes cerrados.
 // Los consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
@@ -2801,15 +2811,23 @@ function clientSeccionesPermitidas(){
     seccionesMC.push('general');
     return seccionesMC;
   }
-  var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
-  // La clínica NO adjunta reportes (solo lectura). El resto sí.
-  if (!esClinica) base.push('reportes');
-  // Credencial provisoria de PAMI: herramienta para el propio centro (baja la
-  // credencial de un afiliado por benef/DNI/trámite). Solo la clínica (el dueño).
-  if (esClinica) base.push('credencialcli');
-  // Autogestión de usuarios: la clínica crea/gestiona a sus propios empleados
-  // (operador_clinica) de su centro. Solo el dueño.
-  if (esClinica) base.push('usuarioscli');
+  // Clínica (dueño): qué secciones ve lo configura el admin por usuario
+  // (capacidades). Default cuando no hay nada guardado: todo menos "omes".
+  // "Crear informes" no es una sección de acá: es una vista aparte, va en el
+  // menú por SECC_CLINICA y la gatea la capacidad 'omes'.
+  if (esClinica){
+    var caps = capacidadesCliente();
+    var permitCli = [];
+    if (caps.indexOf('dashboard') >= 0) permitCli.push('mescurso');
+    if (caps.indexOf('reportes') >= 0) permitCli.push('dashboard');
+    if (caps.indexOf('credencial') >= 0) permitCli.push('credencialcli');
+    if (caps.indexOf('honorarios') >= 0) permitCli.push('honorarios');
+    if (caps.indexOf('usuarios') >= 0) permitCli.push('usuarioscli');
+    if (caps.indexOf('datos') >= 0) permitCli.push('basica');
+    if (clienteTienePlanSalud() && puedeVerPlanSalud()) permitCli.push('plansalud');
+    return permitCli;
+  }
+  var base = ['mescurso', 'basica', 'dashboard', 'honorarios', 'reportes'];
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
   // Plan Salud: SOLO en centros que ya la tienen conectada (hoy: CIMA -
@@ -8113,6 +8131,7 @@ function openUserModal(mode, un){
   umPintarClientes(u && u.clientes);
   umPintarCentro(u && u.centro);
   umPintarModulos(u && u.modulos);
+  umPintarCapacidades(u ? u.capacidades : null);
   umToggleClientes();
   showModal('userModal','umScrim');
   document.getElementById('umName').focus();
@@ -8148,6 +8167,20 @@ function umPintarModulos(sel){
 function umModulosElegidos(){
   return [].slice.call(document.querySelectorAll('#umModulos input:checked')).map(function(i){ return i.value; });
 }
+// Capacidades del rol clínica (qué ve): al EDITAR se reflejan las guardadas; al
+// CREAR (o si el usuario no tiene nada) se pinta el default = todo menos "omes".
+var CLINICA_CAP_DEFAULT_UM = ['dashboard', 'reportes', 'credencial', 'honorarios', 'usuarios', 'datos'];
+function umPintarCapacidades(sel){
+  // Al editar un clínica, `sel` viene resuelto del server (efectivo); al crear
+  // es null y se muestra el default (todo menos "omes").
+  var elegidos = Array.isArray(sel) ? sel : CLINICA_CAP_DEFAULT_UM.slice();
+  [].slice.call(document.querySelectorAll('#umCapacidades input')).forEach(function(i){
+    i.checked = elegidos.indexOf(i.value) >= 0;
+  });
+}
+function umCapacidadesElegidas(){
+  return [].slice.call(document.querySelectorAll('#umCapacidades input:checked')).map(function(i){ return i.value; });
+}
 function umToggleClientes(){
   var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
@@ -8156,6 +8189,8 @@ function umToggleClientes(){
   if (cf) cf.style.display = (role === 'clinica' || role === 'operador_clinica') ? '' : 'none';
   var mf = document.getElementById('umModulosField');
   if (mf) mf.style.display = (role === 'operador_clinica') ? '' : 'none';
+  var capf = document.getElementById('umCapacidadesField');
+  if (capf) capf.style.display = (role === 'clinica') ? '' : 'none';
   var chint = document.getElementById('umCentroHint');
   if (chint) chint.textContent = (role === 'operador_clinica')
     ? 'A qué centro pertenece. Por ahora este perfil no ve gráficas ni valores, solo Datos del centro.'
@@ -8181,10 +8216,10 @@ async function saveUser(){
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos() });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), capacidades: umCapacidadesElegidas() });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos() });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), capacidades: umCapacidadesElegidas() });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }

@@ -98,6 +98,22 @@ function opClinicaTieneModulo(me, modulo) {
   return !!(me && me.role === "operador_clinica" && Array.isArray(me.modulos) && me.modulos.includes(modulo));
 }
 
+// Capacidades del rol "clinica" (dueño): qué secciones/herramientas ve el
+// centro, por usuario (lo configura el admin al editar el usuario clínica).
+// Claves = las secciones del menú de la clínica + "omes" (Crear informes y
+// crear/subir informe). DEFAULT cuando el usuario no tiene nada guardado: TODO
+// menos "omes" (un centro nuevo no hace informes/OMEs hasta que NS lo habilite).
+const CLINICA_CAPACIDADES = ["dashboard", "reportes", "omes", "credencial", "honorarios", "usuarios", "datos"];
+const CLINICA_CAP_DEFAULT = CLINICA_CAPACIDADES.filter((c) => c !== "omes");
+function capacidadesClinica(u) {
+  if (!u) return [];
+  if (Array.isArray(u.capacidades)) return u.capacidades.filter((c) => CLINICA_CAPACIDADES.includes(c));
+  return CLINICA_CAP_DEFAULT.slice();
+}
+function clinicaTieneCap(me, cap) {
+  return !!(me && me.role === "clinica" && capacidadesClinica(me).includes(cap));
+}
+
 // ============================================================================
 // GATE ÚNICO por rol — se llama una sola vez, antes de despachar cualquier
 // ruta bajo /api/. Devuelve null si está permitido (seguir), o { status,
@@ -136,6 +152,20 @@ function aplicarGateDeRol(req, meGate, p) {
     // centro, así que no puede crear un admin ni tocar otro centro.
     else if (suCentro && ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
              && /^\/api\/clientes\/[^/]+\/usuarios(?:\/[a-z0-9._-]+(?:\/password)?)?$/.test(p)) permitido = true;
+    // Capacidades del usuario (qué habilitó el admin): aunque el path esté
+    // permitido arriba, si esa capacidad está apagada para ESTE usuario, se
+    // bloquea. Es un "deny": la lista de arriba da el permiso base y esto solo
+    // puede sacarlo. Cubre las herramientas con endpoint propio (informes/OMEs,
+    // credencial, honorarios+liquidación, usuarios); las secciones de solo
+    // lectura del propio centro (dashboard/reportes/datos) se ocultan en el front.
+    const capReq = /^\/api\/informes\//.test(p) ? "omes"
+      : (p === "/api/credencial-provisoria") ? "credencial"
+      : /\/honorarios(\/liquidacion)?$/.test(p) ? "honorarios"
+      : /^\/api\/clientes\/[^/]+\/usuarios(\/|$)/.test(p) ? "usuarios"
+      : null;
+    if (permitido && capReq && !clinicaTieneCap(meGate, capReq)) {
+      return { status: 403, body: { error: "Tu centro no tiene habilitada esa herramienta. Pedísela a NS." } };
+    }
     if (!permitido) return { status: 403, body: { error: "Tu usuario solo puede ver su propio centro (solo lectura)." } };
     return null;
   }
@@ -230,5 +260,8 @@ module.exports = {
   medicosVisiblesPara,
   OPERADOR_CLINICA_MODULOS,
   opClinicaTieneModulo,
+  CLINICA_CAPACIDADES,
+  capacidadesClinica,
+  clinicaTieneCap,
   aplicarGateDeRol,
 };
