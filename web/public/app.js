@@ -2588,6 +2588,12 @@ function renderClientList(){
     }).join('');
     if (med) med.innerHTML = '';
     if (medGroup) medGroup.style.display = 'none';
+    // Al entrar a "Crear informes" (una vista aparte, no una sección del centro),
+    // go() cierra el grupo del menú - lo dejaríamos sin navegación. Mientras esté
+    // en Informes forzamos el grupo abierto para que el menú de la izquierda siga
+    // visible y pueda volver a su centro con un clic.
+    var grpCli = document.getElementById('navGroupConsultorios');
+    if (grpCli && enInformes) grpCli.classList.add('open');
     cons.querySelectorAll('[data-cli-view]').forEach(function(btn){
       btn.addEventListener('click', function(){ go(btn.getAttribute('data-cli-view')); renderClientList(); });
     });
