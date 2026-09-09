@@ -454,6 +454,7 @@
                 <button id="clientTabOsdop" type="button" onclick="setClientSection('osdop')" style="display:none">OSDOP</button>
                 <button id="clientTabPlanSalud" type="button" onclick="setClientSection('plansalud')" style="display:none">Plan Salud</button>
                 <button id="clientTabCredencialCli" type="button" onclick="setClientSection('credencialcli')" style="display:none">Credencial</button>
+                <button id="clientTabUsuariosCli" type="button" onclick="setClientSection('usuarioscli')" style="display:none">Usuarios</button>
                 <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
               </div>
 
@@ -479,6 +480,38 @@
                   </div>
                   <div class="msg err" id="clicredError" style="display:none"></div>
                   <div id="clicredResult" style="display:none;margin-top:12px"></div>
+                </div>
+              </section>
+
+              <section id="client-section-usuarios" class="client-section" style="display:none">
+                <div class="card" style="max-width:720px">
+                  <div class="cred-head">
+                    <h3>👤 Usuarios del centro</h3>
+                    <span class="nom-muted">Creá y administrá los usuarios de tu equipo (recepción). Cada uno entra solo a lo que le habilites, siempre dentro de tu centro.</span>
+                  </div>
+                  <form id="cliUsrForm" class="cred-form" style="margin-top:12px" onsubmit="crearUsuarioCentro(event)">
+                    <label>Usuario<input class="inp" id="cliUsrUser" autocomplete="off" placeholder="ej: recepcion1" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9._-]/g,'')"></label>
+                    <label>Nombre y apellido<input class="inp" id="cliUsrName" autocomplete="off" placeholder="ej: Ana Pérez"></label>
+                    <label>Email <span class="nom-muted">(opcional)</span><input class="inp" id="cliUsrEmail" autocomplete="off" inputmode="email" placeholder="ana@centro.com"></label>
+                    <label>Contraseña inicial<input class="inp" id="cliUsrPass" type="text" autocomplete="off" placeholder="mínimo 6 caracteres"></label>
+                  </form>
+                  <div style="margin-top:10px">
+                    <div class="cfg-scope-lbl">¿A qué puede entrar?</div>
+                    <div id="cliUsrModulos" class="inf-campos" style="gap:6px 18px">
+                      <label class="inf-campo" style="flex-direction:row;align-items:center;gap:7px"><input type="checkbox" value="padron"> Afiliados (padrón y credenciales)</label>
+                      <label class="inf-campo" style="flex-direction:row;align-items:center;gap:7px"><input type="checkbox" value="informes"> Generar informes</label>
+                      <label class="inf-campo" style="flex-direction:row;align-items:center;gap:7px"><input type="checkbox" value="liberarcupo"> Liberar cupo</label>
+                    </div>
+                  </div>
+                  <div class="cred-actions" style="margin-top:12px">
+                    <button class="btn btn-primary" type="button" onclick="crearUsuarioCentro(event)">Crear usuario</button>
+                  </div>
+                  <div class="msg err" id="cliUsrError" style="display:none"></div>
+                  <div class="msg ok" id="cliUsrOk" style="display:none"></div>
+                </div>
+                <div class="card" style="max-width:720px;margin-top:14px">
+                  <h3 style="margin:0 0 10px">Usuarios creados</h3>
+                  <div id="cliUsrList" class="cfg-list"><div class="cfg-empty">Cargando…</div></div>
                 </div>
               </section>
 

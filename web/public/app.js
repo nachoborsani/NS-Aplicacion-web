@@ -419,7 +419,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud', 'honorarios', 'credencialcli'].indexOf(section) >= 0) setClientSection(section);
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud', 'honorarios', 'credencialcli', 'usuarioscli'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -2575,6 +2575,7 @@ function renderClientList(){
       { label: 'Reportes',             section: 'dashboard' },
       { label: 'Crear informes',       view: 'informes' },
       { label: 'Credencial provisoria', section: 'credencialcli' },
+      { label: 'Usuarios del centro',  section: 'usuarioscli' },
       { label: 'Honorarios',           section: 'honorarios' },
       { label: 'Datos del centro',     section: 'basica' },
     ];
@@ -2730,6 +2731,7 @@ var CLIENT_SECTIONS = [
   { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios médicos' },
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
   { key:'credencialcli',sec:'client-section-credencial',tab:'clientTabCredencialCli',crumb:'Credencial provisoria' },
+  { key:'usuarioscli',sec:'client-section-usuarios',tab:'clientTabUsuariosCli',crumb:'Usuarios del centro' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' },
   { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' },
   { key:'plansalud', sec:'client-section-plansalud', tab:'clientTabPlanSalud',crumb:'Plan Salud' },
@@ -2782,6 +2784,9 @@ function clientSeccionesPermitidas(){
   // Credencial provisoria de PAMI: herramienta para el propio centro (baja la
   // credencial de un afiliado por benef/DNI/trámite). Solo la clínica (el dueño).
   if (esClinica) base.push('credencialcli');
+  // Autogestión de usuarios: la clínica crea/gestiona a sus propios empleados
+  // (operador_clinica) de su centro. Solo el dueño.
+  if (esClinica) base.push('usuarioscli');
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
   // Plan Salud: SOLO en centros que ya la tienen conectada (hoy: CIMA -
@@ -2863,6 +2868,7 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'osdop') renderOsdop();
   if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
   if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentro();
+  if (CLIENT_SECTION === 'usuarioscli') loadClientUsuarios();
 }
 function clientSectionCrumb(found){
   if (ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera') {
@@ -2891,6 +2897,100 @@ async function loadClientPendientesCentro(){
     return '<div class="ini-pendop-row" style="padding:10px 0;border-bottom:1px solid var(--border)">'
       + '<span class="ini-pendop-badge pend">' + f.n + '</span> <span>' + esc(f.tx) + '</span></div>';
   }).join('');
+}
+// ===== Autogestión de usuarios del centro (rol clínica) =====
+// La clínica administra a sus propios empleados (operador_clinica de su centro):
+// crear, activar/desactivar, cambiar a qué entra (módulos), resetear clave, borrar.
+// El backend fuerza rol y centro; acá solo armamos la pantalla.
+var USR_MODULOS_LABEL = { padron:'Afiliados', informes:'Generar informes', liberarcupo:'Liberar cupo' };
+function cliUsrCentroSlug(){ return (ME && ME.centro) || (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || ''; }
+async function loadClientUsuarios(){
+  var cont = document.getElementById('cliUsrList');
+  if (!cont) return;
+  var slug = cliUsrCentroSlug();
+  if (!slug){ cont.innerHTML = '<div class="cfg-empty">No se pudo determinar el centro.</div>'; return; }
+  cont.innerHTML = '<div class="cfg-empty">Cargando…</div>';
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/usuarios');
+  if (!res.ok || !res.data){ cont.innerHTML = '<div class="cfg-empty">No se pudo cargar la lista.</div>'; return; }
+  var users = res.data.users || [];
+  if (!users.length){ cont.innerHTML = '<div class="cfg-empty">Todavía no creaste ningún usuario.</div>'; return; }
+  cont.innerHTML = users.map(function(u){
+    var mods = Object.keys(USR_MODULOS_LABEL).map(function(k){
+      var on = (u.modulos || []).indexOf(k) >= 0;
+      return '<label class="inf-campo" style="flex-direction:row;align-items:center;gap:6px;margin:0">'
+        + '<input type="checkbox" data-usr="' + esc(u.username) + '" value="' + k + '"' + (on ? ' checked' : '') + '> ' + esc(USR_MODULOS_LABEL[k]) + '</label>';
+    }).join('');
+    var estado = u.active
+      ? '<span class="cfg-tag on">activo</span>'
+      : '<span class="cfg-tag off">desactivado</span>';
+    var pend = u.mustChange ? ' <span class="nom-muted">· debe cambiar la clave</span>' : '';
+    return '<div class="cfg-item">'
+      + '<div class="cfg-row"><span class="cfg-name">' + esc(u.name) + ' <span class="nom-muted">(' + esc(u.username) + ')</span></span>' + estado + pend + '</div>'
+      + '<div class="cfg-scope" style="display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0">' + mods + '</div>'
+      + '<div class="cred-actions" style="gap:8px;flex-wrap:wrap">'
+      +   '<button class="btn btn-ghost btn-sm" type="button" onclick="guardarModulosUsuario(\'' + esc(u.username) + '\')">Guardar accesos</button>'
+      +   '<button class="btn btn-ghost btn-sm" type="button" onclick="toggleUsuarioCentro(\'' + esc(u.username) + '\',' + (u.active ? 'false' : 'true') + ')">' + (u.active ? 'Desactivar' : 'Activar') + '</button>'
+      +   '<button class="btn btn-ghost btn-sm" type="button" onclick="resetPassUsuarioCentro(\'' + esc(u.username) + '\')">Cambiar clave</button>'
+      +   '<button class="rowbtn danger" title="Eliminar" onclick="eliminarUsuarioCentro(\'' + esc(u.username) + '\')">' + SVG_TRASH + '</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+async function crearUsuarioCentro(ev){
+  if (ev && ev.preventDefault) ev.preventDefault();
+  var err = document.getElementById('cliUsrError'), ok = document.getElementById('cliUsrOk');
+  if (err){ err.style.display = 'none'; err.textContent = ''; }
+  if (ok){ ok.style.display = 'none'; ok.textContent = ''; }
+  var slug = cliUsrCentroSlug();
+  var payload = {
+    username: (document.getElementById('cliUsrUser').value || '').trim(),
+    name: (document.getElementById('cliUsrName').value || '').trim(),
+    email: (document.getElementById('cliUsrEmail').value || '').trim(),
+    password: document.getElementById('cliUsrPass').value || '',
+    modulos: Array.prototype.slice.call(document.querySelectorAll('#cliUsrModulos input:checked')).map(function(c){ return c.value; }),
+  };
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(slug) + '/usuarios', payload);
+  if (!res.ok){ if (err){ err.textContent = (res.data && res.data.error) || 'No se pudo crear el usuario.'; err.style.display = ''; } return; }
+  if (ok){ ok.textContent = 'Usuario creado. La clave inicial la tiene que cambiar en el primer ingreso.'; ok.style.display = ''; }
+  document.getElementById('cliUsrUser').value = '';
+  document.getElementById('cliUsrName').value = '';
+  document.getElementById('cliUsrEmail').value = '';
+  document.getElementById('cliUsrPass').value = '';
+  document.querySelectorAll('#cliUsrModulos input:checked').forEach(function(c){ c.checked = false; });
+  loadClientUsuarios();
+}
+async function guardarModulosUsuario(username){
+  var slug = cliUsrCentroSlug();
+  var mods = Array.prototype.slice.call(document.querySelectorAll('#cliUsrList input[data-usr="' + username + '"]:checked')).map(function(c){ return c.value; });
+  var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(slug) + '/usuarios/' + encodeURIComponent(username), { modulos: mods });
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudieron guardar los accesos.'); return; }
+  loadClientUsuarios();
+}
+async function toggleUsuarioCentro(username, activar){
+  var slug = cliUsrCentroSlug();
+  if (!activar && !await nsConfirm('No va a poder entrar hasta que lo vuelvas a activar.', { titulo:'Desactivar usuario', okLabel:'Desactivar' })) return;
+  var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(slug) + '/usuarios/' + encodeURIComponent(username), { active: !!activar });
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo cambiar el estado.'); return; }
+  loadClientUsuarios();
+}
+async function resetPassUsuarioCentro(username){
+  var nueva = await nsPrompt('Nueva contraseña (mínimo 6 caracteres)', {
+    titulo: 'Cambiar clave de ' + username,
+    cuerpo: 'La va a tener que cambiar en su próximo ingreso.',
+    placeholder: 'Nueva clave', okLabel: 'Cambiar clave' });
+  if (nueva === null) return;
+  if (String(nueva).length < 6){ nsAlert('La clave tiene que tener al menos 6 caracteres.'); return; }
+  var slug = cliUsrCentroSlug();
+  var res = await req('POST', '/api/clientes/' + encodeURIComponent(slug) + '/usuarios/' + encodeURIComponent(username) + '/password', { password: nueva });
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo cambiar la clave.'); return; }
+  nsAlert('Clave cambiada. Avisale al usuario la nueva clave: ' + nueva, { titulo:'Listo' });
+}
+async function eliminarUsuarioCentro(username){
+  if (!await nsConfirm('Se elimina el usuario ' + username + ' de tu centro. No se puede deshacer.', { titulo:'Eliminar usuario', okLabel:'Eliminar' })) return;
+  var slug = cliUsrCentroSlug();
+  var res = await req('DELETE', '/api/clientes/' + encodeURIComponent(slug) + '/usuarios/' + encodeURIComponent(username));
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo eliminar.'); return; }
+  loadClientUsuarios();
 }
 // Plan Salud (CIMA): etapa 1, todavía en desarrollo. Por ahora solo confirma
 // qué archivo se eligió — el parseo real se suma cuando tengamos un reporte

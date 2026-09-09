@@ -5867,6 +5867,12 @@ const server = http.createServer(async (req, res) => {
       // sin generar-y-subir (subir a PAMI sigue siendo tarea de NS).
       else if (esGet && p === "/api/informes/config") permitido = true;
       else if (req.method === "POST" && (p === "/api/informes/generar" || p === "/api/informes/lote")) permitido = true;
+      // Autogestión de usuarios del centro: la clínica crea/edita/borra SOLO a sus
+      // empleados (operador_clinica de SU centro). El GET (listar) ya entra por
+      // "esGet && suCentro"; acá se habilitan las escrituras. El handler fuerza rol
+      // y centro, así que no puede crear un admin ni tocar otro centro.
+      else if (suCentro && ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
+               && /^\/api\/clientes\/[^/]+\/usuarios(?:\/[a-z0-9._-]+(?:\/password)?)?$/.test(p)) permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
 
@@ -7115,6 +7121,102 @@ const server = http.createServer(async (req, res) => {
     // Eliminar
     if (!isPwd && req.method === "DELETE") {
       if (target === me.username) return json(res, 400, { error: "No podés eliminar tu propio usuario." });
+      users.splice(idx, 1);
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
+  }
+
+  // ---- Autogestión de usuarios del centro (rol clínica) ----
+  // La clínica (dueño) administra SOLO a sus empleados: usuarios "operador_clinica"
+  // de SU centro. Puede crear, activar/desactivar, cambiar los módulos habilitados,
+  // resetear la clave y borrar. Es fail-closed a propósito y SEPARADO de /api/users
+  // (que es del admin): acá el rol se fuerza a operador_clinica y el centro a
+  // me.centro, así una clínica no puede crear un admin, tocar otro centro, ni
+  // cambiarse el suyo. El admin sigue administrando todo por /api/users.
+  const umClinica = p.match(/^\/api\/clientes\/([^/]+)\/usuarios(?:\/([a-z0-9._-]+))?(\/password)?$/);
+  if (umClinica) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(umClinica[1]);
+    // Solo la clínica dueña de ESE centro (el admin usa /api/users, no esto).
+    if (!(me.role === "clinica" && me.centro === slug)) return json(res, 403, { error: "forbidden" });
+    const targetUname = umClinica[2] ? umClinica[2].toLowerCase() : "";
+    const isPwd = !!umClinica[3];
+    const users = loadUsers() || [];
+
+    // Listar los empleados (operador_clinica) de su centro.
+    if (!targetUname && (req.method === "GET" || !req.method)) {
+      return json(res, 200, {
+        users: users.filter((u) => u.role === "operador_clinica" && u.centro === slug)
+          .map((u) => ({ username: u.username, name: u.name, modulos: Array.isArray(u.modulos) ? u.modulos : [],
+                         email: u.email || "", active: u.active !== false, mustChange: !!u.mustChange })),
+        modulosDisponibles: Array.from(OPERADOR_CLINICA_MODULOS),
+      });
+    }
+
+    // Crear un empleado (operador_clinica) en su centro.
+    if (!targetUname && req.method === "POST") {
+      const { username, name, password, email, modulos } = await readBody(req);
+      const uname = String(username || "").trim().toLowerCase();
+      const nm = String(name || "").trim();
+      const pw = String(password || "");
+      const em = String(email || "").trim().toLowerCase();
+      const mods = (Array.isArray(modulos) ? modulos : []).map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+      if (!validUsername(uname)) return json(res, 400, { error: "El usuario debe tener entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo." });
+      if (!nm) return json(res, 400, { error: "Escribí el nombre y apellido." });
+      if (pw.length < 6) return json(res, 400, { error: "La contraseña inicial debe tener al menos 6 caracteres." });
+      if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
+      if (users.some((x) => x.username === uname)) return json(res, 409, { error: "Ya existe un usuario con ese nombre." });
+      users.push({ username: uname, name: nm, role: "operador_clinica", email: em, centro: slug,
+                   clientes: [], modulos: mods, password: hashPassword(pw), mustChange: true, active: true });
+      saveUsers(users);
+      return json(res, 201, { ok: true });
+    }
+
+    // De acá en más se opera sobre un usuario existente, que TIENE que ser un
+    // operador_clinica de SU centro (nunca la propia clínica ni nadie de afuera).
+    const idx = users.findIndex((x) => x.username === targetUname);
+    if (idx < 0) return json(res, 404, { error: "No existe ese usuario." });
+    if (!(users[idx].role === "operador_clinica" && users[idx].centro === slug)) {
+      return json(res, 403, { error: "Solo podés administrar los empleados de tu centro." });
+    }
+
+    // Resetear la clave (queda "debe cambiarla" en el próximo ingreso).
+    if (isPwd && req.method === "POST") {
+      const { password } = await readBody(req);
+      const pw = String(password || "");
+      if (pw.length < 6) return json(res, 400, { error: "La clave debe tener al menos 6 caracteres." });
+      users[idx].password = hashPassword(pw);
+      users[idx].mustChange = true;
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
+
+    // Editar nombre / activo / email / módulos. NUNCA rol ni centro.
+    if (!isPwd && (req.method === "PATCH" || req.method === "PUT")) {
+      const body = await readBody(req);
+      if (body.name !== undefined) {
+        const nm = String(body.name).trim();
+        if (!nm) return json(res, 400, { error: "El nombre no puede quedar vacío." });
+        users[idx].name = nm;
+      }
+      if (body.active !== undefined) users[idx].active = !!body.active;
+      if (body.email !== undefined) {
+        const em = String(body.email).trim().toLowerCase();
+        if (em && !validEmail(em)) return json(res, 400, { error: "El email no parece válido." });
+        users[idx].email = em;
+      }
+      if (body.modulos !== undefined) {
+        users[idx].modulos = (Array.isArray(body.modulos) ? body.modulos : [])
+          .map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+      }
+      saveUsers(users);
+      return json(res, 200, { ok: true });
+    }
+
+    // Eliminar un empleado.
+    if (!isPwd && req.method === "DELETE") {
       users.splice(idx, 1);
       saveUsers(users);
       return json(res, 200, { ok: true });
