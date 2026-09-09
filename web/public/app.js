@@ -196,16 +196,17 @@ if (document.readyState !== 'loading') initNav();
 else document.addEventListener('DOMContentLoaded', initNav);
 
 // ---------- Credencial provisoria: consulta en vivo a PAMI ----------
-async function descargarCredencial(){
-  var btn = document.getElementById('credBtn');
-  var err = document.getElementById('credError');
-  var result = document.getElementById('credResult');
+async function descargarCredencial(pfx){
+  pfx = pfx || '';   // '' = vista interna NS; 'cli' = sección Credencial del cliente
+  var btn = document.getElementById(pfx + 'credBtn');
+  var err = document.getElementById(pfx + 'credError');
+  var result = document.getElementById(pfx + 'credResult');
   err.style.display = 'none'; result.style.display = 'none'; result.innerHTML = '';
   var payload = {
-    benef: (document.getElementById('credBenef').value || '').trim(),
-    dni: (document.getElementById('credDni').value || '').trim(),
-    tramite: (document.getElementById('credTramite').value || '').trim(),
-    genero: (document.getElementById('credGenero').value || '').trim()
+    benef: (document.getElementById(pfx + 'credBenef').value || '').trim(),
+    dni: (document.getElementById(pfx + 'credDni').value || '').trim(),
+    tramite: (document.getElementById(pfx + 'credTramite').value || '').trim(),
+    genero: (document.getElementById(pfx + 'credGenero').value || '').trim()
   };
   if (!payload.benef || !payload.dni || !payload.tramite){
     err.textContent = 'Completá BENEF, DNI y N° trámite.'; err.style.display = 'block'; return;
@@ -2702,6 +2703,7 @@ var CLIENT_SECTIONS = [
   { key:'reportes',  sec:'client-section-reportes',  tab:'clientTabReportes',  crumb:'Adjuntar reporte' },
   { key:'medicos',   sec:'client-section-medicos',   tab:'clientTabMedicos',   crumb:'Usuarios médicos' },
   { key:'honorarios',sec:'client-section-honorarios',tab:'clientTabHonorarios',crumb:'Honorarios' },
+  { key:'credencialcli',sec:'client-section-credencial',tab:'clientTabCredencialCli',crumb:'Credencial provisoria' },
   { key:'general',   sec:'client-section-general',   tab:'clientTabGeneral',   crumb:'Dashboard general' },
   { key:'osdop',     sec:'client-section-osdop',     tab:'clientTabOsdop',     crumb:'OSDOP' },
   { key:'plansalud', sec:'client-section-plansalud', tab:'clientTabPlanSalud',crumb:'Plan Salud' },
@@ -2751,6 +2753,9 @@ function clientSeccionesPermitidas(){
   var base = ['mescurso', 'basica', 'dashboard', 'honorarios'];
   // La clínica NO adjunta reportes (solo lectura). El resto sí.
   if (!esClinica) base.push('reportes');
+  // Credencial provisoria de PAMI: herramienta para el propio centro (baja la
+  // credencial de un afiliado por benef/DNI/trámite). Solo la clínica (el dueño).
+  if (esClinica) base.push('credencialcli');
   // Médicos: por ahora solo admin (no se le muestra al centro).
   if (ME && ME.role === 'admin') base.push('medicos');
   // Plan Salud: SOLO en centros que ya la tienen conectada (hoy: CIMA -

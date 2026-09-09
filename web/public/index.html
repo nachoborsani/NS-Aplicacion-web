@@ -453,11 +453,33 @@
                 <button id="clientTabHonorarios" type="button" onclick="setClientSection('honorarios')" style="display:none">Honorarios</button>
                 <button id="clientTabOsdop" type="button" onclick="setClientSection('osdop')" style="display:none">OSDOP</button>
                 <button id="clientTabPlanSalud" type="button" onclick="setClientSection('plansalud')" style="display:none">Plan Salud</button>
+                <button id="clientTabCredencialCli" type="button" onclick="setClientSection('credencialcli')" style="display:none">Credencial</button>
                 <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
                 <div id="clientMesCurso"></div>
+              </section>
+
+              <section id="client-section-credencial" class="client-section" style="display:none">
+                <div class="card cred-card">
+                  <div class="cred-head">
+                    <h3>🪪 Credencial provisoria</h3>
+                    <span class="nom-muted">Traé la credencial provisoria de PAMI de un afiliado. Cargá BENEF, DNI y N° de trámite y se descarga el PDF.</span>
+                  </div>
+                  <div class="cred-form">
+                    <label>BENEF<input class="inp" id="clicredBenef" inputmode="numeric" placeholder="14091965740000"></label>
+                    <label>DNI<input class="inp" id="clicredDni" inputmode="numeric" placeholder="13943423"></label>
+                    <label>N° trámite<input class="inp" id="clicredTramite" inputmode="numeric" placeholder="00745585752"></label>
+                    <label>Sexo<select class="inp" id="clicredGenero"><option value="">Auto (probar todos)</option><option value="MASC">Masculino</option><option value="FEM">Femenino</option><option value="OTRO">Otro</option></select></label>
+                  </div>
+                  <div class="cred-actions">
+                    <button class="btn btn-primary" id="clicredBtn" type="button" onclick="descargarCredencial('cli')">Descargar credencial</button>
+                    <span class="cred-hint nom-muted">El N° de trámite es el que figura en el DNI.</span>
+                  </div>
+                  <div class="msg err" id="clicredError" style="display:none"></div>
+                  <div id="clicredResult" style="display:none;margin-top:12px"></div>
+                </div>
               </section>
 
               <section id="client-section-general" class="client-section" style="display:none">

@@ -5851,6 +5851,12 @@ const server = http.createServer(async (req, res) => {
       // Única excepción de escritura: guardar SUS honorarios. Y exportar PDF (lectura).
       else if (!esGet && suCentro && /\/honorarios$/.test(p)) permitido = true;
       else if (p === "/api/mescurso/export") permitido = true;
+      // Nomenclador: es data de REFERENCIA (no de un centro), solo lectura → el
+      // cliente puede consultarlo y bajarlo (con especialidades).
+      else if (esGet && (p === "/api/nomencladores/search" || p === "/api/nomencladores/export")) permitido = true;
+      // Credencial provisoria de PAMI (mismo permiso que su empleado operador_clinica
+      // con módulo padrón): baja la credencial de un afiliado por benef/DNI/trámite.
+      else if (req.method === "POST" && p === "/api/credencial-provisoria") permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
 
