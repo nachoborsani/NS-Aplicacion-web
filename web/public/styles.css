@@ -1261,6 +1261,14 @@
   .cfg-valores{margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:9px;background:var(--surface-2)}
   .cfg-valores .cfg-scope-lbl{display:block;margin-bottom:8px}
   @media(max-width:560px){ .inf-campos{grid-template-columns:1fr 1fr} }
+  /* Holter: campos en secciones plegables (Resumen / detalle / VFC / …) */
+  .inf-grupos{display:block}
+  .inf-grupo{border:1px solid var(--border);border-radius:9px;margin-bottom:7px;background:var(--surface-2)}
+  .inf-grupo>summary{cursor:pointer;padding:7px 11px;font-weight:700;font-size:12px;color:var(--text-2);list-style:none;user-select:none}
+  .inf-grupo>summary::-webkit-details-marker{display:none}
+  .inf-grupo>summary:before{content:'▸';margin-right:6px;font-size:10px}
+  .inf-grupo[open]>summary:before{content:'▾'}
+  .inf-grupo>.inf-campos{padding:2px 11px 11px}
   /* Urodinamia: avisos de coherencia + pantalla de revisión */
   .inf-avisos{margin-top:10px;padding:8px 11px;border-radius:8px;background:color-mix(in srgb,#e8a13a 14%,var(--surface));border:1px solid color-mix(in srgb,#e8a13a 40%,var(--surface))}
   .inf-avisos-tit{font-size:12px;font-weight:700;color:#a15c00;margin-bottom:3px}

@@ -1616,33 +1616,55 @@ function saveBandejaEstado(store) {
 // volumen; se siembra con los datos actuales (Naiara + descripciones base).
 const informesConfigFile = path.join(dataDir, "informes_config.json");
 const debitoReglasFile = path.join(dataDir, "debito_reglas.json");
-// Presets "Normal" de cada Holter, con sus valores estándar (todos editables).
+// Presets del Holter (8 "Resultados"), sexo-neutros: el sexo es dato del
+// paciente y NO recalcula valores. Ids estables holter-p1..holter-p8. Los
+// campos que no se listan quedan en su default del modelo (HOLTER_CAMPOS_FULL).
+// Reemplazan a los 4 presets viejos (ver ensureHolterSeed, que los retira por id).
 const HOLTER_SEED_PRESETS = [
   {
-    id: "holter-normal", modelo: "holter", nombre: "Holter normal",
-    texto: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
-    valores: { duracion: "24 hs", fcProm: "72 lpm", fcMin: "55 lpm", fcMax: "118 lpm", totalLatidos: "103.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", stt: "sin cambios significativos", sintomas: "no refiere" },
+    id: "holter-p1", modelo: "holter", nombre: "Sin arritmias significativas / ESV mínimas",
+    texto: "PACIENTE EN RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nLA CONDUCCIÓN AV SE ENCUENTRA CONSERVADA.\nLA FRECUENCIA CARDÍACA MEDIA FUE DE 72 LPM, MÍNIMA DE 54 LPM Y MÁXIMA DE 112 LPM.\nNO SE OBSERVARON EXTRASÍSTOLES VENTRICULARES.\nSE OBSERVARON 6 EXTRASÍSTOLES SUPRAVENTRICULARES AISLADAS.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.\nSIN CAMBIOS SIGNIFICATIVOS DEL SEGMENTO ST-T.",
+    valores: { duracion: "21 h 13 min", ritmo: "Ritmo sinusal durante todo el estudio", conduccionAV: "Conservada", fcProm: "72 lpm", fcMin: "54 lpm", fcMax: "112 lpm", totalLatidos: "87.103", ev: "0", evPct: "0", evPares: "0", evTripletas: "0", evBigeminias: "0", evTrigeminias: "0", tv: "0", esv: "6", esvPct: "<0,01%", esvPares: "0", esvTripletas: "0", esvBigeminias: "0", esvTrigeminias: "0", tsv: "0", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos", st1: "Sin eventos", st2: "Sin eventos", st3: "Sin eventos", sintomas: "No refiere" },
   },
   {
-    id: "cima-holter-normal", modelo: "holter", nombre: "Holter normal",
-    texto: "Se realizó Holter de tres canales. Ritmo sinusal permanente. Conducción AV dentro de límites normales. Conducción IV dentro de límites normales. No se detectaron ectópicos. No se detectaron alteraciones inespecíficas de la repolarización ventricular. Sin síntomas.",
-    valores: { duracion: "24 hs", fcProm: "80 lpm", fcMin: "73 lpm", fcMax: "103 lpm", totalLatidos: "90.000 aprox.", latidosAnormales: "0", esv: "0", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+    id: "holter-p2", modelo: "holter", nombre: "Ectopia ventricular y supraventricular escasa",
+    texto: "PACIENTE EN RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nCONDUCCIÓN AV CONSERVADA.\nFC MEDIA 80 LPM, MÍNIMA 55 LPM Y MÁXIMA 111 LPM.\nSE OBSERVARON 105 EXTRASÍSTOLES VENTRICULARES.\nSE OBSERVARON 12 EXTRASÍSTOLES SUPRAVENTRICULARES, CON UNA DUPLA.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.\nSIN CAMBIOS SIGNIFICATIVOS DEL ST-T.",
+    valores: { duracion: "20 h 37 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "80 lpm", fcMin: "55 lpm", fcMax: "111 lpm", totalLatidos: "93.094", ev: "105", evPct: "0,11%", evPares: "0", evTripletas: "0", evBigeminias: "0", evTrigeminias: "0", tv: "0", esv: "12", esvPct: "0,01%", esvPares: "1", esvTripletas: "0", tsv: "0", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos" },
   },
-  // Extraídos de Holters reales de CIMA (jun/2025): mismo ritmo sinusal de base,
-  // pero con extrasístoles supraventriculares aisladas en duplas/tripletas.
   {
-    id: "holter-esv-duplas", modelo: "holter", nombre: "Con extrasístoles supraventriculares (duplas/tripletas)",
-    texto: "SE REALIZÓ HOLTER DE TRES CANALES. SE OBSERVÓ RITMO SINUSAL DURANTE TODO EL ESTUDIO. CONDUCCIÓN AV Y CONDUCCIÓN IV DENTRO DE LOS LÍMITES NORMALES. SE HALLARON EXTRASÍSTOLES SUPRAVENTRICULARES (ESV) AISLADAS, EN DUPLAS Y TRIPLETAS, CON EPISODIOS DE TAQUICARDIA SUPRAVENTRICULAR (TSV) NO SOSTENIDA. NO SE HALLARON EXTRASÍSTOLES VENTRICULARES (EV). NO SE DETECTARON PAUSAS SIGNIFICATIVAS. NO SE OBSERVARON ALTERACIONES EN EL SEGMENTO ST-T. NO REFIRIÓ SÍNTOMAS DURANTE EL ESTUDIO.",
-    valores: { duracion: "24 hs", fcProm: "76 lpm", fcMin: "58 lpm", fcMax: "120 lpm", totalLatidos: "100.000 aprox.", latidosAnormales: "750 (0,8%)", esv: "presentes, aisladas en duplas y tripletas", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+    id: "holter-p3", modelo: "holter", nombre: "ESV aisladas y duplas",
+    texto: "RITMO SINUSAL DURANTE TODO EL REGISTRO.\nCONDUCCIÓN AV CONSERVADA.\nFC MEDIA 78 LPM, MÍNIMA 51 LPM Y MÁXIMA 125 LPM.\nNO SE OBSERVARON EXTRASÍSTOLES VENTRICULARES.\nSE REGISTRARON 61 EXTRASÍSTOLES SUPRAVENTRICULARES, INCLUYENDO 3 DUPLAS.\nNO SE REGISTRARON PAUSAS SIGNIFICATIVAS.\nSIN CAMBIOS SIGNIFICATIVOS DEL ST-T.",
+    valores: { duracion: "23 h 48 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "78 lpm", fcMin: "51 lpm", fcMax: "125 lpm", totalLatidos: "108.186", ev: "0", esv: "61", esvPct: "0,05%", esvPares: "3", tsv: "0", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos" },
   },
-  // Fibrilación auricular sostenida durante todo el registro (arrítmico) —
-  // reemplaza el ritmo sinusal de base por el hallazgo principal.
   {
-    id: "holter-fibrilacion-auricular", modelo: "holter", nombre: "Con fibrilación auricular",
-    texto: "SE REALIZÓ HOLTER DE TRES CANALES. SE OBSERVÓ RITMO DE FIBRILACIÓN AURICULAR DE MODERADA RESPUESTA VENTRICULAR DURANTE TODO EL ESTUDIO. CONDUCCIÓN IV DENTRO DE LOS LÍMITES NORMALES. NO SE HALLARON EXTRASÍSTOLES VENTRICULARES (EV). NO SE REGISTRARON PAUSAS SIGNIFICATIVAS DURANTE EL ESTUDIO. NO SE OBSERVARON ALTERACIONES EN EL SEGMENTO ST-T. NO REFIERE SÍNTOMAS.",
-    valores: { duracion: "24 hs", fcProm: "95 lpm", fcMin: "75 lpm", fcMax: "110 lpm", totalLatidos: "115.000 aprox.", latidosAnormales: "fibrilación auricular sostenida", esv: "no aplica (FA de base)", ev: "0", pausas: "0", pausaMasLarga: "0,0 seg", bradicardia: "0 episodios", stt: "sin cambios significativos", sintomas: "no refiere", motivo: "Control", medicacion: "—" },
+    id: "holter-p4", modelo: "holter", nombre: "Extrasistolia ventricular + bigeminismo",
+    texto: "PACIENTE EN RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nCONDUCCIÓN AV CONSERVADA.\nFC MEDIA 70 LPM, MÍNIMA 52 LPM Y MÁXIMA 114 LPM.\nSE REGISTRARON 637 EXTRASÍSTOLES VENTRICULARES, CON 2 EPISODIOS DE BIGEMINISMO.\nNO SE OBSERVARON EXTRASÍSTOLES SUPRAVENTRICULARES.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.\nSIN CAMBIOS SIGNIFICATIVOS DEL ST-T.",
+    valores: { duracion: "23 h 59 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "70 lpm", fcMin: "52 lpm", fcMax: "114 lpm", totalLatidos: "91.478", ev: "637", evPct: "0,69%", evPares: "0", evTripletas: "0", evBigeminias: "2", evTrigeminias: "0", tv: "0", esv: "0", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos" },
+  },
+  {
+    id: "holter-p5", modelo: "holter", nombre: "Ectopia mixta + salva supraventricular",
+    texto: "PACIENTE EN RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nCONDUCCIÓN AV CONSERVADA.\nFC MEDIA 81 LPM, MÍNIMA 68 LPM Y MÁXIMA 111 LPM.\nSE REGISTRARON 198 EXTRASÍSTOLES VENTRICULARES.\nSE REGISTRARON 42 EXTRASÍSTOLES SUPRAVENTRICULARES, CON UNA SALVA DE TAQUICARDIA SUPRAVENTRICULAR DE 12 LATIDOS.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.\nSIN CAMBIOS SIGNIFICATIVOS DEL ST-T.",
+    valores: { duracion: "19 h 44 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "81 lpm", fcMin: "68 lpm", fcMax: "111 lpm", totalLatidos: "75.176", ev: "198", evPct: "0,26%", esv: "42", esvPct: "0,05%", esvPares: "0", tsv: "1", salvaLatidos: "12", salvaFcMax: "139 lpm", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos" },
+  },
+  {
+    id: "holter-p6", modelo: "holter", nombre: "ESV frecuentes + TSV corta",
+    texto: "RITMO SINUSAL.\nNO SE REGISTRARON EXTRASÍSTOLES VENTRICULARES.\nEXTRASÍSTOLES SUPRAVENTRICULARES FRECUENTES, AISLADAS Y APAREADAS, CON UNA SALVA CORTA DE 4 LATIDOS.\nNO SE REGISTRARON PAUSAS SIGNIFICATIVAS.\nNO HUBO CAMBIOS SIGNIFICATIVOS DEL ST-T.",
+    valores: { duracion: "18 h 35 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "78 lpm", fcMin: "57 lpm", fcMax: "127 lpm", totalLatidos: "79.026", ev: "0", esv: "202", esvPct: "0,25%", esvPares: "2", tsv: "1", salvaLatidos: "4", salvaFcMax: "116 lpm", pausas: "0", pausasTexto: "Sin pausas significativas", qtMax: "422 ms", qtcMax: "424 ms", stt: "Sin cambios significativos" },
+  },
+  {
+    id: "holter-p7", modelo: "holter", nombre: "ESV + TSV rápida",
+    texto: "RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nCONDUCCIÓN AV CONSERVADA.\nFC MEDIA 92 LPM, MÍNIMA 46 LPM Y MÁXIMA 131 LPM.\nNO SE REGISTRARON EXTRASÍSTOLES VENTRICULARES.\nSE REGISTRARON 63 EXTRASÍSTOLES SUPRAVENTRICULARES, 2 DUPLAS Y UNA SALVA DE TAQUICARDIA SUPRAVENTRICULAR DE 4 LATIDOS, CON FC MÁXIMA DE 161 LPM.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.",
+    valores: { duracion: "19 h 30 min", ritmo: "Ritmo sinusal", conduccionAV: "Conservada", fcProm: "92 lpm", fcMin: "46 lpm", fcMax: "131 lpm", totalLatidos: "95.857", ev: "0", esv: "63", esvPct: "0,06%", esvPares: "2", tsv: "1", salvaLatidos: "4", salvaFcMax: "161 lpm", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos" },
+  },
+  {
+    id: "holter-p8", modelo: "holter", nombre: "ESV muy frecuentes + bigeminia/trigeminia + TA",
+    texto: "RITMO SINUSAL DURANTE TODO EL ESTUDIO.\nCONDUCCIÓN AV DENTRO DE LÍMITES FISIOLÓGICOS.\nSE OBSERVARON EXTRASÍSTOLES SUPRAVENTRICULARES MUY FRECUENTES, CON EPISODIOS DE BIGEMINIA, TRIGEMINIA, DUPLAS Y UNA SALVA DE TAQUICARDIA AURICULAR.\nSE REGISTRÓ UN EVENTO DE TA DE 8 COMPLEJOS, FC MÁXIMA 125 LPM, AUTOLIMITADO.\nNO SE OBSERVARON EXTRASÍSTOLES VENTRICULARES.\nNO SE OBSERVARON CAMBIOS SIGNIFICATIVOS DEL SEGMENTO ST-T.\nNO SE OBSERVARON PAUSAS SIGNIFICATIVAS.",
+    valores: { duracion: "23 h 35 min", ritmo: "Ritmo sinusal", conduccionAV: "Dentro de límites fisiológicos", fcProm: "61 lpm", fcMin: "46 lpm", fcMax: "87 lpm", totalLatidos: "87.515", latidosAnormales: "6.396", ev: "0", esv: "6.396", esvPct: "7,2% (aprox.)", esvPares: "5", esvBigeminias: "389", esvTrigeminias: "11", tsv: "1", salvaLatidos: "8", salvaFcMax: "125 lpm", salvaDuracion: "3 seg", pausas: "0", pausasTexto: "Sin pausas significativas", stt: "Sin cambios significativos", sintomas: "No refiere" },
   },
 ];
+// Ids de los 4 presets viejos de Holter, para retirarlos de configs ya
+// guardadas al migrar a los 8 nuevos (ensureHolterSeed).
+const HOLTER_PRESETS_VIEJOS = ["holter-normal", "cima-holter-normal", "holter-esv-duplas", "holter-fibrilacion-auricular"];
 // Presets ORL. Los que llevan `ladoTextos` cambian el texto según el lado
 // elegido (derecho/izquierdo/bilateral/noesp); `texto` es el default sin lado.
 const ORL_SEED_PRESETS = [
@@ -11252,9 +11274,14 @@ function ensureHolterSeed() {
     const cfg = loadInformesConfig();
     if (!Array.isArray(cfg.descripciones) || !Array.isArray(cfg.medicos)) return;
     let cambio = false;
-    // Precargar el preset "Normal" de cada Holter si ese modelo no tiene resultados.
+    // Migración a los 8 presets nuevos: retirar los 4 viejos por id (eran seeds
+    // por defecto, no creados a mano) y sembrar los nuevos que falten POR ID
+    // (idempotente: no pisa uno editado a mano con el mismo id).
+    const antes = cfg.descripciones.length;
+    cfg.descripciones = cfg.descripciones.filter((d) => !HOLTER_PRESETS_VIEJOS.includes(d.id));
+    if (cfg.descripciones.length !== antes) cambio = true;
     for (const s of HOLTER_SEED_PRESETS) {
-      if (!cfg.descripciones.some((d) => (d.modelos || []).includes(s.modelo))) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
         cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores });
         cambio = true;
       }

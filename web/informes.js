@@ -44,6 +44,74 @@ const HOLTER_CAMPOS_CIMA = [
   { key: "motivo", label: "Motivo", default: "Control" },
   { key: "medicacion", label: "Medicación", default: "—", wide: true },
 ];
+// Set completo del Holter (el que usa el modelo hoy). Cada campo lleva:
+//  - `grupo`: para las secciones plegables del formulario (el front las arma).
+//  - `resumen: true`: entra en la caja resumen del PDF. Si NINGÚN campo del
+//    modelo trae `resumen`, el builder muestra todos los campos (el resto de los
+//    modelos no cambia). Ver buildInformePdf, caja "DATOS TÉCNICOS DEL REGISTRO".
+// Los keys que ya existían (duracion, fcProm, fcMin, fcMax, totalLatidos, ev,
+// esv, pausas, stt, sintomas, pausaMasLarga, motivo, medicacion, latidosAnormales)
+// se conservan tal cual para no romper presets viejos ni el matcheo.
+const HOLTER_CAMPOS_FULL = [
+  // --- Resumen (va al PDF) ---
+  { key: "duracion", label: "Duración", default: "24 hs", grupo: "resumen", resumen: true },
+  { key: "ritmo", label: "Ritmo predominante", default: "Ritmo sinusal durante todo el estudio", wide: true, grupo: "resumen", resumen: true },
+  { key: "conduccionAV", label: "Conducción AV", default: "Conservada", grupo: "resumen", resumen: true },
+  { key: "fcProm", label: "FC media", default: "72 lpm", grupo: "resumen", resumen: true },
+  { key: "fcMin", label: "FC mínima", default: "55 lpm", grupo: "resumen", resumen: true },
+  { key: "fcMax", label: "FC máxima", default: "118 lpm", grupo: "resumen", resumen: true },
+  { key: "totalLatidos", label: "Total de latidos", default: "103.000 aprox.", grupo: "resumen", resumen: true },
+  { key: "ev", label: "EV totales", default: "0", grupo: "resumen", resumen: true },
+  { key: "evPct", label: "EV %", default: "0", grupo: "resumen", resumen: true },
+  { key: "esv", label: "ESV totales", default: "0", grupo: "resumen", resumen: true },
+  { key: "esvPct", label: "ESV %", default: "0", grupo: "resumen", resumen: true },
+  { key: "pausas", label: "Pausas >2500 ms", default: "0", grupo: "resumen", resumen: true },
+  { key: "pausaMasLarga", label: "Pausa más larga (ms)", default: "0", grupo: "resumen", resumen: true },
+  { key: "pausasTexto", label: "Pausas — texto", default: "Sin pausas significativas", wide: true, grupo: "resumen", resumen: true },
+  { key: "stt", label: "ST-T conclusión", default: "Sin cambios significativos", wide: true, grupo: "resumen", resumen: true },
+  { key: "sintomas", label: "Síntomas", default: "No refiere", grupo: "resumen", resumen: true },
+  // --- Datos generales (no van al PDF resumen) ---
+  { key: "marcapasos", label: "Marcapasos", default: "No", grupo: "general" },
+  { key: "latidosAnormales", label: "Latidos anormales", default: "0", grupo: "general" },
+  { key: "motivo", label: "Motivo", default: "Control", grupo: "general" },
+  { key: "medicacion", label: "Medicación", default: "—", wide: true, grupo: "general" },
+  { key: "bradiEvento", label: "Bradicardia mín / evento", default: "", grupo: "general" },
+  { key: "taquiEvento", label: "Taquicardia máx / evento", default: "", grupo: "general" },
+  // --- Detalle ventricular ---
+  { key: "evPares", label: "EV pares", default: "0", grupo: "ventricular" },
+  { key: "evTripletas", label: "EV tripletas", default: "0", grupo: "ventricular" },
+  { key: "evBigeminias", label: "Bigeminias EV", default: "0", grupo: "ventricular" },
+  { key: "evTrigeminias", label: "Trigeminias EV", default: "0", grupo: "ventricular" },
+  { key: "tv", label: "Taquicardias ventriculares", default: "0", grupo: "ventricular" },
+  { key: "evMaxMin", label: "Máx EV/min", default: "", grupo: "ventricular" },
+  // --- Detalle supraventricular ---
+  { key: "esvPares", label: "ESV pares", default: "0", grupo: "supraventricular" },
+  { key: "esvTripletas", label: "ESV tripletas", default: "0", grupo: "supraventricular" },
+  { key: "esvBigeminias", label: "Bigeminias ESV", default: "0", grupo: "supraventricular" },
+  { key: "esvTrigeminias", label: "Trigeminias ESV", default: "0", grupo: "supraventricular" },
+  { key: "tsv", label: "TSV / salvas", default: "0", grupo: "supraventricular" },
+  { key: "salvaLatidos", label: "Salva más larga (latidos)", default: "", grupo: "supraventricular" },
+  { key: "salvaFcMax", label: "FC máx de la salva", default: "", grupo: "supraventricular" },
+  { key: "salvaDuracion", label: "Duración de la salva", default: "", grupo: "supraventricular" },
+  // --- ST / QT ---
+  { key: "st1", label: "ST Canal 1", default: "Sin eventos", grupo: "st" },
+  { key: "st2", label: "ST Canal 2", default: "Sin eventos", grupo: "st" },
+  { key: "st3", label: "ST Canal 3", default: "Sin eventos", grupo: "st" },
+  { key: "qtMax", label: "QT máximo", default: "", grupo: "st" },
+  { key: "qtcMax", label: "QTc máximo", default: "", grupo: "st" },
+  { key: "qtDif", label: "Diferencia QT", default: "", grupo: "st" },
+  // TODO: referencia QTc por sexo a futuro (hoy los QT quedan editables, sin límite automático).
+  // --- VFC (avanzado) ---
+  { key: "sdnn", label: "SDNN", default: "", grupo: "vfc" },
+  { key: "sdann", label: "SDANN", default: "", grupo: "vfc" },
+  { key: "sdnnIndex", label: "SDNN Index", default: "", grupo: "vfc" },
+  { key: "rmssd", label: "rMSSD", default: "", grupo: "vfc" },
+  { key: "nn50", label: "NN50", default: "", grupo: "vfc" },
+  { key: "pnn50", label: "pNN50", default: "", grupo: "vfc" },
+  { key: "potenciaTotal", label: "Potencia total", default: "", grupo: "vfc" },
+  // --- Conclusión / observaciones ---
+  { key: "observaciones", label: "Observaciones", default: "", wide: true, grupo: "conclusion" },
+];
 // Campos del Test de SIBO: fecha de nacimiento, umbral y las 10 mediciones PPM.
 const SIBO_CAMPOS = [
   { key: "fechaNac", label: "Fecha nacimiento", default: "" },
@@ -294,7 +362,9 @@ const MODELOS = {
     // editables. Usa el set completo (antes solo lo tenía el modelo de CIMA) —
     // son campos opcionales de más, no le quitan nada a nadie.
     tecnicosTitulo: "DATOS TÉCNICOS DEL REGISTRO",
-    campos: HOLTER_CAMPOS_CIMA,
+    // Set completo con grupos (secciones plegables en el form) y `resumen` (qué
+    // entra en la caja del PDF). El builder lista solo los `resumen: true`.
+    campos: HOLTER_CAMPOS_FULL,
   },
   // ===================== ORL / Otorrinolaringología =====================
   // Mismo layout que cardiología (sin caja técnica). Cambia el servicio y, en
@@ -937,16 +1007,31 @@ async function buildInformePdf(modeloKey, input) {
   // Caja: DATOS TÉCNICOS DEL REGISTRO (solo modelos con campos, ej. Holter)
   if (modelo.campos && modelo.campos.length) {
     const valores = (input && input.valores) || {};
-    const campos = modelo.campos;
+    // Si algún campo declara `resumen`, la caja lista SOLO esos (Holter: ~16
+    // campos resumen en vez de los ~35). Si ninguno lo declara, se muestran
+    // todos, como siempre — el resto de los modelos no cambia.
+    const camposAll = modelo.campos.some((c) => c.resumen) ? modelo.campos.filter((c) => c.resumen) : modelo.campos;
+    // Los campos de texto largo (`wide`) van en una fila de ancho completo (no en
+    // una celda de la grilla, donde se truncarían con "…"). El resto, en grilla
+    // de 3 columnas. Ej Holter: FC/latidos/EV/ESV en grilla; Ritmo/ST-T/Pausas a lo ancho.
+    const campos = camposAll.filter((c) => !c.wide);
+    const camposWide = camposAll.filter((c) => c.wide);
     const cols = 3;
     const rows = Math.ceil(campos.length / cols);
-    const rowH = 14, titleH = 20;
-    const h = titleH + rows * rowH + 5;
+    const rowH = 14, titleH = 20, wideH = 13;
+    const h = titleH + rows * rowH + camposWide.length * wideH + 5;
     drawBox(y, h);
     T(modelo.tecnicosTitulo || "DATOS TÉCNICOS", LBLX, y - 16, { bold: true, size: 11 });
     const grid = rgb(0.75, 0.77, 0.8);
     const gridTop = y - titleH;
     const colW = boxW / cols;
+    const trunc = (val, maxVW) => {
+      if (font.widthOfTextAtSize(val, 8.5) > maxVW) {
+        while (val.length > 1 && font.widthOfTextAtSize(val + "…", 8.5) > maxVW) val = val.slice(0, -1);
+        val += "…";
+      }
+      return val;
+    };
     for (let i = 0; i < campos.length; i++) {
       const r = Math.floor(i / cols), c = i % cols;
       const cx = boxX + c * colW + 8;
@@ -954,13 +1039,8 @@ async function buildInformePdf(modeloKey, input) {
       const lbl = campos[i].label + ": ";
       T(lbl, cx, cy, { bold: true, size: 8.5 });
       const lblW = bold.widthOfTextAtSize(lbl, 8.5);
-      let val = String((valores[campos[i].key] == null ? "" : valores[campos[i].key])).trim() || campos[i].default || "";
-      const maxVW = colW - 12 - lblW;
-      if (font.widthOfTextAtSize(val, 8.5) > maxVW) {
-        while (val.length > 1 && font.widthOfTextAtSize(val + "…", 8.5) > maxVW) val = val.slice(0, -1);
-        val += "…";
-      }
-      T(val, cx + lblW, cy, { size: 8.5 });
+      const raw = String((valores[campos[i].key] == null ? "" : valores[campos[i].key])).trim() || campos[i].default || "";
+      T(trunc(raw, colW - 12 - lblW), cx + lblW, cy, { size: 8.5 });
     }
     for (let r = 0; r <= rows; r++) {
       const ly = gridTop - r * rowH;
@@ -970,6 +1050,16 @@ async function buildInformePdf(modeloKey, input) {
       const lx = boxX + c * colW;
       page.drawLine({ start: { x: lx, y: gridTop }, end: { x: lx, y: gridTop - rows * rowH }, thickness: 0.5, color: grid });
     }
+    // Filas de ancho completo (campos `wide`) debajo de la grilla.
+    let wy = gridTop - rows * rowH - 11;
+    for (const cw of camposWide) {
+      const lbl = cw.label + ": ";
+      T(lbl, boxX + 8, wy, { bold: true, size: 8.5 });
+      const lblW = bold.widthOfTextAtSize(lbl, 8.5);
+      const raw = String((valores[cw.key] == null ? "" : valores[cw.key])).trim() || cw.default || "";
+      T(trunc(raw, boxW - 16 - lblW), boxX + 8 + lblW, wy, { size: 8.5 });
+      wy -= wideH;
+    }
     y -= h + 18;
   }
 
@@ -978,6 +1068,18 @@ async function buildInformePdf(modeloKey, input) {
   y -= 20;
   const lines = wrapText(texto, font, 10.5, boxW - 2 * PADX);
   for (const ln of lines) { T(ln, LBLX, y); y -= 15; }
+
+  // OBSERVACIONES (opcional): si el modelo tiene un campo `observaciones` con
+  // contenido cargado, se muestra debajo de la conclusión. Vacío = no aparece.
+  {
+    const obs = String(((input && input.valores) || {}).observaciones || "").trim();
+    if (obs) {
+      y -= 10;
+      T("OBSERVACIONES", LBLX, y, { bold: true, size: 10.5, color: soft });
+      y -= 18;
+      for (const ln of wrapText(obs, font, 10.5, boxW - 2 * PADX)) { T(ln, LBLX, y); y -= 15; }
+    }
+  }
 
   // FECHA + Firma (posición fija)
   const fy = 248;

@@ -653,29 +653,75 @@ function modeloSexoCampo(key){
 function modeloRequiereSexo(key){ var c = modeloSexoCampo(key); return !!(c && c.requerido); }
 function presetById(id){ return (INFORMES_CFG.descripciones || []).find(function(d){ return d.id === id; }); }
 function presetLabel(d){ if (d.nombre) return d.nombre; var t = String(d.texto || ''); return t.length > 60 ? t.slice(0, 58) + '…' : t; }
+// HTML de un campo suelto (label + input/select). Reusado por el render plano
+// y por el agrupado del Holter.
+function _campoInputHTML(c){
+  var req = c.requerido ? ' data-req="1"' : '';
+  var control;
+  if (c.tipo === 'select' && Array.isArray(c.opciones)){
+    var opts = '';
+    // Obligatorio sin default: arranca vacío ("Elegí…") para forzar la elección.
+    if (c.requerido && !(c.default || '')) opts += '<option value="">Elegí…</option>';
+    opts += c.opciones.map(function(o){ return opt(o, o, o === (c.default || '')); }).join('');
+    // El sexo dispara la recarga de posición/diagnóstico por sexo.
+    var hook = c.key === 'sexo' ? ' onchange="onInformeSexoChange()"' : '';
+    control = '<select class="inp" data-key="' + esc(c.key) + '"' + req + hook + '>' + opts + '</select>';
+  } else {
+    control = '<input class="inp" data-key="' + esc(c.key) + '"' + req + ' value="' + esc(c.default || '') + '" spellcheck="false">';
+  }
+  return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + (c.requerido ? ' <b style="color:var(--error)">*</b>' : '') + '</span>' + control + '</label>';
+}
+// Secciones plegables del Holter (orden + título + si abre por defecto).
+// "Resumen" y "Conclusión" abren; el detalle arranca colapsado (se abre solo
+// cuando hay ectopia cargada, ver ajustarSeccionesHolter).
+var HOLTER_GRUPOS_META = [
+  { id: 'resumen', titulo: 'Resumen', open: true },
+  { id: 'general', titulo: 'Datos generales', open: false },
+  { id: 'ventricular', titulo: 'Detalle ventricular', open: false },
+  { id: 'supraventricular', titulo: 'Detalle supraventricular', open: false },
+  { id: 'st', titulo: 'ST / QT', open: false },
+  { id: 'vfc', titulo: 'VFC (avanzado)', open: false },
+  { id: 'conclusion', titulo: 'Conclusión / observaciones', open: true },
+];
 // Renderiza los campos técnicos del modelo (ej. Holter) con sus defaults.
+// Si los campos traen `grupo` (Holter), se arma en secciones plegables; si no,
+// va la grilla plana de siempre (resto de los modelos).
 function renderCampos(key){
   var wrap = document.getElementById('infCamposWrap'), box = document.getElementById('infCampos');
   if (!wrap || !box) return;
   var campos = modeloCampos(key);
-  if (!campos.length){ wrap.style.display = 'none'; box.innerHTML = ''; return; }
-  box.innerHTML = campos.map(function(c){
-    var req = c.requerido ? ' data-req="1"' : '';
-    var control;
-    if (c.tipo === 'select' && Array.isArray(c.opciones)){
-      var opts = '';
-      // Obligatorio sin default: arranca vacío ("Elegí…") para forzar la elección.
-      if (c.requerido && !(c.default || '')) opts += '<option value="">Elegí…</option>';
-      opts += c.opciones.map(function(o){ return opt(o, o, o === (c.default || '')); }).join('');
-      // El sexo dispara la recarga de posición/diagnóstico por sexo.
-      var hook = c.key === 'sexo' ? ' onchange="onInformeSexoChange()"' : '';
-      control = '<select class="inp" data-key="' + esc(c.key) + '"' + req + hook + '>' + opts + '</select>';
-    } else {
-      control = '<input class="inp" data-key="' + esc(c.key) + '"' + req + ' value="' + esc(c.default || '') + '" spellcheck="false">';
-    }
-    return '<label class="inf-campo' + (c.wide ? ' inf-wide' : '') + '"><span>' + esc(c.label) + (c.requerido ? ' <b style="color:var(--error)">*</b>' : '') + '</span>' + control + '</label>';
-  }).join('');
+  if (!campos.length){ wrap.style.display = 'none'; box.innerHTML = ''; box.className = 'inf-campos'; return; }
+  var agrupado = campos.some(function(c){ return c.grupo; });
+  if (agrupado){
+    box.className = 'inf-grupos';
+    var html = '';
+    HOLTER_GRUPOS_META.forEach(function(g){
+      var items = campos.filter(function(c){ return (c.grupo || '') === g.id; });
+      if (!items.length) return;
+      html += '<details class="inf-grupo"' + (g.open ? ' open' : '') + ' data-grupo="' + esc(g.id) + '">'
+        + '<summary>' + esc(g.titulo) + '</summary>'
+        + '<div class="inf-campos">' + items.map(_campoInputHTML).join('') + '</div>'
+        + '</details>';
+    });
+    // Defensivo: cualquier campo con un grupo desconocido va al final, visible.
+    var restantes = campos.filter(function(c){ return !HOLTER_GRUPOS_META.some(function(g){ return g.id === (c.grupo || ''); }); });
+    if (restantes.length) html += '<details class="inf-grupo" open><summary>Otros</summary><div class="inf-campos">' + restantes.map(_campoInputHTML).join('') + '</div></details>';
+    box.innerHTML = html;
+  } else {
+    box.className = 'inf-campos';
+    box.innerHTML = campos.map(_campoInputHTML).join('');
+  }
   wrap.style.display = '';
+}
+// Abre las secciones de detalle cuando el preset/valores indican actividad
+// (EV>0 → ventricular; ESV o TSV>0 → supraventricular). No cierra nada que el
+// operador haya dejado abierto: solo abre.
+function ajustarSeccionesHolter(){
+  if (modeloActualKey() !== 'holter') return;
+  var v = recolectarCampos();
+  var abrir = function(gid){ var d = document.querySelector('#infCampos details[data-grupo="' + gid + '"]'); if (d) d.open = true; };
+  if (_holterNum(v.ev) > 0) abrir('ventricular');
+  if (_holterNum(v.esv) > 0 || _holterNum(v.tsv) > 0) abrir('supraventricular');
 }
 // Al elegir un preset: llena el texto del informe y pisa los valores estándar.
 function aplicarPreset(){
@@ -709,6 +755,7 @@ function aplicarPreset(){
     if (valores[k] != null && String(valores[k]).trim() !== '') inp.value = valores[k];
   });
   aplicarDefaultsPorSexo();   // posición/diagnóstico según el sexo elegido
+  ajustarSeccionesHolter();   // abre el detalle si el preset trae ectopia
   programarPreviewVivo();
 }
 // El textarea del informe crece solo con el contenido (arranca chico).
@@ -737,11 +784,43 @@ function avisosUrodinamia(v){
   var vlpp = _numUro(v.vlpp); if (vlpp != null && vlpp > 0 && vlpp < 60) a.push('VLPP disminuido (< 60 cm H2O).');
   return a;
 }
-// Panel de avisos en vivo bajo los campos (solo para el modelo urodinamia).
+// ===== Holter: avisos de coherencia (NO cambian valores ni texto) =====
+// Parser tolerante: "1.284"→1284, "0,11%"→0.11, "<0,01%"→0.01, "6"→6, ""→null.
+function _holterNum(v){
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  var d = s.replace(/[^0-9.,]/g, '').replace(/\./g, '').replace(',', '.');
+  var n = parseFloat(d);
+  return isFinite(n) ? n : null;
+}
+// ¿La conclusión afirma (en positivo, sin negación) algo que matchea `re`?
+// Parte por oraciones para no confundir "NO SE OBSERVARON…" con una afirmación.
+function _holterAfirma(texto, re){
+  return String(texto || '').split(/[.\n]+/).some(function(s){
+    return re.test(s) && !/\bno\b|\bsin\b/i.test(s);
+  });
+}
+function avisosHolter(v, texto){
+  v = v || {}; var a = [];
+  var ev = _holterNum(v.ev), esv = _holterNum(v.esv), tsv = _holterNum(v.tsv), pausas = _holterNum(v.pausas);
+  if (ev === 0 && _holterAfirma(texto, /extras[íi]stole\w*\s+ventricular|\bEV\b/i))
+    a.push('EV en 0, pero la conclusión menciona extrasístoles ventriculares.');
+  if (esv === 0 && _holterAfirma(texto, /extras[íi]stole\w*\s+supraventricular|supraventricular|\bESV\b/i))
+    a.push('ESV en 0, pero la conclusión menciona extrasístoles supraventriculares.');
+  if (pausas === 0 && _holterAfirma(texto, /pausas?\s+significativ/i))
+    a.push('Pausas en 0, pero la conclusión menciona pausas significativas.');
+  var salva = String(v.salvaLatidos || '').trim() || String(v.salvaFcMax || '').trim();
+  if (tsv === 0 && salva)
+    a.push('Hay una salva cargada (latidos/FC), pero TSV/salvas figura en 0.');
+  return a;
+}
+// Panel de avisos en vivo bajo los campos (urodinamia y holter comparten el
+// contenedor #infAvisosUro; el resto de los modelos no muestra nada).
 function renderAvisosUro(){
   var wrap = document.getElementById('infAvisosUro'); if (!wrap) return;
-  if (modeloActualKey() !== 'urodinamia'){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
-  var a = avisosUrodinamia(recolectarCampos());
+  var key = modeloActualKey(), a = [];
+  if (key === 'urodinamia') a = avisosUrodinamia(recolectarCampos());
+  else if (key === 'holter') a = avisosHolter(recolectarCampos(), (document.getElementById('infTexto') || {}).value || '');
   if (!a.length){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   wrap.style.display = '';
   wrap.innerHTML = '<div class="inf-avisos-tit">⚠ Revisá la coherencia (son avisos, no cambian el diagnóstico):</div><ul class="inf-avisos-list">'
