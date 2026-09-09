@@ -1583,6 +1583,12 @@
               <div class="field"><label>N° Beneficiario</label><input class="inp" id="infBenef" spellcheck="false" inputmode="numeric" placeholder="Ej: 14023345500100" oninput="this.value=this.value.replace(/[^0-9-]/g,'')"></div>
               <div class="field"><label>Fecha (DD/MM/AAAA)</label><input class="inp" id="infFecha" spellcheck="false" placeholder="20/07/2026"></div>
             </div>
+            <!-- Sexo del paciente (dato del paciente): se oculta en modelos que ya
+                 tienen su propio campo de sexo (ej. urodinamia), ver filtrarPorModelo. -->
+            <div class="field" id="infSexoPacWrap">
+              <label>Sexo del paciente <span style="font-weight:400;color:var(--text-2)">(opcional)</span></label>
+              <select class="inp" id="infSexoPac" onchange="programarPreviewVivo()"><option value="">— Sin especificar —</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option></select>
+            </div>
             <div class="field" id="infCoberturaWrap" style="display:none">
               <label>Cobertura</label>
               <input class="inp" id="infCobertura" spellcheck="false" placeholder="PAMI" oninput="programarPreviewVivo()">

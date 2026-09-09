@@ -477,6 +477,7 @@ function construirPayloadInforme(){
       benef: document.getElementById('infBenef').value.trim(),
       fecha: document.getElementById('infFecha').value.trim(),
       documento: document.getElementById('infDoc').value.trim(),
+      sexo: ((document.getElementById('infSexoPac') || {}).value || '').trim(),
       cobertura: ((document.getElementById('infCobertura') || {}).value || '').trim(),
     },
     textoInforme: (document.getElementById('infTexto') || {}).value || '',
@@ -893,6 +894,10 @@ function filtrarPorModelo(){
   var ladoWrap = document.getElementById('infLadoWrap');
   if (ladoWrap) ladoWrap.style.display = modeloRequiereLado(key) ? '' : 'none';
   var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; }) || {};
+  // Sexo del paciente: se oculta si el modelo ya tiene su propio campo de sexo
+  // (ej. urodinamia lo usa para filtrar presets); para el resto (Holter, etc.) va.
+  var sexWrap = document.getElementById('infSexoPacWrap');
+  if (sexWrap) sexWrap.style.display = (m.campos || []).some(function(c){ return c.key === 'sexo'; }) ? 'none' : '';
   // Cobertura (default PAMI) solo en modelos que la piden.
   var cobWrap = document.getElementById('infCoberturaWrap');
   if (cobWrap){
