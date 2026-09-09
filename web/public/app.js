@@ -1022,15 +1022,40 @@ var ROLE = {
 // bloquea, no alcanza con esconder botones). Mismo criterio que server.js.
 var SOLO_LECTURA = ['demo', 'colaborador'];
 function esSoloLectura(u){ return !!(u && SOLO_LECTURA.indexOf(u.role) >= 0); }
-// Visibilidad de clientes restringida a una lista puntual (u.clientes) - mismo
-// criterio que el servidor (tieneClientesRestringidos en server.js): demo y
-// colaborador siempre, operador SOLO si se le cargó una lista (si no, ve todos,
-// como siempre vio). No es un rol aparte - un operador sin lista sigue igual.
+// Visibilidad de clientes restringida - mismo criterio que el servidor
+// (permissions.js: tieneClientesRestringidos/clientesPermitidosSet/
+// clientesVisiblesPara). Hace falta esta copia en JS por el modo espejo: la
+// sesión real sigue siendo la del admin (el server ya le manda TODOS los
+// clientes), así que cualquier pantalla que liste clientes tiene que
+// re-filtrar ACÁ con el usuario efectivo (ME, espejado) para que la vista
+// previa muestre lo mismo que vería ese usuario en una sesión real.
 function tieneClientesRestringidos(u){
   if (!u) return false;
   if (esSoloLectura(u)) return true;
   if (u.role === 'operador') return Array.isArray(u.clientes) && u.clientes.length > 0;
+  if (u.role === 'operador_clinica' || u.role === 'clinica') return true;
   return false;
+}
+function clientesPermitidosSet(u){
+  if (u.role === 'operador_clinica' || u.role === 'clinica') return new Set(u.centro ? [u.centro] : []);
+  return new Set(Array.isArray(u.clientes) ? u.clientes : []);
+}
+function clientesVisiblesPara(u, clientes){
+  if (!tieneClientesRestringidos(u)) return clientes;
+  var permitidos = clientesPermitidosSet(u);
+  return (clientes || []).filter(function(c){ return permitidos.has(c.slug); });
+}
+// Trae la lista de clientes para poblar un selector (Padrón/Cabina/Cruzas/OME/
+// Liberar cupo), ya re-filtrada por el usuario EFECTIVO (ME) - así el modo
+// espejo muestra exactamente lo que ese usuario vería, no la lista completa
+// que le llega a la sesión real del admin.
+async function clientesParaSelector(){
+  try {
+    var r = await fetch('/api/clientes');
+    var raw = await r.json();
+    var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+    return clientesVisiblesPara(ME, list);
+  } catch (e) { return []; }
 }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 var USERS = [];
@@ -8526,14 +8551,10 @@ var PADRON_SEARCH_TIMER = null;
 async function loadPadronView(){
   var sel = document.getElementById('padCliente');
   if (sel && !sel.options.length){
-    try {
-      var r = await fetch('/api/clientes');
-      var raw = await r.json();
-      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      list.forEach(function(c){
-        var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o);
-      });
-    } catch(e){}
+    var list = await clientesParaSelector();
+    list.forEach(function(c){
+      var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o);
+    });
   }
   await refreshPadron();
 }
@@ -8629,17 +8650,13 @@ async function loadCruzasClientes(){
   var sel = document.getElementById('czCliente');
   if (sel && !CZ.clientesCargados){
     CZ.clientesCargados = true;
-    try {
-      var r = await fetch('/api/clientes');
-      var raw = await r.json();
-      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
-      // Recuerda el último cliente elegido - si no, siempre arranca en el
-      // primero de la lista (Sala Millon) en vez de donde quedaste la vez pasada.
-      var ultimo = null;
-      try { ultimo = localStorage.getItem('ns_cruzas_cliente'); } catch(e){}
-      if (ultimo && list.some(function(c){ return c.slug === ultimo; })) sel.value = ultimo;
-    } catch(e){}
+    var list = await clientesParaSelector();
+    list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+    // Recuerda el último cliente elegido - si no, siempre arranca en el
+    // primero de la lista (Sala Millon) en vez de donde quedaste la vez pasada.
+    var ultimo = null;
+    try { ultimo = localStorage.getItem('ns_cruzas_cliente'); } catch(e){}
+    if (ultimo && list.some(function(c){ return c.slug === ultimo; })) sel.value = ultimo;
     await cargarNomencladoresParaCruza();
   }
   onCambiaClienteCruzas();
@@ -9135,18 +9152,14 @@ function cabMatchBusca(it){
 async function loadCabinaView(){
   var sel = document.getElementById('cabCliente');
   if (sel && !sel.options.length){
-    try {
-      var r = await fetch('/api/clientes');
-      var raw = await r.json();
-      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      // Solo los clientes que usan el sistema de informes. Scheffelaar y
-      // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
-      // cargan a mano, más adelante entran solas varias veces por día.
-      // Cuando se sume otro cliente, agregar su slug acá.
-      var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel'];
-      list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
-          .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
-    } catch(e){}
+    var list = await clientesParaSelector();
+    // Solo los clientes que usan el sistema de informes. Scheffelaar y
+    // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
+    // cargan a mano, más adelante entran solas varias veces por día.
+    // Cuando se sume otro cliente, agregar su slug acá.
+    var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel'];
+    list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
+        .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
   }
   // Las fechas también filtran qué informes se muestran (no solo la bajada del mail).
   ['cabDesde','cabHasta'].forEach(function(id){
@@ -9446,9 +9459,7 @@ async function loadOmeWebView(){
   var sel = document.getElementById('omeCliente');
   if (sel && !sel.options.length){
     try {
-      var r = await fetch('/api/clientes');
-      var raw = await r.json();
-      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
+      var list = await clientesParaSelector();
       sel.innerHTML = list.map(function(c){ return '<option value="' + esc(c.slug) + '">' + esc(c.name || c.slug) + '</option>'; }).join('');
       try {
         var last = localStorage.getItem('ns-ome-cliente') || '';
@@ -9665,23 +9676,21 @@ function lcApplyIncomingPreset(){
 async function loadLiberarCupoView(){
   var sel = document.getElementById('lcCliente');
   if (sel && !sel.options.length){
+    // clientesParaSelector() ya viene scopeado por rol Y re-filtrado por el
+    // usuario EFECTIVO (ME) - cubre tanto una sesión real restringida como el
+    // modo espejo (donde la sesión real sigue siendo la del admin). Si a este
+    // usuario le queda un solo cliente posible (operador_clinica, atado a su
+    // centro), no tiene sentido mostrarle un selector - se ve como una
+    // herramienta de NS con un cliente de más, en vez de "el liberar cupo de
+    // este centro". Se oculta y se deja autoseleccionado.
+    var list = await clientesParaSelector();
+    list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+    var wrap = document.getElementById('lcClienteWrap');
+    if (wrap) wrap.style.display = (list.length <= 1) ? 'none' : '';
+    if (list.length === 1) sel.value = list[0].slug;
     try {
-      var r = await fetch('/api/clientes');
-      var raw = await r.json();
-      var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-      list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
-      // /api/clientes ya viene scopeado por rol (ver permissions.js): si a este
-      // usuario le queda un solo cliente posible (operador_clinica, atado a su
-      // centro), no tiene sentido mostrarle un selector - se ve como una
-      // herramienta de NS con un cliente de más, en vez de "el liberar cupo de
-      // este centro". Se oculta y se deja autoseleccionado.
-      var wrap = document.getElementById('lcClienteWrap');
-      if (wrap) wrap.style.display = (list.length <= 1) ? 'none' : '';
-      if (list.length === 1) sel.value = list[0].slug;
-      try {
-        var last = localStorage.getItem('ns-liberar-cupo-cliente') || '';
-        if (last && Array.prototype.some.call(sel.options, function(o){ return o.value === last; })) sel.value = last;
-      } catch(e){}
+      var last = localStorage.getItem('ns-liberar-cupo-cliente') || '';
+      if (last && Array.prototype.some.call(sel.options, function(o){ return o.value === last; })) sel.value = last;
     } catch(e){}
   }
   lcApplyIncomingPreset();
