@@ -866,13 +866,16 @@ function renderInformesConfigLists(){
   }
   var dl = document.getElementById('infDescripcionesList');
   if (dl){
-    dl.innerHTML = (INFORMES_CFG.descripciones || []).map(function(d){
+    var descs = INFORMES_CFG.descripciones || [];
+    var modeloDe = {}; modelos.forEach(function(m){ modeloDe[m.key] = m; });
+    // HTML de UN resultado (mismos controles que antes: borrar, chips de informes,
+    // valores estándar). Suma data-search para el buscador.
+    function descItemHtml(d){
       var titulo = d.nombre || presetLabel(d);
       var prev = d.texto ? '<div class="cfg-textoprev">' + esc(d.texto.length > 220 ? d.texto.slice(0, 218) + '…' : d.texto) + '</div>' : '';
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(titulo) + '</span>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteDescripcion(\'' + esc(d.id) + '\')">' + SVG_TRASH + '</button></div>';
       var chips = modelos.length ? '<div class="cfg-scope">' + scopeChips('desc', d.id, modelos, d.modelos) + '</div>' : '';
-      // Editor de valores estándar (solo si el resultado está asignado a un informe con campos, ej. Holter)
       var campos = presetCampos(d), valEditor = '';
       if (campos.length){
         var val = d.valores || {};
@@ -885,9 +888,66 @@ function renderInformesConfigLists(){
           + '<button class="btn btn-ghost" style="margin-top:8px" onclick="guardarValoresPreset(\'' + esc(d.id) + '\',this)">Guardar valores</button></div>';
       }
       var sub = (chips || valEditor) ? cfgSub('Informes y valores', cfgMetaInformes(d.modelos), chips + valEditor) : '';
-      return '<div class="cfg-item">' + fila + prev + sub + '</div>';
-    }).join('') || '<div class="cfg-empty">Todavía no hay resultados.</div>';
+      var ests = (d.modelos || []).map(function(k){ return modeloDe[k]; }).filter(Boolean);
+      var searchTxt = [titulo, d.texto || '', ests.map(function(m){ return m.practica; }).join(' '), ests.map(function(m){ return m.especialidad; }).join(' ')].join(' ').toLowerCase();
+      return '<div class="cfg-item" data-search="' + esc(searchTxt) + '">' + fila + prev + sub + '</div>';
+    }
+    if (!descs.length){ dl.innerHTML = '<div class="cfg-empty">Todavía no hay resultados.</div>'; }
+    else {
+      // Agrupar por ESPECIALIDAD -> ESTUDIO. Un resultado sin modelos asignados
+      // va a "General · Todos los estudios"; uno asignado a varios estudios
+      // aparece bajo cada uno (así se lo encuentra por cualquiera de ellos).
+      var grupos = {};
+      function put(esp, estKey, practica, d){
+        esp = esp || 'General';
+        if (!grupos[esp]) grupos[esp] = {};
+        if (!grupos[esp][estKey]) grupos[esp][estKey] = { practica: practica, items: [] };
+        grupos[esp][estKey].items.push(d);
+      }
+      descs.forEach(function(d){
+        var ests = (d.modelos || []).map(function(k){ return modeloDe[k]; }).filter(Boolean);
+        if (!ests.length){ put('General', '__all__', 'Todos los estudios', d); return; }
+        ests.forEach(function(m){ put(m.especialidad || 'General', m.key, m.practica || m.key, d); });
+      });
+      var esps = Object.keys(grupos).sort(function(a, b){ return a.localeCompare(b); });
+      var html = '<div style="margin-bottom:6px"><input class="inp" id="infDescFiltro" placeholder="Buscar por nombre, estudio o especialidad… (ej: electro)" oninput="filtrarResultadosInforme()"></div>';
+      html += '<div id="infDescGrupos">';
+      esps.forEach(function(esp){
+        html += '<div class="desc-esp"><div class="desc-esp-head" style="font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(esp) + '</div>';
+        var estKeys = Object.keys(grupos[esp]).sort(function(a, b){ return (grupos[esp][a].practica || '').localeCompare(grupos[esp][b].practica || ''); });
+        estKeys.forEach(function(ek){
+          var g = grupos[esp][ek];
+          html += '<div class="desc-est"><div class="desc-est-head" style="font-weight:700;font-size:12px;color:var(--text-2);margin:8px 0 3px 2px">' + esc(g.practica) + ' <span class="nom-muted">· ' + g.items.length + '</span></div>';
+          html += g.items.map(descItemHtml).join('');
+          html += '</div>';
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+      dl.innerHTML = html;
+    }
   }
+}
+// Filtra la lista de "Resultados del informe" (agrupada por especialidad/estudio)
+// por texto: nombre, contenido, estudio o especialidad. Oculta los sub-grupos y
+// grupos que quedan sin resultados visibles.
+function filtrarResultadosInforme(){
+  var q = ((document.getElementById('infDescFiltro') || {}).value || '').trim().toLowerCase();
+  var cont = document.getElementById('infDescGrupos'); if (!cont) return;
+  [].slice.call(cont.querySelectorAll('.desc-esp')).forEach(function(esp){
+    var espVis = 0;
+    [].slice.call(esp.querySelectorAll('.desc-est')).forEach(function(est){
+      var estVis = 0;
+      [].slice.call(est.querySelectorAll('.cfg-item')).forEach(function(it){
+        var show = !q || (it.getAttribute('data-search') || '').indexOf(q) >= 0;
+        it.style.display = show ? '' : 'none';
+        if (show) estVis++;
+      });
+      est.style.display = estVis ? '' : 'none';
+      if (estVis) espVis++;
+    });
+    esp.style.display = espVis ? '' : 'none';
+  });
 }
 // Bloque desplegable con las opciones seleccionables (chips / valores) del ítem.
 function cfgSub(titulo, meta, contenido){
