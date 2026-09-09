@@ -93,7 +93,10 @@ function go(v, el){
   // a 'credencial' abre Afiliados.
   if (v === 'credencial') v = 'padron';
   // El rol clínica solo entra a su centro: cualquier vista interna de NS lo redirige.
-  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0){
+  // Excepción: "Informes" (crear informes con SUS médicos/firmas) - herramienta
+  // propia del centro, misma que usa su empleado operador_clinica con módulo
+  // informes. El backend scopea el config/generar/lote a su centro.
+  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0 && v !== 'informes'){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
@@ -416,7 +419,7 @@ function selectClientWhenReady(slug, section, tries){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud'].indexOf(section) >= 0) setClientSection(section);
+      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud', 'honorarios', 'credencialcli'].indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -2563,18 +2566,31 @@ function renderClientList(){
     var centroCli = CLIENTS.filter(function(c){ return c.slug === ME.centro; })[0];
     var hdrCli = document.querySelector('#navGroupConsultorios .nav-parent span');
     if (hdrCli) hdrCli.textContent = centroCli ? centroCli.name : 'Mi centro';
+    // Las solapas de arriba están ocultas para la clínica por CSS (client-tabs):
+    // este menú de la izquierda ES su navegación. Por eso todo lo que la clínica
+    // puede abrir tiene que estar acá (una sección de su centro con `section`, o
+    // una vista propia de la herramienta con `view`, como Crear informes).
     var SECC_CLINICA = [
-      { key: 'mescurso',   label: 'Dashboard' },
-      { key: 'dashboard',  label: 'Reportes' },
-      { key: 'honorarios', label: 'Honorarios' },
-      { key: 'basica',     label: 'Datos del centro' },
+      { label: 'Dashboard',            section: 'mescurso' },
+      { label: 'Reportes',             section: 'dashboard' },
+      { label: 'Crear informes',       view: 'informes' },
+      { label: 'Credencial provisoria', section: 'credencialcli' },
+      { label: 'Honorarios',           section: 'honorarios' },
+      { label: 'Datos del centro',     section: 'basica' },
     ];
+    var enInformes = (document.getElementById('view-informes') && document.getElementById('view-informes').style.display === 'block');
     cons.innerHTML = SECC_CLINICA.map(function(s){
-      var active = (ACTIVE_CLIENT && CLIENT_SECTION === s.key) ? ' active' : '';
-      return '<button class="client-nav-item' + active + '" type="button" data-cli-section="' + s.key + '">' + s.label + '</button>';
+      var active = s.view
+        ? (enInformes && s.view === 'informes' ? ' active' : '')
+        : (ACTIVE_CLIENT && !enInformes && CLIENT_SECTION === s.section ? ' active' : '');
+      var attr = s.view ? ('data-cli-view="' + s.view + '"') : ('data-cli-section="' + s.section + '"');
+      return '<button class="client-nav-item' + active + '" type="button" ' + attr + '>' + s.label + '</button>';
     }).join('');
     if (med) med.innerHTML = '';
     if (medGroup) medGroup.style.display = 'none';
+    cons.querySelectorAll('[data-cli-view]').forEach(function(btn){
+      btn.addEventListener('click', function(){ go(btn.getAttribute('data-cli-view')); renderClientList(); });
+    });
     cons.querySelectorAll('[data-cli-section]').forEach(function(btn){
       btn.addEventListener('click', function(){
         go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();

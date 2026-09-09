@@ -2283,16 +2283,19 @@ function tieneClientesRestringidos(me) {
   if (!me) return false;
   if (SOLO_LECTURA.has(me.role)) return true;
   if (me.role === "operador") return Array.isArray(me.clientes) && me.clientes.length > 0;
-  // "operador_clinica" siempre está atado a UN centro (me.centro), nunca ve el
-  // resto - mismo espíritu que un operador con lista, pero fijo (no lo carga el
-  // admin a mano en una lista, ya viene del alta del usuario).
-  if (me.role === "operador_clinica") return true;
+  // "operador_clinica" y "clinica" (el dueño) están atados a UN centro
+  // (me.centro), nunca ven el resto - mismo espíritu que un operador con lista,
+  // pero fijo (no lo carga el admin a mano en una lista, ya viene del alta del
+  // usuario). Así el config de Informes y la lista de clientes se restringen a
+  // SU centro (sus médicos/firmas), no a todos.
+  if (me.role === "operador_clinica" || me.role === "clinica") return true;
   return false;
 }
 // Slugs que un usuario restringido puede ver: la lista a mano (me.clientes) para
-// demo/colaborador/operador-con-lista, o su único centro para operador_clinica.
+// demo/colaborador/operador-con-lista, o su único centro para operador_clinica
+// y clinica (el dueño), que vienen atados a me.centro.
 function clientesPermitidosSet(me) {
-  if (me.role === "operador_clinica") return new Set(me.centro ? [me.centro] : []);
+  if (me.role === "operador_clinica" || me.role === "clinica") return new Set(me.centro ? [me.centro] : []);
   return new Set(Array.isArray(me.clientes) ? me.clientes : []);
 }
 function clientesVisiblesPara(me, clientes) {
@@ -5857,6 +5860,13 @@ const server = http.createServer(async (req, res) => {
       // Credencial provisoria de PAMI (mismo permiso que su empleado operador_clinica
       // con módulo padrón): baja la credencial de un afiliado por benef/DNI/trámite.
       else if (req.method === "POST" && p === "/api/credencial-provisoria") permitido = true;
+      // Crear informes: el config (desplegable de SUS médicos/firmas/plantillas,
+      // ya filtrado a su centro por clientesVisiblesPara/medicosVisiblesPara) y
+      // generar/lote (que además chequean el centro a mano con el clienteSlug del
+      // body). Igual que el módulo "informes" de su empleado operador_clinica, y
+      // sin generar-y-subir (subir a PAMI sigue siendo tarea de NS).
+      else if (esGet && p === "/api/informes/config") permitido = true;
+      else if (req.method === "POST" && (p === "/api/informes/generar" || p === "/api/informes/lote")) permitido = true;
       if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
     }
 
@@ -10524,9 +10534,10 @@ const server = http.createServer(async (req, res) => {
     const cliente = loadClientsStore().find((c) => c.slug === String(body.clienteSlug || ""));
     if (!cliente) return json(res, 400, { error: "Elegí para qué cliente es el informe." });
     // El clienteSlug viaja en el body (no en la URL), así que el gate de arriba
-    // no lo restringe: acá SÍ hay que chequear a mano que un operador_clinica no
-    // arme un informe (con firma de médico) para un centro que no es el suyo.
-    if (me.role === "operador_clinica" && cliente.slug !== me.centro) {
+    // no lo restringe: acá SÍ hay que chequear a mano que un operador_clinica o
+    // un clinica (dueño) no arme un informe (con firma de médico) para un centro
+    // que no es el suyo.
+    if ((me.role === "operador_clinica" || me.role === "clinica") && cliente.slug !== me.centro) {
       return json(res, 403, { error: "No tenés acceso a ese cliente." });
     }
     const pac = body.paciente || {};
@@ -10680,9 +10691,10 @@ const server = http.createServer(async (req, res) => {
         if (!String(pac.nombre || "").trim() || !String(pac.fecha || "").trim()) continue;
         const cliente = clientes.find((c) => c.slug === String(it.clienteSlug || ""));
         if (!cliente) continue; // sin cliente no sabemos qué membrete ponerle: se salta
-        // Un operador_clinica no puede armar (ni de a uno en el lote) el informe
-        // de un centro que no es el suyo - mismo chequeo que /informes/generar.
-        if (me.role === "operador_clinica" && cliente.slug !== me.centro) continue;
+        // Un operador_clinica ni un clinica (dueño) puede armar (ni de a uno en
+        // el lote) el informe de un centro que no es el suyo - mismo chequeo que
+        // /informes/generar.
+        if ((me.role === "operador_clinica" || me.role === "clinica") && cliente.slug !== me.centro) continue;
         // Mismo filtro que /informes/config: no usar un médico (ni su firma) de
         // otro cliente aunque el id se mande a mano.
         const medico = medicosOk.find((m) => m.id === it.medicoId);
