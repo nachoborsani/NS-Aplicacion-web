@@ -11157,6 +11157,9 @@ function ensureModelosUnificados() {
       // Teléfono real visto en el membrete de estudios de CIMA (Espirometría,
       // jun/2025) — el campo estaba vacío en el sistema hasta ahora.
       "cima": { logo: "cima_logo.png", logoW: 150, direccion: "Islas Malvinas 2722 - Isidro Casanova", telefono: "4625-1430 / 2061-0714" },
+      // Logo sacado del membrete de sus propios estudios (Holter, ago/2026). El
+      // banner es horizontal, por eso el ancho es mayor que el de los otros.
+      "dbaime": { logo: "baimed_logo.png", logoW: 200 },
     };
     const clients = loadClientsStore();
     let cambioClientes = false;
