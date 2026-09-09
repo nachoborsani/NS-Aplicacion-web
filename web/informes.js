@@ -989,12 +989,10 @@ async function buildInformePdf(modeloKey, input) {
     const firma = await doc.embedPng(firmaBuf);
     const { w: fw, h: fh } = encajarImagen(firma, 150, 55);
     page.drawImage(firma, { x: firmaAreaX + (firmaAreaW - fw) / 2, y: fy - 22, width: fw, height: fh });
-  } else {
-    centerIn("Firma Médico", firmaAreaX, width - Mx, fy, { bold: true, size: 11 });
-    page.drawLine({ start: { x: firmaAreaX + 12, y: fy - 34 }, end: { x: width - Mx - 12, y: fy - 34 }, thickness: 0.8, color: border });
   }
-  // Nombre + matrícula del médico que firma (regla: aunque no haya firma cargada,
-  // se muestra el nombre y la matrícula debajo del espacio de firma).
+  // Si el médico no tiene firma cargada, NO se dibuja el placeholder "Firma
+  // Médico" ni la línea: el informe sale sin sector de firma (pedido del user).
+  // Nombre + matrícula del médico que firma (solo modelos que lo piden).
   if (modelo.firmaConMatricula && (medicoNombre || medicoMatricula)) {
     let my = fy - 44;
     if (medicoNombre) { centerIn(medicoNombre, firmaAreaX, width - Mx, my, { bold: true, size: 10 }); my -= 13; }
