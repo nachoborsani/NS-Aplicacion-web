@@ -4791,7 +4791,13 @@ function mcFaltCheckSel(panelId){
   if (b){ b.disabled = (n === 0); b.textContent = '📤 Crear y subir seleccionados' + (n ? ' (' + n + ')' : ''); }
 }
 function mcFaltCheckAll(el, panelId){
-  [].slice.call(document.querySelectorAll('.mc-falt-chk[data-panel="' + panelId + '"]')).forEach(function(c){ c.checked = el.checked; });
+  // "Seleccionar todos" respeta el filtro: si hay filas ocultas por el buscador,
+  // solo marca/desmarca las visibles (así "todos" = todos los que estás viendo).
+  [].slice.call(document.querySelectorAll('.mc-falt-chk[data-panel="' + panelId + '"]')).forEach(function(c){
+    var tr = c.closest ? c.closest('tr') : null;
+    if (tr && tr.style.display === 'none') return;
+    c.checked = el.checked;
+  });
   mcFaltCheckSel(panelId);
 }
 // Procesa los faltantes tildados uno por uno: para cada uno abre su modal de
@@ -5277,6 +5283,9 @@ function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accio
       + (conAcc ? '<td class="mc-acc">' + (accionFn(row.idx) || '') + '</td>' : '') + '</tr>';
   }).join('');
   var acciones = '';
+  // Buscador de filas: escribir "holter" (o parte de una práctica/nombre) deja
+  // solo las filas que coinciden. Útil para trabajar un tipo de estudio por vez.
+  if (filas.length) acciones += '<input class="inp mc-filtro" type="text" placeholder="Filtrar (ej: holter)" oninput="mesCursoFiltrarTabla(this)" style="max-width:190px;height:30px">';
   if (conCheck) acciones += '<button id="mcFaltBulk-' + pid + '" class="btn btn-primary btn-sm" type="button" disabled onclick="crearYSubirSeleccionadosPanel(\'' + pid + '\')">📤 Crear y subir seleccionados</button>';
   acciones += '<button class="btn btn-ghost" type="button" title="Copiar" onclick="' + copiaFn + '(this)">📋</button>';
   if (panelId){
@@ -5289,6 +5298,19 @@ function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accio
     + '<div class="mescurso-panel-actions">' + acciones + '</div></div>'
     + '<div class="table-scroll"><table class="bandeja-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>'
     + '</div>';
+}
+// Filtra las filas de la tabla del panel (la que está en el mismo .mescurso-panel
+// del input) por texto: oculta las filas que no contienen lo tipeado (práctica,
+// nombre, benef…). No toca los datos ni la selección; solo muestra/oculta.
+function mesCursoFiltrarTabla(inp){
+  var q = (inp && inp.value || '').trim().toLowerCase();
+  var panel = inp && inp.closest ? inp.closest('.mescurso-panel') : null;
+  if (!panel) return;
+  var filas = panel.querySelectorAll('table.bandeja-table tbody tr');
+  [].slice.call(filas).forEach(function(tr){
+    var ok = !q || (tr.textContent || '').toLowerCase().indexOf(q) >= 0;
+    tr.style.display = ok ? '' : 'none';
+  });
 }
 // Datos crudos (encabezados en mayúscula + valores numéricos de $) para exportar
 // un panel. Reusa los mismos globales que "copiar". Envoltorio: si el panel tiene
