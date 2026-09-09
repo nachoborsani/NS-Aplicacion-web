@@ -11223,6 +11223,25 @@ function ensureModelosUnificados() {
       saveInformesConfig(cfg);
     }
   } catch (e) { console.log("[baimed-gondim-seed] omitido:", e && e.message); }
+
+  // Alta UNA SOLA VEZ de la médica de Baimed: María Florencia Duckwen (cardióloga,
+  // MN 161707 / MP 457966), para HOLTER y ELECTRO de Baimed (dbaime). Se crea SIN
+  // firma: las firmas son sensibles y NO van en el repo (van al volumen, subidas
+  // por la UI). El admin sube firma-duckwen.png desde Informes→config→Duckwen y
+  // ahí el holter/electro pasan a mostrar la firma; hasta entonces sale
+  // "MÉDICO / María Florencia Duckwen". One-time por flag.
+  try {
+    const cfg = loadInformesConfig();
+    if (!cfg._baimedDuckwenSeedDone) {
+      if (!Array.isArray(cfg.medicos)) cfg.medicos = [];
+      if (!cfg.medicos.some((m) => m.id === "maria-florencia-duckwen")) {
+        cfg.medicos.push({ id: "maria-florencia-duckwen", nombre: "María Florencia Duckwen", firma: "", matricula: "MN 161707 · MP 457966", modelos: ["holter", "electro"], clientes: ["dbaime"] });
+        console.log("[baimed-duckwen-seed] médica María Florencia Duckwen creada (holter+electro, dbaime, sin firma - se sube por UI).");
+      }
+      cfg._baimedDuckwenSeedDone = true;
+      saveInformesConfig(cfg);
+    }
+  } catch (e) { console.log("[baimed-duckwen-seed] omitido:", e && e.message); }
 }
 ensureModelosUnificados();
 
