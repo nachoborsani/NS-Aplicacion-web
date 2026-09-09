@@ -933,15 +933,52 @@ function renderInformesConfigLists(){
   var cd = document.getElementById('infDescripcionesCount'); if (cd) cd.textContent = '(' + (INFORMES_CFG.descripciones || []).length + ')';
   var ml = document.getElementById('infMedicosList');
   if (ml){
-    ml.innerHTML = (INFORMES_CFG.medicos || []).map(function(m){
+    var meds = INFORMES_CFG.medicos || [];
+    var modeloDeMed = {}; modelos.forEach(function(mm){ modeloDeMed[mm.key] = mm; });
+    var cliNombre = {}; clientesList.forEach(function(c){ cliNombre[c.slug] = c.name; });
+    var espsDe = function(m){ return uniq((m.modelos || []).map(function(k){ return (modeloDeMed[k] || {}).especialidad; }).filter(Boolean)); };
+    // HTML de UN médico (mismos controles: firma, informes que firma, clientes, borrar).
+    function medItemHtml(m){
       var tag = m.hasFirma ? '<span class="cfg-tag on">firma ✓</span>' : '<span class="cfg-tag off">sin firma</span>';
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
         + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
       var subInformes = modelos.length ? cfgSub('Informes que firma', cfgMetaInformes(m.modelos), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
       var subClientes = clientesList.length ? cfgSub('Clientes', cfgMetaInformes(m.clientes), '<div class="cfg-scope">' + clienteChips('med-cliente', m.id, clientesList, m.clientes) + '</div>') : '';
-      return '<div class="cfg-item">' + fila + subInformes + subClientes + '</div>';
-    }).join('') || '<div class="cfg-empty">Todavía no hay médicos.</div>';
+      var search = [m.nombre, (m.clientes || []).map(function(s){ return cliNombre[s] || s; }).join(' '), espsDe(m).join(' ')].join(' ').toLowerCase();
+      return '<div class="cfg-item" data-search="' + esc(search) + '">' + fila + subInformes + subClientes + '</div>';
+    }
+    if (!meds.length){ ml.innerHTML = '<div class="cfg-empty">Todavía no hay médicos.</div>'; }
+    else {
+      // Agrupar por CENTRO -> ESPECIALIDAD. Un médico que trabaja en varios
+      // centros aparece en CADA uno (los centros son reales); dentro del centro va
+      // una sola vez, bajo su primera especialidad (según los informes que firma).
+      // Sin centro asignado -> "Todos los centros".
+      var grupos = {};
+      function put(centro, esp, m){ grupos[centro] = grupos[centro] || {}; grupos[centro][esp] = grupos[centro][esp] || []; grupos[centro][esp].push(m); }
+      meds.forEach(function(m){
+        var esp = (espsDe(m)[0]) || 'Sin especialidad';
+        var centros = (m.clientes || []).filter(Boolean);
+        if (!centros.length){ put('Todos los centros', esp, m); return; }
+        centros.forEach(function(slug){ put(cliNombre[slug] || slug, esp, m); });
+      });
+      var centrosOrden = Object.keys(grupos).sort(function(a, b){ return a.localeCompare(b); });
+      var html = '<div style="margin-bottom:6px"><input class="inp" id="infMedFiltro" placeholder="Buscar médico, centro o especialidad…" oninput="filtrarMedicosInforme()"></div>';
+      html += '<div id="infMedGrupos">';
+      centrosOrden.forEach(function(centro){
+        var esps = Object.keys(grupos[centro]).sort(function(a, b){ return a.localeCompare(b); });
+        var total = esps.reduce(function(s, e){ return s + grupos[centro][e].length; }, 0);
+        html += '<details open class="desc-esp"><summary class="desc-esp-head" style="cursor:pointer;font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(centro) + ' <span class="nom-muted" style="text-transform:none;font-weight:600">· ' + total + '</span></summary>';
+        esps.forEach(function(esp){
+          html += '<div class="desc-est"><div class="desc-est-head" style="font-weight:700;font-size:12px;color:var(--text-2);margin:8px 0 3px 2px">' + esc(esp) + ' <span class="nom-muted">· ' + grupos[centro][esp].length + '</span></div>';
+          html += grupos[centro][esp].map(medItemHtml).join('');
+          html += '</div>';
+        });
+        html += '</details>';
+      });
+      html += '</div>';
+      ml.innerHTML = html;
+    }
   }
   var dl = document.getElementById('infDescripcionesList');
   if (dl){
@@ -1035,6 +1072,27 @@ function filtrarResultadosInforme(){
     // Al buscar, abrir las especialidades con coincidencias (si están plegadas,
     // no se verían). Sin búsqueda, arrancan/quedan plegadas (el user las abre).
     if (q && esp.tagName === 'DETAILS') esp.open = espVis > 0;
+  });
+}
+// Filtra la lista de médicos (agrupada por centro/especialidad) por texto:
+// nombre, centro o especialidad. Oculta sub-grupos y centros sin coincidencias.
+function filtrarMedicosInforme(){
+  var q = ((document.getElementById('infMedFiltro') || {}).value || '').trim().toLowerCase();
+  var cont = document.getElementById('infMedGrupos'); if (!cont) return;
+  [].slice.call(cont.querySelectorAll('.desc-esp')).forEach(function(centro){
+    var centroVis = 0;
+    [].slice.call(centro.querySelectorAll('.desc-est')).forEach(function(est){
+      var estVis = 0;
+      [].slice.call(est.querySelectorAll('.cfg-item')).forEach(function(it){
+        var show = !q || (it.getAttribute('data-search') || '').indexOf(q) >= 0;
+        it.style.display = show ? '' : 'none';
+        if (show) estVis++;
+      });
+      est.style.display = estVis ? '' : 'none';
+      if (estVis) centroVis++;
+    });
+    centro.style.display = centroVis ? '' : 'none';
+    if (q && centro.tagName === 'DETAILS') centro.open = centroVis > 0;
   });
 }
 // Bloque desplegable con las opciones seleccionables (chips / valores) del ítem.
