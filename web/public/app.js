@@ -913,15 +913,16 @@ function renderInformesConfigLists(){
       var html = '<div style="margin-bottom:6px"><input class="inp" id="infDescFiltro" placeholder="Buscar por nombre, estudio o especialidad… (ej: electro)" oninput="filtrarResultadosInforme()"></div>';
       html += '<div id="infDescGrupos">';
       esps.forEach(function(esp){
-        html += '<div class="desc-esp"><div class="desc-esp-head" style="font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(esp) + '</div>';
         var estKeys = Object.keys(grupos[esp]).sort(function(a, b){ return (grupos[esp][a].practica || '').localeCompare(grupos[esp][b].practica || ''); });
+        var totalEsp = estKeys.reduce(function(s, ek){ return s + grupos[esp][ek].items.length; }, 0);
+        html += '<details open class="desc-esp"><summary class="desc-esp-head" style="cursor:pointer;font-weight:800;font-size:12.5px;color:var(--petrol);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px;border-bottom:1px solid var(--border);padding-bottom:3px">' + esc(esp) + ' <span class="nom-muted" style="text-transform:none;font-weight:600">· ' + totalEsp + '</span></summary>';
         estKeys.forEach(function(ek){
           var g = grupos[esp][ek];
           html += '<div class="desc-est"><div class="desc-est-head" style="font-weight:700;font-size:12px;color:var(--text-2);margin:8px 0 3px 2px">' + esc(g.practica) + ' <span class="nom-muted">· ' + g.items.length + '</span></div>';
           html += g.items.map(descItemHtml).join('');
           html += '</div>';
         });
-        html += '</div>';
+        html += '</details>';
       });
       html += '</div>';
       dl.innerHTML = html;
@@ -947,6 +948,9 @@ function filtrarResultadosInforme(){
       if (estVis) espVis++;
     });
     esp.style.display = espVis ? '' : 'none';
+    // Al buscar, abrir las especialidades con coincidencias (si están plegadas,
+    // no se verían los resultados). Sin búsqueda, quedan todas desplegadas.
+    if (esp.tagName === 'DETAILS') esp.open = espVis > 0;
   });
 }
 // Bloque desplegable con las opciones seleccionables (chips / valores) del ítem.
