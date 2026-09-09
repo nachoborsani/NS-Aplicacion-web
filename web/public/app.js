@@ -2588,12 +2588,12 @@ function renderClientList(){
     }).join('');
     if (med) med.innerHTML = '';
     if (medGroup) medGroup.style.display = 'none';
-    // Al entrar a "Crear informes" (una vista aparte, no una sección del centro),
-    // go() cierra el grupo del menú - lo dejaríamos sin navegación. Mientras esté
-    // en Informes forzamos el grupo abierto para que el menú de la izquierda siga
-    // visible y pueda volver a su centro con un clic.
+    // El menú de la clínica ES su navegación: el grupo va SIEMPRE abierto (si no,
+    // el .nav-sub queda display:none y no se ve nada). Además go() lo cierra al
+    // salir de la vista de clientes (ej. al abrir "Crear informes"), así que lo
+    // reabrimos en cada render para que el menú no desaparezca.
     var grpCli = document.getElementById('navGroupConsultorios');
-    if (grpCli && enInformes) grpCli.classList.add('open');
+    if (grpCli){ grpCli.style.display = ''; grpCli.classList.add('open'); }
     cons.querySelectorAll('[data-cli-view]').forEach(function(btn){
       btn.addEventListener('click', function(){ go(btn.getAttribute('data-cli-view')); renderClientList(); });
     });
@@ -2622,6 +2622,10 @@ function renderClientList(){
     }).join('');
     if (med) med.innerHTML = '';
     if (medGroup) medGroup.style.display = 'none';
+    // Igual que la clínica: el grupo va siempre abierto y visible, si no el menú
+    // (que es toda su navegación) queda oculto.
+    var grpOpCli = document.getElementById('navGroupConsultorios');
+    if (grpOpCli){ grpOpCli.style.display = ''; grpOpCli.classList.add('open'); }
     cons.querySelectorAll('[data-cli-section]').forEach(function(btn){
       btn.addEventListener('click', function(){
         go('clientes'); selectClient(ME.centro); setClientSection(btn.getAttribute('data-cli-section')); renderClientList();
@@ -10365,7 +10369,17 @@ function aplicarUsuario(u){
   // que el contenido quede siempre visible (nunca colapsado).
   var navSecCli = document.getElementById('navSectionClientes');
   var itemsCli = document.querySelector('.nav-section-items[data-section-items="clientes"]');
-  if (u.role === 'operador') {
+  // El contenedor de clientes es .ns-only (interno de NS), pero clínica y
+  // operador_clinica NAVEGAN justamente por ahí (su propio centro). Sin esto, el
+  // CSS body.role-clinica .ns-only lo tapa con !important y el menú de la clínica
+  // queda vacío. Se le saca ns-only SOLO a esos dos roles (igual que el patrón de
+  // navInformes en operador_clinica); para el resto queda como estaba.
+  var esRolCentro = (u.role === 'clinica' || u.role === 'operador_clinica');
+  if (itemsCli) itemsCli.classList.toggle('ns-only', !esRolCentro);
+  if (u.role === 'operador' || esRolCentro) {
+    // No necesitan el rótulo "clientes" arriba del grupo (operador ni lee la
+    // palabra; clínica/operador_clinica ya ven el nombre del centro como header
+    // del grupo). Y el contenido queda siempre desplegado, nunca colapsado.
     if (navSecCli) navSecCli.style.display = 'none';
     if (itemsCli) itemsCli.classList.remove('collapsed');
   } else if (navSecCli) {
