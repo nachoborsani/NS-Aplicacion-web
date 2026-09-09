@@ -11159,7 +11159,7 @@ function ensureModelosUnificados() {
       "cima": { logo: "cima_logo.png", logoW: 150, direccion: "Islas Malvinas 2722 - Isidro Casanova", telefono: "4625-1430 / 2061-0714" },
       // Logo sacado del membrete de sus propios estudios (Holter, ago/2026). El
       // banner es horizontal, por eso el ancho es mayor que el de los otros.
-      "dbaime": { logo: "baimed_logo.png", logoW: 200 },
+      "dbaime": { logo: "baimed_logo.png", logoW: 200, direccion: "Bolivia 3618 HGD, B1653 Villa Gral. Juan Gregorio de Las Heras", telefono: "011 4764-6114" },
     };
     const clients = loadClientsStore();
     let cambioClientes = false;
