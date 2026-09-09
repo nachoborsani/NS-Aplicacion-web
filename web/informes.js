@@ -964,8 +964,9 @@ async function buildInformePdf(modeloKey, input) {
   // Caja: Datos de paciente
   {
     const hasDoc = (p.documento || "").trim();
+    const hasSexo = (p.sexo || "").trim();
     const hasCob = !!cobertura;
-    const innerLines = 1 + 2 + (hasDoc ? 1 : 0) + (hasCob ? 1 : 0);
+    const innerLines = 1 + 2 + (hasDoc ? 1 : 0) + (hasSexo ? 1 : 0) + (hasCob ? 1 : 0);
     const h = innerLines * 15 + 14;
     drawBox(y, h);
     let iy = y - 18;
@@ -973,6 +974,7 @@ async function buildInformePdf(modeloKey, input) {
     T("Nombre:", LBLX, iy, { bold: true }); T(p.nombre || "—", VALX, iy); iy -= 15;
     if (hasDoc) { T("Documento:", LBLX, iy, { bold: true }); T(hasDoc, VALX, iy); iy -= 15; }
     T("N° Benef.:", LBLX, iy, { bold: true }); T(p.benef || "—", VALX, iy); iy -= 15;
+    if (hasSexo) { T("Sexo:", LBLX, iy, { bold: true }); T(hasSexo, VALX, iy); iy -= 15; }
     if (hasCob) { T("Cobertura:", LBLX, iy, { bold: true }); T(cobertura, VALX, iy); }
     y -= h + 12;
   }

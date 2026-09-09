@@ -5015,6 +5015,9 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         '<span class="mc-inf-sub">' + esc(x.nombre || '') + ' · ' + esc((x.practica || '').split(' - ').slice(-1)[0]) + (subir ? ' · OME ' + esc(x.ome || '') : '') + '</span></div>' +
       '<div class="mc-inf-body">' +
         (sexoCampo ? campoHtml(sexoCampo) : '') +
+        // Sexo del paciente (dato del paciente, no del estudio): se pregunta salvo
+        // que el modelo ya tenga su propio campo de sexo (ej. urodinamia).
+        (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
         visitaHtml +
@@ -5072,6 +5075,8 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
       if (!omes.length) omes = [String(x.ome || '').replace(/\D/g, '')].filter(Boolean);
       var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
       if (!payload) return;
+      var sexoPac = scrim.querySelector('#mc-inf-sexo');
+      if (sexoPac && sexoPac.value && payload.paciente) payload.paciente.sexo = sexoPac.value;
       delete payload._modelo;
       scrim.remove();
       if (subir){
