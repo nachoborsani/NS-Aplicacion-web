@@ -11175,6 +11175,31 @@ function ensureModelosUnificados() {
     }
     if (cambioClientes) saveClientsStore(clients);
   } catch (e) { console.log("[modelos-unificados] seed de clientes omitido:", e && e.message); }
+
+  // Limpieza UNA SOLA VEZ: hoy ningún médico con firma registrada debe quedar
+  // asociado a Baimed (dbaime) - todavía no tiene sus propios firmantes. Se le
+  // saca "dbaime" de la lista de clientes a cada médico que tenga firma. Va
+  // guardada con un flag para que corra una única vez: si mañana el admin
+  // asocia a propósito un médico (con firma) a Baimed, esto NO se lo vuelve a
+  // sacar en el próximo deploy.
+  try {
+    const cfg = loadInformesConfig();
+    if (!cfg._baimedFirmaCleanupDone) {
+      let cambio = false;
+      for (const m of (cfg.medicos || [])) {
+        if (!Array.isArray(m.clientes)) continue;
+        if (!firmaExiste(m.firma)) continue;             // solo los que tienen firma usable
+        if (m.clientes.includes("dbaime")) {
+          m.clientes = m.clientes.filter((c) => c !== "dbaime");
+          cambio = true;
+          console.log(`[baimed-firma-cleanup] "${m.nombre}" desasociado de dbaime (tenía firma).`);
+        }
+      }
+      cfg._baimedFirmaCleanupDone = true;
+      saveInformesConfig(cfg);
+      if (!cambio) console.log("[baimed-firma-cleanup] nada para limpiar (ningún médico con firma estaba asociado a dbaime).");
+    }
+  } catch (e) { console.log("[baimed-firma-cleanup] omitido:", e && e.message); }
 }
 ensureModelosUnificados();
 
