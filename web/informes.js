@@ -1651,4 +1651,109 @@ async function buildErgoPdf(modelo, input) {
   return await doc.save();
 }
 
-module.exports = { MODELOS, buildInformePdf, informeFilename, listarModelos, MODELO_RENOMBRADOS, MODELO_VIEJO_CLIENTE };
+// ===== Liquidación de honorarios (PDF membretado) =====
+// Documento que el centro le entrega al médico: membrete del centro (logo +
+// nombre + dirección), el detalle de las prácticas agrupadas por especialidad
+// (con el/los médico(s) de esa especialidad) y el total de honorarios. La data
+// (grupos con sus filas y subtotales) la arma server.js; acá solo se dibuja.
+//   input = { clienteNombre, clienteDireccion, logoName, logoW, periodoLabel,
+//             fechaEmision, paraLabel, mostrarFacturado,
+//             grupos:[{ especialidad, medicos, filas:[{practica,code,cantidad,
+//               facturado,pago,honorario}], subFacturado, subHonorario }],
+//             totalFacturado, totalHonorario }
+function _liqSafe(s) { return String(s == null ? "" : s).replace(/[^\x20-\x7E\xA0-\xFF]/g, " "); }
+function _liqMoney(n) {
+  n = Math.round((Number(n) || 0) * 100) / 100;
+  const neg = n < 0; n = Math.abs(n);
+  const s = n.toFixed(2).split(".");
+  const ent = s[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return (neg ? "-$ " : "$ ") + ent + "," + s[1];
+}
+async function buildLiquidacionHonorariosPdf(input) {
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
+  const data = input || {};
+  const grupos = Array.isArray(data.grupos) ? data.grupos : [];
+  const mostrarFact = data.mostrarFacturado !== false;
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0.12, 0.12, 0.12), soft = rgb(0.38, 0.38, 0.38), line = rgb(0.62, 0.62, 0.62), band = rgb(0.93, 0.95, 0.97);
+  const W = 595.28, H = 841.89, Mx = 46;
+  let logoImg = null, logoDims = null;
+  const logoBuf = readAsset(data.logoName);
+  if (logoBuf) { try { logoImg = await doc.embedPng(logoBuf); logoDims = encajarImagen(logoImg, data.logoW || 90, 66); } catch { logoImg = null; } }
+  // Columnas: Práctica (izq) · Cant · Facturado · Honorario (der).
+  const xPrac = Mx;
+  const xHonR = W - Mx;
+  const xFactR = mostrarFact ? W - Mx - 95 : null;
+  const xCantR = (mostrarFact ? xFactR : xHonR) - 95;
+  const pracMaxW = xCantR - xPrac - 40;
+  let page, y;
+  const T = (t, x, yy, o = {}) => page.drawText(_liqSafe(t), { x, y: yy, size: o.size || 10, font: o.bold ? bold : font, color: o.color || ink });
+  const rightT = (t, xr, yy, o = {}) => { const f = o.bold ? bold : font, s = o.size || 10; T(t, xr - f.widthOfTextAtSize(_liqSafe(t), s), yy, o); };
+  const centerT = (t, yy, o = {}) => { const f = o.bold ? bold : font, s = o.size || 10; T(t, (W - f.widthOfTextAtSize(_liqSafe(t), s)) / 2, yy, o); };
+  const hr = (yy, th) => page.drawLine({ start: { x: Mx, y: yy }, end: { x: W - Mx, y: yy }, thickness: th || 0.6, color: line });
+  const colHeads = () => {
+    T("Práctica", xPrac, y, { bold: true, size: 8, color: soft });
+    rightT("Cant.", xCantR, y, { bold: true, size: 8, color: soft });
+    if (mostrarFact) rightT("Facturado", xFactR, y, { bold: true, size: 8, color: soft });
+    rightT("Honorario", xHonR, y, { bold: true, size: 8, color: soft });
+    y -= 5; hr(y); y -= 13;
+  };
+  const header = () => {
+    y = H - 46;
+    if (logoImg && logoDims) { page.drawImage(logoImg, { x: (W - logoDims.w) / 2, y: y - logoDims.h, width: logoDims.w, height: logoDims.h }); y -= logoDims.h + 8; }
+    centerT(data.clienteNombre || "Centro", y - 12, { bold: true, size: 14 }); y -= 27;
+    if (data.clienteDireccion) { centerT(data.clienteDireccion, y, { size: 9, color: soft }); y -= 14; }
+    centerT("Liquidación de honorarios", y - 3, { bold: true, size: 12 }); y -= 19;
+    const sub = [data.periodoLabel, data.fechaEmision ? ("Emitido: " + data.fechaEmision) : ""].filter(Boolean).join("     ·     ");
+    if (sub) { centerT(sub, y, { size: 9, color: soft }); y -= 15; }
+    if (data.paraLabel) { centerT(data.paraLabel, y, { size: 9.5, bold: true }); y -= 15; }
+    y -= 2; hr(y, 0.8); y -= 14;
+    colHeads();
+  };
+  const ensure = (h) => { if (y - h < 70) { page = doc.addPage([W, H]); header(); } };
+  page = doc.addPage([W, H]); header();
+  for (const g of grupos) {
+    ensure(40);
+    // Banda de especialidad + médicos.
+    page.drawRectangle({ x: Mx, y: y - 4, width: W - 2 * Mx, height: 17, color: band });
+    T((g.especialidad || "Sin especialidad").toUpperCase(), xPrac + 4, y, { bold: true, size: 9.5 });
+    if (g.medicos) rightT(g.medicos, xHonR - 4, y, { size: 8.5, color: soft });
+    y -= 20;
+    for (const f of (g.filas || [])) {
+      const lines = wrapText((f.practica || f.code || "") + (f.code ? "  (" + f.code + ")" : ""), font, 9, pracMaxW);
+      const rh = Math.max(12, lines.length * 11);
+      ensure(rh + 2);
+      lines.forEach((ln, i) => T(ln, xPrac, y - i * 11, { size: 9 }));
+      rightT(String(f.cantidad != null ? f.cantidad : ""), xCantR, y, { size: 9 });
+      if (mostrarFact) rightT(_liqMoney(f.facturado), xFactR, y, { size: 9 });
+      rightT(_liqMoney(f.honorario), xHonR, y, { size: 9, bold: true });
+      y -= rh + 2;
+    }
+    // Subtotal del grupo.
+    y -= 2; hr(y); y -= 13;
+    rightT("Subtotal " + (g.especialidad || ""), xCantR, y, { size: 8.5, color: soft });
+    if (mostrarFact) rightT(_liqMoney(g.subFacturado), xFactR, y, { size: 9 });
+    rightT(_liqMoney(g.subHonorario), xHonR, y, { size: 9.5, bold: true });
+    y -= 20;
+  }
+  // Total general.
+  ensure(60);
+  hr(y, 0.9); y -= 16;
+  T("TOTAL HONORARIOS", xPrac, y, { bold: true, size: 11 });
+  if (mostrarFact) rightT(_liqMoney(data.totalFacturado), xFactR, y, { size: 9, color: soft });
+  rightT(_liqMoney(data.totalHonorario), xHonR, y, { bold: true, size: 12 });
+  y -= 46;
+  // Firma del profesional (si es una liquidación para UN médico).
+  ensure(50);
+  if (data.paraLabel) {
+    const fx = W - Mx - 220;
+    page.drawLine({ start: { x: fx, y: y }, end: { x: W - Mx, y: y }, thickness: 0.6, color: line });
+    y -= 12; rightT("Firma y aclaración", W - Mx - 60, y, { size: 8.5, color: soft });
+  }
+  const bytes = await doc.save();
+  return bytes;
+}
+
+module.exports = { MODELOS, buildInformePdf, buildLiquidacionHonorariosPdf, informeFilename, listarModelos, MODELO_RENOMBRADOS, MODELO_VIEJO_CLIENTE };

@@ -5851,8 +5851,9 @@ const server = http.createServer(async (req, res) => {
       if (permitidoSiempre) permitido = true;
       else if (esGet && p === "/api/clientes") permitido = true;
       else if (esGet && suCentro) permitido = true;
-      // Única excepción de escritura: guardar SUS honorarios. Y exportar PDF (lectura).
-      else if (!esGet && suCentro && /\/honorarios$/.test(p)) permitido = true;
+      // Única excepción de escritura: guardar SUS honorarios (y bajar la
+      // liquidación en PDF, que se pide por POST). Y exportar PDF (lectura).
+      else if (!esGet && suCentro && /\/honorarios(\/liquidacion)?$/.test(p)) permitido = true;
       else if (p === "/api/mescurso/export") permitido = true;
       // Nomenclador: es data de REFERENCIA (no de un centro), solo lectura → el
       // cliente puede consultarlo y bajarlo (con especialidades).
@@ -8314,6 +8315,88 @@ const server = http.createServer(async (req, res) => {
     else store[slug][code] = { tipo: (b && b.tipo) === "pct" ? "pct" : "monto", valor };
     saveHonorarios(store);
     return json(res, 200, { ok: true, config: store[slug] });
+  }
+
+  // Liquidación de honorarios en PDF membretado (el documento que el centro le
+  // entrega al médico). Reconstruye los honorarios en el server desde el reporte
+  // (o mes en curso) + la config guardada, los agrupa por especialidad (con el/los
+  // médico(s) de esa especialidad) y arma un PDF con el membrete del centro. Se
+  // puede filtrar a UNA especialidad para darle a cada médico solo su hoja.
+  const clientHonLiqMatch = p.match(/^\/api\/clientes\/([^/]+)\/honorarios\/liquidacion$/);
+  if (clientHonLiqMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(clientHonLiqMatch[1]);
+    if (!(me.role === "admin" || (me.role === "clinica" && me.centro === slug))) return json(res, 403, { error: "forbidden" });
+    const b = await readBody(req);
+    const rstore = loadClientReportsStore();
+    const reportes = (rstore.items || []).filter((r) => r.clientSlug === slug)
+      .sort((a, x) => String(x.closedAt || "").localeCompare(String(a.closedAt || ""))).map(reportListItem);
+    const reporteId = String((b && b.reporte) || "").trim() || (reportes[0] && reportes[0].id) || "";
+    let data = reporteId ? buildHonorariosDeReporte(slug, reporteId) : null;
+    if (!data) data = buildHonorariosCodigos(slug);
+    const config = loadHonorarios()[slug] || {};
+    const honDe = (cod) => {
+      const cfg = config[cleanIdentifier(cod.code)];
+      if (!cfg || !(Number(cfg.valor) > 0)) return 0;
+      return cfg.tipo === "pct" ? (Number(cod.facturado) || 0) * Number(cfg.valor) / 100 : (Number(cod.cantidad) || 0) * Number(cfg.valor);
+    };
+    // Médicos por especialidad (para rotular cada grupo). Match laxo por texto
+    // normalizado, porque la especialidad del médico puede venir como clave o label.
+    const medicosStore = loadClientMedicos()[slug] || [];
+    const medicosDeEsp = (esp) => {
+      const ne = normalizeText(esp || "");
+      if (!ne) return "";
+      const nombres = medicosStore.filter((m) => {
+        const mm = normalizeText(m.especialidad || "");
+        return mm && (ne.includes(mm) || mm.includes(ne));
+      }).map((m) => m.nombre).filter(Boolean);
+      return [...new Set(nombres)].join(", ");
+    };
+    const gruposMap = new Map();
+    for (const cod of (data.codigos || [])) {
+      const esp = cod.especialidad || "Sin especialidad";
+      if (!gruposMap.has(esp)) gruposMap.set(esp, { especialidad: esp, filas: [], subFacturado: 0, subHonorario: 0 });
+      const g = gruposMap.get(esp);
+      const honor = honDe(cod);
+      g.filas.push({ practica: cod.nombre || cod.code, code: cod.code, cantidad: cod.cantidad, facturado: money(cod.facturado), honorario: money(honor) });
+      g.subFacturado = money(g.subFacturado + (Number(cod.facturado) || 0));
+      g.subHonorario = money(g.subHonorario + honor);
+    }
+    let grupos = [...gruposMap.values()];
+    const filtroEsp = String((b && b.especialidad) || "").trim();
+    if (filtroEsp) { const nf = normalizeText(filtroEsp); grupos = grupos.filter((g) => normalizeText(g.especialidad) === nf); }
+    for (const g of grupos) g.medicos = medicosDeEsp(g.especialidad);
+    if (!grupos.length) return json(res, 400, { error: "No hay prácticas para liquidar en el período elegido." });
+    const totalFacturado = money(grupos.reduce((s, g) => s + g.subFacturado, 0));
+    const totalHonorario = money(grupos.reduce((s, g) => s + g.subHonorario, 0));
+    const cliente = loadClientsStore().find((c) => c.slug === slug) || {};
+    const periodoLabel = data.reporteNombre ? (data.reporteNombre + (data.periodo ? "  ·  " + data.periodo : ""))
+      : (data.periodo ? "Mes en curso " + data.periodo : "");
+    const hoy = hoyArgentinaISO();
+    const fechaEmision = /^\d{4}-\d{2}-\d{2}$/.test(hoy) ? hoy.slice(8, 10) + "/" + hoy.slice(5, 7) + "/" + hoy.slice(0, 4) : "";
+    const paraLabel = filtroEsp
+      ? ("Para: " + filtroEsp + (grupos[0] && grupos[0].medicos ? " — " + grupos[0].medicos : ""))
+      : "";
+    let bytes;
+    try {
+      bytes = await informes.buildLiquidacionHonorariosPdf({
+        clienteNombre: cliente.name || cliente.businessName || slug,
+        clienteDireccion: [cliente.direccion, cliente.telefono ? "Tel: " + cliente.telefono : ""].filter(Boolean).join("     ·     "),
+        logoName: cliente.logo || "", logoW: cliente.logoW || 0,
+        periodoLabel, fechaEmision, paraLabel,
+        mostrarFacturado: (b && b.mostrarFacturado) !== false,
+        grupos, totalFacturado, totalHonorario,
+      });
+    } catch (error) {
+      console.log("[liquidacion] error:", error && error.message);
+      const falta = error && error.code === "MODULE_NOT_FOUND";
+      return json(res, 500, { error: falta ? "Falta pdf-lib en el servidor. Hacé un Redeploy en Railway." : "No se pudo generar la liquidación." });
+    }
+    const buf = Buffer.from(bytes);
+    const base = downloadName("Liquidacion " + (cliente.name || slug) + " " + (data.periodo || "")) || "liquidacion";
+    res.writeHead(200, { "content-type": "application/pdf", "content-length": buf.length, "content-disposition": `attachment; filename="${base}.pdf"`, "cache-control": "no-store" });
+    return res.end(buf);
   }
 
   // Resumen valorizado de la bandeja del mes en curso (liviano: no devuelve las

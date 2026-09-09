@@ -922,8 +922,10 @@
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                       <label class="factura-cfg">Reporte <select class="inp mini" id="honReporte" onchange="loadClientHonorarios(this.value)" style="max-width:220px"></select></label>
                       <span class="nom-muted" id="honPeriodo"></span>
-                      <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('pdf')">📄 PDF</button>
+                      <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('pdf')" title="Tabla completa (facturado / le pago / ganancia)">📄 PDF</button>
                       <button class="btn btn-ghost btn-sm" type="button" onclick="honDescargar('xlsx')">📊 Excel</button>
+                      <label class="factura-cfg">Liquidación <select class="inp mini" id="honLiqPara" style="max-width:200px"><option value="">Todo el centro</option></select></label>
+                      <button class="btn btn-primary btn-sm" type="button" onclick="descargarLiquidacion()" title="Liquidación membretada para el médico">🧾 Liquidación PDF</button>
                     </div>
                   </div>
                   <p class="nom-muted">Se liquida sobre lo <b>cerrado</b> (lo que el centro cobra). Por cada práctica ves lo cobrado y cargás cuánto le pagás al médico ($/práctica o % ); la diferencia es tu <b>ganancia real</b>.</p>

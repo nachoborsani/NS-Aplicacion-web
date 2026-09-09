@@ -3362,6 +3362,39 @@ function renderHonorarios(){
   });
   body.innerHTML = html;
   honTotales();
+  // Selector "Para:" de la liquidación: una opción por especialidad presente.
+  var selL = document.getElementById('honLiqPara');
+  if (selL){
+    var esps = [];
+    HON.codigos.forEach(function(c){ var e = c.especialidad || 'Sin especialidad'; if (esps.indexOf(e) < 0) esps.push(e); });
+    var prev = selL.value;
+    selL.innerHTML = '<option value="">Todo el centro</option>' + esps.map(function(e){ return '<option value="' + esc(e) + '">' + esc(e) + '</option>'; }).join('');
+    if (prev && esps.indexOf(prev) >= 0) selL.value = prev;
+  }
+}
+// Liquidación de honorarios en PDF membretado (para entregarle al médico). El
+// server la reconstruye desde el reporte + la config guardada; acá solo pedimos
+// el archivo con el reporte elegido y, si corresponde, filtrada a una especialidad.
+async function descargarLiquidacion(){
+  if (!ACTIVE_CLIENT) return;
+  if (!HON.codigos.length){ nsAlert('No hay prácticas para liquidar en el período elegido.'); return; }
+  var especialidad = (document.getElementById('honLiqPara') || {}).value || '';
+  var payload = { reporte: HON.reporteId || '', especialidad: especialidad };
+  try {
+    var resp = await fetch('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios/liquidacion', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(payload) });
+    if (!resp.ok){
+      var msg = 'No se pudo generar la liquidación.';
+      try { var j = await resp.json(); if (j && j.error) msg = j.error; } catch(e){}
+      nsAlert(msg); return;
+    }
+    var blob = await resp.blob(); var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url;
+    var etq = especialidad ? (' - ' + especialidad) : '';
+    a.download = ('Liquidacion ' + (ACTIVE_CLIENT.name || '') + etq).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') + '.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+  } catch (e){ nsAlert('No se pudo generar la liquidación.'); }
 }
 function honFilaCfg(code){
   var tr = document.querySelector('#honBody tr[data-code="' + code + '"]'); if (!tr) return null;
