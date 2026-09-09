@@ -22,6 +22,20 @@ const { handleLab } = require("./lab_server");
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
+// Matriz de permisos centralizada (ver permissions.js: quién ve/puede tocar
+// qué, por rol y por cliente). Todo lo que no está ahí, está prohibido.
+const {
+  SOLO_LECTURA,
+  esOperativo,
+  puedeCanalInicio,
+  tieneClientesRestringidos,
+  clientesPermitidosSet,
+  clientesVisiblesPara,
+  medicosVisiblesPara,
+  OPERADOR_CLINICA_MODULOS,
+  opClinicaTieneModulo,
+  aplicarGateDeRol,
+} = require("./permissions.js");
 
 const port = Number(process.env.PORT || 3000);
 const publicDir = path.join(__dirname, "public");
@@ -73,8 +87,7 @@ const inicioFile = path.join(dataDir, "inicio.json");
 const inicioAdjuntosDir = path.join(dataDir, "inicio_adjuntos");
 const INICIO_CANALES = ["seba", "operadores"];
 function inicioCanalNorm(c) { c = String(c || "seba").toLowerCase(); return INICIO_CANALES.indexOf(c) >= 0 ? c : "seba"; }
-// Quién ve/escribe cada canal: "operadores" lo ven admin y operador; "seba" solo admin.
-function puedeCanalInicio(me, canal) { return canal === "operadores" ? esOperativo(me) : (!!me && me.role === "admin"); }
+// Quién ve/escribe cada canal ("operadores"/"seba"): puedeCanalInicio, en permissions.js.
 function inicioCanalesVisibles(me) { return INICIO_CANALES.filter((c) => puedeCanalInicio(me, c)); }
 // Canal de un mensaje. Migración del modelo viejo: un mensaje sin `canal` que estaba
 // marcado visibleOperadores pasa a ser del canal "operadores"; el resto, "seba".
@@ -2262,59 +2275,8 @@ function unsign(signed) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   return value;
 }
-// Operativo = admin u operador. El operador hace el trabajo diario (afiliados,
-// informes, cabina, nomenclador) pero NO toca plata, cierre de mes ni clientes.
-function esOperativo(me) { return !!(me && (me.role === "admin" || me.role === "operador")); }
-// Visibilidad de clientes restringida a una lista puntual (me.clientes):
-// - "demo" SIEMPRE esta restringido (un demo sin clientes no ve nada, por eso
-//   se exige al menos uno al crearlo/editarlo).
-// - "operador" esta restringido SOLO si se le cargo una lista de clientes a
-//   mano (ej. alguien que trabaja para NS pero solo en ciertos centros, como
-//   un colaborador puntual). Un operador SIN lista (el caso de siempre, ej.
-//   operadora1) sigue viendo todos los clientes como hasta ahora - no romper
-//   ese comportamiento por defecto es la razon de que esto sea condicional
-//   y no un rol aparte.
-// Roles de solo lectura: ven datos reales pero no escriben nada. Los dos exigen
-// lista de clientes (un usuario de estos SIN clientes no vería nada, por eso se
-// pide al crearlo). "colaborador" es un socio/colaborador externo (ej. el dueño de
-// un centro que además mira otros): arranca viendo solo los dashboards.
-const SOLO_LECTURA = new Set(["demo", "colaborador"]);
-function tieneClientesRestringidos(me) {
-  if (!me) return false;
-  if (SOLO_LECTURA.has(me.role)) return true;
-  if (me.role === "operador") return Array.isArray(me.clientes) && me.clientes.length > 0;
-  // "operador_clinica" y "clinica" (el dueño) están atados a UN centro
-  // (me.centro), nunca ven el resto - mismo espíritu que un operador con lista,
-  // pero fijo (no lo carga el admin a mano en una lista, ya viene del alta del
-  // usuario). Así el config de Informes y la lista de clientes se restringen a
-  // SU centro (sus médicos/firmas), no a todos.
-  if (me.role === "operador_clinica" || me.role === "clinica") return true;
-  return false;
-}
-// Slugs que un usuario restringido puede ver: la lista a mano (me.clientes) para
-// demo/colaborador/operador-con-lista, o su único centro para operador_clinica
-// y clinica (el dueño), que vienen atados a me.centro.
-function clientesPermitidosSet(me) {
-  if (me.role === "operador_clinica" || me.role === "clinica") return new Set(me.centro ? [me.centro] : []);
-  return new Set(Array.isArray(me.clientes) ? me.clientes : []);
-}
-function clientesVisiblesPara(me, clientes) {
-  if (!tieneClientesRestringidos(me)) return clientes;
-  const permitidos = clientesPermitidosSet(me);
-  return clientes.filter((c) => permitidos.has(c.slug));
-}
-// Mismo criterio que clientesVisiblesPara, pero para médicos de la config de
-// Informes (cada médico puede estar atado a uno o más clientes en m.clientes;
-// vacío = médico "global", no asociado a ningún cliente en particular, se
-// muestra siempre). Un usuario con clientes restringidos (operador con lista,
-// demo, colaborador, operador_clinica) NO debe ver médicos/firmas de una
-// clínica que no le asignamos, aunque no esté en la sección "Clientes" (esto
-// viaja también por /api/informes/config, que arma el desplegable de Informes).
-function medicosVisiblesPara(me, medicos) {
-  if (!tieneClientesRestringidos(me)) return medicos;
-  const permitidos = clientesPermitidosSet(me);
-  return medicos.filter((m) => !Array.isArray(m.clientes) || m.clientes.length === 0 || m.clientes.some((c) => permitidos.has(c)));
-}
+// esOperativo/SOLO_LECTURA/tieneClientesRestringidos/clientesPermitidosSet/
+// clientesVisiblesPara/medicosVisiblesPara: movidos a permissions.js.
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
   const m = cookie.match(/(?:^|;\s*)ns_session=([^;]+)/);
@@ -2599,17 +2561,7 @@ function publicUser(u) {
            clientes: Array.isArray(u.clientes) ? u.clientes : [],
            modulos: Array.isArray(u.modulos) ? u.modulos : [], mustChange: !!u.mustChange };
 }
-// Módulos que un "operador_clinica" puede tener habilitados A MANO, por usuario
-// puntual (acá SÍ es por persona, no por rol: bo.26 de Baimed puede tener un set
-// distinto que otro operador de otro centro - a diferencia del resto de los
-// roles, donde el estándar del proyecto es "todo el rol igual"). Mismos nombres
-// que los ids de vista del front (padron=Afiliados, informes=Generar informes,
-// liberarcupo=Liberar cupo). Nivel básico siempre: nada de dashboards, honorarios
-// ni reportes, tenga los módulos que tenga.
-const OPERADOR_CLINICA_MODULOS = new Set(["padron", "informes", "liberarcupo"]);
-function opClinicaTieneModulo(me, modulo) {
-  return !!(me && me.role === "operador_clinica" && Array.isArray(me.modulos) && me.modulos.includes(modulo));
-}
+// OPERADOR_CLINICA_MODULOS/opClinicaTieneModulo: movidos a permissions.js.
 
 // Perfiles validos y reglas de nombre de usuario
 // "demo": usuario de demostración (para mostrar la app sin poder usarla). Ve las
@@ -4033,9 +3985,10 @@ function buildBandejaResumen(slug) {
     else unmatched++;
     // Acumular por módulo.
     const modCode = String((nomRow && nomRow.moduleCode) || "");
+    const modDesc = String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo"));
     const modKey = modCode || "sin";
     let modAgr = moduloAgr.get(modKey);
-    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo")), consultations: 0, practices: 0, gross: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: modDesc, consultations: 0, practices: 0, gross: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
     if (esConsulta) modAgr.consultations++; else modAgr.practices++;
     modAgr.gross += valueGross;
     if (!nomRow) {   // el código no está en el nomenclador → suma $0 pero cuenta
@@ -4044,6 +3997,9 @@ function buildBandejaResumen(slug) {
       if (!modAgr._sv[svc]) modAgr._sv[svc] = { code: svc, desc: (pracRaw.split(" - ").slice(1).join(" - ") || pracRaw).trim(), count: 0 };
       modAgr._sv[svc].count++;
     }
+    // modCode/modDesc/esConsulta viajan en cada fila para poder agrupar por
+    // módulo el detalle de un panel (ausentes, faltan informes...) sin tener
+    // que volver a pedirle nada al servidor: es la vista "a) módulo" del toggle.
     if (!esValidada && ausentesRows.length < 2000) ausentesRows.push({
       benef: String(row[kBenef] || "").trim(),
       nombre: String(row[kNombre] || "").trim(),
@@ -4051,6 +4007,7 @@ function buildBandejaResumen(slug) {
       turno: String(row[kTurno] || "").trim(),
       valor: money(valueGross),
       ome,
+      modCode, modDesc, esConsulta,
     });
     if (esTransmitida) grossTransmitido += valueGross;
     else if (!esValidada) grossTurno += valueGross; // el caso validada+sin-transmitir va a missingInformeAmount
@@ -4065,6 +4022,7 @@ function buildBandejaResumen(slug) {
         turno: String(row[kTurno] || "").trim(),
         valor: money(valueGross),
         ome: kOme ? cleanIdentifier(row[kOme]) : "",
+        modCode, modDesc, esConsulta,
       };
       if (esConsulta) {
         // Consulta validada sin transmitir: NO falta informe, solo transmitir.
@@ -4622,6 +4580,10 @@ function addRowToDashboardPeriod(target, row) {
       valor: money(row.valueGross),
       debito: money(debFila),
       ome: cleanIdentifier(row.order),
+      // Para la vista "a) módulo" del toggle detalle/módulo.
+      modCode: String(row.moduleCode || "").trim(),
+      modDesc: String(row.moduleDescription || "").trim(),
+      esConsulta: isConsultationRow(row),
     });
   } else if (reportRowPorTransmitir(row)) {
     target.porTransmitir += 1;
@@ -4793,6 +4755,10 @@ function buildClientDashboard(slug, periodFilter, compareFilter) {
       turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
       valor: money(r.valueGross),
       ome: cleanIdentifier(r.order),
+      // Para la vista "a) módulo" del toggle detalle/módulo.
+      modCode: String(r.moduleCode || "").trim(),
+      modDesc: String(r.moduleDescription || "").trim(),
+      esConsulta: isConsultationRow(r),
     });
     item.ausentesRows = periodRows.filter((r) => r.absent && !r.outsideCutoff).slice(0, 2000).map(detalleFila);
     // Prácticas que se facturan en el CORTE SIGUIENTE (transmitidas después del corte).
@@ -5817,9 +5783,9 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { user: publicUser(u) });
   }
 
-  // --- Gate del rol "clinica" (dueño del centro): SOLO LECTURA y SOLO su centro.
-  // Puede: ver su sesión, cambiar su clave, salir, y hacer GET de /api/clientes
-  // (scopeado abajo) y de /api/clientes/{su-centro}/... Todo lo demás: 403.
+  // --- Gate único de rol: toda la matriz de permisos vive en permissions.js
+  // (aplicarGateDeRol). Acá solo queda lo genérico (sesión activa, cambio de
+  // clave obligatorio) + la llamada a esa matriz.
   if (p.startsWith("/api/")) {
     const meGate = getSessionUser(req);
     // Gate GLOBAL de acceso: toda ruta que no sea pública exige sesión ACTIVA.
@@ -5842,106 +5808,12 @@ const server = http.createServer(async (req, res) => {
         return json(res, 403, { error: "must-change-password", message: "Tenés que cambiar tu clave antes de seguir." });
       }
     }
-    if (meGate && meGate.role === "clinica") {
-      const esGet = (req.method === "GET" || !req.method);
-      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
-      const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
-      const suCentro = mCli && decodeURIComponent(mCli[1]) === meGate.centro;
-      let permitido = false;
-      if (permitidoSiempre) permitido = true;
-      else if (esGet && p === "/api/clientes") permitido = true;
-      else if (esGet && suCentro) permitido = true;
-      // Única excepción de escritura: guardar SUS honorarios (y bajar la
-      // liquidación en PDF, que se pide por POST). Y exportar PDF (lectura).
-      else if (!esGet && suCentro && /\/honorarios(\/liquidacion)?$/.test(p)) permitido = true;
-      else if (p === "/api/mescurso/export") permitido = true;
-      // Nomenclador: es data de REFERENCIA (no de un centro), solo lectura → el
-      // cliente puede consultarlo y bajarlo (con especialidades).
-      else if (esGet && (p === "/api/nomencladores/search" || p === "/api/nomencladores/export")) permitido = true;
-      // Credencial provisoria de PAMI (mismo permiso que su empleado operador_clinica
-      // con módulo padrón): baja la credencial de un afiliado por benef/DNI/trámite.
-      else if (req.method === "POST" && p === "/api/credencial-provisoria") permitido = true;
-      // Crear informes: el config (desplegable de SUS médicos/firmas/plantillas,
-      // ya filtrado a su centro por clientesVisiblesPara/medicosVisiblesPara) y
-      // generar/lote (que además chequean el centro a mano con el clienteSlug del
-      // body). Igual que el módulo "informes" de su empleado operador_clinica, y
-      // sin generar-y-subir (subir a PAMI sigue siendo tarea de NS).
-      else if (esGet && p === "/api/informes/config") permitido = true;
-      else if (req.method === "POST" && (p === "/api/informes/generar" || p === "/api/informes/lote")) permitido = true;
-      // Autogestión de usuarios del centro: la clínica crea/edita/borra SOLO a sus
-      // empleados (operador_clinica de SU centro). El GET (listar) ya entra por
-      // "esGet && suCentro"; acá se habilitan las escrituras. El handler fuerza rol
-      // y centro, así que no puede crear un admin ni tocar otro centro.
-      else if (suCentro && ["POST", "PATCH", "PUT", "DELETE"].includes(req.method)
-               && /^\/api\/clientes\/[^/]+\/usuarios(?:\/[a-z0-9._-]+(?:\/password)?)?$/.test(p)) permitido = true;
-      if (!permitido) return json(res, 403, { error: "Tu usuario solo puede ver su propio centro (solo lectura)." });
-    }
-
-    // --- Gate del rol "operador_clinica" (empleado de recepción del centro, NO
-    // el dueño): SOLO LECTURA, SOLO su centro, y sin dashboards/honorarios/
-    // reportes (nada con plata ni gráficas). Se van sumando permisos puntuales
-    // acá a medida que se construye cada pantalla nueva para este rol. Hoy
-    // tiene: quién es, cambiar su clave, salir, la lista de clientes (filtrada
-    // a su centro) y el contador de pendientes de SU centro (mismo cálculo que
-    // ya usa Javi - ver pendientesDeCliente - sin tocar la Cabina de informes).
-    if (meGate && meGate.role === "operador_clinica") {
-      const esGet = (req.method === "GET" || !req.method);
-      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
-      const centroCod = encodeURIComponent(meGate.centro);
-      let permitido = permitidoSiempre || (esGet && p === "/api/clientes")
-        || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro`);
-      // Módulos por usuario (ver OPERADOR_CLINICA_MODULOS): cada uno solo destapa
-      // lo mínimo de esa pantalla, siempre restringido a SU centro. El resto de
-      // cada módulo (subir turnera, borrar afiliado, cabina/matching, médicos,
-      // etc.) sigue "en desarrollo" para este rol.
-      if (!permitido && opClinicaTieneModulo(meGate, "padron") && esGet) {
-        permitido = p === `/api/clientes/${centroCod}/padron` || p === `/api/clientes/${centroCod}/padron/lookup`;
-      }
-      if (!permitido && opClinicaTieneModulo(meGate, "padron") && req.method === "POST") {
-        permitido = p === "/api/pami/capita" || p === "/api/credencial-provisoria";
-      }
-      // Ojo: NO se incluye /api/informes/generar-y-subir - encola una tarea
-      // "subir-informes" y escribe en el mismo store que usa la Cabina, que es
-      // terreno de Nacho en paralelo (ver memoria). Este módulo solo genera/
-      // descarga el PDF; subirlo a PAMI sigue siendo tarea de NS.
-      if (!permitido && opClinicaTieneModulo(meGate, "informes")) {
-        permitido = (esGet && p === "/api/informes/config")
-          || (req.method === "POST" && (p === "/api/informes/generar" || p === "/api/informes/lote"));
-      }
-      if (!permitido && opClinicaTieneModulo(meGate, "liberarcupo")) {
-        permitido = (esGet && (p === `/api/clientes/${centroCod}/liberar-cupo/candidatos` || p === `/api/clientes/${centroCod}/liberar-cupo/reporte.xlsx`))
-          || (req.method === "POST" && p === `/api/clientes/${centroCod}/liberar-cupo/liberar`);
-      }
-      if (!permitido) return json(res, 403, { error: "Tu usuario todavía no tiene esa pantalla habilitada." });
-    }
-
-    // --- Gate de los roles de SOLO LECTURA ("demo" y "colaborador").
-    // Ven los datos reales y pueden descargar, pero no crean, no modifican y no
-    // borran NADA; y solo entran a los clientes de su lista.
-    // Es fail-closed a propósito: se permite lo que está listado y todo lo demás se
-    // niega. Así no depende de acordarse de proteger cada endpoint nuevo — el que
-    // decide es el backend, esconder el botón en la pantalla no es proteger.
-    if (meGate && SOLO_LECTURA.has(meGate.role)) {
-      const esGet = (req.method === "GET" || !req.method);
-      const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
-      const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
-      const permitidos = Array.isArray(meGate.clientes) ? meGate.clientes : [];
-      const suCliente = !mCli || permitidos.includes(decodeURIComponent(mCli[1]));
-      // Los accesos PAMI del cliente (usuario/clave) NUNCA, ni de lectura: es
-      // justamente lo que no queremos que se lleve.
-      const esCredencial = /\/pami(\/|$)/.test(p) || /\/credenciales(\/|$)/.test(p) || /\/claves(\/|$)/.test(p);
-      let permitido = false;
-      if (permitidoSiempre) permitido = true;
-      else if (esCredencial) permitido = false;
-      else if (esGet && suCliente) permitido = true;
-      // Descarga que se pide por POST: solo arma el archivo con las filas que ya
-      // están en pantalla (no lee la base), así que es segura.
-      else if (p === "/api/mescurso/export") permitido = true;
-      if (!permitido) {
-        return json(res, 403, { error: (mCli && !suCliente)
-          ? "Tu usuario no tiene acceso a ese cliente."
-          : "Te faltan permisos: tu usuario es de solo lectura (podés ver y descargar, pero no modificar)." });
-      }
+    // --- Gate único de rol: toda la matriz de permisos vive en permissions.js
+    // (aplicarGateDeRol). Acá solo queda lo genérico (arriba: sesión activa,
+    // cambio de clave obligatorio) + la llamada a esa matriz.
+    if (meGate) {
+      const negado = aplicarGateDeRol(req, meGate, p);
+      if (negado) return json(res, negado.status, negado.body);
     }
   }
 
