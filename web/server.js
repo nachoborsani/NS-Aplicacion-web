@@ -2002,6 +2002,13 @@ const URODINAMIA_SEED_PRESETS = [
 // modelo, para que aparezca en el desplegable de Descripciones) más las
 // variantes clínicas reales encontradas (Doppler arterial MMII: normal real
 // del Dr. Peltz vs. arteriopatía crónica bilateral real del Dr. Novelli).
+// El "Venoso MMII normal" arrancaba con el párrafo de la técnica (equipo,
+// transductor, modos). Desde que ese modelo imprime la tabla de hallazgos, ese
+// párrafo son 6 de sus 11 renglones y empujaba el informe a una segunda hoja.
+// Se guarda el texto viejo para poder reemplazarlo en las configs que ya están
+// guardadas SOLO si nadie lo editó a mano (ver ensureVenosoMmiiSeed).
+const VENOSO_NORMAL_VIEJO = "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES.";
+const VENOSO_NORMAL_TEXTO = "ECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES.";
 const ECO_SEED_PRESETS = [
   { id: "eco-abdominal-normal", modelo: "eco-abdominal", nombre: "Abdominal completa normal",
     texto: "HÍGADO DE TAMAÑO, FORMA Y ECOESTRUCTURA CONSERVADOS, SIN IMÁGENES FOCALES. VESÍCULA BILIAR DE PAREDES FINAS, SIN IMÁGENES LITIÁSICAS EN SU INTERIOR. VÍA BILIAR NO DILATADA. PÁNCREAS DE ECOESTRUCTURA HOMOGÉNEA. BAZO DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS. AMBOS RIÑONES DE FORMA, TAMAÑO Y ECOESTRUCTURA CONSERVADOS, SIN SIGNOS DE UROPATÍA OBSTRUCTIVA NI LITIASIS. NO SE OBSERVA LÍQUIDO LIBRE EN CAVIDAD." },
@@ -2035,8 +2042,11 @@ const ECO_SEED_PRESETS = [
   // aisladas sin repercusión hemodinámica).
   { id: "eco-doppler-arterial-mmii-arteriopatia", modelo: "eco-doppler-arterial-mmii", nombre: "Arterial MMII — arteriopatía crónica bilateral", medicoId: "novelli-dario",
     texto: "SE ESTUDIAN CON TRANSDUCTOR LINEAL DE 12 MHZ ARTERIAS FEMORALES COMUNES, ARTERIAS FEMORALES SUPERFICIALES Y PROFUNDAS, ARTERIAS POPLÍTEAS, TRONCOS TIBIO-PERONEOS, ARTERIAS TIBIALES Y ARTERIAS PEDIAS.\nAL MOMENTO DEL EXAMEN AMBOS MIEMBROS INFERIORES PRESENTAN FLUJO ANTERÓGRADO CON ONDAS TRIFÁSICAS DE VELOCIDADES GLOBALMENTE CONSERVADAS.\nPEQUEÑAS PLACAS FIBROCÁLCICAS AISLADAS BILATERALES QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA.\nCONCLUSIÓN: ARTERIOPATÍA CRÓNICA BILATERAL." },
+  // Sin el párrafo del ecógrafo: ese modelo ahora imprime la tabla de hallazgos
+  // arriba de la conclusión, y el párrafo de la técnica empujaba el informe a
+  // una segunda hoja (o lo obligaba a bajar a 8,5). Ver VENOSO_NORMAL_VIEJO.
   { id: "eco-doppler-venoso-mmii-normal", modelo: "eco-doppler-venoso-mmii", nombre: "Venoso MMII normal", medicoId: "peltz-guillermo",
-    texto: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES." },
+    texto: VENOSO_NORMAL_TEXTO },
   { id: "eco-doppler-aorta-abdominal-normal", modelo: "eco-doppler-aorta-abdominal", nombre: "Aorta abdominal — placas sin repercusión hemodinámica",
     texto: "SE REALIZA ESTUDIO DOPPLER COLOR ARTERIAL DE ARTERIA AORTA ABDOMINAL CON EQUIPO DE ALTA RESOLUCIÓN COLOR Y CON TRANSDUCTORES DE 3,5 MHZ.\nARTERIA AORTA ABDOMINAL: EN SU TRAYECTO EVALUADO SE OBSERVA DIÁMETRO ANTEROPOSTERIOR DE 13 MM A NIVEL SUPRAUMBILICAL Y DE CALIBRE CONSERVADO, MÁXIMO INFRAUMBILICAL DE 16 MM. ONDAS DE TIPO TRIFÁSICA CON VELOCIDADES CONSERVADAS.\nSE MENCIONAN AISLADAS PLACAS ATEROMATOSAS FIBROCALCÍCICAS QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA." },
   { id: "eco-doppler-tiroides-normal", modelo: "eco-doppler-tiroides", nombre: "Doppler tiroides normal",
@@ -11505,6 +11515,17 @@ function ensureVenosoMmiiSeed() {
     for (const s of VENOSO_MMII_SEED_PRESETS) {
       if (!cfg.descripciones.some((d) => d.id === s.id)) {
         cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} });
+        cambio = true;
+      }
+    }
+    // Le saca el párrafo del ecógrafo al "Venoso MMII normal" en las configs ya
+    // guardadas. Solo si el texto sigue siendo EXACTAMENTE el que sembramos: si
+    // el admin lo editó, es suyo y no se toca. Idempotente por comparación (no
+    // hace falta flag: una vez cambiado ya no matchea).
+    for (const d of cfg.descripciones) {
+      if (d.id === "eco-doppler-venoso-mmii-normal" && String(d.texto || "").trim() === VENOSO_NORMAL_VIEJO) {
+        d.texto = VENOSO_NORMAL_TEXTO;
+        console.log("[venoso-mmii-seed] al resultado 'Venoso MMII normal' se le sacó el párrafo de la técnica (entra en una hoja).");
         cambio = true;
       }
     }
