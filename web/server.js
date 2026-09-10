@@ -4745,6 +4745,7 @@ function emptyDashboardPeriod(period) {
     debitExcluyente: 0,
     debitOtros: 0,
     net: 0,
+    netTransmitido: 0,
     consultationNet: 0,
     practiceNet: 0,
     averageNet: 0,
@@ -4781,9 +4782,36 @@ function addRowToDashboardPeriod(target, row) {
   if (row.absent) { target.absent += 1; target.absentAmount += money(row.valueGross); }
   if (row.outsideCutoff) target.outsideCutoff += 1;
   target.nextPeriodCutoff += reportRowNextPeriodCutoff(row);
+  // Módulo: se busca/crea ACÁ (antes de sumar informes/por-transmitir) porque
+  // esas dos bolsas también se acumulan por módulo, para poder mostrar en
+  // "Cantidades por módulo" cuánto de cada módulo es Transmitido (cobro real,
+  // = module.net, que ya excluye lo no transmitido) contra cuánto está
+  // Pendiente (falta informe + por transmitir: validado pero sin garantía
+  // todavía) — misma idea que "mes en curso", aplicada acá.
+  const moduleCode = String(row.moduleCode || "Sin modulo");
+  let module = target._modules[moduleCode];
+  if (!module) {
+    module = target._modules[moduleCode] = {
+      moduleCode,
+      moduleDescription: row.moduleDescription || "",
+      totalRows: 0,
+      consultations: 0,
+      practices: 0,
+      gross: 0,
+      sinValor: 0,
+      _sv: {},
+      debit: 0,
+      net: 0,
+      missingInformeAmount: 0,
+      porTransmitirAmount: 0,
+      nextPeriodCutoff: 0,
+      rows: [],
+    };
+  }
   if (reportRowMissingInforme(row)) {
     target.missingInforme += 1;
     target.missingInformeAmount += reportRowMissingInformeAmount(row);
+    module.missingInformeAmount += reportRowMissingInformeAmount(row);
     // ¿Iría a débito si se sube el informe y se transmite? La regla de cruce ya
     // está aplicada en la fila (reportRowDebit): si debita, subir el informe no
     // recupera el valor entero.
@@ -4810,6 +4838,7 @@ function addRowToDashboardPeriod(target, row) {
   } else if (reportRowPorTransmitir(row)) {
     target.porTransmitir += 1;
     target.porTransmitirAmount += money(row.valueGross);
+    module.porTransmitirAmount += money(row.valueGross);
     if (target.porTransmitirRows.length < 2000) target.porTransmitirRows.push({
       benef: String(row.benefit || ""),
       nombre: String(row.patientName || ""),
@@ -4835,24 +4864,6 @@ function addRowToDashboardPeriod(target, row) {
   target.net += net;
   if (consultation) target.consultationNet += net;
   else target.practiceNet += net;
-  const moduleCode = String(row.moduleCode || "Sin modulo");
-  let module = target._modules[moduleCode];
-  if (!module) {
-    module = target._modules[moduleCode] = {
-      moduleCode,
-      moduleDescription: row.moduleDescription || "",
-      totalRows: 0,
-      consultations: 0,
-      practices: 0,
-      gross: 0,
-      sinValor: 0,
-      _sv: {},
-      debit: 0,
-      net: 0,
-      nextPeriodCutoff: 0,
-      rows: [],
-    };
-  }
   module.totalRows += 1;
   if (consultation) module.consultations += 1;
   else module.practices += 1;
@@ -4897,14 +4908,28 @@ function finalizeDashboardPeriod(target) {
   target.missingInformeAmount = money(target.missingInformeAmount);
   target.missingInformeDebitoAmount = money(target.missingInformeDebitoAmount);
   target.porTransmitirAmount = money(target.porTransmitirAmount);
+  // "net" ya es solo lo TRANSMITIDO (reportRowGross/Net exigen fila transmitida
+  // para contar) — por eso "Facturación" nunca incluyó lo pendiente. Lo
+  // pendiente real (plata que existe pero todavía no se transmitió) son estas
+  // dos bolsas, que ya se calculaban aparte: falta informe + por transmitir.
+  // Separarlo así (en vez de "net - transmitido", que siempre daría 0) es lo
+  // que deja ver, con el mismo semáforo que "mes en curso", cuánto de la
+  // facturación total es cobro seguro y cuánto todavía no.
+  target.netTransmitido = target.net;
+  target.netPendiente = money(target.missingInformeAmount + target.porTransmitirAmount);
   target.modules = Object.values(target._modules || {})
     .map((module) => {
       const { _sv, ...rest } = module;
+      const netPendiente = money((module.missingInformeAmount || 0) + (module.porTransmitirAmount || 0));
       return {
         ...rest,
         gross: money(module.gross),
         debit: money(module.debit),
         net: money(module.net),
+        missingInformeAmount: money(module.missingInformeAmount || 0),
+        porTransmitirAmount: money(module.porTransmitirAmount || 0),
+        netTransmitido: money(module.net),
+        netPendiente: netPendiente,
         nextPeriodCutoff: money(module.nextPeriodCutoff),
         sinValorCodigos: Object.values(_sv || {}),
         rows: (module.rows || []).sort((a, b) => String(a.patientName).localeCompare(String(b.patientName)) || String(a.practiceCode).localeCompare(String(b.practiceCode))),

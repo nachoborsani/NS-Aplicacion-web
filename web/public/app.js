@@ -4577,10 +4577,26 @@ var MESCURSO_MODULOS = [];          // desglose por módulo del mes en curso
 var MESCURSO_MODULOS_JULIO = [];    // ... del reporte "sin cerrar"
 var MESCURSO_MODULOS_CERRADO = [];  // ... del mes cerrado
 // Normaliza el desglose por módulo (mes en curso trae gross; los reportes traen net).
-function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), montoTransmitido:(m.grossTransmitido!=null?m.grossTransmitido:null), montoPendiente:(m.grossPendiente!=null?m.grossPendiente:null), sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
-// Solo el mes en curso trae desglose transmitido/pendiente (viene de la bandeja
-// viva, con estado por fila); mes anterior y cerrado vienen de informes ya
-// cerrados y siguen mostrando una sola columna de $ (ver mescMods).
+function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){
+  // "Mes en curso" manda grossTransmitido/grossPendiente (sobre el bruto, sin
+  // débitos todavía); "sin cerrar"/"cerrado" mandan netTransmitido/netPendiente
+  // (sobre el neto, ya con débitos descontados) — en los dos casos es la misma
+  // idea: cuánto de la columna ya es transmitido = cobro real, y cuánto todavía
+  // no (validado sin transmitir, por transmitir, etc.) y por lo tanto no está
+  // garantizado.
+  var transmitido = (m.netTransmitido!=null?m.netTransmitido:(m.grossTransmitido!=null?m.grossTransmitido:null));
+  var pendiente = (m.netPendiente!=null?m.netPendiente:(m.grossPendiente!=null?m.grossPendiente:null));
+  // "Total" es Transmitido + Pendiente cuando hay desglose (la facturación
+  // POTENCIAL del módulo, no solo lo ya cobrado) — antes acá iba "net", que en
+  // sin cerrar/cerrado es solo lo transmitido y escondía el pendiente adentro
+  // del total sin que se viera. Sin desglose (reporte viejo) se cae a net/gross.
+  var total = (transmitido != null && pendiente != null) ? (transmitido + pendiente) : (m.net != null ? m.net : (m.gross || 0));
+  return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:total,
+  montoTransmitido: transmitido, montoPendiente: pendiente,
+  sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
+// Todos los períodos (mes en curso, sin cerrar, cerrado) ya traen desglose
+// transmitido/pendiente por módulo (ver mescMods) — esta función queda para
+// cubrir el caso raro de un período sin ese dato (reporte muy viejo).
 function mesCursoModHayDesglose(md){ return (md || []).some(function(m){ return m.montoTransmitido != null; }); }
 var MESCURSO_POSIBLES_DEBITOS_ADELANTE = []; // posibles débitos de turnos futuros (hacia adelante)
 var MESCURSO_FUTUROS = [];   // meses futuros (sep, oct…) con sus posiblesDebitosRows
@@ -5288,7 +5304,11 @@ function mesCursoTogglePanel(tipo){
   } else if (tipo === 'modulos' || tipo === 'modulos-julio' || tipo === 'modulos-cerrado'){
     var md = tipo === 'modulos' ? MESCURSO_MODULOS : (tipo === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modDesglose = mesCursoModHayDesglose(md);
-    var modCols = modDesglose ? ['Módulo', 'Consultas', 'Prácticas', 'Transmitido', 'Pendiente', 'Total'] : ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
+    // "Transmitido" = ya cobrado, cuenta segura (✅). "Pendiente" = todavía no
+    // se transmitió (validado sin transmitir, por transmitir, etc.) y por lo
+    // tanto NO está garantizado, aunque sume al "Total" (⏳). El símbolo va en
+    // el propio encabezado porque las celdas de la tabla son texto plano.
+    var modCols = modDesglose ? ['Módulo', 'Consultas', 'Prácticas', '✅ Transmitido', '⏳ Pendiente', 'Total'] : ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
     var modMoneyCols = modDesglose ? [3, 4, 5] : [3];
     var mapMod = modDesglose
       ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.montoTransmitido || 0), moneyFmt(m.montoPendiente || 0), moneyFmt(m.monto)]; }
@@ -5303,7 +5323,8 @@ function mesCursoTogglePanel(tipo){
       return '';
     };
     var haySinValor = veValoresCliente() && md.some(function(m){ return m.sinValor > 0; });
-    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
+    var modTitulo = 'Cantidades por módulo · ' + md.length + ' módulos' + (modDesglose ? ' · el "Total" incluye lo pendiente, todavía no cobrado' : '');
+    html = md.length ? mesCursoTablaHtml(modTitulo, '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
   } else if (tipo === 'debitos-adelante'){
     var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
     html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante', null, null, [7]) : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');
@@ -5749,6 +5770,16 @@ function mesCursoDesgloseHtml(r){
   if (r.grossTurno) parts.push('<span class="warn">Proyectado <b>' + esc(moneyFmt(r.grossTurno)) + '</b></span>');
   return parts.length ? '<div class="mescurso-desglose">' + parts.join('') + '</div>' : '';
 }
+// Semáforo genérico de 2 estados para "sin cerrar"/"cerrado": verde = ya
+// transmitido (cobro real), ámbar = todavía sin transmitir (aunque ya esté
+// validado o valorizado, no es plata garantizada hasta que se transmite).
+function mesCursoDesglose2Html(transmitido, pendiente, pendienteLabel){
+  if (!veValoresCliente()) return '';
+  var parts = [];
+  if (transmitido) parts.push('<span class="ok">Transmitido <b>' + esc(moneyFmt(transmitido)) + '</b></span>');
+  if (pendiente > 0) parts.push('<span class="warn">' + esc(pendienteLabel || 'Sin transmitir todavía') + ' <b>' + esc(moneyFmt(pendiente)) + '</b></span>');
+  return parts.length ? '<div class="mescurso-desglose">' + parts.join('') + '</div>' : '';
+}
 function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
@@ -5835,7 +5866,11 @@ function mesCursoCardMesEnCurso(r, estado){
     ? ('<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
       + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
       + '<div class="mescurso-val-note">+ ' + lblFaltaNota + ' <b>' + esc(moneyFmt(faltaInf)) + '</b>'
-      + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>')
+      + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
+      // Semáforo: verde = ya transmitido (cobro seguro), rojo = falta informe,
+      // ámbar = proyectado sobre turnos ausentes. Así "Estimado" no se confunde
+      // con plata garantizada.
+      + mesCursoDesgloseHtml(r))
     : '';
   return '<div class="mescurso-card">' + head + salud + cobroCeroWarn
     + valHtml
@@ -5949,17 +5984,27 @@ function mesCursoCardSinCerrar(current, reporte){
   // bajada). Refleja hasta cuándo está al día la transmisión.
   var syncSc = (reporte && reporte.updatedAt) ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(reporte.updatedAt)) + '</b></div>' : '';
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
+  // Igual criterio que "Mes en curso": el número grande es lo YA transmitido
+  // (lo que el cliente cobra seguro). "current.net" solo cuenta filas
+  // transmitidas (así se define Facturación acá) — lo pendiente real es falta
+  // informe + por transmitir, que antes quedaban en líneas aparte sin sumarse
+  // a ningún total visible. Ahora el total (Transmitido + Pendiente) se ve acá
+  // arriba, igual que en Mes en curso.
+  var netTransmitidoSC = current.netTransmitido != null ? current.netTransmitido : (current.net || 0);
+  var netPendienteSC = current.netPendiente != null ? current.netPendiente : 0;
+  var totalConPendienteSC = netTransmitidoSC + netPendienteSC;
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span>'
     + mesCursoBotonRefresco()
     + '</div>'
     + (veValoresCliente() ? (
-      '<div class="mescurso-val-lbl">Facturación</div>'
-      + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
-      + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
+      '<div class="mescurso-val-lbl">Transmitido</div>'
+      + '<div class="mescurso-val">' + esc(moneyFmt(netTransmitidoSC)) + '</div>' + mescArrastreHtml(current)
+      + '<div class="mescurso-val-note">Facturación total (transmitido + falta informe + por transmitir) <b>' + esc(moneyFmt(totalConPendienteSC)) + '</b> · Valor aproximado'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
+      + mesCursoDesglose2Html(netTransmitidoSC, netPendienteSC, 'Sin transmitir todavía')
     ) : '')
     + '<div class="mescurso-lines duo">'
     + '<div class="mescurso-line mescurso-click" onclick="toggleModulosJulio()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosJulioCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
@@ -5997,6 +6042,11 @@ function mesCursoCardMesCerrado(current, reporte){
   var clickable = reporte ? ' mescurso-click" onclick="mesCursoAbrirReporte(\'' + esc(reporte.id) + '\')' : '';
   // Confirmados = ya cotejados contra PAMI → dejan de ser "posibles".
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
+  // Un mes "cerrado" debería estar ~100% transmitido; el semáforo lo confirma
+  // (o, si quedó algo sin transmitir, lo deja ver en vez de esconderlo dentro
+  // del total).
+  var netTransmitidoCe = current.netTransmitido != null ? current.netTransmitido : (current.net || 0);
+  var netPendienteCe = current.netPendiente != null ? current.netPendiente : 0;
   return '<div class="mescurso-card cerrado' + clickable + '">'
     + '<div class="mescurso-head"><span class="mescurso-title">Cerrado</span>'
     + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
@@ -6006,6 +6056,7 @@ function mesCursoCardMesCerrado(current, reporte){
       + '<div class="mescurso-val-note">Valor aproximado'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
+      + mesCursoDesglose2Html(netTransmitidoCe, netPendienteCe, 'Sin transmitir todavía')
     ) : '')
     + '<div class="mescurso-lines duo">'
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
