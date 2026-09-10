@@ -5040,6 +5040,14 @@ function mcEnsureModalCss(){
     '.mc-inf-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}',
     '.mc-inf-field label{display:block;font-size:12px;font-weight:600;color:var(--text-2,#64748b);margin-bottom:4px}',
     '.mc-inf-field label .mc-inf-hint{font-weight:500;opacity:.75}',
+    // Pantalla de revisión: la caja se agranda para que el PDF se lea de verdad.
+    '.mc-inf-box.mc-inf-rev{max-width:860px;width:94vw;max-height:92vh;display:flex;flex-direction:column}',
+    '.mc-inf-rev .mc-inf-body{overflow:auto;flex:1}',
+    '.mc-inf-rev .rev-pdf{height:62vh;min-height:340px;border:1px solid var(--border,#e2e8f0);border-radius:10px;overflow:hidden;background:var(--bg-2,#f8fafc)}',
+    '.mc-inf-rev .rev-pdf-frame{width:100%;height:100%;border:0;display:block}',
+    '.mc-inf-rev .rev-pdf-msg{padding:16px;font-size:13px;color:var(--text-2,#64748b)}',
+    '.mc-inf-rev .rev-avisos{border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12.5px}',
+    '.mc-inf-rev .rev-avisos ul{margin:6px 0 0 16px;padding:0}',
     '.mc-inf-field select,.mc-inf-field input{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:var(--bg,#fff);color:var(--text,#0f172a);font-size:14px}',
     '.mc-inf-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px}',
     '.mc-inf-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#0f172a);font-weight:600;cursor:pointer;font-size:14px}',
@@ -5134,7 +5142,7 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
     function cerrar(val){ scrim.remove(); resolve(!!val); }
     scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(false); });
     scrim.querySelector('#mc-inf-cancel').onclick = function(){ cerrar(false); };
-    scrim.querySelector('#mc-inf-ok').onclick = function(){
+    scrim.querySelector('#mc-inf-ok').onclick = async function(){
       var presetSel = scrim.querySelector('#mc-inf-preset');
       var medicoId = scrim.querySelector('#mc-inf-medico').value;
       if (!medicoId){ nsAlert('Elegí el médico que firma.'); return; }
@@ -5156,6 +5164,16 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
       var sexoPac = scrim.querySelector('#mc-inf-sexo');
       if (sexoPac && sexoPac.value && payload.paciente) payload.paciente.sexo = sexoPac.value;
       delete payload._modelo;
+      // Modelos que piden confirmar mirando el PDF (ej. la vesicoprostática).
+      // Si vuelve a editar, el modal queda como estaba y no se crea nada.
+      if (m.revisionPrevia){
+        var sub = (x.nombre || '') + (x.turno ? ' · ' + String(x.turno).split(' ')[0] : '');
+        var avisosRev = (m.key === 'eco-vesicoprostatica' && typeof avisosVesicoprostatica === 'function')
+          ? avisosVesicoprostatica(payload.valores || {}, String(payload.textoInforme || '') + ' ' + String((payload.valores || {}).conclusion || ''))
+          : [];
+        var okRev = await revisarInformePdf(payload, sub, avisosRev);
+        if (!okRev) return;
+      }
       scrim.remove();
       if (subir){
         payload.ome = x.ome; payload.omes = omes; payload.practicaTexto = x.practica || '';
@@ -5165,6 +5183,55 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
       }
       resolve(true);
     };
+  });
+}
+// Última pantalla antes de crear: muestra el PDF YA ARMADO (el mismo que se va a
+// generar, no una maqueta) para confirmarlo. Se pide desde el modelo con
+// `revisionPrevia`, no para todos: desde "Faltan informes" se crea de a muchos y
+// un paso extra en cada uno haría lento el trabajo en tanda.
+// Resuelve true si se confirma, false si se vuelve a editar.
+function revisarInformePdf(payload, subtitulo, avisos){
+  mcEnsureModalCss();
+  return new Promise(function(resolve){
+    var av = (avisos || []).length
+      ? '<div class="rev-avisos"><b>⚠ Revisá la coherencia (son avisos, no cambian el informe)</b><ul>'
+        + avisos.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>'
+      : '';
+    var scrim = document.createElement('div'); scrim.className = 'mc-inf-scrim';
+    scrim.innerHTML =
+      '<div class="mc-inf-box mc-inf-rev">'
+      + '<div class="mc-inf-head"><b>Revisá el informe antes de crearlo</b><span class="mc-inf-sub">' + esc(subtitulo || '') + '</span></div>'
+      + '<div class="mc-inf-body">' + av
+      + '<div class="rev-pdf"><div class="rev-pdf-msg">Armando la vista previa…</div>'
+      + '<iframe class="rev-pdf-frame" style="display:none"></iframe></div></div>'
+      + '<div class="mc-inf-foot"><button class="mc-inf-btn" id="rev-volver">Volver a editar</button>'
+      + '<button class="mc-inf-btn primary" id="rev-ok" disabled>✓ Confirmar y crear</button></div></div>';
+    document.body.appendChild(scrim);
+    var url = null;
+    function cerrar(val){ if (url) URL.revokeObjectURL(url); scrim.remove(); resolve(!!val); }
+    scrim.addEventListener('click', function(e){ if (e.target === scrim) cerrar(false); });
+    scrim.querySelector('#rev-volver').onclick = function(){ cerrar(false); };
+    scrim.querySelector('#rev-ok').onclick = function(){ cerrar(true); };
+    // El PDF de la vista previa es el mismo endpoint que genera el definitivo:
+    // lo que se ve acá es exactamente lo que se va a crear.
+    fetch('/api/informes/generar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function(r){ if (!r.ok) throw new Error('no se pudo generar'); return r.blob(); })
+      .then(function(blob){
+        if (!scrim.isConnected) { return; }
+        url = URL.createObjectURL(blob);
+        var f = scrim.querySelector('.rev-pdf-frame');
+        f.src = url + '#toolbar=0&navpanes=0&view=FitH';
+        f.style.display = 'block';
+        scrim.querySelector('.rev-pdf-msg').style.display = 'none';
+        scrim.querySelector('#rev-ok').disabled = false;
+      })
+      .catch(function(){
+        if (!scrim.isConnected) return;
+        // Sin vista previa igual se deja confirmar: si el PDF no se puede armar,
+        // el error real va a salir al crearlo y con su mensaje.
+        scrim.querySelector('.rev-pdf-msg').textContent = 'No se pudo armar la vista previa. Podés crear el informe igual y ver el resultado.';
+        scrim.querySelector('#rev-ok').disabled = false;
+      });
   });
 }
 // Si hay un panel de faltan-informes abierto, lo vuelve a dibujar (para reflejar

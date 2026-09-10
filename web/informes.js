@@ -750,6 +750,10 @@ const MODELOS = {
     // Los que firman acá lo hacen con el trazo solo; el nombre y la matrícula
     // van impresos debajo, como en los informes de Baimed.
     firmaConMatricula: true,
+    // Antes de crearlo se muestra el PDF ya armado para confirmarlo. Va por
+    // modelo y no para todos: desde "Faltan informes" se crean de a muchos, y
+    // meterle un paso extra a cada uno haría lento el trabajo en tanda.
+    revisionPrevia: true,
     textoDefault: "VEJIGA CON ADECUADA REPLECIÓN, DE PAREDES REGULARES Y CONTENIDO HOMOGÉNEO ANECOICO, SIN EVIDENCIA DE LESIONES PARIETALES NI ENDOLUMINALES.\nPRÓSTATA DE CONTORNOS NETOS, SIMÉTRICA, DE ECOESTRUCTURA SIN ALTERACIONES SIGNIFICATIVAS Y VOLUMEN CONSERVADO.",
   },
   "eco-partes-blandas-general": {
@@ -978,6 +982,7 @@ function listarModelos() {
     codigoPractica: MODELOS[k].codigoPractica || "",
     campos: MODELOS[k].campos || [],
     requiereLado: !!MODELOS[k].requiereLado,
+    revisionPrevia: !!MODELOS[k].revisionPrevia,
     mostrarCobertura: !!MODELOS[k].mostrarCobertura,
     estudioEditable: !!MODELOS[k].estudioEditable,
     estudio: MODELOS[k].estudio || "",
