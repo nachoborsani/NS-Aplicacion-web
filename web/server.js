@@ -2042,11 +2042,11 @@ const ECO_SEED_PRESETS = [
   // aisladas sin repercusión hemodinámica).
   { id: "eco-doppler-arterial-mmii-arteriopatia", modelo: "eco-doppler-arterial-mmii", nombre: "Arterial MMII — arteriopatía crónica bilateral", medicoId: "novelli-dario",
     texto: "SE ESTUDIAN CON TRANSDUCTOR LINEAL DE 12 MHZ ARTERIAS FEMORALES COMUNES, ARTERIAS FEMORALES SUPERFICIALES Y PROFUNDAS, ARTERIAS POPLÍTEAS, TRONCOS TIBIO-PERONEOS, ARTERIAS TIBIALES Y ARTERIAS PEDIAS.\nAL MOMENTO DEL EXAMEN AMBOS MIEMBROS INFERIORES PRESENTAN FLUJO ANTERÓGRADO CON ONDAS TRIFÁSICAS DE VELOCIDADES GLOBALMENTE CONSERVADAS.\nPEQUEÑAS PLACAS FIBROCÁLCICAS AISLADAS BILATERALES QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA.\nCONCLUSIÓN: ARTERIOPATÍA CRÓNICA BILATERAL." },
-  // Sin el párrafo del ecógrafo: ese modelo ahora imprime la tabla de hallazgos
-  // arriba de la conclusión, y el párrafo de la técnica empujaba el informe a
-  // una segunda hoja (o lo obligaba a bajar a 8,5). Ver VENOSO_NORMAL_VIEJO.
+  // El de CIMA: conserva el párrafo que describe la técnica del equipo, que es
+  // su redacción. Baimed tiene el suyo sin ese párrafo (venoso-mmii-normal-baimed,
+  // en VENOSO_MMII_SEED_PRESETS): con el párrafo su informe no entra en la hoja.
   { id: "eco-doppler-venoso-mmii-normal", modelo: "eco-doppler-venoso-mmii", nombre: "Venoso MMII normal", medicoId: "peltz-guillermo",
-    texto: VENOSO_NORMAL_TEXTO },
+    clientes: ["cima"], texto: VENOSO_NORMAL_VIEJO },
   { id: "eco-doppler-aorta-abdominal-normal", modelo: "eco-doppler-aorta-abdominal", nombre: "Aorta abdominal — placas sin repercusión hemodinámica",
     texto: "SE REALIZA ESTUDIO DOPPLER COLOR ARTERIAL DE ARTERIA AORTA ABDOMINAL CON EQUIPO DE ALTA RESOLUCIÓN COLOR Y CON TRANSDUCTORES DE 3,5 MHZ.\nARTERIA AORTA ABDOMINAL: EN SU TRAYECTO EVALUADO SE OBSERVA DIÁMETRO ANTEROPOSTERIOR DE 13 MM A NIVEL SUPRAUMBILICAL Y DE CALIBRE CONSERVADO, MÁXIMO INFRAUMBILICAL DE 16 MM. ONDAS DE TIPO TRIFÁSICA CON VELOCIDADES CONSERVADAS.\nSE MENCIONAN AISLADAS PLACAS ATEROMATOSAS FIBROCALCÍCICAS QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA." },
   { id: "eco-doppler-tiroides-normal", modelo: "eco-doppler-tiroides", nombre: "Doppler tiroides normal",
@@ -2125,7 +2125,7 @@ function loadInformesConfig() {
       ...HOLTER_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores })),
       ...ORL_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], ladoTextos: s.ladoTextos || {}, valores: s.valores || {}, estudio: s.estudio || "", medicoId: s.medicoId || "" })),
       ...FLUJO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, textoPorSexo: s.textoPorSexo || {}, modelos: [s.modelo], valores: s.valores, valoresPorSexo: s.valoresPorSexo || {} })),
-      ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {}, medicoId: s.medicoId || "" })),
+      ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], clientes: s.clientes || [], valores: s.valores || {}, medicoId: s.medicoId || "" })),
       ...URODINAMIA_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
       ...VENOSO_MMII_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
     ];
@@ -11042,7 +11042,7 @@ const server = http.createServer(async (req, res) => {
         return (cfg.descripciones || [])
           .filter((d) => !d.medicoId || medicosVisibles.has(d.medicoId))
           .map((d) => ({
-            id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
+            id: d.id, nombre: d.nombre || "", texto: d.texto, modelos: d.modelos || [], clientes: d.clientes || [], valores: d.valores || {}, ladoTextos: d.ladoTextos || {}, valoresPorSexo: d.valoresPorSexo || {}, textoPorSexo: d.textoPorSexo || {}, estudio: d.estudio || "", medicoId: d.medicoId || "",
           }));
       })(),
       motivosDesestimacion: cfg.motivosDesestimacion || [],
@@ -11219,6 +11219,24 @@ const server = http.createServer(async (req, res) => {
     const desc = cfg.descripciones.find((d) => d.id === descScopeMatch[1]);
     if (!desc) return json(res, 404, { error: "Resultado no encontrado." });
     desc.modelos = (Array.isArray(body.modelos) ? body.modelos : []).map(String).filter((k) => modelosOK.has(k));
+    saveInformesConfig(cfg);
+    return json(res, 200, { ok: true });
+  }
+  // Asignar clientes (centros) a un RESULTADO — vacío = disponible para todos.
+  // Mismo criterio que el de los médicos: hay prácticas donde cada centro tiene
+  // su propia redacción (el venoso de MMII: CIMA describe la técnica del equipo
+  // y Baimed no), y sin esto las dos versiones le aparecen a los dos.
+  const descClientesMatch = p.match(/^\/api\/informes\/descripciones\/([a-z0-9-]+)\/clientes$/);
+  if (descClientesMatch && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "Solo un administrador." });
+    const body = await readBody(req);
+    const clientesOK = new Set(loadClientsStore().map((c) => c.slug));
+    const cfg = loadInformesConfig();
+    const desc = cfg.descripciones.find((d) => d.id === descClientesMatch[1]);
+    if (!desc) return json(res, 404, { error: "Resultado no encontrado." });
+    desc.clientes = (Array.isArray(body.clientes) ? body.clientes : []).map(String).filter((s) => clientesOK.has(s));
     saveInformesConfig(cfg);
     return json(res, 200, { ok: true });
   }
@@ -11518,16 +11536,34 @@ function ensureVenosoMmiiSeed() {
         cambio = true;
       }
     }
-    // Le saca el párrafo del ecógrafo al "Venoso MMII normal" en las configs ya
-    // guardadas. Solo si el texto sigue siendo EXACTAMENTE el que sembramos: si
-    // el admin lo editó, es suyo y no se toca. Idempotente por comparación (no
-    // hace falta flag: una vez cambiado ya no matchea).
+    // El "Venoso MMII normal" pasa a estar partido en dos, uno por centro: CIMA
+    // describe la técnica del equipo y Baimed no. Antes había uno solo y no se
+    // podía conformar a los dos —con el párrafo el informe de Baimed no entraba
+    // en la hoja; sin él, CIMA perdía su redacción—.
+    // El original queda como el de CIMA (con el párrafo, que es su estilo) y se
+    // le pone el scope. Solo se toca si el texto es uno de los dos que sembramos
+    // nosotros: si el admin lo editó, es suyo. Idempotente por comparación.
     for (const d of cfg.descripciones) {
-      if (d.id === "eco-doppler-venoso-mmii-normal" && String(d.texto || "").trim() === VENOSO_NORMAL_VIEJO) {
-        d.texto = VENOSO_NORMAL_TEXTO;
-        console.log("[venoso-mmii-seed] al resultado 'Venoso MMII normal' se le sacó el párrafo de la técnica (entra en una hoja).");
-        cambio = true;
+      if (d.id !== "eco-doppler-venoso-mmii-normal") continue;
+      const txt = String(d.texto || "").trim();
+      if (txt === VENOSO_NORMAL_VIEJO || txt === VENOSO_NORMAL_TEXTO) {
+        if (txt !== VENOSO_NORMAL_VIEJO) { d.texto = VENOSO_NORMAL_VIEJO; cambio = true; }
+        if (!Array.isArray(d.clientes) || !d.clientes.length) {
+          d.clientes = ["cima"];
+          console.log("[venoso-mmii-seed] 'Venoso MMII normal' queda para CIMA, con el párrafo de la técnica.");
+          cambio = true;
+        }
       }
+    }
+    // Y el de Baimed: el mismo texto sin ese párrafo.
+    if (!cfg.descripciones.some((d) => d.id === "venoso-mmii-normal-baimed")) {
+      cfg.descripciones.push({
+        id: "venoso-mmii-normal-baimed", nombre: "Venoso MMII normal",
+        texto: VENOSO_NORMAL_TEXTO, modelos: ["eco-doppler-venoso-mmii"],
+        clientes: ["dbaime"], valores: {},
+      });
+      console.log("[venoso-mmii-seed] creado 'Venoso MMII normal' de Baimed (sin el párrafo de la técnica).");
+      cambio = true;
     }
     // Quién firma los doppler de miembros inferiores en Baimed. Sin esto el
     // selector de "Médico que firma" no encontraba NINGÚN médico cargado para

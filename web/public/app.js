@@ -524,7 +524,10 @@ function poblarPresetsInforme(){
   var desc = document.getElementById('infDescripcion');
   if (!desc) return;
   var prevD = desc.value;
-  var todos = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key); });
+  // Acotado al centro elegido arriba en el form: hay prácticas con una redacción
+  // por centro (el venoso de MMII). Sin centros asignados = sirve para todos.
+  var cliSel = (document.getElementById('infCentro') || {}).value || '';
+  var todos = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, key) && scopeAplica(d.clientes, cliSel); });
   var tienenSexo = todos.some(function(d){ return d.valores && d.valores.sexo; });
   var sx = _sexoInformeActual();
   var nsx = function(s){ s = String(s || '').toLowerCase(); return s.indexOf('masc') === 0 ? 'masculino' : s.indexOf('fem') === 0 ? 'femenino' : ''; };
@@ -955,13 +958,15 @@ function renderInformesConfigLists(){
   if (!isAdmin){ setInformesTab('generar'); return; }
   var modelos = INFORMES_CFG.modelos || [];
   var clientesList = INFORMES_CFG.clientes || [];
+  // Lo usan las dos listas (médicos y resultados), así que va acá y no adentro
+  // del bloque de médicos.
+  var cliNombre = {}; clientesList.forEach(function(c){ cliNombre[c.slug] = c.name; });
   var cm = document.getElementById('infMedicosCount'); if (cm) cm.textContent = '(' + (INFORMES_CFG.medicos || []).length + ')';
   var cd = document.getElementById('infDescripcionesCount'); if (cd) cd.textContent = '(' + (INFORMES_CFG.descripciones || []).length + ')';
   var ml = document.getElementById('infMedicosList');
   if (ml){
     var meds = INFORMES_CFG.medicos || [];
     var modeloDeMed = {}; modelos.forEach(function(mm){ modeloDeMed[mm.key] = mm; });
-    var cliNombre = {}; clientesList.forEach(function(c){ cliNombre[c.slug] = c.name; });
     var espsDe = function(m){ return uniq((m.modelos || []).map(function(k){ return (modeloDeMed[k] || {}).especialidad; }).filter(Boolean)); };
     // HTML de UN médico (mismos controles: firma, informes que firma, clientes, borrar).
     function medItemHtml(m){
@@ -1030,9 +1035,13 @@ function renderInformesConfigLists(){
           + '<button class="btn btn-ghost" style="margin-top:8px" onclick="guardarValoresPreset(\'' + esc(d.id) + '\',this)">Guardar valores</button></div>';
       }
       var sub = (chips || valEditor) ? cfgSub('Informes y valores', cfgMetaInformes(d.modelos), chips + valEditor) : '';
+      // Centros: vacío = lo ve cualquiera. Sirve cuando la misma práctica se
+      // redacta distinto según el centro (el venoso de MMII: CIMA describe la
+      // técnica del equipo y Baimed no).
+      var subCli = clientesList.length ? cfgSub('Clientes', cfgMetaInformes(d.clientes), '<div class="cfg-scope">' + clienteChips('desc-cliente', d.id, clientesList, d.clientes) + '</div>') : '';
       var ests = (d.modelos || []).map(function(k){ return modeloDe[k]; }).filter(Boolean);
-      var searchTxt = [titulo, d.texto || '', ests.map(function(m){ return m.practica; }).join(' '), ests.map(function(m){ return m.especialidad; }).join(' ')].join(' ').toLowerCase();
-      return '<div class="cfg-item" data-search="' + esc(searchTxt) + '">' + fila + prev + sub + '</div>';
+      var searchTxt = [titulo, d.texto || '', ests.map(function(m){ return m.practica; }).join(' '), ests.map(function(m){ return m.especialidad; }).join(' '), (d.clientes || []).map(function(s){ return cliNombre[s] || s; }).join(' ')].join(' ').toLowerCase();
+      return '<div class="cfg-item" data-search="' + esc(searchTxt) + '">' + fila + prev + sub + subCli + '</div>';
     }
     if (!descs.length){ dl.innerHTML = '<div class="cfg-empty">Todavía no hay resultados.</div>'; }
     else {
@@ -1162,6 +1171,9 @@ async function toggleScope(kind, id, key){
   } else if (kind === 'desc'){
     var d = (INFORMES_CFG.descripciones || []).find(function(x){ return x.id === id; }); if (!d) return;
     r = await req('POST', '/api/informes/descripciones/' + encodeURIComponent(id) + '/scope', { modelos: toggle(d.modelos) });
+  } else if (kind === 'desc-cliente'){
+    var dc = (INFORMES_CFG.descripciones || []).find(function(x){ return x.id === id; }); if (!dc) return;
+    r = await req('POST', '/api/informes/descripciones/' + encodeURIComponent(id) + '/clientes', { clientes: toggle(dc.clientes) });
   }
   if (r && r.ok) await loadInformesConfig();
 }
@@ -4792,7 +4804,8 @@ function payloadInformeDeFila(x, opts){
   if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return null; }
   var medicoId = opts.medicoId || loteMedicoParaModelo(m.key);
   if (!medicoId){ nsAlert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
-  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
+  var slugFila = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
+  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && scopeAplica(d.clientes, slugFila); });
   var preset = (opts.presetId ? presets.find(function(d){ return d.id === opts.presetId; }) : null) || presets[0];
   var fechaM = /(\d{2}\/\d{2}\/\d{4})/.exec(String(x.turno || ''));
   var valores = Object.assign({}, (preset && preset.valores) || {}, opts.valores || {});
@@ -4864,7 +4877,9 @@ function opcionesModelo(m){
   // Un médico pertenece a ESTE centro si no tiene clientes (global) o si lo
   // incluye. Antes el desplegable mostraba médicos de TODOS los centros.
   var delCentro = function(md){ return !Array.isArray(md.clientes) || md.clientes.length === 0 || (slug && md.clientes.indexOf(slug) >= 0); };
-  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key); });
+  // Los resultados también se acotan al centro: hay prácticas que cada centro
+  // redacta distinto (el venoso de MMII). Sin centros = para todos, como siempre.
+  var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && delCentro(d); });
   var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key) && delCentro(md); });
   if (!medicos.length) medicos = (INFORMES_CFG.medicos || []).filter(delCentro); // sin médico propio del modelo → los del centro
   if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // fallback: ninguno del centro → todos, para no dejar el selector vacío
