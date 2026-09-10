@@ -703,7 +703,8 @@ const MODELOS = {
     practica: "Ecografía vesical",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    // Ver la nota en eco-prostatica: el 180114 lo comparten tres prácticas.
+    codigoPractica: "180114",
     estudio: "ECOGRAFÍA VESICAL",
     estudioArchivo: "Ecografia vesical",
     textoDefault: "VEJIGA EN REPLECIÓN, DE PAREDES FINAS Y REGULARES, CON CONTENIDO ANECOICO, SIN IMÁGENES COMPATIBLES CON LITIASIS NI FORMACIONES SÓLIDAS EN SU INTERIOR.",
@@ -725,7 +726,13 @@ const MODELOS = {
     practica: "Ecografía prostática",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    // PAMI factura TRES prácticas distintas con el 180114 (vesicoprostática,
+    // prostática y vesical). Los tres modelos llevan el código a propósito: si
+    // lo tuviera uno solo, "Crear informe" le mandaría cualquier fila 180114 a
+    // ese —el código con un único modelo no se desempata— y una ecografía
+    // vesical saldría con un informe que describe la próstata. Con los tres
+    // cargados el desempate lo hace el nombre de la práctica de la fila.
+    codigoPractica: "180114",
     estudio: "ECOGRAFÍA PROSTÁTICA",
     estudioArchivo: "Ecografia prostatica",
     textoDefault: "PRÓSTATA DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS PARA LA EDAD, DE CONTORNOS REGULARES, SIN IMÁGENES NODULARES EN SU INTERIOR.",

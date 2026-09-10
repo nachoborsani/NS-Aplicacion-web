@@ -4672,7 +4672,11 @@ function _normPract(s){
     .replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 function _clavesPract(s){
-  return _normPract(s).split(' ').filter(function(w){ return w.length >= 3 && !_PRACT_GENERICAS[w]; });
+  // Los números sueltos no cuentan como palabra del nombre: el código ya se usó
+  // para elegir los candidatos, y si además puntúa acá, el modelo que lo lleva
+  // escrito en su práctica (ej. "180114 - Ecografía vesicoprostática") le gana a
+  // todos los que comparten ese código aunque el nombre no tenga nada que ver.
+  return _normPract(s).split(' ').filter(function(w){ return w.length >= 3 && !_PRACT_GENERICAS[w] && !/^\d+$/.test(w); });
 }
 // Elige, entre una lista de modelos, el que mejor pega por nombre con la práctica
 // de la fila. Puntúa por palabras clave compartidas; a igualdad, gana el modelo
