@@ -4113,7 +4113,14 @@ function renderClientMedicos(){
   var copiar = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" stroke-width="1.8"/></svg>';
   var llave = '<svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="15" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M11 12l9-9M17 3l3 3M15 5l2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var esAdminMed = ME && ME.role === 'admin';
-  body.innerHTML = MEDICOS.map(function(m){
+  // Arriba los que se pueden usar. Abajo los que no sirven para trabajar:
+  // primero los que no tienen clave cargada y al final los deshabilitados.
+  var ordenados = MEDICOS.map(function(m, i){ return { m: m, i: i }; }).sort(function(a, b){
+    var ra = a.m.deshabilitado ? 2 : (a.m.tieneClave ? 0 : 1);
+    var rb = b.m.deshabilitado ? 2 : (b.m.tieneClave ? 0 : 1);
+    return ra !== rb ? ra - rb : a.i - b.i;
+  }).map(function(x){ return x.m; });
+  body.innerHTML = ordenados.map(function(m){
     var mid = esc(m.id);
     var claveCell;
     if (m.tieneClave){
