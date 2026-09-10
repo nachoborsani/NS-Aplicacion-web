@@ -3089,7 +3089,7 @@ function renderClientList(){
 }
 function selectClient(slug){
   ACTIVE_CLIENT = CLIENTS.filter(function(client){ return client.slug === slug; })[0] || ACTIVE_CLIENT;
-  if (ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera' && CLIENT_SECTION === 'general') CLIENT_SECTION = 'mescurso';
+  if (ACTIVE_CLIENT && (ACTIVE_CLIENT.tipo === 'med_cabecera' || ACTIVE_CLIENT.bandejaCup) && CLIENT_SECTION === 'general') CLIENT_SECTION = 'mescurso';
   // NO forzamos la solapa: se mantiene la última usada (CLIENT_SECTION). Si venís
   // por un link con solapa, selectClientWhenReady la aplica después.
   setDashSection('resumen');
@@ -3131,6 +3131,14 @@ function clientSeccionesPermitidas(){
   var esClinica = (ME && ME.role === 'clinica');
   var esOperador = (ME && ME.role === 'operador');
   var esMC = ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera';
+  // Consultorio con "bandejaCup" (ej. Caballito Pediátrico): mismo tablero que
+  // un médico de cabecera, pero sigue siendo Consultorio en todo lo demás. El
+  // operador (Javi) de un consultorio normal solo ve "Información básica" -
+  // acá lo tratamos como si fuera médico de cabecera SOLO para destrabarle el
+  // tablero (mescurso/general), sin tocar el "esMC" real que usan las otras
+  // ramas (admin, colaborador) para no ensancharle a Caballito el resto de
+  // pestañas de un médico de cabecera.
+  var esTableroCup = esMC || !!(ACTIVE_CLIENT && ACTIVE_CLIENT.bandejaCup);
   // Colaborador (socio externo, solo lectura): por ahora SOLO los dashboards.
   // Es una lista propia y corta a propósito: los módulos se le van sumando de a
   // uno acá, no hereda nada por estar en la misma rama que otro rol.
@@ -3150,8 +3158,8 @@ function clientSeccionesPermitidas(){
   // Información básica que ya veía. Va primero en la lista a propósito: es la
   // que usa para trabajar, así que es donde aterriza por defecto
   // (setClientSection cae en permitidas[0]) - la básica queda a un clic.
-  if (esOperador && !esMC && clienteTienePlanSalud()) return ['plansalud', 'basica'];
-  if (esOperador) return esMC ? ['mescurso', 'basica', 'general'] : ['basica'];
+  if (esOperador && !esTableroCup && clienteTienePlanSalud()) return ['plansalud', 'basica'];
+  if (esOperador) return esTableroCup ? ['mescurso', 'basica', 'general'] : ['basica'];
   if (esMC) {
     var seccionesMC = ['mescurso', 'basica'];
     // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
