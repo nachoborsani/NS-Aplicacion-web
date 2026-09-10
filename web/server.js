@@ -11435,6 +11435,23 @@ function ensureVenosoMmiiSeed() {
         cambio = true;
       }
     }
+    // Quién firma los doppler de miembros inferiores en Baimed. Sin esto el
+    // selector de "Médico que firma" no encontraba NINGÚN médico cargado para
+    // estos modelos y caía a "todos los médicos del centro" (ver opcionesModelo
+    // en app.js), así que ofrecía a los cardiólogos —GONDIM salía firmando un
+    // doppler vascular—. Datos tomados de los informes reales de Baimed
+    // (arterial y venoso de MMII, jul/2026).
+    if (Array.isArray(cfg.medicos) && !cfg.medicos.some((m) => m.id === "bartolomeo-daniela")) {
+      cfg.medicos.push({
+        id: "bartolomeo-daniela", nombre: "BARTOLOMEO DANIELA",
+        firma: "firma-bartolomeo-daniela.png",            // se sube por la UI
+        matricula: "MN 143384 · MP 453471",
+        modelos: ["eco-doppler-venoso-mmii", "eco-doppler-arterial-mmii"],
+        clientes: ["dbaime"],
+      });
+      console.log("[venoso-mmii-seed] médica BARTOLOMEO DANIELA creada (doppler MMII de Baimed, firma pendiente de subir).");
+      cambio = true;
+    }
     if (cambio) saveInformesConfig(cfg);
   } catch (e) { console.log("[venoso-mmii-seed] omitido:", e && e.message); }
 }

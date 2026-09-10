@@ -372,9 +372,13 @@ const VENOSO_MMII_CAMPOS = [
 // en la tabla: se imprimen como renglones debajo de la conclusión, y SOLO los
 // que están cargados ("No" = no se observó, no se menciona). Los que piden lado
 // salen con el lado ("Flebectasias: derecha"); el sí/no sale como la frase sola.
+// `textoNo`: lo que se imprime cuando el hallazgo NO está. Solo la trombosis lo
+// tiene, y a propósito: descartar una TVP es muchas veces el motivo del estudio,
+// así que el informe real de Baimed escribe "Sin signos de trombosis venosa"
+// aunque sea negativo. El resto de los hallazgos, si no están, no se mencionan.
 const VENOSO_MMII_OBS = [
   { key: "obsDificultoso", texto: "Estudio técnicamente dificultoso" },
-  { key: "obsTrombosis", texto: "Signos de trombosis venosa" },
+  { key: "obsTrombosis", texto: "Signos de trombosis venosa", textoNo: "Sin signos de trombosis venosa" },
   { key: "obsTelangiectasias", texto: "Telangiectasias" },
   { key: "obsFlebectasias", texto: "Flebectasias" },
   { key: "obsEdema", texto: "Edema de tejido celular subcutáneo" },
@@ -1399,7 +1403,11 @@ async function buildInformePdf(modeloKey, input) {
     if (Array.isArray(modelo.observacionesHallazgos)) {
       for (const o of modelo.observacionesHallazgos) {
         const v = String(vals[o.key] == null ? "" : vals[o.key]).trim();
-        if (!v || v === "No" || v === "—") continue;
+        if (!v || v === "No" || v === "—") {
+          // Ausente: se menciona solo si el hallazgo pide decirlo (trombosis).
+          if (o.textoNo && (v === "No" || !v)) obsParrafos.push(o.textoNo + ".");
+          continue;
+        }
         // "Sí" no aporta nada escrito ("Telangiectasias: sí"): va la frase sola.
         obsParrafos.push(v === "Sí" ? o.texto + "." : o.texto + ": " + v.toLowerCase() + ".");
       }
@@ -1407,6 +1415,26 @@ async function buildInformePdf(modeloKey, input) {
     const obs = String(vals.observaciones || "").trim();
     if (obs) obsParrafos.push(obs);
   }
+
+  // La firma se carga ACÁ, antes de medir, porque su imagen se dibuja desde
+  // `fy - 22` hacia ARRIBA: con un sello alto llega hasta `fy + 33`, o sea que
+  // se mete en la zona del texto. Sin reservar ese alto, la última línea de la
+  // conclusión terminaba escrita encima del sello (se veía en los Holter de
+  // Baimed, que firman con un sello redondo grande).
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
+  let firmaImg = null, firmaW = 0, firmaH = 0;
+  if (firmaBuf) {
+    try {
+      firmaImg = await doc.embedPng(firmaBuf);
+      const enc = encajarImagen(firmaImg, 150, 55);
+      firmaW = enc.w; firmaH = enc.h;
+    } catch (e) {
+      // Un PNG ilegible no puede tumbar el informe: sale como si no hubiera firma.
+      firmaImg = null; firmaW = 0; firmaH = 0;
+    }
+  }
+  // Cuánto invade la firma por encima de la línea de FECHA.
+  const reservaFirma = firmaImg ? Math.max(0, firmaH - 22) : 0;
 
   // Cuánto ocupa el cuerpo (conclusión + observaciones) y dónde termina cayendo
   // la firma. Se mide ANTES de escribir, y se cede en este orden:
@@ -1418,9 +1446,15 @@ async function buildInformePdf(modeloKey, input) {
   const ESCALAS = [[10.5, 15], [10, 14], [9.5, 13], [9, 12], [8.5, 11]];
   const anchoTexto = boxW - 2 * PADX;
   const FY_DEFAULT = 248;
-  // Piso de la firma: el pie del centro arranca en y=100, y con `firmaConMatricula`
-  // el renglón más bajo de la firma cae en fy-57. 172 deja aire entre los dos.
-  const FY_MIN = 172;
+  // Hasta dónde puede bajar la firma: depende de QUÉ se dibuje debajo de la
+  // línea de FECHA, que no es lo mismo en todos los casos. Con un número fijo
+  // para el peor caso (sello + nombre + matrícula) se desperdiciaban ~40 pt y el
+  // Holter de Baimed se iba a dos hojas por nada.
+  const PIE_TOP = 100, AIRE_PIE = 8;
+  const bajoFy = firmaImg
+    ? (modelo.firmaConMatricula && (medicoNombre || medicoMatricula) ? 57 : 22)   // sello (+ nombre/matrícula)
+    : (medicoNombre ? (medicoMatricula ? 30 : 16) : 0);                            // "MÉDICO" + nombre (+ matrícula)
+  const FY_MIN = PIE_TOP + AIRE_PIE + bajoFy;
   // Aire entre el último renglón y la línea de FECHA. Tiene que ser el MISMO
   // número al medir y al decidir el salto de hoja: con dos valores distintos el
   // texto "entraba" en la cuenta y el escritor igual cambiaba de hoja (le pasaba
@@ -1438,7 +1472,7 @@ async function buildInformePdf(modeloKey, input) {
     for (const [sz, lh] of ESCALAS) {
       const lc = cortarTexto(texto, sz);
       const lo = obsParrafos.map((pr) => wrapText(pr, font, sz, anchoTexto));
-      const fyNecesario = yInforme - altoCuerpo(lc, lo, lh) - AIRE_FIRMA;
+      const fyNecesario = yInforme - altoCuerpo(lc, lo, lh) - AIRE_FIRMA - reservaFirma;
       if (fyNecesario >= FY_MIN) {
         cuerpoSize = sz; cuerpoLineH = lh; lineasConcl = lc; lineasObs = lo;
         fy = Math.min(FY_DEFAULT, fyNecesario);
@@ -1456,7 +1490,7 @@ async function buildInformePdf(modeloKey, input) {
       lineasObs = obsParrafos.map((pr) => wrapText(pr, font, sz, anchoTexto));
       fy = FY_DEFAULT;
     }
-    PISO_TEXTO = fy + AIRE_FIRMA;
+    PISO_TEXTO = fy + AIRE_FIRMA + reservaFirma;
   }
 
   // INFORME (sin caja)
@@ -1477,11 +1511,8 @@ async function buildInformePdf(modeloKey, input) {
   T("FECHA:", LBLX, fy, { bold: true, size: 11 });
   T(p.fecha || "—", LBLX + 56, fy, { size: 11 });
   const firmaAreaW = 200, firmaAreaX = width - Mx - firmaAreaW;
-  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
-  if (firmaBuf) {
-    const firma = await doc.embedPng(firmaBuf);
-    const { w: fw, h: fh } = encajarImagen(firma, 150, 55);
-    page.drawImage(firma, { x: firmaAreaX + (firmaAreaW - fw) / 2, y: fy - 22, width: fw, height: fh });
+  if (firmaImg) {
+    page.drawImage(firmaImg, { x: firmaAreaX + (firmaAreaW - firmaW) / 2, y: fy - 22, width: firmaW, height: firmaH });
     // Nombre + matrícula debajo de la firma (solo modelos que lo piden).
     if (modelo.firmaConMatricula && (medicoNombre || medicoMatricula)) {
       let my = fy - 44;
