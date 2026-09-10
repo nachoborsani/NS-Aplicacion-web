@@ -11608,6 +11608,25 @@ function ensureHolterSeed() {
 }
 ensureHolterSeed();
 
+// Caballito Pediátrico: cliente tipo "consultorio" con dashboard de bandeja
+// CUP (pago fijo, sin valorización) — ver normalizeClient/bandejaCup. Se
+// fuerza acá en vez de depender de que alguien lo edite a mano desde la web
+// (el botón de editar cliente es solo para admin, y en producción costó
+// encontrarlo). Idempotente: solo guarda si hace falta cambiar algo.
+function ensureCaballitoConsultorio() {
+  try {
+    const clients = loadClientsStore();
+    const idx = clients.findIndex((c) => c.slug === "caballito-pediatrico");
+    if (idx < 0) return;
+    const actual = clients[idx];
+    if (actual.tipo === "consultorio" && actual.seccion === "consultorio" && actual.bandejaCup === true) return;
+    clients[idx] = normalizeClient({ ...actual, tipo: "consultorio", seccion: "consultorio", bandejaCup: true });
+    saveClientsStore(clients);
+    console.log("[caballito-consultorio] tipo=consultorio, seccion=consultorio, bandejaCup=true aplicado.");
+  } catch (e) { console.log("[caballito-consultorio] omitido:", e && e.message); }
+}
+ensureCaballitoConsultorio();
+
 // Precarga los presets ORL en configs ya existentes (idempotente: solo agrega
 // el preset de una práctica ORL si esa práctica todavía no tiene resultados).
 function ensureOrlSeed() {
