@@ -1485,6 +1485,12 @@
   .medcab-list-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border)}
   .medcab-list-row span{color:var(--text);font-weight:700}
   .medcab-list-row b{font-variant-numeric:tabular-nums}
+  /* Los números del tablero de bandeja abren la lista de pacientes de ese mes. */
+  .medcab-list-row.mescurso-click{cursor:pointer;border-radius:8px;padding-left:8px;padding-right:8px;transition:background .15s ease}
+  .medcab-list-row.mescurso-click:hover{background:var(--hover)}
+  .medcab-total-link{cursor:pointer;transition:border-color .15s ease,background .15s ease}
+  .medcab-total-link:hover{border-color:var(--turq);background:var(--hover)}
+  .medcab-total-link:focus-visible{outline:2px solid var(--turq);outline-offset:2px}
   @media(max-width:1100px){ .mescurso-cards.medcab-grid{grid-template-columns:1fr 1fr}.medcab-dashboard-head{align-items:stretch;flex-direction:column}.medcab-totals{justify-content:flex-start} }
   @media(max-width:640px){ .mescurso-cards.medcab-grid,.medcab-columns{grid-template-columns:1fr}.medcab-totals>div{flex:1 1 120px} }
   .mescurso-head{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-bottom:8px}

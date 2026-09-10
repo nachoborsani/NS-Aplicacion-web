@@ -1829,7 +1829,9 @@ async function iniRenderPendientesEn(listId, metaId){
     // Toda la fila (nombre y números) lleva a donde se trabaja ese pendiente.
     // Los chips de vencimiento son la excepción: abren su propio detalle y
     // cortan la propagación para no disparar también la navegación.
-    var esMC = c.tipo === 'med_cabecera';
+    // Un consultorio con bandejaCup (ej. Caballito) también se trabaja en SU
+    // dashboard, igual que un médico de cabecera - no en la Cabina.
+    var esMC = c.tipo === 'med_cabecera' || !!c.bandejaCup;
     var destino = esMC ? 'Abre el dashboard de ' + c.nombre + ' para trabajar las bandejas del CUP.'
                        : 'Abre Informes recibidos de ' + c.nombre + '.';
     return '<li class="ini-pendop-row is-link" role="button" tabindex="0" title="' + esc(destino) + '"'
@@ -1840,9 +1842,9 @@ async function iniRenderPendientesEn(listId, metaId){
       + venc
       // Cada número abre el detalle de PACIENTES (sin valores: informes y bandeja
       // del CUP nunca los tuvieron) — mismo patrón que los chips de "por vencer".
-      + (c.pendientes ? '<button type="button" class="ini-pendop-badge pend" title="Informes pendientes — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'pendientes\',\''+esc(c.nombre)+'\')">'+c.pendientes+'</button>' : '')
-      + (c.sinTransmitir ? '<button type="button" class="ini-pendop-badge transm" title="Sin transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'sinTransmitir\',\''+esc(c.nombre)+'\')">'+c.sinTransmitir+'</button>' : '')
-      + (c.cup ? '<button type="button" class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'cup\',\''+esc(c.nombre)+'\')">'+c.cup+'</button>' : '')
+      + (c.pendientes ? '<button type="button" class="ini-pendop-badge pend" title="Informes pendientes — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'pendientes\',\''+escJs(c.nombre)+'\')">'+c.pendientes+'</button>' : '')
+      + (c.sinTransmitir ? '<button type="button" class="ini-pendop-badge transm" title="Sin transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'sinTransmitir\',\''+escJs(c.nombre)+'\')">'+c.sinTransmitir+'</button>' : '')
+      + (c.cup ? '<button type="button" class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'cup\',\''+escJs(c.nombre)+'\')">'+c.cup+'</button>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }
@@ -1902,19 +1904,29 @@ function cerrarOmesPorVencer(){ hideModal('omesVencerModal', 'omesVencerScrim');
 // / sin transmitir / CUP): nunca muestra valores — informes y bandeja del CUP
 // no los tienen. Genérico por cliente y tipo: sirve para cualquier cliente
 // nuevo que se le asigne a un operador, sin tocar código.
-var PEND_DETALLE_LABEL = { pendientes: 'Informes pendientes', sinTransmitir: 'Sin transmitir', cup: 'Del informe del CUP (falta validar o transmitir)' };
-async function abrirPendientesDetalle(slug, tipo, nombreCliente){
+// Texto que va DENTRO de comillas simples en un onclick: esc() solo cubre &<>"
+// (HTML), así que la comilla simple hay que escaparla aparte o un cliente tipo
+// "Sanatorio D'Or" rompe el botón.
+function escJs(s){ return esc(String(s == null ? '' : s)).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+var PEND_DETALLE_LABEL = {
+  pendientes: 'Informes pendientes', sinTransmitir: 'Sin transmitir',
+  cup: 'Del informe del CUP (falta validar o transmitir)',
+  'cup-validar': 'Faltan validar', 'cup-informe': 'Faltan informe',
+  'cup-transmitidas': 'Transmitidas', 'cup-total': 'Total en bandeja'
+};
+async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   var body = document.getElementById('pendDetalleBody');
   var meta = document.getElementById('pendDetalleMeta');
   var tit = document.getElementById('pendDetalleTitulo');
   var colFecha = document.getElementById('pendDetalleColFecha');
   if (!body) return;
   if (tit) tit.textContent = (PEND_DETALLE_LABEL[tipo] || 'Pendientes') + ' — ' + (nombreCliente || '');
-  if (colFecha) colFecha.textContent = tipo === 'cup' ? 'Turno' : 'Recibido';
+  if (colFecha) colFecha.textContent = tipo.indexOf('cup') === 0 ? 'Turno' : 'Recibido';
   body.innerHTML = '<tr><td colspan="6" class="muted-cell">Cargando…</td></tr>';
   if (meta) meta.textContent = '';
   showModal('pendDetalleModal', 'pendDetalleScrim');
-  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pendientes-detalle?tipo=' + encodeURIComponent(tipo));
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pendientes-detalle?tipo=' + encodeURIComponent(tipo)
+    + (month ? '&month=' + encodeURIComponent(month) : ''));
   if (!res.ok){
     body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
     return;
@@ -5602,7 +5614,7 @@ function mesCursoDescargarDatosCruda(panelId){
     return { titulo: modTit + ' - ' + cli, columnas: modArrCols,
       filas: (modArr || []).map(modArrMap), moneyCols: modArrMoneyCols };
   }
-  if (panelId === 'medcab-historial') return { titulo: 'Dashboard médico de cabecera - ' + cli,
+  if (panelId === 'medcab-historial') return { titulo: medCabTituloTablero() + ' - ' + cli,
     columnas: ['MES', 'FALTAN VALIDAR', 'FALTAN INFORME', 'TRANSMITIDAS', 'TOTAL EN BANDEJA'],
     filas: (MESCURSO_MEDCAB_HISTORIAL || []).map(function(d){
       var validar = Number(d.pendienteValidar) || 0, transmitir = Number(d.pendienteTransmitir) || 0, listas = Number(d.listas) || 0;
@@ -6094,6 +6106,26 @@ function medCabEstadoMes(d){
   if ((Number(d && d.listas) || 0) > 0) return 'ok';
   return 'vacio';
 }
+// Este tablero lo usan DOS clases de cliente: el médico de cabecera de verdad
+// (tipo = med_cabecera) y un consultorio de pago fijo con bandeja del CUP
+// (bandejaCup, ej. Caballito). Los textos no pueden decir "médico de cabecera"
+// en el segundo caso - es un consultorio.
+function medCabEsMedicoDeCabecera(){ return !!(ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera'); }
+function medCabTituloTablero(){ return medCabEsMedicoDeCabecera() ? 'Dashboard médico de cabecera' : 'Dashboard por bandeja del CUP'; }
+function medCabNotaCard(){ return medCabEsMedicoDeCabecera() ? 'Médico de cabecera · sin valorización por práctica' : 'Consultorio de pago fijo · sin valorización por práctica'; }
+// Un renglón clickeable de la tarjeta: abre la lista de PACIENTES de ese mes y
+// esa categoría (sin valores: la bandeja del CUP no los tiene).
+function medCabLinea(d, tono, label, valor, tipo){
+  var slug = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
+  var nom = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
+  var mes = (d && d.month) || '';
+  var etiqueta = nom + (d && d.monthLabel ? ' · ' + d.monthLabel : '');
+  var clickable = valor > 0;
+  return '<div class="mescurso-line ' + tono + (clickable ? ' mescurso-click' : '') + '"'
+    + (clickable ? ' onclick="abrirPendientesDetalle(\'' + escJs(slug) + '\',\'' + tipo + '\',\'' + escJs(etiqueta) + '\',\'' + escJs(mes) + '\')" title="Ver los pacientes"' : '')
+    + '><span>' + esc(label) + (clickable ? ' <span class="mescurso-caret">▸</span>' : '') + '</span>'
+    + '<b>' + esc(numberFmt(valor)) + '</b></div>';
+}
 function medCabMesCard(d){
   var validar = Number(d && d.pendienteValidar) || 0;
   var transmitir = Number(d && d.pendienteTransmitir) || 0;
@@ -6107,12 +6139,12 @@ function medCabMesCard(d){
     + (d.live ? '<span class="mescurso-chip">Actual</span>' : '') + '</div>'
     + '<div class="mescurso-val-lbl">Pendientes</div>'
     + '<div class="mescurso-val chico">' + esc(numberFmt(pendientes)) + '</div>'
-    + '<div class="mescurso-val-note">Médico de cabecera · sin valorización por práctica</div>'
+    + '<div class="mescurso-val-note">' + esc(medCabNotaCard()) + '</div>'
     + '<div class="mescurso-lines">'
-    + '<div class="mescurso-line warn"><span>Faltan validar</span><b>' + esc(numberFmt(validar)) + '</b></div>'
-    + '<div class="mescurso-line alert"><span>Faltan informe</span><b>' + esc(numberFmt(transmitir)) + '</b></div>'
-    + '<div class="mescurso-line"><span>Transmitidas</span><b>' + esc(numberFmt(listas)) + '</b></div>'
-    + '<div class="mescurso-line"><span>Total en bandeja</span><b>' + esc(numberFmt(total)) + '</b></div>'
+    + medCabLinea(d, 'warn',  'Faltan validar',   validar,   'cup-validar')
+    + medCabLinea(d, 'alert', 'Faltan informe',   transmitir, 'cup-informe')
+    + medCabLinea(d, '',      'Transmitidas',     listas,    'cup-transmitidas')
+    + medCabLinea(d, '',      'Total en bandeja', total,     'cup-total')
     + '</div>'
     + (d.uploadedAt ? '<div class="mescurso-sync"><span>Ultima actualización</span><b>' + esc(mesCursoFechaHora(d.uploadedAt)) + '</b></div>' : '')
     + '</div>';
@@ -6120,9 +6152,17 @@ function medCabMesCard(d){
 function medCabResumenLista(historial, key, titulo, empty){
   var rows = (historial || []).filter(function(d){ return (Number(d && d[key]) || 0) > 0; });
   if (!rows.length) return '<div class="medcab-list"><h3>' + esc(titulo) + '</h3><p class="nom-muted">' + esc(empty) + '</p></div>';
+  var tipo = key === 'pendienteValidar' ? 'cup-validar' : 'cup-informe';
+  var slug = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
+  var nom = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
   return '<div class="medcab-list"><h3>' + esc(titulo) + '</h3>'
     + rows.map(function(d){
-      return '<div class="medcab-list-row"><span>' + esc(d.monthLabel || d.month || 'Mes') + '</span><b>' + esc(numberFmt(d[key] || 0)) + '</b></div>';
+      var etiqueta = nom + (d.monthLabel ? ' · ' + d.monthLabel : '');
+      // Mismo detalle que el renglón de la tarjeta: los pacientes de ese mes.
+      return '<div class="medcab-list-row mescurso-click" title="Ver los pacientes"'
+        + ' onclick="abrirPendientesDetalle(\'' + escJs(slug) + '\',\'' + tipo + '\',\'' + escJs(etiqueta) + '\',\'' + escJs(d.month || '') + '\')">'
+        + '<span>' + esc(d.monthLabel || d.month || 'Mes') + ' <span class="mescurso-caret">▸</span></span>'
+        + '<b>' + esc(numberFmt(d[key] || 0)) + '</b></div>';
     }).join('')
     + '</div>';
 }
@@ -6147,22 +6187,36 @@ async function loadMedCabMesCurso(){
     return String(b.month || '').localeCompare(String(a.month || ''));
   });
   if (!historial.length) {
-    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">Dashboard médico de cabecera</span>' + mesCursoBotonRefresco('Actualizar bandeja') + '</div>'
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">' + esc(medCabTituloTablero()) + '</span>' + mesCursoBotonRefresco('Actualizar bandeja') + '</div>'
       + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan informe.</span></div></div>';
     if (REFRESCO_ACTIVO) arrancarPollRefresco();
     return;
   }
   var cards = historial.slice(0, 6).map(medCabMesCard).join('');
-  var totalValidar = historial.reduce(function(a, d){ return a + (Number(d.pendienteValidar) || 0); }, 0);
-  var totalTransmitir = historial.reduce(function(a, d){ return a + (Number(d.pendienteTransmitir) || 0); }, 0);
-  var totalListas = historial.reduce(function(a, d){ return a + (Number(d.listas) || 0); }, 0);
+  // Los números de arriba son los del MES EN CURSO (la bandeja viva), no la suma
+  // de todos los meses: así son EXACTAMENTE los mismos que muestra el panel de
+  // Pendientes del Inicio (pendientesDeCliente usa esa misma bandeja) y que la
+  // tarjeta del mes actual de acá abajo. Antes sumaban todo el historial y no
+  // cuadraban con nada.
+  var vivo = historial.filter(function(d){ return d.live; })[0] || historial[0] || {};
+  var totalValidar = Number(vivo.pendienteValidar) || 0;
+  var totalTransmitir = Number(vivo.pendienteTransmitir) || 0;
+  var totalListas = Number(vivo.listas) || 0;
+  var mesVivo = vivo.month || '';
+  var etiquetaVivo = ((ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '') + (vivo.monthLabel ? ' · ' + vivo.monthLabel : '');
+  var totalBtn = function(n, label, tipo){
+    if (!n) return '<div><b>' + esc(numberFmt(n)) + '</b><span>' + esc(label) + '</span></div>';
+    return '<div class="medcab-total-link" role="button" tabindex="0" title="Ver los pacientes"'
+      + ' onclick="abrirPendientesDetalle(\'' + escJs((ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '') + '\',\'' + tipo + '\',\'' + escJs(etiquetaVivo) + '\',\'' + escJs(mesVivo) + '\')">'
+      + '<b>' + esc(numberFmt(n)) + '</b><span>' + esc(label) + '</span></div>';
+  };
   MESCURSO_MEDCAB_HISTORIAL = historial;
   box.innerHTML = '<div class="client-card medcab-dashboard-head">'
-    + '<div><h3>Dashboard médico de cabecera</h3><p>Control por bandejas del CUP. No se valoriza por práctica porque el pago es fijo.</p></div>'
+    + '<div><h3>' + esc(medCabTituloTablero()) + '</h3><p>Control por bandejas del CUP. No se valoriza por práctica porque el pago es fijo.</p></div>'
     + '<div class="medcab-totals">'
-    + '<div><b>' + esc(numberFmt(totalValidar)) + '</b><span>faltan validar</span></div>'
-    + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan informe</span></div>'
-    + '<div><b>' + esc(numberFmt(totalListas)) + '</b><span>transmitidas</span></div>'
+    + totalBtn(totalValidar, 'faltan validar' + (vivo.monthLabel ? ' · ' + vivo.monthLabel : ''), 'cup-validar')
+    + totalBtn(totalTransmitir, 'faltan informe' + (vivo.monthLabel ? ' · ' + vivo.monthLabel : ''), 'cup-informe')
+    + totalBtn(totalListas, 'transmitidas' + (vivo.monthLabel ? ' · ' + vivo.monthLabel : ''), 'cup-transmitidas')
     + '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'medcab-historial\',this)">📄 PDF</button>'
     + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'medcab-historial\',this)">📊 Excel</button>'
     + mesCursoBotonRefresco('Actualizar bandeja')

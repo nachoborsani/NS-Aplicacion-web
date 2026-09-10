@@ -869,7 +869,11 @@ function pendientesDeCliente(slug, cliente, informes, bandejas) {
   }
   const bandeja = (bandejas || {})[slug];
   let cup = 0;
-  if (cliente && cliente.tipo === "med_cabecera") {
+  // Vale para el médico de cabecera Y para un consultorio con tablero de bandeja
+  // CUP (bandejaCup, ej. Caballito): es el MISMO número que muestra su dashboard
+  // en la tarjeta del mes en curso (faltan validar + faltan informe), así que el
+  // panel de Pendientes y el dashboard no pueden divergir.
+  if (cliente && (cliente.tipo === "med_cabecera" || cliente.bandejaCup)) {
     if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
       const r = bandejaResumenCup(bandeja);
       cup = r.pendienteValidar + r.pendienteTransmitir;
@@ -7056,6 +7060,9 @@ const server = http.createServer(async (req, res) => {
         // médico de cabecera se trabaja en SU dashboard (bandejas del CUP), el
         // consultorio en la Cabina de informes.
         filas.push({ slug, nombre: clientDisplayName(slug) || slug, tipo: (cliente && cliente.tipo) || "consultorio",
+          // bandejaCup viaja para que el panel sepa que este consultorio también
+          // se trabaja en SU dashboard de bandeja, no en la Cabina de informes.
+          bandejaCup: !!(cliente && cliente.bandejaCup),
           pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin });
         totalPendientes += pendientes;
         totalSinTransmitir += sinTransmitir;
@@ -7131,14 +7138,27 @@ const server = http.createServer(async (req, res) => {
     if (!puede) return json(res, 403, { error: "sin permiso" });
     const tipo = String(url.searchParams.get("tipo") || "pendientes").trim();
     const nombreCliente = clientDisplayName(slug) || slug;
-    if (tipo === "cup") {
-      const bandeja = (loadClientBandejas() || {})[slug];
-      const filas = cabinaLib.bandejaParaMatcher(bandeja)
-        .filter((r) => !r.transmitida)
-        .slice(0, 500)
-        .map((r) => ({ ome: r.nOrden, benef: r.beneficio, nombre: r.nombre, practica: r.practica, turno: r.turno,
-          estado: r.validada ? "Validada, sin transmitir" : "Sin validar" }));
-      return json(res, 200, { slug, nombre: nombreCliente, tipo, filas });
+    // Bandeja del CUP. "cup" = todo lo no transmitido (es el número del panel de
+    // Pendientes); los otros tres son cada renglón de la tarjeta del mes en el
+    // dashboard. `month` opcional: sin él va la bandeja viva (el mes en curso),
+    // que es justo la que usa pendientesDeCliente → los números cuadran solos.
+    const CUP_TIPOS = { cup: 1, "cup-validar": 1, "cup-informe": 1, "cup-transmitidas": 1, "cup-total": 1 };
+    if (CUP_TIPOS[tipo]) {
+      const mes = normalizePeriod(url.searchParams.get("month")) || "";
+      const bandeja = mes ? getLiberarCupoBandeja(slug, mes) : ((loadClientBandejas() || {})[slug]);
+      const todas = cabinaLib.bandejaParaMatcher(bandeja);
+      const pasa = (r) => {
+        if (tipo === "cup-validar") return !r.validada;
+        if (tipo === "cup-informe") return r.validada && !r.transmitida;
+        if (tipo === "cup-transmitidas") return r.transmitida;
+        if (tipo === "cup-total") return true;
+        return !r.transmitida;   // "cup": validar + informe, lo mismo que cuenta el panel
+      };
+      const filas = todas.filter(pasa).slice(0, 500).map((r) => ({
+        ome: r.nOrden, benef: r.beneficio, nombre: r.nombre, practica: r.practica, turno: r.turno,
+        estado: r.transmitida ? "Transmitida" : (r.validada ? "Validada, falta informe" : "Sin validar"),
+      }));
+      return json(res, 200, { slug, nombre: nombreCliente, tipo, month: mes, total: todas.filter(pasa).length, filas });
     }
     const items = ((loadInformes() || {})[slug] || {}).items || [];
     const filtrados = items.filter((it) => {
