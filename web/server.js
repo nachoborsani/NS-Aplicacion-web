@@ -4893,6 +4893,11 @@ function addRowToDashboardPeriod(target, row) {
       turno: String(row.appointmentLabel || row.appointmentAt || ""),
       valor: money(row.valueGross),
       ome: cleanIdentifier(row.order),
+      // Para la vista "a) módulo" del toggle detalle/módulo (igual que ausentes y
+      // falta-informe): sin esto el panel agruparía todo en "Sin módulo".
+      modCode: String(row.moduleCode || "").trim(),
+      modDesc: String(row.moduleDescription || "").trim(),
+      esConsulta: isConsultationRow(row),
     });
   }
   if (!row.matchFound && !row.valueEdited) target.unmatched += 1;

@@ -4839,6 +4839,13 @@ var MESCURSO_POSIBLES_DEBITOS_FUTURO = []; // el mes futuro que se está viendo 
 var MESCURSO_AUSENTES = [];          // detalle de ausentes (con turno pero sin validar)
 var MESCURSO_AUSENTES_JULIO = [];    // ausentes del reporte "sin cerrar"
 var MESCURSO_AUSENTES_CERRADO = [];  // ausentes del mes cerrado
+// "Por transmitir": CONSULTAS validadas sin transmitir. No necesitan informe (por
+// eso no entran en "Faltan informes", que es solo prácticas), pero son plata
+// cargada que todavía no se transmitió — antes se calculaban en el servidor y no
+// se dibujaban en ningún lado, así que quedaban invisibles.
+var MESCURSO_POR_TRANSMITIR = [];          // consultas por transmitir (mes en curso)
+var MESCURSO_POR_TRANSMITIR_JULIO = [];    // ... del reporte "sin cerrar"
+var MESCURSO_POR_TRANSMITIR_CERRADO = [];  // ... del mes cerrado
 var MESCURSO_FUERACORTE_JULIO = [];  // prácticas a facturar fuera de corte (reporte "sin cerrar")
 var MESCURSO_MEDCAB_HISTORIAL = [];  // historial por mes del dashboard de médico de cabecera (para exportar)
 var MESCURSO_PERIODO_ACTUAL = '';
@@ -4897,6 +4904,9 @@ function toggleDebitosJulio(){ mesCursoTogglePanel('debitos-julio'); }
 function toggleDebitosCerrado(){ mesCursoTogglePanel('debitos-cerrado'); }
 function toggleAusentesJulio(){ mesCursoTogglePanel('ausentes-julio'); }
 function toggleAusentesCerrado(){ mesCursoTogglePanel('ausentes-cerrado'); }
+function togglePorTransmitir(){ mesCursoTogglePanel('portransmitir'); }
+function togglePorTransmitirJulio(){ mesCursoTogglePanel('portransmitir-julio'); }
+function togglePorTransmitirCerrado(){ mesCursoTogglePanel('portransmitir-cerrado'); }
 function toggleFueraCorteJulio(){ mesCursoTogglePanel('fueracorte-julio'); }
 function toggleModulos(){ mesCursoTogglePanel('modulos'); }
 function toggleModulosJulio(){ mesCursoTogglePanel('modulos-julio'); }
@@ -5505,7 +5515,7 @@ function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
   if (!panel) return;
   var apagarCarets = function(){
-    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoInformesCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoFueraCorteJulioCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret']
+    ['mescursoInformesCaret','mescursoDebitosCaret','mescursoInformesJulioCaret','mescursoDebitosJulioCaret','mescursoDebitosCerradoCaret','mescursoInformesCerradoCaret','mescursoDebitosAdelanteCaret','mescursoAusentesCaret','mescursoAusentesJulioCaret','mescursoAusentesCerradoCaret','mescursoFueraCorteJulioCaret','mescursoModulosCaret','mescursoModulosJulioCaret','mescursoModulosCerradoCaret','mescursoPorTransmitirCaret','mescursoPorTransmitirJulioCaret','mescursoPorTransmitirCerradoCaret']
       .forEach(function(id){ mesCursoSetCaret(id, false); });
     document.querySelectorAll('[id^="mescursoDebFut-"]').forEach(function(c){ c.textContent = '▸'; });
   };
@@ -5573,6 +5583,12 @@ function mesCursoTogglePanel(tipo){
     html = mesCursoPanelDetalleOModulo('ausentes-julio', MESCURSO_AUSENTES_JULIO || [], 'Ausentes sin validar (mes anterior)', 'warn', 'copiarAusentesJulio', accionLiberarCupoAusente('ausentes-julio'));
   } else if (tipo === 'ausentes-cerrado'){
     html = mesCursoPanelDetalleOModulo('ausentes-cerrado', MESCURSO_AUSENTES_CERRADO || [], 'Ausentes sin validar (mes cerrado)', 'warn', 'copiarAusentesCerrado', accionLiberarCupoAusente('ausentes-cerrado'));
+  } else if (tipo === 'portransmitir'){
+    html = mesCursoPanelDetalleOModulo('portransmitir', MESCURSO_POR_TRANSMITIR || [], 'Por transmitir', 'warn', 'copiarPorTransmitir', null);
+  } else if (tipo === 'portransmitir-julio'){
+    html = mesCursoPanelDetalleOModulo('portransmitir-julio', MESCURSO_POR_TRANSMITIR_JULIO || [], 'Por transmitir (mes anterior)', 'warn', 'copiarPorTransmitirJulio', null);
+  } else if (tipo === 'portransmitir-cerrado'){
+    html = mesCursoPanelDetalleOModulo('portransmitir-cerrado', MESCURSO_POR_TRANSMITIR_CERRADO || [], 'Por transmitir (mes cerrado)', 'warn', 'copiarPorTransmitirCerrado', null);
   } else if (tipo === 'fueracorte-julio'){
     html = mesCursoPanelDetalleOModulo('fueracorte-julio', MESCURSO_FUERACORTE_JULIO || [], 'A facturar fuera de corte (mes anterior)', 'warn', 'copiarFueraCorteJulio', null);
   } else {
@@ -5596,6 +5612,9 @@ function mesCursoTogglePanel(tipo){
   mesCursoSetCaret('mescursoAusentesJulioCaret', tipo === 'ausentes-julio');
   mesCursoSetCaret('mescursoAusentesCerradoCaret', tipo === 'ausentes-cerrado');
   mesCursoSetCaret('mescursoFueraCorteJulioCaret', tipo === 'fueracorte-julio');
+  mesCursoSetCaret('mescursoPorTransmitirCaret', tipo === 'portransmitir');
+  mesCursoSetCaret('mescursoPorTransmitirJulioCaret', tipo === 'portransmitir-julio');
+  mesCursoSetCaret('mescursoPorTransmitirCerradoCaret', tipo === 'portransmitir-cerrado');
   if (tipo.indexOf('debitos-futuro:') === 0) mesCursoSetCaret('mescursoDebFut-' + tipo.slice('debitos-futuro:'.length), true);
 }
 // Panel vacío: se abre igual que el de la tabla (mismo header, mismo click para
@@ -5768,6 +5787,9 @@ function mesCursoDescargarDatosCruda(panelId){
   if (panelId === 'ausentes-julio') return mesCursoDatosDetalleOModulo('ausentes-julio', MESCURSO_AUSENTES_JULIO || [], 'Ausentes sin validar (mes anterior)');
   if (panelId === 'ausentes-cerrado') return mesCursoDatosDetalleOModulo('ausentes-cerrado', MESCURSO_AUSENTES_CERRADO || [], 'Ausentes sin validar (mes cerrado)');
   if (panelId === 'fueracorte-julio') return mesCursoDatosDetalleOModulo('fueracorte-julio', MESCURSO_FUERACORTE_JULIO || [], 'A facturar fuera de corte (mes anterior)');
+  if (panelId === 'portransmitir') return mesCursoDatosDetalleOModulo('portransmitir', MESCURSO_POR_TRANSMITIR || [], 'Por transmitir');
+  if (panelId === 'portransmitir-julio') return mesCursoDatosDetalleOModulo('portransmitir-julio', MESCURSO_POR_TRANSMITIR_JULIO || [], 'Por transmitir (mes anterior)');
+  if (panelId === 'portransmitir-cerrado') return mesCursoDatosDetalleOModulo('portransmitir-cerrado', MESCURSO_POR_TRANSMITIR_CERRADO || [], 'Por transmitir (mes cerrado)');
   if (panelId === 'informes') return mesCursoDatosDetalleOModulo('informes', MESCURSO_FALTAN_INFORMES || [], 'Faltan informes');
   if (panelId === 'informes-julio') return mesCursoDatosDetalleOModulo('informes-julio', MESCURSO_FALTAN_INFORMES_JULIO || [], 'Faltan informes (mes anterior)');
   if (panelId === 'informes-cerrado') return mesCursoDatosDetalleOModulo('informes-cerrado', MESCURSO_FALTAN_INFORMES_CERRADO || [], 'Faltan informes (mes cerrado)');
@@ -5833,6 +5855,9 @@ function copiarFaltanInformes(btn){ var d = mesCursoDescargarDatos('informes'); 
 function copiarAusentes(btn){ var d = mesCursoDescargarDatos('ausentes'); mesCursoCopiar(btn, d.columnas, d.filas); }
 function copiarAusentesJulio(btn){ var d = mesCursoDescargarDatos('ausentes-julio'); mesCursoCopiar(btn, d.columnas, d.filas); }
 function copiarAusentesCerrado(btn){ var d = mesCursoDescargarDatos('ausentes-cerrado'); mesCursoCopiar(btn, d.columnas, d.filas); }
+function copiarPorTransmitir(btn){ var d = mesCursoDescargarDatos('portransmitir'); mesCursoCopiar(btn, d.columnas, d.filas); }
+function copiarPorTransmitirJulio(btn){ var d = mesCursoDescargarDatos('portransmitir-julio'); mesCursoCopiar(btn, d.columnas, d.filas); }
+function copiarPorTransmitirCerrado(btn){ var d = mesCursoDescargarDatos('portransmitir-cerrado'); mesCursoCopiar(btn, d.columnas, d.filas); }
 function copiarFueraCorteJulio(btn){ var d = mesCursoDescargarDatos('fueracorte-julio'); mesCursoCopiar(btn, d.columnas, d.filas); }
 function copiarFaltanInformesJulio(btn){ var d = mesCursoDescargarDatos('informes-julio'); mesCursoCopiar(btn, d.columnas, d.filas); }
 function copiarFaltanInformesCerrado(btn){ var d = mesCursoDescargarDatos('informes-cerrado'); mesCursoCopiar(btn, d.columnas, d.filas); }
@@ -6070,7 +6095,12 @@ function mesCursoCardMesEnCurso(r, estado){
   var debitosCaret = ' <span class="mescurso-caret" id="mescursoDebitosCaret">▸</span>';
   var cobroReal = r.grossTransmitido || 0;
   var faltaInf = r.missingInformeAmount || 0;
-  var estimado = cobroReal + faltaInf;
+  // "Por transmitir" = consultas validadas sin transmitir. No necesitan informe
+  // (por eso no entran en "Faltan informes", que es solo prácticas), pero es
+  // plata cargada que todavía no se transmitió: suma al estimado, NO al cobro
+  // real. Antes se calculaba en el servidor y no se mostraba en ningún lado.
+  var porTrans = r.porTransmitirAmount || 0;
+  var estimado = cobroReal + faltaInf + porTrans;
   // En un cliente EN ANÁLISIS no transmitimos, así que lo validado-sin-transmitir
   // no es "falta informe" (deuda) sino "faltante de transmisión" (potencial).
   var enAnalisisCli = ACTIVE_CLIENT && ACTIVE_CLIENT.enAnalisis;
@@ -6089,6 +6119,7 @@ function mesCursoCardMesEnCurso(r, estado){
     ? ('<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
       + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
       + '<div class="mescurso-val-note">+ ' + lblFaltaNota + ' <b>' + esc(moneyFmt(faltaInf)) + '</b>'
+      + (porTrans > 0 ? ' + Por transmitir <b>' + esc(moneyFmt(porTrans)) + '</b>' : '')
       + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>')
     : '';
   return '<div class="mescurso-card">' + head + salud + cobroCeroWarn
@@ -6098,6 +6129,7 @@ function mesCursoCardMesEnCurso(r, estado){
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + mcMoneyPart(r.posiblesDebitos) + '</b></div>'
     + '<div class="mescurso-line alert' + faltanClick + '"><span>' + lblFalta + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + mcMoneyPart(r.missingInformeAmount) + '</b>' + (((r.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(r.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(r.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
+    + '<div class="mescurso-line warn wide mescurso-click" onclick="togglePorTransmitir()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirCaret">▸</span></span><b>' + esc(numberFmt(r.porTransmitir || 0)) + mcMoneyPart(r.porTransmitirAmount) + '</b></div>'
     + '</div>'
     + ausentesHtml
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
@@ -6161,14 +6193,21 @@ function mesCursoCardFaltaReporte(period){
     + '<div class="mescurso-empty"><b>Falta el reporte de ' + esc(label) + '</b>'
     + '<span>Todavía no subiste el reporte transmitido de ' + esc(label) + '. Cuando lo subas, vas a ver acá la facturación, los informes que faltan y los ausentes.</span></div></div>';
 }
-// Línea de "arrastre": el próximo corte del mes anterior entra en el corte de este
-// mes → se suma a la facturación y se muestra el total real del corte.
+// El número grande de "Sin cerrar"/"Cerrado" es lo REAL TRANSMITIDO y nada más:
+// `net` ya exige fila validada + transmitida DENTRO del corte (ver reportRowGross
+// en el servidor), así que no suma ausentes, ni validadas sin transmitir, ni
+// turnos futuros. Se le agrega lo que se transmitió FUERA DE TÉRMINO del mes
+// anterior (prevPeriodCutoff): también es plata transmitida y se cobra en el corte
+// de este mes. Antes quedaba afuera, como un renglón suelto abajo del número.
+function mescNumeroGrande(current){
+  return Number((current && current.net) || 0) + Number((current && current.prevPeriodCutoff) || 0);
+}
+// Cómo se compone ese número cuando arrastra un corte anterior.
 function mescArrastreHtml(current){
   if (!veValoresCliente()) return '';
   var arr = Number(current && current.prevPeriodCutoff) || 0;
   if (arr <= 0) return '';
-  var total = Number((current && current.net) || 0) + arr;
-  return '<div class="mescurso-arrastre">+ <b>' + esc(moneyFmt(arr)) + '</b> del corte anterior · Total del corte <b>' + esc(moneyFmt(total)) + '</b></div>';
+  return '<div class="mescurso-arrastre"><b>' + esc(moneyFmt(Number((current && current.net) || 0))) + '</b> del mes + <b>' + esc(moneyFmt(arr)) + '</b> transmitido fuera de término del mes anterior</div>';
 }
 function mesCursoCardSinCerrar(current, reporte){
   if (!current || !current.period){
@@ -6181,6 +6220,9 @@ function mesCursoCardSinCerrar(current, reporte){
   var fechaRep = (reporte && reporte.closedAt) ? mesCursoFechaCorta(reporte.closedAt) : '';
   var faltan = current.missingInforme || 0;
   var faltanMonto = current.missingInformeAmount || 0;
+  // Consultas validadas sin transmitir: no piden informe, solo transmitirse.
+  var porTrans = current.porTransmitir || 0;
+  var porTransMonto = current.porTransmitirAmount || 0;
   var ausentes = current.absent || 0;
   var ausMonto = current.absentAmount || 0;
   var debCount = current.debitCount || 0;
@@ -6210,8 +6252,8 @@ function mesCursoCardSinCerrar(current, reporte){
     + '</div>'
     + (veValoresCliente() ? (
       '<div class="mescurso-val-lbl">Facturación</div>'
-      + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
-      + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
+      + '<div class="mescurso-val">' + esc(moneyFmt(mescNumeroGrande(current))) + '</div>' + mescArrastreHtml(current)
+      + '<div class="mescurso-val-note">Solo lo transmitido · factura sin cerrar (ausentes, falta informe y por transmitir no suman acá)'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
     ) : '')
@@ -6220,6 +6262,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line warn' + djClick + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + djCaret + '</span><b>' + esc(numberFmt(debCount)) + mcMoneyPart(debMonto) + '</b></div>'
     + '<div class="mescurso-line alert' + fjClick + '"><span>Faltan informes' + fjCaret + '</span>'
     + '<b>' + esc(numberFmt(faltan)) + mcMoneyPart(faltanMonto) + '</b>' + (((current.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
+    + '<div class="mescurso-line warn wide mescurso-click" onclick="togglePorTransmitirJulio()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirJulioCaret">▸</span></span><b>' + esc(numberFmt(porTrans)) + mcMoneyPart(porTransMonto) + '</b></div>'
     + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
     + '<b>' + esc(numberFmt(ausentes)) + mcMoneyPart(ausMonto) + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line wide mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + mcMoneyPart(fueraCorteMonto) + '</b></div>' : '')
@@ -6245,6 +6288,8 @@ function mesCursoCardMesCerrado(current, reporte){
   var fechaRep = (reporte && reporte.closedAt) ? mesCursoFechaCorta(reporte.closedAt) : '';
   var debMonto = current.debit || 0, debCount = current.debitCount || 0;
   var faltan = current.missingInforme || 0, faltanMonto = current.missingInformeAmount || 0;
+  // Consultas validadas sin transmitir: no piden informe, solo transmitirse.
+  var porTrans = current.porTransmitir || 0, porTransMonto = current.porTransmitirAmount || 0;
   var ausentes = current.absent || 0, ausMonto = current.absentAmount || 0;
   var foot = fechaRep ? '<div class="mescurso-foot">Reporte del ' + esc(fechaRep) + '</div>' : '';
   var syncSc = (reporte && reporte.updatedAt) ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(reporte.updatedAt)) + '</b></div>' : '';
@@ -6256,8 +6301,8 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
     + (veValoresCliente() ? (
       '<div class="mescurso-val-lbl">Facturación</div>'
-      + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
-      + '<div class="mescurso-val-note">Valor aproximado'
+      + '<div class="mescurso-val">' + esc(moneyFmt(mescNumeroGrande(current))) + '</div>' + mescArrastreHtml(current)
+      + '<div class="mescurso-val-note">Solo lo transmitido'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
     ) : '')
@@ -6265,6 +6310,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span></span><b>' + esc(numberFmt(debCount)) + mcMoneyPart(debMonto) + '</b></div>'
     + '<div class="mescurso-line alert mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()"><span>Faltan informes <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span></span><b>' + esc(numberFmt(faltan)) + mcMoneyPart(faltanMonto) + '</b>' + (((current.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
+    + '<div class="mescurso-line warn wide mescurso-click" onclick="event.stopPropagation();togglePorTransmitirCerrado()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirCerradoCaret">▸</span></span><b>' + esc(numberFmt(porTrans)) + mcMoneyPart(porTransMonto) + '</b></div>'
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + mcMoneyPart(ausMonto) + '</b></div>'
     + '</div>'
     + (current.transmittedToday > 0 ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(current.transmittedToday)) + '</b></div>' : '')
@@ -6442,6 +6488,7 @@ async function loadClientMesCurso(){
   REFRESCO_ACTIVO = !!(refEstado && (refEstado.pendiente || refEstado.corriendo));
   MESCURSO_FALTAN_INFORMES = (resumen && resumen.missingInformeRows) || [];
   MESCURSO_AUSENTES = (resumen && resumen.ausentesRows) || [];
+  MESCURSO_POR_TRANSMITIR = (resumen && resumen.porTransmitirRows) || [];
   MESCURSO_POSIBLES_DEBITOS = (resumen && resumen.posiblesDebitosRows) || [];
   MESCURSO_MODULOS = mescMods(resumen && resumen.modules);
   MESCURSO_PERIODO_ACTUAL = (resumen && resumen.period) || '';
@@ -6454,6 +6501,7 @@ async function loadClientMesCurso(){
   MESCURSO_FALTAN_INFORMES_JULIO = (current && current.missingInformeRows) || [];
   MESCURSO_POSIBLES_DEBITOS_JULIO = (current && current.posiblesDebitosRows) || [];
   MESCURSO_AUSENTES_JULIO = (current && current.ausentesRows) || [];
+  MESCURSO_POR_TRANSMITIR_JULIO = (current && current.porTransmitirRows) || [];
   MESCURSO_FUERACORTE_JULIO = (current && current.fueraCorteRows) || [];
   MESCURSO_MODULOS_JULIO = mescMods(current && current.modules);
   var reportes = (results[2].ok && results[2].data) ? (results[2].data.reports || []) : [];
@@ -6471,6 +6519,7 @@ async function loadClientMesCurso(){
   MESCURSO_PERIODO_CERRADO = (current2 && current2.period) || prev2;
   MESCURSO_DEBITOS_CERRADO = (current2 && current2.posiblesDebitosRows) || [];   // detalle de la card "Cerrado"
   MESCURSO_AUSENTES_CERRADO = (current2 && current2.ausentesRows) || [];
+  MESCURSO_POR_TRANSMITIR_CERRADO = (current2 && current2.porTransmitirRows) || [];
   MESCURSO_FALTAN_INFORMES_CERRADO = (current2 && current2.missingInformeRows) || [];
   ensureInformesCfg(); // para tener listo el botón "Crear informe" en los faltantes
   MESCURSO_MODULOS_CERRADO = mescMods(current2 && current2.modules);
