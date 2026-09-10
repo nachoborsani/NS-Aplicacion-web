@@ -791,6 +791,10 @@ const MODELOS = {
     codigoPractica: "180202",
     estudio: "ECO-DOPPLER ARTERIAL DE MIEMBROS INFERIORES",
     estudioArchivo: "Ecodoppler arterial MMII",
+    // Quien firma estos estudios lo hace con el trazo solo (no con un sello que
+    // ya traiga el texto), así que el nombre y la matrícula los imprime el PDF:
+    // si no, la firma queda al pie sin decir de quién es.
+    firmaConMatricula: true,
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS.",
   },
   // Se informa por lado (derecho / izquierdo) con la tabla de hallazgos, más la
@@ -813,6 +817,8 @@ const MODELOS = {
     // La conclusión se escribe por miembro ("MIEMBRO INFERIOR DERECHO:" y su
     // detalle): se respetan los saltos de línea del preset en vez de reflowar.
     respetaSaltos: true,
+    // Mismo motivo que el arterial de MMII: la firma es el trazo solo.
+    firmaConMatricula: true,
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DEL SISTEMA VENOSO SUPERFICIAL Y PROFUNDO DE AMBOS MIEMBROS INFERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: VENAS DE PAREDES LISAS QUE COAPTAN CON LA COMPRESIÓN EXTERNA.\nDOPPLER: FLUJO VENOSO ESPONTÁNEO, FÁSICO CON LA RESPIRACIÓN Y COMPETENTE DURANTE LA MANIOBRA DE VALSALVA.\nCONCLUSIÓN: SISTEMA VENOSO PROFUNDO Y SAFENA PERMEABLE Y COMPETENTE A NIVEL BILATERAL. NO SE DETECTAN PERFORANTES INCOMPETENTES.",
   },
   "eco-doppler-aorta-abdominal": {
