@@ -1255,6 +1255,35 @@ function credPadronBuscar(dni, benef) {
   const s = loadCredPadron();
   return (d && s.registros["d" + d]) || (b && s.registros["b" + b]) || null;
 }
+// Los registros del padrón, releídos solo si cambió el archivo. Completar el sexo
+// de un panel de faltantes son hasta 2.000 búsquedas: con `credPadronBuscar`
+// serían 2.000 lecturas de disco y otros tantos JSON.parse.
+let _credPadronCache = { mtime: -1, registros: null };
+function credPadronRegistros() {
+  try {
+    const st = fs.statSync(credPadronFile);
+    if (_credPadronCache.registros && _credPadronCache.mtime === st.mtimeMs) return _credPadronCache.registros;
+    const s = loadCredPadron();
+    _credPadronCache = { mtime: st.mtimeMs, registros: s.registros || {} };
+    return _credPadronCache.registros;
+  } catch { return {}; }
+}
+// Sexo del paciente SOLO cuando es un dato, no una adivinanza. Sale del padrón de
+// credenciales, que guarda el género con el que PAMI aceptó la credencial
+// (`credDescargar` prueba m/f/o y se queda con el que anda), así que es el que
+// PAMI tiene registrado, no algo deducido del nombre. Si no está, se devuelve
+// vacío y el desplegable queda en "Sin especificar" — es preferible preguntar a
+// poner un sexo inventado en un informe médico. "Otro" tampoco se completa: el
+// desplegable ofrece Masculino/Femenino y elegir por él sería lo mismo que
+// inventar.
+function sexoConocido(benef, dni) {
+  const b = String(benef || "").replace(/\D+/g, ""), d = String(dni || "").replace(/\D+/g, "");
+  if (!b && !d) return "";
+  const regs = credPadronRegistros();
+  const rec = (d && regs["d" + d]) || (b && regs["b" + b]) || null;
+  const g = credGeneroForm(rec && rec.sexo);
+  return g === "m" ? "Masculino" : g === "f" ? "Femenino" : "";
+}
 // ¿La credencial guardada sigue vigente? Sin fecha => no (se re-baja la 1ra vez).
 function credPadronVigente(rec, dias) {
   if (!rec || !rec.link || !rec.fecha) return false;
@@ -4098,6 +4127,9 @@ function buildBandejaResumen(slug) {
         turno: String(row[kTurno] || "").trim(),
         valor: money(valueGross),
         ome: kOme ? cleanIdentifier(row[kOme]) : "",
+        // Para que "Crear informe" no vuelva a preguntar el sexo cuando ya lo
+        // sabemos por la credencial. Vacío = se pregunta, como antes.
+        sexo: sexoConocido(row[kBenef]),
         modCode, modDesc, esConsulta,
       };
       if (esConsulta) {
@@ -4656,6 +4688,8 @@ function addRowToDashboardPeriod(target, row) {
       valor: money(row.valueGross),
       debito: money(debFila),
       ome: cleanIdentifier(row.order),
+      // Sexo por credencial (ver sexoConocido): evita preguntarlo de nuevo.
+      sexo: sexoConocido(row.benefit),
       // Para la vista "a) módulo" del toggle detalle/módulo.
       modCode: String(row.moduleCode || "").trim(),
       modDesc: String(row.moduleDescription || "").trim(),

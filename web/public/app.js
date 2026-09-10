@@ -4991,6 +4991,7 @@ function mcEnsureModalCss(){
     '.mc-inf-head b{font-size:16px}.mc-inf-head .mc-inf-sub{display:block;font-size:12px;opacity:.9;margin-top:2px}',
     '.mc-inf-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}',
     '.mc-inf-field label{display:block;font-size:12px;font-weight:600;color:var(--text-2,#64748b);margin-bottom:4px}',
+    '.mc-inf-field label .mc-inf-hint{font-weight:500;opacity:.75}',
     '.mc-inf-field select,.mc-inf-field input{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:var(--bg,#fff);color:var(--text,#0f172a);font-size:14px}',
     '.mc-inf-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px}',
     '.mc-inf-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#0f172a);font-weight:600;cursor:pointer;font-size:14px}',
@@ -5043,7 +5044,10 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         (sexoCampo ? campoHtml(sexoCampo) : '') +
         // Sexo del paciente (dato del paciente, no del estudio): se pregunta salvo
         // que el modelo ya tenga su propio campo de sexo (ej. urodinamia).
-        (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
+        // Si el sexo vino del padrón de credenciales (lo que PAMI tiene
+        // registrado), llega ya elegido y se aclara de dónde salió: un dato
+        // precargado en un informe médico tiene que decir de dónde viene.
+        (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente' + (x.sexo ? ' <span class="mc-inf-hint">· según la credencial</span>' : '') + '</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
         visitaHtml +
