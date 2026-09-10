@@ -95,8 +95,11 @@ function go(v, el){
   // El rol clínica solo entra a su centro: cualquier vista interna de NS lo redirige.
   // Excepción: "Informes" (crear informes) y "Liberar cupo" - herramientas
   // propias del centro que el admin habilita por capacidad. El backend scopea
-  // todo a su centro y corta si la capacidad está apagada.
-  if (ME && ME.role === 'clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0
+  // todo a su centro y corta si la capacidad está apagada. "dash" (Inicio)
+  // también es excepción: TODOS los roles arrancan en Inicio (con su cartel de
+  // "en desarrollo" si todavía no tiene paneles propios, ver cargarInicio) en
+  // vez de saltar directo al centro.
+  if (ME && ME.role === 'clinica' && v !== 'dash' && NS_ONLY_VIEWS.indexOf(v) >= 0
       && !(v === 'informes' && clinicaTieneCap('omes'))
       && !(v === 'liberarcupo' && clinicaTieneCap('liberarcupo'))){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
@@ -106,7 +109,7 @@ function go(v, el){
   // clínica (nunca dashboards/honorarios/reportes/plata), salvo los módulos
   // puntuales que se le hayan habilitado (afiliados/informes/liberar cupo) -
   // esos SÍ pueden abrirse, y siguen de largo a los chequeos de más abajo.
-  if (ME && ME.role === 'operador_clinica' && NS_ONLY_VIEWS.indexOf(v) >= 0 && opClinicaModulos().indexOf(v) < 0){
+  if (ME && ME.role === 'operador_clinica' && v !== 'dash' && NS_ONLY_VIEWS.indexOf(v) >= 0 && opClinicaModulos().indexOf(v) < 0){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'pendientes'); }
     return;
   }
@@ -1489,8 +1492,12 @@ function iniNombreDe(username){
   return a ? a.nombre : username;
 }
 function iniPuedeVerInicio(){ return !!(ME && (ME.role === 'admin' || ME.role === 'operador')); }
-// Inicio del colaborador: por ahora solo el cartel de "en desarrollo" (entra a
-// los clientes por el menú). Los módulos se van sumando a este panel.
+// Inicio de cualquier rol sin paneles propios todavía (colaborador, clínica,
+// operador_clinica, médico, demo…): el mismo cartel de "en desarrollo" para
+// todos — entran a sus clientes por el menú. Antes esto quedaba en blanco para
+// todos salvo colaborador; el resto de los roles ni siquiera pasaba por acá
+// (go() los mandaba derecho al centro, saltándose Inicio). Los módulos se van
+// sumando a este panel a medida que cada rol tenga algo propio para mostrar.
 function cargarInicioColaborador(){
   var cont = document.getElementById('colabPaneles');
   if (cont) cont.style.display = '';
@@ -1500,14 +1507,13 @@ async function cargarInicio(marcarLeido){
   var op = document.getElementById('operadorPaneles');
   var colab = document.getElementById('colabPaneles');
   var actCard0 = document.getElementById('actividadOpCard');
-  if (ME && ME.role === 'colaborador'){
+  if (!iniPuedeVerInicio()){
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = 'none';
     if (actCard0) actCard0.style.display = 'none';
     return cargarInicioColaborador();
   }
   if (colab) colab.style.display = 'none';
-  if (!iniPuedeVerInicio()){ if(pl) pl.style.display='none'; if(op) op.style.display='none'; if(actCard0) actCard0.style.display='none'; return; }
   if (!INICIO.canal) INICIO.canal = iniCanalDefault();
   var res = await api('/api/inicio?canal=' + encodeURIComponent(INICIO.canal));
   if (!res.ok){
@@ -4586,12 +4592,11 @@ function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){
   // garantizado.
   var transmitido = (m.netTransmitido!=null?m.netTransmitido:(m.grossTransmitido!=null?m.grossTransmitido:null));
   var pendiente = (m.netPendiente!=null?m.netPendiente:(m.grossPendiente!=null?m.grossPendiente:null));
-  // "Total" es Transmitido + Pendiente cuando hay desglose (la facturación
-  // POTENCIAL del módulo, no solo lo ya cobrado) — antes acá iba "net", que en
-  // sin cerrar/cerrado es solo lo transmitido y escondía el pendiente adentro
-  // del total sin que se viera. Sin desglose (reporte viejo) se cae a net/gross.
-  var total = (transmitido != null && pendiente != null) ? (transmitido + pendiente) : (m.net != null ? m.net : (m.gross || 0));
-  return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:total,
+  // La facturación del módulo es la TRANSMITIDA, nada más — ausentes, no
+  // transmitidos y falta informe no suman a ningún total hasta que se
+  // transmiten. "Pendiente" queda solo informativo, aparte, sin sumarse.
+  var monto = (transmitido != null) ? transmitido : (m.net != null ? m.net : (m.gross || 0));
+  return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:monto,
   montoTransmitido: transmitido, montoPendiente: pendiente,
   sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
 // Todos los períodos (mes en curso, sin cerrar, cerrado) ya traen desglose
@@ -5304,14 +5309,13 @@ function mesCursoTogglePanel(tipo){
   } else if (tipo === 'modulos' || tipo === 'modulos-julio' || tipo === 'modulos-cerrado'){
     var md = tipo === 'modulos' ? MESCURSO_MODULOS : (tipo === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modDesglose = mesCursoModHayDesglose(md);
-    // "Transmitido" = ya cobrado, cuenta segura (✅). "Pendiente" = todavía no
-    // se transmitió (validado sin transmitir, por transmitir, etc.) y por lo
-    // tanto NO está garantizado, aunque sume al "Total" (⏳). El símbolo va en
-    // el propio encabezado porque las celdas de la tabla son texto plano.
-    var modCols = modDesglose ? ['Módulo', 'Consultas', 'Prácticas', '✅ Transmitido', '⏳ Pendiente', 'Total'] : ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
-    var modMoneyCols = modDesglose ? [3, 4, 5] : [3];
+    // La facturación del módulo es la TRANSMITIDA (✅), nada más — no suma
+    // ausentes, no transmitidos ni falta informe. "Pendiente" (⏳) es solo
+    // informativo, aparte, para saber que existe sin que se lea como cobrado.
+    var modCols = modDesglose ? ['Módulo', 'Consultas', 'Prácticas', '✅ Transmitido', '⏳ Pendiente'] : ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
+    var modMoneyCols = modDesglose ? [3, 4] : [3];
     var mapMod = modDesglose
-      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.montoTransmitido || 0), moneyFmt(m.montoPendiente || 0), moneyFmt(m.monto)]; }
+      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.montoTransmitido || 0), moneyFmt(m.montoPendiente || 0)]; }
       : function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.monto)]; };
     var copiaMod = tipo === 'modulos' ? 'copiarModulos' : (tipo === 'modulos-julio' ? 'copiarModulosJulio' : 'copiarModulosCerrado');
     // Aviso ⚠ cuando un módulo tiene prácticas SIN VALORIZAR (código que no está en el
@@ -5323,8 +5327,7 @@ function mesCursoTogglePanel(tipo){
       return '';
     };
     var haySinValor = veValoresCliente() && md.some(function(m){ return m.sinValor > 0; });
-    var modTitulo = 'Cantidades por módulo · ' + md.length + ' módulos' + (modDesglose ? ' · el "Total" incluye lo pendiente, todavía no cobrado' : '');
-    html = md.length ? mesCursoTablaHtml(modTitulo, '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
+    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
   } else if (tipo === 'debitos-adelante'){
     var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
     html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante', null, null, [7]) : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');
@@ -5544,10 +5547,10 @@ function mesCursoDescargarDatosCruda(panelId){
     var modArr = panelId === 'modulos' ? MESCURSO_MODULOS : (panelId === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modTit = panelId === 'modulos' ? 'Cantidades por módulo (mes en curso)' : (panelId === 'modulos-julio' ? 'Cantidades por módulo (mes anterior)' : 'Cantidades por módulo (mes cerrado)');
     var modArrDesglose = mesCursoModHayDesglose(modArr);
-    var modArrCols = modArrDesglose ? ['MODULO', 'CONSULTAS', 'PRACTICAS', 'TRANSMITIDO', 'PENDIENTE', 'TOTAL'] : ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'];
-    var modArrMoneyCols = modArrDesglose ? [3, 4, 5] : [3];
+    var modArrCols = modArrDesglose ? ['MODULO', 'CONSULTAS', 'PRACTICAS', 'TRANSMITIDO', 'PENDIENTE'] : ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'];
+    var modArrMoneyCols = modArrDesglose ? [3, 4] : [3];
     var modArrMap = modArrDesglose
-      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.montoTransmitido) || 0, Number(m.montoPendiente) || 0, Number(m.monto) || 0]; }
+      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.montoTransmitido) || 0, Number(m.montoPendiente) || 0]; }
       : function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.monto) || 0]; };
     return { titulo: modTit + ' - ' + cli, columnas: modArrCols,
       filas: (modArr || []).map(modArrMap), moneyCols: modArrMoneyCols };
@@ -5770,16 +5773,6 @@ function mesCursoDesgloseHtml(r){
   if (r.grossTurno) parts.push('<span class="warn">Proyectado <b>' + esc(moneyFmt(r.grossTurno)) + '</b></span>');
   return parts.length ? '<div class="mescurso-desglose">' + parts.join('') + '</div>' : '';
 }
-// Semáforo genérico de 2 estados para "sin cerrar"/"cerrado": verde = ya
-// transmitido (cobro real), ámbar = todavía sin transmitir (aunque ya esté
-// validado o valorizado, no es plata garantizada hasta que se transmite).
-function mesCursoDesglose2Html(transmitido, pendiente, pendienteLabel){
-  if (!veValoresCliente()) return '';
-  var parts = [];
-  if (transmitido) parts.push('<span class="ok">Transmitido <b>' + esc(moneyFmt(transmitido)) + '</b></span>');
-  if (pendiente > 0) parts.push('<span class="warn">' + esc(pendienteLabel || 'Sin transmitir todavía') + ' <b>' + esc(moneyFmt(pendiente)) + '</b></span>');
-  return parts.length ? '<div class="mescurso-desglose">' + parts.join('') + '</div>' : '';
-}
 function mesCursoMesActualLabel(){
   var d = new Date();
   return MESCURSO_MESES[d.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) + ' ' + d.getFullYear();
@@ -5866,11 +5859,7 @@ function mesCursoCardMesEnCurso(r, estado){
     ? ('<div class="mescurso-val-lbl">Cobro real (transmitido)</div>'
       + '<div class="mescurso-val">' + esc(moneyFmt(cobroReal)) + '</div>'
       + '<div class="mescurso-val-note">+ ' + lblFaltaNota + ' <b>' + esc(moneyFmt(faltaInf)) + '</b>'
-      + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>'
-      // Semáforo: verde = ya transmitido (cobro seguro), rojo = falta informe,
-      // ámbar = proyectado sobre turnos ausentes. Así "Estimado" no se confunde
-      // con plata garantizada.
-      + mesCursoDesgloseHtml(r))
+      + ' → Estimado <b>' + esc(moneyFmt(estimado)) + '</b> · ' + esc(nomNota) + '</div>')
     : '';
   return '<div class="mescurso-card">' + head + salud + cobroCeroWarn
     + valHtml
@@ -5984,27 +5973,17 @@ function mesCursoCardSinCerrar(current, reporte){
   // bajada). Refleja hasta cuándo está al día la transmisión.
   var syncSc = (reporte && reporte.updatedAt) ? '<div class="mescurso-sync"><span>🔄 Última actualización</span><b>' + esc(mesCursoFechaHora(reporte.updatedAt)) + '</b></div>' : '';
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
-  // Igual criterio que "Mes en curso": el número grande es lo YA transmitido
-  // (lo que el cliente cobra seguro). "current.net" solo cuenta filas
-  // transmitidas (así se define Facturación acá) — lo pendiente real es falta
-  // informe + por transmitir, que antes quedaban en líneas aparte sin sumarse
-  // a ningún total visible. Ahora el total (Transmitido + Pendiente) se ve acá
-  // arriba, igual que en Mes en curso.
-  var netTransmitidoSC = current.netTransmitido != null ? current.netTransmitido : (current.net || 0);
-  var netPendienteSC = current.netPendiente != null ? current.netPendiente : 0;
-  var totalConPendienteSC = netTransmitidoSC + netPendienteSC;
   return '<div class="mescurso-card sincerrar">'
     + '<div class="mescurso-head"><span class="mescurso-title">Sin cerrar</span>'
     + '<span class="mescurso-chip warn">' + esc(current.label || '') + '</span>'
     + mesCursoBotonRefresco()
     + '</div>'
     + (veValoresCliente() ? (
-      '<div class="mescurso-val-lbl">Transmitido</div>'
-      + '<div class="mescurso-val">' + esc(moneyFmt(netTransmitidoSC)) + '</div>' + mescArrastreHtml(current)
-      + '<div class="mescurso-val-note">Facturación total (transmitido + falta informe + por transmitir) <b>' + esc(moneyFmt(totalConPendienteSC)) + '</b> · Valor aproximado'
+      '<div class="mescurso-val-lbl">Facturación</div>'
+      + '<div class="mescurso-val">' + esc(moneyFmt(current.net || 0)) + '</div>' + mescArrastreHtml(current)
+      + '<div class="mescurso-val-note">Valor aproximado · factura sin cerrar (falta informe no suma acá)'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
-      + mesCursoDesglose2Html(netTransmitidoSC, netPendienteSC, 'Sin transmitir todavía')
     ) : '')
     + '<div class="mescurso-lines duo">'
     + '<div class="mescurso-line mescurso-click" onclick="toggleModulosJulio()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosJulioCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
@@ -6042,11 +6021,6 @@ function mesCursoCardMesCerrado(current, reporte){
   var clickable = reporte ? ' mescurso-click" onclick="mesCursoAbrirReporte(\'' + esc(reporte.id) + '\')' : '';
   // Confirmados = ya cotejados contra PAMI → dejan de ser "posibles".
   var confDeb = reporte && reporte.debitStatus === 'confirmado';
-  // Un mes "cerrado" debería estar ~100% transmitido; el semáforo lo confirma
-  // (o, si quedó algo sin transmitir, lo deja ver en vez de esconderlo dentro
-  // del total).
-  var netTransmitidoCe = current.netTransmitido != null ? current.netTransmitido : (current.net || 0);
-  var netPendienteCe = current.netPendiente != null ? current.netPendiente : 0;
   return '<div class="mescurso-card cerrado' + clickable + '">'
     + '<div class="mescurso-head"><span class="mescurso-title">Cerrado</span>'
     + '<span class="mescurso-chip">' + esc(current.label || '') + '</span></div>'
@@ -6056,7 +6030,6 @@ function mesCursoCardMesCerrado(current, reporte){
       + '<div class="mescurso-val-note">Valor aproximado'
       + (debMonto ? ' · ya con <b>' + esc(moneyFmt(debMonto)) + '</b> de ' + (confDeb ? 'débitos' : 'posibles débitos') + ' descontados' : '')
       + (Number(current.nextPeriodCutoff) > 0 ? ' · + <b>' + esc(moneyFmt(current.nextPeriodCutoff)) + '</b> que entra en el próximo corte' : '') + '</div>'
-      + mesCursoDesglose2Html(netTransmitidoCe, netPendienteCe, 'Sin transmitir todavía')
     ) : '')
     + '<div class="mescurso-lines duo">'
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
@@ -11293,6 +11266,33 @@ async function req(method, path, body){
   return { ok: r.ok, status: r.status, data: data };
 }
 
+// Limpia todo estado de "qué cliente estaba viendo" antes de arrancar una
+// sesión nueva. Sin esto, loguearse con otro usuario en la MISMA pestaña (sin
+// recargar la página — típico en una PC compartida de recepción, o probando
+// varios logins seguidos) podía arrastrar el CLIENTS/ACTIVE_CLIENT/hash del
+// login anterior: se vio a Baimed (operador_clinica) mostrando por un
+// instante los datos de Cima, porque el hash/las variables globales todavía
+// apuntaban al cliente que se estaba viendo antes de loguearse. También borra
+// el hash para que TODOS los roles arranquen en Inicio (ver go()/cargarInicio).
+function limpiarEstadoClienteAlEntrar(){
+  CLIENTS = [];
+  ACTIVE_CLIENT = null;
+  // Los selectores de "Cliente" de Padrón/Cabina/OME web/Liberar cupo/Cruzas se
+  // llenan UNA sola vez por pestaña (si ya tienen opciones, no se vuelven a
+  // pedir — evita golpear el server cada vez que se reabre la pantalla). Pero
+  // eso significa que sobreviven a un logout: si en la MISMA pestaña entra
+  // OTRO usuario, hereda el <select> ya poblado (y hasta el cliente
+  // seleccionado) del usuario anterior — que puede no tener acceso a esos
+  // clientes → "Tu usuario no tiene acceso a ese cliente" (visto con Javi en
+  // Liberar cupo). Se vacían acá para que cada login los repueble con SU
+  // propia lista (clientesParaSelector ya scopea por usuario).
+  ['lcCliente', 'padCliente', 'cabCliente', 'omeCliente', 'czCliente'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  CZ.clientesCargados = false;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e){ try { location.hash = ''; } catch (e2){} }
+}
 async function doLogin(){
   var err = document.getElementById('loginError'); err.textContent = '';
   var info = document.getElementById('loginInfo'); if (info) info.textContent = '';
@@ -11305,6 +11305,7 @@ async function doLogin(){
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo ingresar'; return; }
   document.getElementById('pwd').value = '';
+  limpiarEstadoClienteAlEntrar();
   setUser(res.data.user);
   if (res.data.user.mustChange) showChange(); else showApp();
 }
@@ -11372,6 +11373,11 @@ async function doLogout(){
   await api('/api/logout', {});
   document.getElementById('loginUser').value = '';
   document.getElementById('pwd').value = '';
+  // Red de seguridad extra (ver limpiarEstadoClienteAlEntrar, que también corre
+  // al loguearse): si algo quedó sin limpiar al salir, que no espere al
+  // próximo login de otro usuario en esta misma pestaña.
+  ME = null; ME_REAL = null; ESPEJO = false;
+  limpiarEstadoClienteAlEntrar();
   showLogin();
 }
 
