@@ -87,8 +87,14 @@ async function descargarAdjuntos(token, desde, hasta, filtros) {
     try { msg = await gmail.users.messages.get({ userId: "me", id, format: "full" }); }
     catch { continue; }
     // Fecha del mail (YYYY-MM-DD) para poder filtrar los informes por período.
-    let fecha = "";
-    try { const d = new Date(Number(msg.data.internalDate)); if (!isNaN(d)) fecha = d.toISOString().slice(0, 10); } catch { /* sin fecha */ }
+    // `fechaHora` guarda además el momento exacto, para mostrar a qué hora entró:
+    // va en un campo aparte porque el filtro Desde/Hasta compara `fecha` como
+    // texto, y un ISO completo rompería el "hasta" del último día.
+    let fecha = "", fechaHora = "";
+    try {
+      const d = new Date(Number(msg.data.internalDate));
+      if (!isNaN(d)) { fecha = d.toISOString().slice(0, 10); fechaHora = d.toISOString(); }
+    } catch { /* sin fecha */ }
     // Asunto del mail (para mostrarlo como columna en la cabina).
     let asunto = "";
     try {
@@ -120,7 +126,7 @@ async function descargarAdjuntos(token, desde, hasta, filtros) {
       if (vistos.has(hash)) continue;   // repetido dentro de esta corrida
       if (yaPorHash(hash)) continue;    // ya está en la cabina
       vistos.add(hash);
-      bajados.push({ filename: safe, buffer, hash, fecha, asunto });
+      bajados.push({ filename: safe, buffer, hash, fecha, fechaHora, asunto });
     }
   }
   return bajados;

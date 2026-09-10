@@ -600,7 +600,7 @@ function matchearInforme(slug, extract) {
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
-async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha, asunto) {
+async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha, asunto, fechaHora) {
   let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
   let error = null;
   if (informeExtract) {
@@ -615,7 +615,7 @@ async function procesarInforme(slug, storedPath, id, stored, filename, origen, f
   }
   const match = matchearInforme(slug, extract);
   return { id, filename, ext: path.extname(filename).toLowerCase(), stored, origen,
-           storedAt: new Date().toISOString(), fecha: fecha || "", asunto: asunto || "", extract, match, resuelto: null, error };
+           storedAt: new Date().toISOString(), fecha: fecha || "", fechaHora: fechaHora || "", asunto: asunto || "", extract, match, resuelto: null, error };
 }
 // Baja los adjuntos del mail en [desde, hasta) (YYYY/MM/DD, before exclusivo) para un
 // cliente: deduplica por hash/nombre, guarda y matchea. Reusado por el endpoint
@@ -653,7 +653,7 @@ async function traerDelMailInterno(slug, token, desde, hasta) {
     const id = crypto.randomBytes(8).toString("hex");
     const stored = id + ext;
     fs.writeFileSync(path.join(destDir, stored), f.buffer);
-    const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto);
+    const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "mail", f.fecha, f.asunto, f.fechaHora);
     rec.hash = f.hash || "";
     rec.tam = f.buffer.length;
     store[slug].items.unshift(rec);
@@ -897,8 +897,12 @@ function informesExportRows(items) {
         : it.resuelto
           ? (resueltoTodoTransmitido(it) ? "Ya transmitido" : "Listo para subir")
           : (cabinaLib.ETIQUETA_ESTADO[m.estado] || m.estado || "");
+    // Cuándo entró: el mail si vino por mail, si no cuándo se subió a mano.
+    const isoRec = (it.origen === "mail" ? (it.fechaHora || it.fecha) : it.storedAt) || "";
+    const dmy = isoRec.slice(0, 10).split("-");
+    const recibido = dmy.length === 3 ? dmy[2] + "/" + dmy[1] + "/" + dmy[0] : "";
     return { archivo: it.filename || "", paciente: ex.nombre || "", dni: ex.dni || "",
-             beneficio, practica, estado, ome };
+             beneficio, practica, estado, ome, recibido };
   });
 }
 
@@ -910,15 +914,15 @@ function buildInformesWorkbook(items, clientName) {
     [`Informes recibidos - ${clientName}`],
     [`${rows.length} informe(s)`],
     [],
-    ["Archivo", "Paciente", "DNI", "Beneficio", "Practica", "Estado", "N OME"],
-    ...rows.map((r) => [r.archivo, r.paciente, r.dni, r.beneficio, r.practica, r.estado, r.ome]),
+    ["Archivo", "Paciente", "DNI", "Beneficio", "Practica", "Estado", "N OME", "Recibido"],
+    ...rows.map((r) => [r.archivo, r.paciente, r.dni, r.beneficio, r.practica, r.estado, r.ome, r.recibido]),
   ];
   const ws = XS.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 12 }, { wch: 16 }, { wch: 26 }, { wch: 18 }, { wch: 16 }];
+  ws["!cols"] = [{ wch: 34 }, { wch: 24 }, { wch: 12 }, { wch: 16 }, { wch: 26 }, { wch: 18 }, { wch: 16 }, { wch: 12 }];
   const head = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "1F4E5F" } }, alignment: { vertical: "center" } };
   if (ws["A1"]) ws["A1"].s = { font: { bold: true, sz: 16, color: { rgb: "1F4E5F" } } };
   if (ws["A2"]) ws["A2"].s = { font: { italic: true, color: { rgb: "667079" } } };
-  ["A4", "B4", "C4", "D4", "E4", "F4", "G4"].forEach((a) => { if (ws[a]) ws[a].s = head; });
+  ["A4", "B4", "C4", "D4", "E4", "F4", "G4", "H4"].forEach((a) => { if (ws[a]) ws[a].s = head; });
   const wb = XS.utils.book_new();
   XS.utils.book_append_sheet(wb, ws, "Informes");
   return XS.write(wb, { type: "buffer", bookType: "xlsx" });
@@ -932,8 +936,11 @@ async function buildInformesPdf(items, clientName) {
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const teal = rgb(0.12, 0.31, 0.37), gris = rgb(0.4, 0.44, 0.47), negro = rgb(0.1, 0.1, 0.1);
-  const cols = [{ k: "paciente", w: 150, t: "Paciente" }, { k: "practica", w: 175, t: "Practica" },
-                { k: "estado", w: 95, t: "Estado" }, { k: "ome", w: 100, t: "N OME" }];
+  // Las anchuras tienen que sumar <= 523, que es el ancho de la franja del
+  // encabezado: si se pasan, la última columna se dibuja fuera de la tabla.
+  const cols = [{ k: "paciente", w: 130, t: "Paciente" }, { k: "practica", w: 155, t: "Practica" },
+                { k: "estado", w: 88, t: "Estado" }, { k: "ome", w: 88, t: "N OME" },
+                { k: "recibido", w: 62, t: "Recibido" }];
   let page = doc.addPage([595, 842]);
   const M = 36; let y = 800;
   const put = (t, x, yy, f, sz, col) => page.drawText(asciiText(String(t == null ? "" : t)).slice(0, 46), { x, y: yy, size: sz, font: f, color: col || negro });

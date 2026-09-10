@@ -10358,6 +10358,38 @@ function cabMostrarUltimaImport(iso){
 }
 // Fecha del informe para filtrar/mostrar: la del mail si la tenemos, si no cuándo se bajó.
 function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').slice(0,10); }
+// Cuándo entró el informe, para la columna "Recibido". Los que vinieron por mail
+// muestran la fecha del mail (y la hora, si el import la guardó: `fechaHora` se
+// empezó a guardar después, los viejos tienen solo el día). Los subidos a mano no
+// tienen mail, así que se muestra cuándo se subieron y se aclara en el título.
+function cabRecibido(it){
+  it = it || {};
+  var porMail = it.origen === 'mail';
+  var iso = String((porMail ? (it.fechaHora || it.fecha) : it.storedAt) || '');
+  if (!iso) return { txt: '—', title: '' };
+  var p = iso.slice(0,10).split('-');
+  if (p.length !== 3) return { txt: '—', title: '' };
+  var dia = p[2] + '/' + p[1] + '/' + p[0];
+  var hora = '';
+  // Solo si hay hora de verdad. Un "YYYY-MM-DD" pelado NO se pasa por Date():
+  // se interpreta como UTC y en Argentina muestra el día anterior.
+  if (/T\d{2}:\d{2}/.test(iso)) {
+    var d = new Date(iso);
+    if (!isNaN(d)) {
+      // Con hora hay que tomar la fecha LOCAL, no la del ISO: un mail de las
+      // 02:00 UTC acá entró el día anterior. Y se arma a mano para que quede
+      // siempre DD/MM/AAAA y 24 hs (toLocale* devuelve "8/9/2026" y "a. m.").
+      var z = function(n){ return String(n).padStart(2, '0'); };
+      dia = z(d.getDate()) + '/' + z(d.getMonth() + 1) + '/' + d.getFullYear();
+      hora = z(d.getHours()) + ':' + z(d.getMinutes());
+    }
+  }
+  return {
+    txt: dia, hora: hora,
+    title: porMail ? ('Llegó por mail el ' + dia + (hora ? ' a las ' + hora : '')) : ('Subido a mano el ' + dia + (hora ? ' a las ' + hora : '')),
+    aMano: !porMail,
+  };
+}
 // Mismo criterio que usa el badge de la fila (cabBadge) para clasificar un
 // informe: una sola función, así el chip del resumen y el badge de la tabla
 // nunca pueden quedar desalineados.
@@ -10504,7 +10536,7 @@ function cabBadge(it){
 }
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
-  if (!items.length){ body.innerHTML = '<tr><td colspan="8" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
+  if (!items.length){ body.innerHTML = '<tr><td colspan="9" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
     // Si está "Falta validar", en la columna OME mostramos SOLO la(s) que falta
@@ -10516,6 +10548,7 @@ function renderCabinaRows(slug, items){
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     var asunto = it.asunto ? esc(it.asunto) : '—';
+    var rec = cabRecibido(it);
     return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
       + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
@@ -10523,6 +10556,9 @@ function renderCabinaRows(slug, items){
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
       + '<td>'+cabBadge(it)+'</td>'
       + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
+      + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
+        + (rec.hora ? '<div class="cab-sub">'+esc(rec.hora)+'</div>' : '')
+        + (rec.aMano ? '<div class="cab-sub">a mano</div>' : '') + '</td>'
       + '<td class="cab-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
