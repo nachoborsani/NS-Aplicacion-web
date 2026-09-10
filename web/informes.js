@@ -1303,9 +1303,12 @@ async function buildInformePdf(modeloKey, input) {
       if (fila.extra && V(fila.extra.key + suf) === "Sí") txt += ", " + fila.extra.texto;
       return txt;
     };
-    const labelW = 132;
+    // Compacta a propósito: esta tabla va ARRIBA de la conclusión y cada punto
+    // que se coma acá se lo saca al informe. Con la etiqueta más angosta las
+    // celdas entran en un renglón en vez de dos, que es donde está la diferencia.
+    const labelW = 116;
     const colW = (boxW - labelW) / 2;
-    const S = 8.5, lineH = 11, titleH = 20, headH = 14;
+    const S = 8, lineH = 10, titleH = 17, headH = 12;
     // Primero se mide (cuántos renglones ocupa cada celda) y después se dibuja:
     // la caja necesita su altura antes de escribir adentro.
     const filas = modelo.hallazgosPorLado.map((f) => {
@@ -1313,7 +1316,7 @@ async function buildInformePdf(modeloKey, input) {
       const izq = wrapText(armarCelda(f, "Izq"), font, S, colW - 12);
       const lbl = wrapText(f.label, bold, S, labelW - 12);
       const lineas = Math.max(der.length, izq.length, lbl.length);
-      return { der, izq, lbl, lineas, h: lineas * lineH + 5 };
+      return { der, izq, lbl, lineas, h: lineas * lineH + 3 };
     });
     const h = titleH + headH + filas.reduce((s, f) => s + f.h, 0) + 3;
     drawBox(y, h);
