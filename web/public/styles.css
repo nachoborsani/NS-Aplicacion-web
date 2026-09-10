@@ -885,6 +885,11 @@
   .client-tabs button{border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:999px;flex-shrink:0;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
   .client-tabs button:hover{background:var(--hover);color:var(--text)}
   .client-tabs button.active{background:var(--petrol);color:#fff;border-color:var(--petrol)}
+  /* Herramientas de NS como pestaña del cliente (rol operador): mismo chip que
+     las solapas, pero separadas por una línea para que se lea que son otra
+     familia (solapas del cliente | herramientas sobre ese cliente). */
+  .client-tool-tabs{display:flex;gap:7px;align-items:center;flex-shrink:0}
+  .client-tool-tabs:not(:empty){margin-left:5px;padding-left:12px;border-left:1px solid var(--border)}
   .client-section{display:block}
   .client-grid{display:grid;grid-template-columns:minmax(320px,.62fr) minmax(0,1.55fr);gap:14px}
   .client-card{padding:15px 16px}
@@ -1843,6 +1848,11 @@
   .modal-table .numw{font-variant-numeric:tabular-nums;white-space:normal;line-height:1.35}
   @media(max-width:760px){ .modal-table .wrap{min-width:0} .modal-table td,.modal-table thead th{padding:8px 9px} }
   .module-edit-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:420px;overflow:auto}
+  /* "Qué ve en cada cliente" (operador): un bloque por cliente asignado. */
+  .um-mc-cliente{border:1px solid var(--border);border-radius:12px;padding:10px 11px;margin-bottom:9px;background:var(--surface-2)}
+  .um-mc-cliente .um-mc-nombre{font-size:12.5px;font-weight:750;color:var(--text);margin-bottom:8px}
+  .um-mc-cliente .module-edit-list{grid-template-columns:repeat(3,minmax(0,1fr));max-height:none}
+  @media(max-width:640px){ .um-mc-cliente .module-edit-list{grid-template-columns:repeat(2,minmax(0,1fr))} }
   .module-edit-option{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px 9px;font-size:12px;line-height:1.25;cursor:pointer}
   .module-edit-option:hover{background:var(--hover)}
   .module-edit-option input{width:15px;height:15px;margin:0;accent-color:var(--turq);flex:0 0 auto}

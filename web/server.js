@@ -2771,7 +2771,41 @@ function publicUser(u) {
   return { username: u.username, name: u.name, role: u.role, centro: u.centro || "",
            clientes: Array.isArray(u.clientes) ? u.clientes : [],
            modulos: Array.isArray(u.modulos) ? u.modulos : [],
+           // Qué ve un operador DENTRO de cada cliente: { slug: [modulos] }.
+           // Campo aparte de `modulos` (que es del operador_clinica y es plano)
+           // a propósito: así conviven sin migrar nada ni volverse ambiguos.
+           modulosCliente: modulosClienteDeUsuario(u),
            capacidades: u.role === "clinica" ? capacidadesClinica(u) : [], mustChange: !!u.mustChange };
+}
+// Saneado del mapa por cliente: solo slugs que existen, solo módulos del
+// catálogo, y solo para el rol que lo usa. Devuelve {} si no hay nada — el
+// frontend cae al default derivado por cliente (ver modulosClienteDefault).
+const OPERADOR_MODULOS_CLIENTE = new Set([
+  "mescurso", "basica", "plansalud", "general",
+  "cabina", "informes", "omeweb", "padron", "liberarcupo",
+]);
+function modulosClienteDeUsuario(u) {
+  if (!u || u.role !== "operador") return {};
+  const raw = u.modulosCliente;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const slug of Object.keys(raw)) {
+    if (!Array.isArray(raw[slug])) continue;
+    const mods = raw[slug].map((s) => String(s || "").trim()).filter((s) => OPERADOR_MODULOS_CLIENTE.has(s));
+    out[slug] = [...new Set(mods)];
+  }
+  return out;
+}
+function sanearModulosCliente(valor, slugsValidos) {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return {};
+  const out = {};
+  for (const slug of Object.keys(valor)) {
+    if (slugsValidos && !slugsValidos.has(slug)) continue;
+    if (!Array.isArray(valor[slug])) continue;
+    const mods = valor[slug].map((s) => String(s || "").trim()).filter((s) => OPERADOR_MODULOS_CLIENTE.has(s));
+    out[slug] = [...new Set(mods)];
+  }
+  return out;
 }
 // OPERADOR_CLINICA_MODULOS/opClinicaTieneModulo: movidos a permissions.js.
 
@@ -7186,6 +7220,7 @@ const server = http.createServer(async (req, res) => {
         centro: u.centro || "",
         clientes: Array.isArray(u.clientes) ? u.clientes : [],
         modulos: Array.isArray(u.modulos) ? u.modulos : [],
+        modulosCliente: modulosClienteDeUsuario(u),
         capacidades: u.role === "clinica" ? capacidadesClinica(u) : [],
         email: u.email || "",
         active: u.active !== false,
@@ -7199,7 +7234,7 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
-    const { username, name, role, password, email, centro, clientes, modulos, capacidades } = await readBody(req);
+    const { username, name, role, password, email, centro, clientes, modulos, modulosCliente, capacidades } = await readBody(req);
     const uname = String(username || "").trim().toLowerCase();
     const nm = String(name || "").trim();
     const rl = String(role || "").trim();
@@ -7232,8 +7267,12 @@ const server = http.createServer(async (req, res) => {
     // El checkbox de clientes solo se muestra (y se completa) para demo/operador;
     // para el resto de los roles el formulario lo manda vacío igual, así que no
     // hace falta filtrar por rol acá - guardamos lo que vino.
+    // Qué ve un operador DENTRO de cada cliente ({ slug: [modulos] }). Solo se
+    // guardan slugs que este usuario puede ver.
+    const modsCli = rl === "operador" ? sanearModulosCliente(modulosCliente, new Set(cls.length ? cls : [...slugsExistentes])) : {};
     users.push({ username: uname, name: nm, role: rl, email: em, centro: (rl === "clinica" || rl === "operador_clinica") ? ce : "",
                  clientes: cls, modulos: rl === "operador_clinica" ? mods : [],
+                 ...(rl === "operador" ? { modulosCliente: modsCli } : {}),
                  ...(rl === "clinica" && caps ? { capacidades: caps } : {}),
                  password: hashPassword(pw), mustChange: true, active: true });
     saveUsers(users);
@@ -7300,6 +7339,16 @@ const server = http.createServer(async (req, res) => {
       if (body.modulos !== undefined && users[idx].role === "operador_clinica") {
         users[idx].modulos = (Array.isArray(body.modulos) ? body.modulos : [])
           .map((s) => String(s || "").trim()).filter((s) => OPERADOR_CLINICA_MODULOS.has(s));
+      }
+      // Qué ve un operador DENTRO de cada cliente ({ slug: [modulos] }). Solo
+      // aplica a ese rol; se acota a los clientes que el usuario puede ver (si
+      // tiene lista propia) para no dejar config colgada de un cliente que ya
+      // no ve.
+      if (body.modulosCliente !== undefined && users[idx].role === "operador") {
+        const visibles = (users[idx].clientes || []).length
+          ? new Set(users[idx].clientes)
+          : new Set(loadClientsStore().map((c) => c.slug));
+        users[idx].modulosCliente = sanearModulosCliente(body.modulosCliente, visibles);
       }
       // Capacidades (qué ve) del rol clínica: idem, solo aplica a ese rol.
       if (body.capacidades !== undefined && users[idx].role === "clinica") {

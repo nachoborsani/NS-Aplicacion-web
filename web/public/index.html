@@ -456,6 +456,10 @@
                 <button id="clientTabCredencialCli" type="button" onclick="setClientSection('credencialcli')" style="display:none">Credencial</button>
                 <button id="clientTabUsuariosCli" type="button" onclick="setClientSection('usuarioscli')" style="display:none">Usuarios</button>
                 <button id="clientTabGeneral" type="button" onclick="setClientSection('general')" style="display:none">Dashboard general</button>
+                <!-- Herramientas de NS como pestaña del cliente (rol operador):
+                     se dibujan por JS según lo que el admin le habilitó en ESTE
+                     cliente. Ver OPERADOR_MODULOS / renderTabsHerramientas. -->
+                <span id="clientToolTabs" class="client-tool-tabs"></span>
               </div>
 
               <section id="client-section-mescurso" class="client-section" style="display:none">
@@ -1881,6 +1885,13 @@
             <label class="module-edit-option"><input type="checkbox" value="liberarcupo"><span>Liberar cupo</span></label>
           </div>
           <div class="hint">Además de "Datos del centro", siempre a nivel básico (sin plata, sin gráficas). Ninguna tildada = solo Datos del centro, como hasta ahora.</div>
+        </div>
+        <!-- Operador NS: qué herramientas ve DENTRO de cada cliente que tiene
+             asignado. Se dibuja por JS (una grilla por cliente tildado arriba). -->
+        <div class="field" id="umModulosClienteField" style="display:none">
+          <label>Qué ve en cada cliente</label>
+          <div id="umModulosCliente"></div>
+          <div class="hint">Por cada cliente que tildaste arriba, elegí qué ve al entrar. Las herramientas (Informes, Generar OME, Afiliados, Informes recibidos, Liberar cupo) aparecen como pestañas dentro del cliente, ya scopeadas a ese cliente. Si no tocás nada, se usa lo que ese cliente ya mostraba.</div>
         </div>
         <div class="field" id="umCapacidadesField" style="display:none">
           <label>Qué ve este centro</label>

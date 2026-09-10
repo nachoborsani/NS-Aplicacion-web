@@ -418,13 +418,17 @@ function applyRoute(){
   if (v === 'informes'){ var t = parts[1]; setInformesTab(['generar', 'lote', 'config'].indexOf(t) >= 0 ? t : 'generar'); }
   if (v === 'clientes' && parts[1]) selectClientWhenReady(parts[1], parts[2]);
 }
+// Solapas del cliente + herramientas de NS que el operador abre adentro del
+// cliente (cabina/padron/…): las dos cosas viajan igual en el hash.
+var CLIENT_SECCIONES_HASH = ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes',
+  'plansalud', 'honorarios', 'credencialcli', 'usuarioscli', 'cabina', 'padron', 'informes', 'omeweb', 'liberarcupo'];
 function selectClientWhenReady(slug, section, tries){
   tries = tries || 0;
   if (typeof CLIENTS !== 'undefined' && CLIENTS && CLIENTS.length){
     if (CLIENTS.filter(function(c){ return c.slug === slug; })[0]){
       APPLYING_ROUTE = true;
       selectClient(slug);
-      if (section && ['mescurso', 'basica', 'dashboard', 'reportes', 'medicos', 'general', 'pendientes', 'plansalud', 'honorarios', 'credencialcli', 'usuarioscli'].indexOf(section) >= 0) setClientSection(section);
+      if (section && CLIENT_SECCIONES_HASH.indexOf(section) >= 0) setClientSection(section);
       APPLYING_ROUTE = false;
     }
     return;
@@ -3141,6 +3145,50 @@ function capacidadesCliente(){
   return Array.isArray(ME.capacidades) ? ME.capacidades : CLINICA_CAP_DEFAULT_FRONT.slice();
 }
 function clinicaTieneCap(cap){ return capacidadesCliente().indexOf(cap) >= 0; }
+// ===== Modelo de permisos del rol `operador` (Javi): POR USUARIO Y POR CLIENTE
+// Las herramientas de NS (Informes, Generar OME, Afiliados, Informes recibidos,
+// Liberar cupo) ya no viven sueltas en el menú lateral: entran como PESTAÑA
+// dentro de cada cliente, ya scopeadas a ese cliente. Qué ve en cada uno lo
+// define el admin (Configuración → Usuarios), y se guarda en
+// ME.modulosCliente = { "<slug>": ["mescurso","cabina",…] }.
+// Dos familias de módulo, porque se abren distinto:
+//  - 'seccion': una solapa del cliente de siempre (CLIENT_SECTIONS).
+//  - 'vista'  : una herramienta de NS (view-*), que se abre debajo del header
+//               del cliente con ese cliente ya elegido (ver abrirHerramientaCliente).
+var OPERADOR_MODULOS = [
+  { key:'mescurso',    label:'Dashboard',          tipo:'seccion' },
+  { key:'basica',      label:'Información básica', tipo:'seccion' },
+  { key:'plansalud',   label:'Plan Salud',         tipo:'seccion' },
+  { key:'general',     label:'Dashboard general',  tipo:'seccion' },
+  { key:'cabina',      label:'Informes recibidos', tipo:'vista' },
+  { key:'informes',    label:'Informes',           tipo:'vista' },
+  { key:'omeweb',      label:'Generar OME',        tipo:'vista' },
+  { key:'padron',      label:'Afiliados',          tipo:'vista' },
+  { key:'liberarcupo', label:'Liberar cupo',       tipo:'vista' }
+];
+function operadorModuloLabel(key){
+  var m = OPERADOR_MODULOS.filter(function(x){ return x.key === key; })[0];
+  return m ? m.label : key;
+}
+// Qué módulos tiene este operador en ESTE cliente. Si el admin todavía no lo
+// configuró, se cae al default derivado (lo que ese cliente ya mostraba), así
+// el día del deploy nadie se queda sin nada y la config se va llenando de a poco.
+function modulosClienteDe(slug){
+  slug = String(slug || '');
+  var cfg = ME && ME.modulosCliente;
+  if (cfg && Object.prototype.hasOwnProperty.call(cfg, slug) && Array.isArray(cfg[slug])) return cfg[slug];
+  return modulosClienteDefault(slug);
+}
+function modulosClienteDefault(slug){
+  var c = (CLIENTS || []).filter(function(x){ return x.slug === slug; })[0] || {};
+  var tablero = (c.tipo === 'med_cabecera' || !!c.bandejaCup);
+  var m = [];
+  if (tablero) m.push('mescurso');
+  if (slugTienePlanSalud(slug)) m.push('plansalud');
+  m.push('basica');
+  if (tablero) m.push('general');
+  return m;
+}
 // Qué pestañas ve cada tipo de cliente. Los médicos de cabecera tienen tablero
 // propio desde la bandeja automática; no usan valorización ni reportes cerrados.
 // Los consultorios suman "Usuarios médicos" (solo admin, porque maneja claves).
@@ -3175,8 +3223,16 @@ function clientSeccionesPermitidas(){
   // Información básica que ya veía. Va primero en la lista a propósito: es la
   // que usa para trabajar, así que es donde aterriza por defecto
   // (setClientSection cae en permitidas[0]) - la básica queda a un clic.
-  if (esOperador && !esTableroCup && clienteTienePlanSalud()) return ['plansalud', 'basica'];
-  if (esOperador) return esTableroCup ? ['mescurso', 'basica', 'general'] : ['basica'];
+  // Operador NS: las solapas salen de lo que el admin le habilitó en ESTE
+  // cliente (ver OPERADOR_MODULOS / modulosClienteDe). Las herramientas de NS
+  // del mismo catálogo no son solapas: se dibujan aparte, en renderTabsHerramientas().
+  if (esOperador){
+    var modsOp = modulosClienteDe((ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '');
+    var secsOp = OPERADOR_MODULOS
+      .filter(function(m){ return m.tipo === 'seccion' && modsOp.indexOf(m.key) >= 0; })
+      .map(function(m){ return m.key; });
+    return secsOp.length ? secsOp : ['basica'];
+  }
   if (esMC) {
     var seccionesMC = ['mescurso', 'basica'];
     // OSDOP: calculadora de facturación, por ahora exclusiva de Scheffelaar.
@@ -3238,6 +3294,91 @@ async function cargarPlanSaludSlugs(){
 function clienteTienePlanSalud(){
   return !!(ACTIVE_CLIENT && slugTienePlanSalud(ACTIVE_CLIENT.slug));
 }
+// ===== Herramientas de NS como pestaña DEL CLIENTE (rol operador) =====
+// Una herramienta abierta es UNA SECCIÓN MÁS del cliente: CLIENT_SECTION puede
+// valer 'cabina', 'padron', etc. Se modeló así (y no como un estado paralelo)
+// porque TODO el flujo que ya existe — renderActiveClient, el hash, F5, el
+// localStorage de "última solapa" — pasa por CLIENT_SECTION. Con un estado
+// aparte, cada re-render volvía a la solapa anterior y cerraba la herramienta.
+function esHerramientaDeCliente(key){
+  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT) return false;
+  var m = OPERADOR_MODULOS.filter(function(x){ return x.key === key && x.tipo === 'vista'; })[0];
+  if (!m) return false;
+  return modulosClienteDe(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
+}
+function renderTabsHerramientas(){
+  var cont = document.getElementById('clientToolTabs');
+  if (!cont) return;
+  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
+  var mods = modulosClienteDe(ACTIVE_CLIENT.slug);
+  cont.innerHTML = OPERADOR_MODULOS
+    .filter(function(m){ return m.tipo === 'vista' && mods.indexOf(m.key) >= 0; })
+    .map(function(m){
+      return '<button type="button"' + (CLIENT_SECTION === m.key ? ' class="active"' : '')
+        + ' data-cli-tool="' + esc(m.key) + '">' + esc(m.label) + '</button>';
+    }).join('');
+  cont.querySelectorAll('[data-cli-tool]').forEach(function(b){
+    b.addEventListener('click', function(){ setClientSection(b.getAttribute('data-cli-tool')); });
+  });
+}
+// Abre una herramienta SIN salirse del cliente: go() muestra la vista de la
+// herramienta, y acá volvemos a mostrar la vista de clientes (header +
+// pestañas) con sus secciones ocultas. Como todos los view-* son hermanos en el
+// DOM, la herramienta queda justo debajo del header del cliente.
+// Idempotente a propósito: si un re-render la vuelve a pedir, se re-aplica sin
+// romper nada.
+function abrirHerramientaCliente(view){
+  if (!ACTIVE_CLIENT) return;
+  var slug = ACTIVE_CLIENT.slug;
+  go(view);
+  var vc = document.getElementById('view-clientes');
+  if (vc) vc.style.display = 'block';
+  // go() sacó el "modo cliente" (porque la vista activa no es 'clientes') y con
+  // eso se iba el encabezado con el nombre del centro: sin él la herramienta
+  // queda flotando y no se sabe sobre qué cliente se está trabajando.
+  document.body.classList.add('client-view');
+  var tb = document.querySelector('.topbar');
+  if (tb) tb.classList.add('client-mode');
+  CLIENT_SECTIONS.forEach(function(s){
+    var sec = document.getElementById(s.sec); if (sec) sec.style.display = 'none';
+    var tab = document.getElementById(s.tab); if (tab) tab.classList.remove('active');
+  });
+  preseleccionarClienteEnHerramienta(view, slug);
+  renderTabsHerramientas();
+  var crumb = document.getElementById('clientCrumbSection');
+  if (crumb) crumb.textContent = operadorModuloLabel(view);
+  pushHash('clientes/' + slug + '/' + view);
+}
+// La herramienta trae su propio selector de cliente (se llena async): esperamos
+// a que exista la opción y la elegimos, igual que cabinaElegirCliente.
+function elegirClienteEnSelector(id, slug, luego, tries){
+  tries = tries || 0;
+  var sel = document.getElementById(id);
+  if (sel && [].slice.call(sel.options).some(function(o){ return o.value === slug; })){
+    if (sel.value !== slug){ sel.value = slug; if (typeof luego === 'function') luego(); }
+    return;
+  }
+  if (tries < 40) setTimeout(function(){ elegirClienteEnSelector(id, slug, luego, tries + 1); }, 100);
+}
+// Qué selector de "Cliente" trae cada herramienta. Abierta como pestaña DEL
+// cliente, ese selector sobra (el cliente ya lo elegiste al entrar) y encima
+// invita a cambiarlo, que es justo lo que no queremos: se oculta.
+var HERRAMIENTA_SELECTOR = { cabina:'cabCliente', liberarcupo:'lcCliente', padron:'padCliente', omeweb:'omeCliente', informes:'infCentro' };
+function mostrarSelectorDeHerramienta(view, mostrar){
+  var id = HERRAMIENTA_SELECTOR[view];
+  if (!id) return;
+  var sel = document.getElementById(id);
+  var wrap = sel && (sel.closest('.field') || sel.parentElement);
+  if (wrap) wrap.style.display = mostrar ? '' : 'none';
+}
+function preseleccionarClienteEnHerramienta(view, slug){
+  mostrarSelectorDeHerramienta(view, false);
+  if (view === 'cabina') return cabinaElegirCliente(slug);
+  if (view === 'liberarcupo') return elegirClienteEnSelector('lcCliente', slug, onLiberarCupoCliente);
+  if (view === 'padron') return elegirClienteEnSelector('padCliente', slug, loadPadronView);
+  if (view === 'omeweb') return elegirClienteEnSelector('omeCliente', slug, function(){ onOmeClienteChange(); });
+  if (view === 'informes') return elegirClienteEnSelector('infCentro', slug, function(){ if (typeof onCentroChange === 'function') onCentroChange(); });
+}
 // Muestra/oculta las pestañas según el tipo de cliente.
 function aplicarPestanasCliente(){
   var permitidas = clientSeccionesPermitidas();
@@ -3250,8 +3391,27 @@ function aplicarPestanasCliente(){
     var tab = document.getElementById(s.tab);
     if (tab) tab.style.display = permitidas.indexOf(s.key) >= 0 ? '' : 'none';
   });
+  renderTabsHerramientas();
 }
 function setClientSection(section){
+  // Una herramienta de NS (Informes recibidos, Afiliados, …) es una sección más
+  // para el operador: se guarda igual en CLIENT_SECTION y se abre acá, así el
+  // hash, el F5 y cada re-render la respetan en vez de volver a la solapa vieja.
+  if (esHerramientaDeCliente(section)){
+    CLIENT_SECTION = section;
+    try { localStorage.setItem('ns_client_section', CLIENT_SECTION); } catch (e){}
+    abrirHerramientaCliente(section);
+    return;
+  }
+  // Veníamos de una herramienta y volvemos a una solapa normal: hay que
+  // esconder su vista (go() no la esconde porque seguimos en "clientes") y
+  // devolverle su selector de cliente, por si alguien la abre después desde el
+  // menú (admin/operador sin restringir).
+  OPERADOR_MODULOS.forEach(function(m){
+    if (m.tipo !== 'vista') return;
+    var el = document.getElementById('view-' + m.key);
+    if (el && m.key !== section){ el.style.display = 'none'; mostrarSelectorDeHerramienta(m.key, true); }
+  });
   var permitidas = clientSeccionesPermitidas();
   if (permitidas.indexOf(section) < 0) section = permitidas[0];
   var found = null;
@@ -3265,6 +3425,7 @@ function setClientSection(section){
     if (sec) sec.style.display = s.key === CLIENT_SECTION ? 'block' : 'none';
     if (tab) tab.classList.toggle('active', s.key === CLIENT_SECTION);
   });
+  renderTabsHerramientas();
   var crumb = document.getElementById('clientCrumbSection');
   if (crumb) crumb.textContent = clientSectionCrumb(found);
   // El hash guarda cliente + sub-solapa, así F5 restaura la solapa exacta.
@@ -8728,6 +8889,7 @@ function openUserModal(mode, un){
   umPintarClientes(u && u.clientes);
   umPintarCentro(u && u.centro);
   umPintarModulos(u && u.modulos);
+  umPintarModulosCliente(u && u.modulosCliente);
   umPintarCapacidades(u ? u.capacidades : null);
   umToggleClientes();
   showModal('userModal','umScrim');
@@ -8742,6 +8904,13 @@ function umPintarClientes(sel){
     var ck = elegidos.indexOf(c.slug) >= 0 ? ' checked' : '';
     return '<label class="module-edit-option"><input type="checkbox" value="' + esc(c.slug) + '"' + ck + '><span>' + esc(c.name) + '</span></label>';
   }).join('') || '<div class="hint">No hay clientes cargados.</div>';
+  // Tildar/destildar un cliente redibuja la grilla de "qué ve en cada cliente"
+  // (rol operador), para no tener que cerrar y reabrir el modal.
+  cont.querySelectorAll('input[type="checkbox"]').forEach(function(chk){
+    chk.addEventListener('change', function(){
+      if ((document.getElementById('umRole') || {}).value === 'operador') umRenderModulosCliente();
+    });
+  });
 }
 // Selector de centro para los roles atados a UNO solo (clinica, operador_clinica).
 function umPintarCentro(sel){
@@ -8778,6 +8947,57 @@ function umPintarCapacidades(sel){
 function umCapacidadesElegidas(){
   return [].slice.call(document.querySelectorAll('#umCapacidades input:checked')).map(function(i){ return i.value; });
 }
+// ===== Operador NS: qué ve DENTRO de cada cliente =====
+// Una grilla por cada cliente tildado arriba. Se redibuja al cambiar de rol o
+// al tildar/destildar un cliente, conservando lo ya elegido.
+var UM_MODS_CLIENTE = {};   // { slug: [modulos] } en edición
+function umPintarModulosCliente(guardado){
+  UM_MODS_CLIENTE = {};
+  if (guardado && typeof guardado === 'object' && !Array.isArray(guardado)){
+    Object.keys(guardado).forEach(function(s){ if (Array.isArray(guardado[s])) UM_MODS_CLIENTE[s] = guardado[s].slice(); });
+  }
+  umRenderModulosCliente();
+}
+function umRenderModulosCliente(){
+  var cont = document.getElementById('umModulosCliente');
+  if (!cont) return;
+  var elegidos = umClientesElegidos();
+  // Sin lista propia, un operador ve TODOS los clientes: mostramos todos para
+  // poder configurarlos igual.
+  var slugs = elegidos.length ? elegidos : (CLIENTS || []).map(function(c){ return c.slug; });
+  if (!slugs.length){ cont.innerHTML = '<div class="hint">Tildá primero los clientes que puede ver.</div>'; return; }
+  cont.innerHTML = slugs.map(function(slug){
+    var cli = (CLIENTS || []).filter(function(c){ return c.slug === slug; })[0];
+    var actuales = Array.isArray(UM_MODS_CLIENTE[slug]) ? UM_MODS_CLIENTE[slug] : modulosClienteDefault(slug);
+    var chips = OPERADOR_MODULOS.map(function(m){
+      var ck = actuales.indexOf(m.key) >= 0 ? ' checked' : '';
+      return '<label class="module-edit-option"><input type="checkbox" data-mc-slug="' + esc(slug) + '" value="' + esc(m.key) + '"' + ck + '><span>' + esc(m.label) + '</span></label>';
+    }).join('');
+    return '<div class="um-mc-cliente">'
+      + '<div class="um-mc-nombre">' + esc((cli && cli.name) || slug) + '</div>'
+      + '<div class="module-edit-list">' + chips + '</div>'
+      + '</div>';
+  }).join('');
+  cont.querySelectorAll('[data-mc-slug]').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      var s = inp.getAttribute('data-mc-slug');
+      var sel = [].slice.call(cont.querySelectorAll('[data-mc-slug="' + s + '"]:checked')).map(function(i){ return i.value; });
+      UM_MODS_CLIENTE[s] = sel;
+    });
+  });
+}
+function umModulosClienteElegidos(){
+  var out = {};
+  var cont = document.getElementById('umModulosCliente');
+  if (!cont) return out;
+  cont.querySelectorAll('.um-mc-cliente').forEach(function(box){
+    var inp = box.querySelector('[data-mc-slug]');
+    if (!inp) return;
+    var s = inp.getAttribute('data-mc-slug');
+    out[s] = [].slice.call(box.querySelectorAll('[data-mc-slug]:checked')).map(function(i){ return i.value; });
+  });
+  return out;
+}
 function umToggleClientes(){
   var role = document.getElementById('umRole').value;
   var f = document.getElementById('umClientesField');
@@ -8788,6 +9008,10 @@ function umToggleClientes(){
   if (mf) mf.style.display = (role === 'operador_clinica') ? '' : 'none';
   var capf = document.getElementById('umCapacidadesField');
   if (capf) capf.style.display = (role === 'clinica') ? '' : 'none';
+  // Operador NS: la grilla de "qué ve en cada cliente" (una por cliente tildado).
+  var mcf = document.getElementById('umModulosClienteField');
+  if (mcf) mcf.style.display = (role === 'operador') ? '' : 'none';
+  if (role === 'operador') umRenderModulosCliente();
   var chint = document.getElementById('umCentroHint');
   if (chint) chint.textContent = (role === 'operador_clinica')
     ? 'A qué centro pertenece. Por ahora este perfil no ve gráficas ni valores, solo Datos del centro.'
@@ -8813,10 +9037,10 @@ async function saveUser(){
   if (UM_MODE === 'create'){
     var username = document.getElementById('umUser').value.trim().toLowerCase();
     var password = document.getElementById('umPwd').value;
-    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), capacidades: umCapacidadesElegidas() });
+    res = await req('POST', '/api/users', { username: username, name: name, role: role, email: email, password: password, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), modulosCliente: umModulosClienteElegidos(), capacidades: umCapacidadesElegidas() });
   } else {
     var active = document.getElementById('umActive').checked;
-    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), capacidades: umCapacidadesElegidas() });
+    res = await req('PATCH', '/api/users/' + encodeURIComponent(UM_TARGET), { name: name, role: role, email: email, active: active, centro: centro, clientes: umClientesElegidos(), modulos: umModulosElegidos(), modulosCliente: umModulosClienteElegidos(), capacidades: umCapacidadesElegidas() });
   }
   btn.disabled = false;
   if (!res.ok){ err.textContent = res.data.error || 'No se pudo guardar.'; return; }
@@ -11232,6 +11456,17 @@ function aplicarUsuario(u){
   // se habilitan de a uno acá y en clientSeccionesPermitidas().
   if (esColaborador) {
     ['navInformes', 'navOmeWeb', 'navPadron', 'navCabina', 'navLiberarCupo', 'navCruzas', 'navNomencladores'].forEach(function(id){
+      var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+  }
+  // Operador NS (Javi): las herramientas dejan de vivir sueltas en el menú y
+  // pasan a ser PESTAÑAS dentro de cada cliente, ya scopeadas a ese cliente y
+  // según lo que el admin le habilitó cliente por cliente (OPERADOR_MODULOS /
+  // modulosClienteDe). El menú le queda Inicio + sus clientes: una herramienta
+  // siempre se usa desde adentro del cliente, así no puede quedar apuntando al
+  // cliente equivocado.
+  if (u.role === 'operador') {
+    ['navInformes', 'navOmeWeb', 'navPadron', 'navCabina', 'navLiberarCupo'].forEach(function(id){
       var el = document.getElementById(id); if (el) el.style.display = 'none';
     });
   }
