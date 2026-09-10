@@ -1933,8 +1933,9 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   }
   var filas = (res.data && res.data.filas) || [];
   var total = (res.data && res.data.total) || filas.length;
-  if (meta) meta.textContent = (total > filas.length ? ('mostrando ' + filas.length + ' de ' + total) : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes')))
-    + ' · sin valores (esta vista nunca los muestra)';
+  if (meta) meta.textContent = total > filas.length
+    ? ('mostrando ' + filas.length + ' de ' + total)
+    : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes'));
   body.innerHTML = filas.length ? filas.map(function(f){
     return '<tr>'
       + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
