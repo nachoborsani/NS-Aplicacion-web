@@ -321,6 +321,41 @@ const GINECO_CAMPOS = [
   { key: "anexos", label: "Anexos", default: "Sin imágenes anexiales patológicas" },
   { key: "douglas", label: "Fondo de saco de Douglas", default: "Libre" },
 ];
+// ===== Ecografía vesicoprostática (180114) =====
+// OJO: esta práctica es VEJIGA + PRÓSTATA. Los riñones NO van acá: el estudio
+// reno-vesico-prostático es otra práctica y va a ser otro modelo.
+// Los campos no se imprimen como grilla: son la carga guiada del operador y lo
+// que alimenta los avisos de coherencia. Lo que sale en el PDF es el INFORME
+// (prosa, del preset y editable) más OBSERVACIONES y CONCLUSIÓN.
+// "Personalizado" en un desplegable = escribilo a mano en el informe; el campo
+// queda como recordatorio de que ese punto se cambió.
+const VESICOPROSTATICA_CAMPOS = [
+  // ---- Vejiga ----
+  { key: "vejReplecion", label: "Repleción", default: "Adecuada", tipo: "select", opciones: ["Adecuada", "Buena", "Escasa", "Distendida"], grupo: "vejiga" },
+  { key: "vejPared", label: "Pared vesical", default: "Normal", tipo: "select", opciones: ["Normal", "Discretamente engrosada", "Engrosada", "Fina trabeculación", "Trabeculada", "Personalizado"], grupo: "vejiga" },
+  { key: "vejSuperficie", label: "Superficie interna", default: "Regular", tipo: "select", opciones: ["Regular", "Irregular"], grupo: "vejiga" },
+  { key: "vejContenido", label: "Contenido", default: "Homogéneo anecoico", tipo: "select", opciones: ["Homogéneo anecoico", "Homogéneo", "Personalizado"], grupo: "vejiga" },
+  { key: "vejLesiones", label: "Lesiones parietales", default: "No", tipo: "select", opciones: ["No", "Sí"], grupo: "vejiga" },
+  { key: "vejEndoluminales", label: "Imágenes endoluminales", default: "No", tipo: "select", opciones: ["No", "Sí"], grupo: "vejiga" },
+  { key: "vejPremiccional", label: "Volumen premiccional (ml)", default: "", grupo: "vejiga" },
+  { key: "vejRpm", label: "Residuo postmiccional (ml)", default: "", grupo: "vejiga" },
+  // ---- Próstata ----
+  { key: "proEcoestructura", label: "Ecoestructura", default: "Homogénea", tipo: "select", opciones: ["Homogénea", "Heterogénea", "Heterogénea por calcificaciones periuretrales", "Personalizado"], grupo: "prostata" },
+  { key: "proContornos", label: "Contornos", default: "Netos", tipo: "select", opciones: ["Netos", "Regulares", "Personalizado"], grupo: "prostata" },
+  { key: "proSimetria", label: "Simetría", default: "Simétrica", tipo: "select", opciones: ["Simétrica", "Asimétrica", "No informado"], grupo: "prostata" },
+  { key: "proTamano", label: "Tamaño", default: "Normal", tipo: "select", opciones: ["Normal", "Aumentado", "Marcadamente aumentado"], grupo: "prostata" },
+  { key: "proTransverso", label: "Diámetro transversal (mm)", default: "", grupo: "prostata" },
+  { key: "proLongitudinal", label: "Diámetro longitudinal (mm)", default: "", grupo: "prostata" },
+  { key: "proAnteroposterior", label: "Diámetro anteroposterior (mm)", default: "", grupo: "prostata" },
+  { key: "proVolumen", label: "Volumen prostático (cc)", default: "", grupo: "prostata" },
+  { key: "proPeso", label: "Peso estimado (g) — opcional", default: "", grupo: "prostata" },
+  { key: "proCalcificaciones", label: "Calcificaciones", default: "No", tipo: "select", opciones: ["No", "Sí", "Periuretrales", "Personalizado"], grupo: "prostata" },
+  { key: "proImpronta", label: "Impronta sobre piso vesical", default: "No", tipo: "select", opciones: ["No", "Sí"], grupo: "prostata" },
+  // ---- Observaciones y conclusión (sí se imprimen) ----
+  { key: "observaciones", label: "Observaciones", default: "", wide: true, grupo: "obs" },
+  { key: "conclusion", label: "Conclusión", default: "", wide: true, grupo: "obs" },
+];
+
 // ===== Ecodoppler venoso de miembros inferiores (180202) =====
 // El estudio se informa POR LADO: los mismos hallazgos se cargan para el
 // miembro derecho y para el izquierdo. Se escriben una sola vez y se duplican
@@ -694,6 +729,28 @@ const MODELOS = {
     estudio: "ECOGRAFÍA PROSTÁTICA",
     estudioArchivo: "Ecografia prostatica",
     textoDefault: "PRÓSTATA DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS PARA LA EDAD, DE CONTORNOS REGULARES, SIN IMÁGENES NODULARES EN SU INTERIOR.",
+  },
+  // Vejiga + próstata. NO lleva riñones: el reno-vesico-prostático es otra
+  // práctica y va como modelo aparte. Usa la plantilla de siempre (la misma que
+  // el resto de las ecografías); lo propio son los campos de carga, los avisos
+  // de coherencia y que imprime CONCLUSIÓN además del informe.
+  "eco-vesicoprostatica": {
+    label: "Ecografía vesicoprostática (180114)",
+    short: "Eco vesicoprostática",
+    practica: "180114 - Ecografía vesicoprostática",
+    servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
+    especialidad: "Diagnóstico por imágenes / Ecografía",
+    codigoPractica: "180114",
+    estudio: "ECOGRAFÍA VESICOPROSTÁTICA",
+    estudioArchivo: "Ecografia vesicoprostatica",
+    campos: VESICOPROSTATICA_CAMPOS,
+    // Los campos son para cargar y para los avisos: no se imprimen como grilla.
+    camposSoloCarga: true,
+    respetaSaltos: true,
+    // Los que firman acá lo hacen con el trazo solo; el nombre y la matrícula
+    // van impresos debajo, como en los informes de Baimed.
+    firmaConMatricula: true,
+    textoDefault: "VEJIGA CON ADECUADA REPLECIÓN, DE PAREDES REGULARES Y CONTENIDO HOMOGÉNEO ANECOICO, SIN EVIDENCIA DE LESIONES PARIETALES NI ENDOLUMINALES.\nPRÓSTATA DE CONTORNOS NETOS, SIMÉTRICA, DE ECOESTRUCTURA SIN ALTERACIONES SIGNIFICATIVAS Y VOLUMEN CONSERVADO.",
   },
   "eco-partes-blandas-general": {
     label: "Ecografía de partes blandas (hernia / región quirúrgica)",
@@ -1096,16 +1153,19 @@ async function buildInformePdf(modeloKey, input) {
   // Caja: Datos de paciente
   {
     const hasDoc = (p.documento || "").trim();
+    const hasBenef = (p.benef || "").trim();
     const hasSexo = (p.sexo || "").trim();
     const hasCob = !!cobertura;
-    const innerLines = 1 + 2 + (hasDoc ? 1 : 0) + (hasSexo ? 1 : 0) + (hasCob ? 1 : 0);
+    // El renglón que no tiene dato no se dibuja: un "N° Benef.: —" impreso no
+    // informa nada y encima ocupa alto (que es lo que después le falta al texto).
+    const innerLines = 1 + 1 + (hasDoc ? 1 : 0) + (hasBenef ? 1 : 0) + (hasSexo ? 1 : 0) + (hasCob ? 1 : 0);
     const h = innerLines * 15 + 14;
     drawBox(y, h);
     let iy = y - 18;
     T("Datos de paciente", LBLX, iy, { bold: true, size: 11 }); iy -= 16;
     T("Nombre:", LBLX, iy, { bold: true }); T(p.nombre || "—", VALX, iy); iy -= 15;
     if (hasDoc) { T("Documento:", LBLX, iy, { bold: true }); T(hasDoc, VALX, iy); iy -= 15; }
-    T("N° Benef.:", LBLX, iy, { bold: true }); T(p.benef || "—", VALX, iy); iy -= 15;
+    if (hasBenef) { T("N° Benef.:", LBLX, iy, { bold: true }); T(hasBenef, VALX, iy); iy -= 15; }
     if (hasSexo) { T("Sexo:", LBLX, iy, { bold: true }); T(hasSexo, VALX, iy); iy -= 15; }
     if (hasCob) { T("Cobertura:", LBLX, iy, { bold: true }); T(cobertura, VALX, iy); }
     y -= h + 12;
@@ -1343,7 +1403,7 @@ async function buildInformePdf(modeloKey, input) {
       page.drawLine({ start: { x: lx, y: headTop }, end: { x: lx, y: ry }, thickness: 0.5, color: grid });
     }
     y -= h + 18;
-  } else if (modelo.campos && modelo.campos.length) {
+  } else if (modelo.campos && modelo.campos.length && !modelo.camposSoloCarga) {
     // Caja: DATOS TÉCNICOS DEL REGISTRO (grilla plana — resto de los modelos)
     const valores = (input && input.valores) || {};
     // Si algún campo declara `resumen`, la caja lista SOLO esos (Holter: ~16
@@ -1424,6 +1484,7 @@ async function buildInformePdf(modeloKey, input) {
     const obs = String(vals.observaciones || "").trim();
     if (obs) obsParrafos.push(obs);
   }
+  const conclusionTexto = String(((input && input.valores) || {}).conclusion || "").trim();
 
   // La firma se carga ACÁ, antes de medir, porque su imagen se dibuja desde
   // `fy - 22` hacia ARRIBA: con un sello alto llega hasta `fy + 33`, o sea que
@@ -1476,9 +1537,10 @@ async function buildInformePdf(modeloKey, input) {
   // texto "entraba" en la cuenta y el escritor igual cambiaba de hoja (le pasaba
   // al Holter, que terminaba en 2 hojas sin necesidad).
   const AIRE_FIRMA = 14;
-  const altoCuerpo = (lc, lo, lh) =>
+  const altoCuerpo = (lc, lo, lh, lcon) =>
     20 + lc.reduce((s, ln) => s + (ln ? lh : lh * 0.6), 0)          // renglón vacío = separador
-      + (lo.length ? 10 + 18 + lo.reduce((s, arr) => s + arr.length * lh, 0) : 0);
+      + (lo.length ? 10 + 18 + lo.reduce((s, arr) => s + arr.length * lh, 0) : 0)
+      + ((lcon && lcon.length) ? 10 + 18 + lcon.length * lh : 0);
   let cuerpoSize = 10.5, cuerpoLineH = 15;
   let lineasConcl = [], lineasObs = [];
   let fy = FY_DEFAULT;
@@ -1488,7 +1550,8 @@ async function buildInformePdf(modeloKey, input) {
     for (const [sz, lh] of ESCALAS) {
       const lc = cortarTexto(texto, sz);
       const lo = obsParrafos.map((pr) => wrapText(pr, font, sz, anchoTexto));
-      const fyNecesario = yInforme - altoCuerpo(lc, lo, lh) - AIRE_FIRMA - reservaFirma;
+      const lcon = conclusionTexto ? wrapText(conclusionTexto, font, sz, anchoTexto) : [];
+      const fyNecesario = yInforme - altoCuerpo(lc, lo, lh, lcon) - AIRE_FIRMA - reservaFirma;
       if (fyNecesario >= FY_MIN) {
         cuerpoSize = sz; cuerpoLineH = lh; lineasConcl = lc; lineasObs = lo;
         fy = Math.min(FY_DEFAULT, fyNecesario);
@@ -1520,6 +1583,17 @@ async function buildInformePdf(modeloKey, input) {
     T("OBSERVACIONES", LBLX, y, { bold: true, size: 10.5, color: soft });
     y -= 18;
     for (const arr of lineasObs) escribirLineas(arr, cuerpoSize, cuerpoLineH);
+  }
+
+  // CONCLUSIÓN (opcional): los estudios que la separan del cuerpo del informe la
+  // cargan en su propio campo (ej. la vesicoprostática, donde el informe describe
+  // y la conclusión resume). Vacía = no aparece.
+  if (conclusionTexto) {
+    y -= 10;
+    if (y < PISO_TEXTO) nuevaPagina();
+    T("CONCLUSIÓN", LBLX, y, { bold: true, size: 10.5, color: soft });
+    y -= 18;
+    escribirLineas(wrapText(conclusionTexto, font, cuerpoSize, anchoTexto), cuerpoSize, cuerpoLineH);
   }
 
   // FECHA + Firma. `fy` sale de la medición de arriba: 248 salvo que el texto

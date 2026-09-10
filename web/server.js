@@ -2087,6 +2087,55 @@ const VENOSO_MMII_INSUF_SI = {
   cayadoIntCompet: "Incompetente", cayadoIntReflujo: "Moderado",
   troncoIntSuf: "Insuficiente", troncoIntGrado: "Moderada",
 };
+// ===== Resultados de la ecografía vesicoprostática (180114) =====
+// Son plantillas de CARGA para que el médico revise, no mediciones reales: los
+// números vienen puestos para no tipear de cero y se editan antes de firmar.
+// `texto` es el informe y `valores.conclusion` la conclusión, que en esta
+// práctica va separada del cuerpo.
+const VESICO_SEED_PRESETS = [
+  {
+    id: "vesicoprostatica-normal", modelo: "eco-vesicoprostatica", nombre: "Sin hallazgos relevantes",
+    texto: "VEJIGA CON ADECUADA REPLECIÓN, DE PAREDES REGULARES Y CONTENIDO HOMOGÉNEO ANECOICO, SIN EVIDENCIA DE LESIONES PARIETALES NI ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 320 CC.\nRESIDUO POSTMICCIONAL: 20 CC.\n\nPRÓSTATA DE CONTORNOS NETOS, SIMÉTRICA, DE ECOESTRUCTURA SIN ALTERACIONES SIGNIFICATIVAS Y VOLUMEN CONSERVADO.\nMEDIDAS: 38 X 30 X 34 MM.\nVOLUMEN PROSTÁTICO APROXIMADO: 20 CC.",
+    valores: { vejReplecion: "Adecuada", vejPared: "Normal", vejSuperficie: "Regular", vejContenido: "Homogéneo anecoico", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "320", vejRpm: "20", proEcoestructura: "Homogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Normal", proTransverso: "38", proLongitudinal: "30", proAnteroposterior: "34", proVolumen: "20", proCalcificaciones: "No", proImpronta: "No", conclusion: "ESTUDIO VESICOPROSTÁTICO SIN HALLAZGOS ECOGRÁFICOS RELEVANTES." },
+  },
+  {
+    id: "vesicoprostatica-leve-aumento", modelo: "eco-vesicoprostatica", nombre: "Próstata levemente aumentada",
+    texto: "VEJIGA CON BUENA REPLECIÓN, PAREDES REGULARES Y CONTENIDO HOMOGÉNEO, SIN IMÁGENES ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 360 CC.\nRESIDUO POSTMICCIONAL: 30 CC.\n\nPRÓSTATA HETEROGÉNEA, SIMÉTRICA, LEVEMENTE AUMENTADA DE TAMAÑO.\nMIDE 43 X 32 X 42 MM.\nVOLUMEN PROSTÁTICO ESTIMADO: 31 CC.",
+    valores: { vejReplecion: "Buena", vejPared: "Normal", vejSuperficie: "Regular", vejContenido: "Homogéneo", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "360", vejRpm: "30", proEcoestructura: "Heterogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Aumentado", proTransverso: "43", proLongitudinal: "32", proAnteroposterior: "42", proVolumen: "31", proCalcificaciones: "No", proImpronta: "No", conclusion: "LEVE AUMENTO DEL VOLUMEN PROSTÁTICO. RESIDUO POSTMICCIONAL ESCASO." },
+  },
+  {
+    id: "vesicoprostatica-calcificaciones", modelo: "eco-vesicoprostatica", nombre: "Próstata aumentada + calcificaciones",
+    texto: "VEJIGA ADECUADAMENTE REPLECIONADA, DE PAREDES REGULARES, SIN EVIDENCIA DE LESIONES PARIETALES NI ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 300 CC.\nRESIDUO POSTMICCIONAL: 25 CC.\n\nPRÓSTATA HETEROGÉNEA A EXPENSAS DE CALCIFICACIONES PERIURETRALES, DE CONTORNOS NETOS Y MODERADAMENTE AUMENTADA DE TAMAÑO.\nMIDE 48 X 38 X 45 MM.\nVOLUMEN APROXIMADO: 43 CC.",
+    valores: { vejReplecion: "Adecuada", vejPared: "Normal", vejSuperficie: "Regular", vejContenido: "Homogéneo anecoico", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "300", vejRpm: "25", proEcoestructura: "Heterogénea por calcificaciones periuretrales", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Aumentado", proTransverso: "48", proLongitudinal: "38", proAnteroposterior: "45", proVolumen: "43", proCalcificaciones: "Periuretrales", proImpronta: "No", conclusion: "AUMENTO MODERADO DEL VOLUMEN PROSTÁTICO CON CALCIFICACIONES PERIURETRALES." },
+  },
+  {
+    id: "vesicoprostatica-esfuerzo", modelo: "eco-vesicoprostatica", nombre: "Vejiga de esfuerzo + prostatomegalia",
+    texto: "VEJIGA ADECUADAMENTE REPLECIONADA, CON DISCRETO ENGROSAMIENTO Y FINA TRABECULACIÓN DE SUS PAREDES, EN RELACIÓN CON CAMBIOS DE ESFUERZO.\nCONTENIDO HOMOGÉNEO, SIN IMÁGENES ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 420 CC.\nRESIDUO POSTMICCIONAL: 55 CC.\n\nPRÓSTATA HETEROGÉNEA, AUMENTADA DE TAMAÑO, CON IMPRONTA SOBRE EL PISO VESICAL.\nMIDE 55 X 48 X 50 MM.\nVOLUMEN PROSTÁTICO APROXIMADO: 69 CC.",
+    valores: { vejReplecion: "Adecuada", vejPared: "Discretamente engrosada", vejSuperficie: "Regular", vejContenido: "Homogéneo", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "420", vejRpm: "55", proEcoestructura: "Heterogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Aumentado", proTransverso: "55", proLongitudinal: "48", proAnteroposterior: "50", proVolumen: "69", proCalcificaciones: "No", proImpronta: "Sí", conclusion: "PROSTATOMEGALIA ASOCIADA A CAMBIOS VESICALES DE ESFUERZO Y RESIDUO POSTMICCIONAL." },
+  },
+  {
+    id: "vesicoprostatica-marcado-aumento", modelo: "eco-vesicoprostatica", nombre: "Próstata marcadamente aumentada",
+    texto: "VEJIGA CON BUENA REPLECIÓN, DE PAREDES DISCRETAMENTE ENGROSADAS Y CONTENIDO HOMOGÉNEO, SIN IMÁGENES ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 400 CC.\nRESIDUO POSTMICCIONAL: 65 CC.\n\nPRÓSTATA HETEROGÉNEA, DE CONTORNOS NETOS, MARCADAMENTE AUMENTADA DE TAMAÑO, CON IMPRONTA SOBRE EL PISO VESICAL.\nMIDE 72 X 70 X 55 MM.\nVOLUMEN PROSTÁTICO APROXIMADO: 100 CC.",
+    valores: { vejReplecion: "Buena", vejPared: "Discretamente engrosada", vejSuperficie: "Regular", vejContenido: "Homogéneo", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "400", vejRpm: "65", proEcoestructura: "Heterogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Marcadamente aumentado", proTransverso: "72", proLongitudinal: "70", proAnteroposterior: "55", proVolumen: "100", proCalcificaciones: "No", proImpronta: "Sí", conclusion: "MARCADO AUMENTO DEL VOLUMEN PROSTÁTICO CON IMPRONTA SOBRE EL PISO VESICAL." },
+  },
+  {
+    id: "vesicoprostatica-rpm-aumentado", modelo: "eco-vesicoprostatica", nombre: "Residuo postmiccional aumentado",
+    texto: "VEJIGA DISTENDIDA, CON DISCRETA TRABECULACIÓN PARIETAL Y CONTENIDO HOMOGÉNEO.\nNO SE IDENTIFICAN LESIONES PARIETALES NI ENDOLUMINALES.\nVOLUMEN PREMICCIONAL: 580 CC.\nRESIDUO POSTMICCIONAL: 95 CC.\n\nPRÓSTATA HETEROGÉNEA, SIMÉTRICA, MODERADAMENTE AUMENTADA DE TAMAÑO.\nMIDE 46 X 38 X 44 MM.\nVOLUMEN APROXIMADO: 40 CC.",
+    valores: { vejReplecion: "Distendida", vejPared: "Trabeculada", vejSuperficie: "Regular", vejContenido: "Homogéneo", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "580", vejRpm: "95", proEcoestructura: "Heterogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Aumentado", proTransverso: "46", proLongitudinal: "38", proAnteroposterior: "44", proVolumen: "40", proCalcificaciones: "No", proImpronta: "No", conclusion: "RESIDUO POSTMICCIONAL AUMENTADO ASOCIADO A MODERADO AUMENTO DEL VOLUMEN PROSTÁTICO." },
+  },
+  {
+    id: "vesicoprostatica-escasa-replecion", modelo: "eco-vesicoprostatica", nombre: "Escasa repleción vesical",
+    texto: "VEJIGA CON ESCASA REPLECIÓN, LO QUE LIMITA PARCIALMENTE SU VALORACIÓN.\nSE OBSERVA FINA TRABECULACIÓN DE SUS PAREDES, CON CONTENIDO HOMOGÉNEO.\nVOLUMEN PREMICCIONAL: 45 CC.\n\nPRÓSTATA HETEROGÉNEA, SIMÉTRICA, DE TAMAÑO CONSERVADO.\nMIDE 35 X 25 X 35 MM.\nVOLUMEN PROSTÁTICO APROXIMADO: 17 CC.",
+    valores: { vejReplecion: "Escasa", vejPared: "Fina trabeculación", vejSuperficie: "Regular", vejContenido: "Homogéneo", vejLesiones: "No", vejEndoluminales: "No", vejPremiccional: "45", vejRpm: "No evaluado", proEcoestructura: "Heterogénea", proContornos: "Netos", proSimetria: "Simétrica", proTamano: "Normal", proTransverso: "35", proLongitudinal: "25", proAnteroposterior: "35", proVolumen: "17", proCalcificaciones: "No", proImpronta: "No", conclusion: "VALORACIÓN VESICAL PARCIALMENTE LIMITADA POR ESCASA REPLECIÓN. PRÓSTATA DE VOLUMEN CONSERVADO." },
+  },
+  {
+    // Sin diagnóstico puesto: arranca en blanco para cargarlo a mano. No lleva
+    // `valores` justamente para no sugerir medidas que nadie midió.
+    id: "vesicoprostatica-personalizado", modelo: "eco-vesicoprostatica", nombre: "Personalizado (cargar a mano)",
+    texto: "",
+    valores: {},
+  },
+];
 const VENOSO_MMII_SEED_PRESETS = [
   {
     id: "venoso-mmii-normal-bilateral", modelo: "eco-doppler-venoso-mmii", nombre: "Venoso bilateral normal",
@@ -2128,6 +2177,7 @@ function loadInformesConfig() {
       ...ECO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], clientes: s.clientes || [], valores: s.valores || {}, medicoId: s.medicoId || "" })),
       ...URODINAMIA_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
       ...VENOSO_MMII_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
+      ...VESICO_SEED_PRESETS.map((s) => ({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} })),
     ];
   }
   // Motivos por los que un informe se desestima (no se sube). Configurables por
@@ -11586,6 +11636,39 @@ function ensureVenosoMmiiSeed() {
   } catch (e) { console.log("[venoso-mmii-seed] omitido:", e && e.message); }
 }
 ensureVenosoMmiiSeed();
+
+// Precarga los 8 resultados de la ecografía vesicoprostática y los dos médicos
+// de imágenes de Baimed que la firman. Idempotente y por id.
+function ensureVesicoprostaticaSeed() {
+  try {
+    const cfg = loadInformesConfig();
+    if (!Array.isArray(cfg.descripciones)) return;
+    let cambio = false;
+    for (const s of VESICO_SEED_PRESETS) {
+      if (!cfg.descripciones.some((d) => d.id === s.id)) {
+        cfg.descripciones.push({ id: s.id, nombre: s.nombre, texto: s.texto, modelos: [s.modelo], valores: s.valores || {} });
+        cambio = true;
+      }
+    }
+    // Los dos que firman las ecografías de Baimed, tomados de sus informes
+    // reales (jul/2026). La firma se sube por la UI, no va al repo.
+    const imagenes = ["eco-vesicoprostatica", "eco-abdominal", "eco-renal", "eco-vesical", "eco-vesical-residuo", "eco-prostatica"];
+    const medicos = [
+      { id: "alvaro-huarita", nombre: "Dr. Alvaro Huarita", matricula: "MN 168815 · MP 458673" },
+      { id: "raul-pittorino", nombre: "Dr. Raúl Pittorino", matricula: "MN 168133" },
+    ];
+    if (Array.isArray(cfg.medicos)) {
+      for (const m of medicos) {
+        if (cfg.medicos.some((x) => x.id === m.id)) continue;
+        cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png", matricula: m.matricula, modelos: imagenes.slice(), clientes: ["dbaime"] });
+        console.log("[vesicoprostatica-seed] médico " + m.nombre + " creado (ecografías de Baimed, firma pendiente de subir).");
+        cambio = true;
+      }
+    }
+    if (cambio) saveInformesConfig(cfg);
+  } catch (e) { console.log("[vesicoprostatica-seed] omitido:", e && e.message); }
+}
+ensureVesicoprostaticaSeed();
 
 // Rellena el nombre corto en presets ya existentes (configs previas al cambio).
 function ensureNombresPresets() {

@@ -694,6 +694,8 @@ var CAMPOS_GRUPOS_META = HOLTER_GRUPOS_META.concat([
   { id: 'ladoDer', titulo: 'Miembro inferior derecho', open: true },
   { id: 'ladoIzq', titulo: 'Miembro inferior izquierdo', open: true },
   { id: 'obs', titulo: 'Observaciones', open: true },
+  { id: 'vejiga', titulo: 'Vejiga', open: true },
+  { id: 'prostata', titulo: 'Próstata', open: true },
 ]);
 // Secciones a dibujar, EN EL ORDEN EN QUE APARECEN LOS CAMPOS del modelo (antes
 // se recorría la lista fija del Holter, así que los grupos de cualquier otro
@@ -839,6 +841,29 @@ function avisosHolter(v, texto){
     a.push('Hay una salva cargada (latidos/FC), pero TSV/salvas figura en 0.');
   return a;
 }
+// ===== Vesicoprostática: avisos de coherencia (NO cambian nada) =====
+// Comparan lo cargado en los campos contra lo que dice el texto del informe y la
+// conclusión. Solo avisan: el que firma decide. La idea es agarrar el copiar y
+// pegar de un preset que quedó diciendo algo que los valores no respaldan.
+function avisosVesicoprostatica(v, texto){
+  v = v || {}; var a = [];
+  var todo = String(texto || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  var dice = function(re){ return re.test(todo); };
+  var rpm = String(v.vejRpm || '').trim().toLowerCase();
+  if ((rpm === 'no evaluado' || rpm === '') && dice(/RESIDUO POSTMICCIONAL\s*:?\s*\d|RPM\s*:?\s*\d|RESIDUO (NORMAL|AUMENTADO)/))
+    a.push('El residuo postmiccional figura sin evaluar, pero el informe habla de un residuo.');
+  if (String(v.vejEndoluminales || '') === 'No' && dice(/IMAGEN(ES)? ENDOLUMINAL|LESION(ES)? ENDOLUMINAL/) && !dice(/SIN (EVIDENCIA DE )?(LESIONES|IMAGENES)[^.]*ENDOLUMINAL|NO SE (IDENTIFICAN|OBSERVAN)[^.]*ENDOLUMINAL/))
+    a.push('Imágenes endoluminales en "No", pero el informe menciona una lesión endoluminal.');
+  if (String(v.proTamano || '') === 'Normal' && dice(/PROSTATOMEGALIA|AUMENTADA DE TAMANO|MARCADAMENTE AUMENTAD/))
+    a.push('La próstata figura de tamaño conservado, pero el informe habla de prostatomegalia o de aumento de tamaño.');
+  if (String(v.proImpronta || '') === 'No' && dice(/IMPRONTA/))
+    a.push('Impronta sobre piso vesical en "No", pero el informe la menciona.');
+  if (String(v.proCalcificaciones || '') === 'No' && dice(/CALCIFICACION/))
+    a.push('Calcificaciones en "No", pero el informe las menciona.');
+  if (String(v.vejReplecion || '') === 'Escasa' && !dice(/ESCASA REPLECION|LIMITA|LIMITAD/))
+    a.push('La repleción es escasa: conviene aclarar que la valoración vesical queda parcialmente limitada.');
+  return a;
+}
 // Panel de avisos en vivo bajo los campos (urodinamia y holter comparten el
 // contenedor #infAvisosUro; el resto de los modelos no muestra nada).
 function renderAvisosUro(){
@@ -846,6 +871,11 @@ function renderAvisosUro(){
   var key = modeloActualKey(), a = [];
   if (key === 'urodinamia') a = avisosUrodinamia(recolectarCampos());
   else if (key === 'holter') a = avisosHolter(recolectarCampos(), (document.getElementById('infTexto') || {}).value || '');
+  else if (key === 'eco-vesicoprostatica'){
+    // Mira el informe Y la conclusión: la incoherencia suele quedar en la conclusión.
+    var vv = recolectarCampos();
+    a = avisosVesicoprostatica(vv, ((document.getElementById('infTexto') || {}).value || '') + ' ' + (vv.conclusion || ''));
+  }
   if (!a.length){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   wrap.style.display = '';
   wrap.innerHTML = '<div class="inf-avisos-tit">⚠ Revisá la coherencia (son avisos, no cambian el diagnóstico):</div><ul class="inf-avisos-list">'
