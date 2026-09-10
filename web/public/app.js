@@ -5044,10 +5044,10 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         (sexoCampo ? campoHtml(sexoCampo) : '') +
         // Sexo del paciente (dato del paciente, no del estudio): se pregunta salvo
         // que el modelo ya tenga su propio campo de sexo (ej. urodinamia).
-        // Si el sexo vino del padrón de credenciales (lo que PAMI tiene
-        // registrado), llega ya elegido y se aclara de dónde salió: un dato
-        // precargado en un informe médico tiene que decir de dónde viene.
-        (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente' + (x.sexo ? ' <span class="mc-inf-hint">· según la credencial</span>' : '') + '</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
+        // Cuando lo sabemos llega ya elegido, y se aclara DE DÓNDE salió: la
+        // credencial es un dato de PAMI; el nombre es una deducción nuestra y
+        // hay que poder distinguirlas de un vistazo antes de firmar.
+        (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente' + (x.sexo ? ' <span class="mc-inf-hint">· ' + (x.sexoOrigen === 'credencial' ? 'según la credencial' : 'deducido del nombre, revisalo') + '</span>' : '') + '</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
         visitaHtml +
