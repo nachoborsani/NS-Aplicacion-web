@@ -4799,7 +4799,10 @@ function payloadInformeDeFila(x, opts){
   return {
     modelo: m.key,
     clienteSlug: (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '',
-    paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '' },
+    // El sexo ya viene resuelto en la fila (credencial o nombre). Este es el
+    // camino directo, sin modal: si no se pasara acá, los informes creados en
+    // lote saldrían sin sexo mientras que los de a uno sí lo llevan.
+    paciente: { nombre: x.nombre || '', benef: x.benef || '', fecha: fechaM ? fechaM[1] : '', documento: '', cobertura: '', sexo: x.sexo || '' },
     textoInforme: (preset && preset.texto) || '',
     estudio: m.estudio || '',
     valores: valores,
