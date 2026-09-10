@@ -3039,9 +3039,11 @@ function renderClientList(){
   // la manda).
   var consultorios = VISIBLES.filter(function(c){ return clienteSeccion(c) === 'consultorio'; });
   // Al operador, de los consultorios le aparecen SOLO aquellos en los que tiene
-  // algo para hacer: hoy, los que tienen Plan Salud. Sin esto no podría entrar
-  // a Plan Salud, porque el grupo Consultorios está oculto para su rol.
-  if (ME && ME.role === 'operador') consultorios = consultorios.filter(function(c){ return slugTienePlanSalud(c.slug); });
+  // algo para hacer: hoy, los que tienen Plan Salud, o los que tienen su propio
+  // tablero de bandeja CUP (ej. Caballito Pediátrico - ver bandejaCup). Sin
+  // esto no podría entrar a esas pantallas, porque el grupo Consultorios está
+  // oculto para su rol.
+  if (ME && ME.role === 'operador') consultorios = consultorios.filter(function(c){ return slugTienePlanSalud(c.slug) || c.bandejaCup; });
   var medCab = VISIBLES.filter(function(c){ return clienteSeccion(c) === 'med_cabecera'; });
   // Potenciales clientes: el usuario de DEMOSTRACIÓN no los ve nunca (no le
   // mostramos a un prospecto el pipeline comercial). El colaborador sí, pero
