@@ -4577,7 +4577,11 @@ var MESCURSO_MODULOS = [];          // desglose por módulo del mes en curso
 var MESCURSO_MODULOS_JULIO = [];    // ... del reporte "sin cerrar"
 var MESCURSO_MODULOS_CERRADO = [];  // ... del mes cerrado
 // Normaliza el desglose por módulo (mes en curso trae gross; los reportes traen net).
-function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
+function mescMods(arr){ return (Array.isArray(arr)?arr:[]).map(function(m){ return { code:m.moduleCode||'', desc:m.moduleDescription||'', consultas:m.consultations||0, practicas:m.practices||0, monto:(m.net!=null?m.net:(m.gross||0)), montoTransmitido:(m.grossTransmitido!=null?m.grossTransmitido:null), montoPendiente:(m.grossPendiente!=null?m.grossPendiente:null), sinValor:m.sinValor||0, sinValorCodigos:(m.sinValorCodigos||[]) }; }); }
+// Solo el mes en curso trae desglose transmitido/pendiente (viene de la bandeja
+// viva, con estado por fila); mes anterior y cerrado vienen de informes ya
+// cerrados y siguen mostrando una sola columna de $ (ver mescMods).
+function mesCursoModHayDesglose(md){ return (md || []).some(function(m){ return m.montoTransmitido != null; }); }
 var MESCURSO_POSIBLES_DEBITOS_ADELANTE = []; // posibles débitos de turnos futuros (hacia adelante)
 var MESCURSO_FUTUROS = [];   // meses futuros (sep, oct…) con sus posiblesDebitosRows
 var MESCURSO_POSIBLES_DEBITOS_FUTURO = []; // el mes futuro que se está viendo en el panel
@@ -5283,8 +5287,12 @@ function mesCursoTogglePanel(tipo){
     html = dc.length ? mesCursoTablaHtml('Débitos (mes cerrado) · ' + dc.length, 'warn', 'copiarDebitosCerrado', debCols, dc.map(mapDebitos), 'debitos-cerrado', null, null, [7]) : mesCursoVacioHtml('Débitos (mes cerrado)', 'warn');
   } else if (tipo === 'modulos' || tipo === 'modulos-julio' || tipo === 'modulos-cerrado'){
     var md = tipo === 'modulos' ? MESCURSO_MODULOS : (tipo === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
-    var modCols = ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
-    var mapMod = function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.monto)]; };
+    var modDesglose = mesCursoModHayDesglose(md);
+    var modCols = modDesglose ? ['Módulo', 'Consultas', 'Prácticas', 'Transmitido', 'Pendiente', 'Total'] : ['Módulo', 'Consultas', 'Prácticas', 'Facturación'];
+    var modMoneyCols = modDesglose ? [3, 4, 5] : [3];
+    var mapMod = modDesglose
+      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.montoTransmitido || 0), moneyFmt(m.montoPendiente || 0), moneyFmt(m.monto)]; }
+      : function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, numberFmt(m.consultas), numberFmt(m.practicas), moneyFmt(m.monto)]; };
     var copiaMod = tipo === 'modulos' ? 'copiarModulos' : (tipo === 'modulos-julio' ? 'copiarModulosJulio' : 'copiarModulosCerrado');
     // Aviso ⚠ cuando un módulo tiene prácticas SIN VALORIZAR (código que no está en el
     // nomenclador → cuenta pero suma $0). Es plata que no se está facturando. No tiene
@@ -5295,7 +5303,7 @@ function mesCursoTogglePanel(tipo){
       return '';
     };
     var haySinValor = veValoresCliente() && md.some(function(m){ return m.sinValor > 0; });
-    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, [3]) : mesCursoVacioHtml('Cantidades por módulo', '');
+    html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
   } else if (tipo === 'debitos-adelante'){
     var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
     html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante', null, null, [7]) : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');
@@ -5514,8 +5522,14 @@ function mesCursoDescargarDatosCruda(panelId){
   if (panelId === 'modulos' || panelId === 'modulos-julio' || panelId === 'modulos-cerrado'){
     var modArr = panelId === 'modulos' ? MESCURSO_MODULOS : (panelId === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modTit = panelId === 'modulos' ? 'Cantidades por módulo (mes en curso)' : (panelId === 'modulos-julio' ? 'Cantidades por módulo (mes anterior)' : 'Cantidades por módulo (mes cerrado)');
-    return { titulo: modTit + ' - ' + cli, columnas: ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'],
-      filas: (modArr || []).map(function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.monto) || 0]; }), moneyCols: [3] };
+    var modArrDesglose = mesCursoModHayDesglose(modArr);
+    var modArrCols = modArrDesglose ? ['MODULO', 'CONSULTAS', 'PRACTICAS', 'TRANSMITIDO', 'PENDIENTE', 'TOTAL'] : ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'];
+    var modArrMoneyCols = modArrDesglose ? [3, 4, 5] : [3];
+    var modArrMap = modArrDesglose
+      ? function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.montoTransmitido) || 0, Number(m.montoPendiente) || 0, Number(m.monto) || 0]; }
+      : function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, Number(m.consultas) || 0, Number(m.practicas) || 0, Number(m.monto) || 0]; };
+    return { titulo: modTit + ' - ' + cli, columnas: modArrCols,
+      filas: (modArr || []).map(modArrMap), moneyCols: modArrMoneyCols };
   }
   if (panelId === 'medcab-historial') return { titulo: 'Dashboard médico de cabecera - ' + cli,
     columnas: ['MES', 'FALTAN VALIDAR', 'FALTAN TRANSMITIR', 'TRANSMITIDAS', 'TOTAL EN BANDEJA'],

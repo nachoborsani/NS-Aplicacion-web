@@ -4196,9 +4196,15 @@ function buildBandejaResumen(slug) {
     const modDesc = String((nomRow && nomRow.moduleDescription) || (modCode ? "" : "Sin módulo"));
     const modKey = modCode || "sin";
     let modAgr = moduloAgr.get(modKey);
-    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: modDesc, consultations: 0, practices: 0, gross: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
+    if (!modAgr) { modAgr = { moduleCode: modCode, moduleDescription: modDesc, consultations: 0, practices: 0, gross: 0, grossTransmitido: 0, sinValor: 0, _sv: {} }; moduloAgr.set(modKey, modAgr); }
     if (esConsulta) modAgr.consultations++; else modAgr.practices++;
     modAgr.gross += valueGross;
+    // "gross" es el valorizado TOTAL del módulo (transmitido + pendiente). Se
+    // desglosa acá para que la tabla "Cantidades por módulo" pueda mostrar cuánto
+    // de eso ya es cobro real (transmitido) — si no, un módulo con mucha carga
+    // pendiente parece facturar más que el "Cobro real (transmitido)" de la card,
+    // que solo suma lo ya transmitido.
+    if (esTransmitida) modAgr.grossTransmitido += valueGross;
     if (!nomRow) {   // el código no está en el nomenclador → suma $0 pero cuenta
       modAgr.sinValor++;
       const svc = code || "?";
@@ -4373,7 +4379,7 @@ function buildBandejaResumen(slug) {
     porTransmitir, porTransmitirAmount: money(porTransmitirAmount), porTransmitirRows,
     posiblesDebitos: money(posiblesDebitos), posiblesDebitosCount,
     posiblesDebitosRows, inactivosCount,
-    modules: [...moduloAgr.values()].map((m) => { const { _sv, ...rest } = m; return { ...rest, gross: money(m.gross), sinValorCodigos: Object.values(_sv || {}) }; }).sort((a, b) => b.gross - a.gross),
+    modules: [...moduloAgr.values()].map((m) => { const { _sv, ...rest } = m; return { ...rest, gross: money(m.gross), grossTransmitido: money(m.grossTransmitido), grossPendiente: money(m.gross - m.grossTransmitido), sinValorCodigos: Object.values(_sv || {}) }; }).sort((a, b) => b.gross - a.gross),
     coversFrom: coversMin ? `${coversMin.slice(8, 10)}/${coversMin.slice(5, 7)}` : "",
     coversTo: coversMax ? `${coversMax.slice(8, 10)}/${coversMax.slice(5, 7)}` : "",
     nomencladorPeriod: nom ? (nom.period || "") : "",
