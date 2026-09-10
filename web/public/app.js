@@ -6130,7 +6130,12 @@ async function loadMedCabMesCurso(){
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
-  if (ACTIVE_CLIENT.tipo === 'med_cabecera') return loadMedCabMesCurso();
+  // "bandejaCup": mismo tablero que un médico de cabecera (sin valorizar por
+  // práctica), pero en un cliente que sigue siendo Consultorio en todo lo
+  // demás (informes, OMEs, reportes, honorarios) — ver normalizeClient en
+  // server.js. Caballito Pediátrico es el primer caso: pago fijo, sin
+  // valorización, pero NO debe "entrar" a médico de cabecera.
+  if (ACTIVE_CLIENT.tipo === 'med_cabecera' || ACTIVE_CLIENT.bandejaCup) return loadMedCabMesCurso();
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
   // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.
@@ -6417,6 +6422,7 @@ function openClientEditModal(){
   set('clientEditSap', ACTIVE_CLIENT.sap);
   set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
   var enAn = document.getElementById('clientEditEnAnalisis'); if (enAn) enAn.checked = !!ACTIVE_CLIENT.enAnalisis;
+  var bCup = document.getElementById('clientEditBandejaCup'); if (bCup) bCup.checked = !!ACTIVE_CLIENT.bandejaCup;
   set('clientEditSeccion', ACTIVE_CLIENT.seccion || 'consultorio');
   set('clientEditDireccion', ACTIVE_CLIENT.direccion);
   set('clientEditTelefono', ACTIVE_CLIENT.telefono);
@@ -6468,6 +6474,7 @@ async function saveClientEdit(){
     sap: (document.getElementById('clientEditSap') || {}).value || '',
     tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio',
     enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked),
+    bandejaCup: !!((document.getElementById('clientEditBandejaCup') || {}).checked),
     seccion: (document.getElementById('clientEditSeccion') || {}).value || 'consultorio',
     direccion: (document.getElementById('clientEditDireccion') || {}).value || '',
     telefono: (document.getElementById('clientEditTelefono') || {}).value || '',

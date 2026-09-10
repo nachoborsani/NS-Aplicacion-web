@@ -2063,6 +2063,8 @@
           <label>SAP<input class="inp" id="clientEditSap" placeholder="Ej: 112553"></label>
           <label class="span-2">Tipo de cliente<select class="inp" id="clientEditTipo"><option value="consultorio">Consultorio</option><option value="med_cabecera">Médico de cabecera</option></select></label>
           <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientEditEnAnalisis" style="width:auto;flex:0 0 auto"> En análisis (potencial) — no se transmite</label>
+          <label class="span-2" style="display:flex;flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="clientEditBandejaCup" style="width:auto;flex:0 0 auto"> Dashboard con bandeja CUP sin valorizar (pago fijo)</label>
+          <span class="nom-muted span-2" style="font-weight:400;margin-top:-8px">Para un Consultorio de pago fijo que no valoriza por práctica (ej. Caballito Pediátrico): el "Dashboard mes en curso" muestra el mismo tablero que un médico de cabecera (Faltan validar / Faltan informe / Transmitidas / Total en bandeja), pero el cliente sigue siendo Consultorio en todo lo demás — informes, OMEs, reportes, honorarios. No afecta a un cliente que ya sea "Médico de cabecera" arriba.</span>
           <label class="span-2">Sección del menú<select class="inp" id="clientEditSeccion">
               <option value="consultorio">Consultorios</option>
               <option value="med_cabecera">Med. Cabecera</option>

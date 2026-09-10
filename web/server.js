@@ -2966,6 +2966,14 @@ function normalizeClient(client, fallback) {
   // nadie de lugar el día que se desplegó esto.
   const seccionGuardada = String(client.seccion !== undefined ? client.seccion : base.seccion || "").trim();
   const seccion = CLIENT_SECCIONES.has(seccionGuardada) ? seccionGuardada : (enAnalisis ? "potencial" : tipo);
+  // Dashboard con bandeja CUP sin valorizar (el mismo tablero de "Faltan
+  // validar / Faltan informe / Transmitidas / Total en bandeja") en un cliente
+  // que sigue siendo tipo "consultorio" en todo lo demás (informes, OMEs,
+  // reportes, honorarios, Facturación) - para consultorios de pago fijo que no
+  // valorizan por práctica (ej. Caballito Pediátrico), sin que "entren" a
+  // médico de cabecera. Un cliente tipo "med_cabecera" ya usa este tablero
+  // solo, no necesita el flag.
+  const bandejaCup = !!(client.bandejaCup !== undefined ? client.bandejaCup : base.bandejaCup);
   return {
     slug: String(client.slug || base.slug || "").trim(),
     name: String(client.name || base.name || "").trim(),
@@ -2977,6 +2985,7 @@ function normalizeClient(client, fallback) {
     tipo,
     enAnalisis,
     seccion,
+    bandejaCup,
     activeModules: modules.length ? modules : normalizeClientModules(base.activeModules),
     // Membrete para los Informes (PDF): logo + dirección/teléfono al pie. Se
     // van cargando de a poco por cliente; sin ellos, el informe sale igual,
@@ -7489,6 +7498,7 @@ const server = http.createServer(async (req, res) => {
     const sap = String(body.sap || "").replace(/\s+/g, " ").trim();
     const tipo = String(body.tipo || "consultorio").trim();
     const enAnalisis = !!body.enAnalisis;
+    const bandejaCup = !!body.bandejaCup;
     const slug = clientSlugFromName(name);
     const modules = normalizeClientModules(body.activeModules);
     if (!name) return json(res, 400, { error: "Ingresa el nombre del cliente." });
@@ -7498,7 +7508,7 @@ const server = http.createServer(async (req, res) => {
     if (!modules.length) return json(res, 400, { error: "Selecciona al menos un modulo activo." });
     const clients = loadClientsStore();
     if (clients.some((client) => client.slug === slug)) return json(res, 409, { error: "Ya existe un cliente con ese nombre." });
-    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", tipo, enAnalisis, activeModules: modules });
+    const client = normalizeClient({ slug, name, businessName, cuit, ugl, sap, status: "Activo", tipo, enAnalisis, bandejaCup, activeModules: modules });
     clients.push(client);
     saveClientsStore(clients);
     return json(res, 201, { client, clients });
@@ -7571,6 +7581,8 @@ const server = http.createServer(async (req, res) => {
       // Sección de menú (Consultorios/Med. Cabecera/Potenciales): independiente
       // de tipo/enAnalisis de arriba, ver normalizeClient.
       seccion: body.seccion !== undefined ? body.seccion : clients[idx].seccion,
+      // Dashboard bandeja CUP sin valorizar, independiente de tipo (ver normalizeClient).
+      bandejaCup: body.bandejaCup !== undefined ? !!body.bandejaCup : clients[idx].bandejaCup,
       activeModules: clients[idx].activeModules,
       // Dirección/teléfono para el membrete de Informes: se editan acá.
       direccion: body.direccion !== undefined ? String(body.direccion || "").replace(/\s+/g, " ").trim() : clients[idx].direccion,
