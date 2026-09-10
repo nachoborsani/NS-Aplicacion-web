@@ -1846,7 +1846,7 @@ async function iniRenderPendientesEn(listId, metaId){
 }
 // Desde el panel de pendientes, ir a donde ESE pendiente se trabaja: el médico
 // de cabecera tiene su propio dashboard (bandejas del CUP, faltan validar /
-// faltan transmitir); un consultorio se trabaja en la Cabina de informes, que
+// faltan informe); un consultorio se trabaja en la Cabina de informes, que
 // además queda filtrada por ese cliente.
 function iniPendOpIr(slug, esMC){
   if (esMC){ go('clientes'); selectClientWhenReady(slug, 'mescurso'); return; }
@@ -5556,7 +5556,7 @@ function mesCursoDescargarDatosCruda(panelId){
       filas: (modArr || []).map(modArrMap), moneyCols: modArrMoneyCols };
   }
   if (panelId === 'medcab-historial') return { titulo: 'Dashboard médico de cabecera - ' + cli,
-    columnas: ['MES', 'FALTAN VALIDAR', 'FALTAN TRANSMITIR', 'TRANSMITIDAS', 'TOTAL EN BANDEJA'],
+    columnas: ['MES', 'FALTAN VALIDAR', 'FALTAN INFORME', 'TRANSMITIDAS', 'TOTAL EN BANDEJA'],
     filas: (MESCURSO_MEDCAB_HISTORIAL || []).map(function(d){
       var validar = Number(d.pendienteValidar) || 0, transmitir = Number(d.pendienteTransmitir) || 0, listas = Number(d.listas) || 0;
       var total = Number(d.count) || (validar + transmitir + listas);
@@ -6063,7 +6063,7 @@ function medCabMesCard(d){
     + '<div class="mescurso-val-note">Médico de cabecera · sin valorización por práctica</div>'
     + '<div class="mescurso-lines">'
     + '<div class="mescurso-line warn"><span>Faltan validar</span><b>' + esc(numberFmt(validar)) + '</b></div>'
-    + '<div class="mescurso-line alert"><span>Faltan transmitir</span><b>' + esc(numberFmt(transmitir)) + '</b></div>'
+    + '<div class="mescurso-line alert"><span>Faltan informe</span><b>' + esc(numberFmt(transmitir)) + '</b></div>'
     + '<div class="mescurso-line"><span>Transmitidas</span><b>' + esc(numberFmt(listas)) + '</b></div>'
     + '<div class="mescurso-line"><span>Total en bandeja</span><b>' + esc(numberFmt(total)) + '</b></div>'
     + '</div>'
@@ -6101,7 +6101,7 @@ async function loadMedCabMesCurso(){
   });
   if (!historial.length) {
     box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">Dashboard médico de cabecera</span>' + mesCursoBotonRefresco('Actualizar bandeja') + '</div>'
-      + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan transmitir.</span></div></div>';
+      + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan informe.</span></div></div>';
     if (REFRESCO_ACTIVO) arrancarPollRefresco();
     return;
   }
@@ -6114,7 +6114,7 @@ async function loadMedCabMesCurso(){
     + '<div><h3>Dashboard médico de cabecera</h3><p>Control por bandejas del CUP. No se valoriza por práctica porque el pago es fijo.</p></div>'
     + '<div class="medcab-totals">'
     + '<div><b>' + esc(numberFmt(totalValidar)) + '</b><span>faltan validar</span></div>'
-    + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan transmitir</span></div>'
+    + '<div><b>' + esc(numberFmt(totalTransmitir)) + '</b><span>faltan informe</span></div>'
     + '<div><b>' + esc(numberFmt(totalListas)) + '</b><span>transmitidas</span></div>'
     + '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'medcab-historial\',this)">📄 PDF</button>'
     + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'medcab-historial\',this)">📊 Excel</button>'
@@ -6123,7 +6123,7 @@ async function loadMedCabMesCurso(){
     + '<div class="mescurso-cards medcab-grid">' + cards + '</div>'
     + '<div class="medcab-columns">'
     + medCabResumenLista(historial, 'pendienteValidar', 'Meses con faltante de validación', 'No hay meses con OMEs pendientes de validar.')
-    + medCabResumenLista(historial, 'pendienteTransmitir', 'Meses con faltante de transmitir', 'No hay meses con OMEs validadas sin transmitir.')
+    + medCabResumenLista(historial, 'pendienteTransmitir', 'Meses con faltante de informe', 'No hay meses con OMEs pendientes de informe.')
     + '</div>';
   if (REFRESCO_ACTIVO) arrancarPollRefresco();
 }
