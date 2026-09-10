@@ -7168,7 +7168,9 @@ const server = http.createServer(async (req, res) => {
     const filas = informesExportRows(filtrados.slice(0, 500)).map((r) => ({
       nombre: r.paciente, benef: r.beneficio, practica: r.practica, ome: r.ome, estado: r.estado, recibido: r.recibido,
     }));
-    return json(res, 200, { slug, nombre: nombreCliente, tipo, filas });
+    // `total` para poder decir "mostrando 500 de N" y no un "500 pacientes" que
+    // engaña cuando el corte de 500 recortó la lista.
+    return json(res, 200, { slug, nombre: nombreCliente, tipo, total: filtrados.length, filas });
   }
 
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {

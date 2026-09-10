@@ -1891,11 +1891,11 @@ async function abrirOmesPorVencer(slug){
       ? '<span class="ov-estado vencida" title="Pasaron los ' + (d.diasLimite || 60) + ' días: ya no se puede transmitir">Vencida</span>'
       : '<span class="ov-estado" title="Días que quedan para transmitirla">Quedan ' + f.diasRestantes + (f.diasRestantes === 1 ? ' día' : ' días') + '</span>';
     return '<tr>'
-      + '<td>' + esc(f.nombre || '-') + (f.benef ? '<div class="nom-muted">' + esc(f.benef) + '</div>' : '') + '</td>'
-      + '<td class="tnum">' + estado + '</td>'
-      + '<td class="ov-practica" title="' + esc(f.practica || '') + '">' + esc(f.practica || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.ome || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.validada || '-') + '</td>'
+      + '<td class="wrap">' + esc(f.nombre || '-') + (f.benef ? '<div class="nom-muted">' + esc(f.benef) + '</div>' : '') + '</td>'
+      + '<td class="num">' + estado + '</td>'
+      + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
+      + '<td class="num">' + esc(f.ome || '-') + '</td>'
+      + '<td class="num">' + esc(f.validada || '-') + '</td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="5" class="muted-cell">No hay OMEs por vencer en este cliente.</td></tr>';
 }
@@ -1932,15 +1932,17 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
     return;
   }
   var filas = (res.data && res.data.filas) || [];
-  if (meta) meta.textContent = filas.length + (filas.length === 1 ? ' paciente' : ' pacientes') + ' · sin valores (esta vista nunca los muestra)';
+  var total = (res.data && res.data.total) || filas.length;
+  if (meta) meta.textContent = (total > filas.length ? ('mostrando ' + filas.length + ' de ' + total) : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes')))
+    + ' · sin valores (esta vista nunca los muestra)';
   body.innerHTML = filas.length ? filas.map(function(f){
     return '<tr>'
-      + '<td>' + esc(f.nombre || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.benef || '-') + '</td>'
-      + '<td class="ov-practica" title="' + esc(f.practica || '') + '">' + esc(f.practica || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.ome || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.estado || '-') + '</td>'
-      + '<td class="tnum">' + esc(f.turno || f.recibido || '-') + '</td>'
+      + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
+      + '<td class="num">' + esc(f.benef || '-') + '</td>'
+      + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
+      + '<td class="numw">' + esc(f.ome || '-') + '</td>'
+      + '<td class="num">' + esc(f.estado || '-') + '</td>'
+      + '<td class="num">' + esc(f.turno || f.recibido || '-') + '</td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="6" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
 }

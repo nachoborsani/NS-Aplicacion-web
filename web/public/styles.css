@@ -1792,6 +1792,10 @@
     background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(11,31,58,.28);
     z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
   .modal.wide{width:680px}
+  /* Para modales con TABLA de datos (detalle de pacientes, OMEs por vencer…):
+     680px recorta las últimas columnas. Ancho cómodo pero siempre dentro del
+     viewport, y el modal sigue centrado por la regla de arriba. */
+  .modal.xwide{width:1060px}
   .modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
   .modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)}
   .modal-head h3{margin:0;font-size:15.5px}
@@ -1810,6 +1814,34 @@
   .modal-note{margin:0 0 14px;font-size:13.5px;color:var(--text-2);line-height:1.5}
   .modal-note b{color:var(--text)}
   .modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;border-top:1px solid var(--border)}
+
+  /* ===== Tabla de datos DENTRO de un modal =====
+     Base para cualquier pop-up de detalle (pacientes, OMEs por vencer, lo que
+     venga). NO reusar .saved-report-table acá: esa tiene min-width:1350px y
+     anchos fijos por columna (th:nth-child) pensados para la pantalla de
+     reportes guardados - metida en un modal deja las últimas columnas afuera y
+     trunca el texto con "…". Esta se adapta al contenido, scrollea sola y deja
+     el encabezado fijo. */
+  .modal-table-scroll{width:100%;max-height:min(58vh,520px);overflow:auto;
+    border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+  .modal-table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:auto}
+  .modal-table thead th{position:sticky;top:0;z-index:1;background:var(--surface-2);
+    text-align:left;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;
+    color:var(--text-2);font-weight:700;padding:9px 12px;white-space:nowrap;
+    border-bottom:1px solid var(--border)}
+  .modal-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top}
+  .modal-table tbody tr:last-child td{border-bottom:0}
+  .modal-table tbody tr:hover td{background:var(--hover)}
+  /* Columnas cortas (beneficio, turno, estado): en una sola línea. */
+  .modal-table .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* Columna de texto largo (práctica, nombre): envuelve en vez de cortarse.
+     El min-width es chico a propósito: si es grande, la suma de las columnas
+     pasa el ancho del modal y las últimas (Estado, Turno) quedan afuera. */
+  .modal-table .wrap{white-space:normal;min-width:140px;line-height:1.35}
+  /* Números que pueden venir en lista ("332640, 332641, 332642"): tabulares
+     pero que envuelvan, si no una fila con 3 OMEs empuja toda la tabla. */
+  .modal-table .numw{font-variant-numeric:tabular-nums;white-space:normal;line-height:1.35}
+  @media(max-width:760px){ .modal-table .wrap{min-width:0} .modal-table td,.modal-table thead th{padding:8px 9px} }
   .module-edit-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:420px;overflow:auto}
   .module-edit-option{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px 9px;font-size:12px;line-height:1.25;cursor:pointer}
   .module-edit-option:hover{background:var(--hover)}
