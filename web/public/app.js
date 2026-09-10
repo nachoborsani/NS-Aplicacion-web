@@ -5433,7 +5433,15 @@ function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accio
     return '<th' + clase(i) + '><button type="button" class="mc-sort" onclick="mesCursoOrdenar(\'' + esc(panelId || '') + '\',' + i + ')" title="Ordenar por ' + esc(h) + '">' + esc(h) + '<span>' + esc(icon) + '</span></button></th>';
   }).join('') + (conAcc ? '<th></th>' : '') + '</tr>';
   var tbody = ordenadas.map(function(row){
-    return '<tr>' + (conCheck ? '<td class="mc-chk-td"><input type="checkbox" class="mc-falt-chk" data-panel="' + pid + '" value="' + row.idx + '" onclick="mcFaltCheckSel(\'' + pid + '\')"></td>' : '') + row.cells.map(function(c, i){ return '<td' + clase(i) + '>' + esc(String(c == null ? '' : c)) + '</td>'; }).join('')
+    // `data-col` lleva el nombre de la columna: en celular la fila se dibuja como
+    // tarjeta y ese texto es la etiqueta de cada dato (ver styles.css). La celda
+    // vacía se marca para no ocupar un renglón con la etiqueta sola.
+    return '<tr>' + (conCheck ? '<td class="mc-chk-td"><input type="checkbox" class="mc-falt-chk" data-panel="' + pid + '" value="' + row.idx + '" onclick="mcFaltCheckSel(\'' + pid + '\')"></td>' : '') + row.cells.map(function(c, i){
+        var txt = String(c == null ? '' : c);
+        var cl = clase(i), vacio = txt.trim() === '' ? ' mc-vacio' : '';
+        if (vacio) cl = cl ? cl.replace(/"$/, vacio + '"') : ' class="mc-vacio"';
+        return '<td' + cl + ' data-col="' + esc(headers[i] || '') + '">' + esc(txt) + '</td>';
+      }).join('')
       + (conAcc ? '<td class="mc-acc">' + (accionFn(row.idx) || '') + '</td>' : '') + '</tr>';
   }).join('');
   var acciones = '';
