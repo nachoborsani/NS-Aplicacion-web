@@ -7111,6 +7111,46 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { pendientes, sinTransmitir, cup });
   }
 
+  // Detalle de PACIENTES detrás de un número del panel de Pendientes (el de
+  // Javi/admin con todos sus clientes, o el del propio centro): "pendientes"
+  // y "sinTransmitir" salen de los informes de la Cabina (mismos datos que ya
+  // tiene esa pantalla - nunca tuvieron plata, no hace falta sacar nada para
+  // mostrarlos sin valores); "cup" sale de la bandeja del CUP (médico de
+  // cabecera). Genérico por slug: sirve para cualquier cliente nuevo que se
+  // le asigne a un operador, sin tocar código.
+  const pendientesDetalleMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/pendientes-detalle$/);
+  if (pendientesDetalleMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = pendientesDetalleMatch[1];
+    const cliente = loadClientsStore().find((c) => c.slug === slug);
+    if (!cliente) return json(res, 404, { error: "Cliente no encontrado." });
+    const puede = me.role === "admin"
+      || (me.role === "operador" && clientesVisiblesPara(me, [cliente]).length > 0)
+      || ((me.role === "clinica" || me.role === "operador_clinica") && me.centro === slug);
+    if (!puede) return json(res, 403, { error: "sin permiso" });
+    const tipo = String(url.searchParams.get("tipo") || "pendientes").trim();
+    const nombreCliente = clientDisplayName(slug) || slug;
+    if (tipo === "cup") {
+      const bandeja = (loadClientBandejas() || {})[slug];
+      const filas = cabinaLib.bandejaParaMatcher(bandeja)
+        .filter((r) => !r.transmitida)
+        .slice(0, 500)
+        .map((r) => ({ ome: r.nOrden, benef: r.beneficio, nombre: r.nombre, practica: r.practica, turno: r.turno,
+          estado: r.validada ? "Validada, sin transmitir" : "Sin validar" }));
+      return json(res, 200, { slug, nombre: nombreCliente, tipo, filas });
+    }
+    const items = ((loadInformes() || {})[slug] || {}).items || [];
+    const filtrados = items.filter((it) => {
+      const e = estadoInforme(it);
+      return tipo === "sinTransmitir" ? e === "ok" : (e !== "ya_transmitido" && e !== "desestimado");
+    });
+    const filas = informesExportRows(filtrados.slice(0, 500)).map((r) => ({
+      nombre: r.paciente, benef: r.beneficio, practica: r.practica, ome: r.ome, estado: r.estado, recibido: r.recibido,
+    }));
+    return json(res, 200, { slug, nombre: nombreCliente, tipo, filas });
+  }
+
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

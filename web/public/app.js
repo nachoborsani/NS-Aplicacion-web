@@ -1838,9 +1838,11 @@ async function iniRenderPendientesEn(listId, metaId){
       + '<span class="ini-pendop-nombre">'+esc(c.nombre)+'</span>'
       + '<span class="ini-pendop-badges">'
       + venc
-      + (c.pendientes ? '<span class="ini-pendop-badge pend" title="Informes pendientes">'+c.pendientes+'</span>' : '')
-      + (c.sinTransmitir ? '<span class="ini-pendop-badge transm" title="Sin transmitir">'+c.sinTransmitir+'</span>' : '')
-      + (c.cup ? '<span class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir">'+c.cup+'</span>' : '')
+      // Cada número abre el detalle de PACIENTES (sin valores: informes y bandeja
+      // del CUP nunca los tuvieron) — mismo patrón que los chips de "por vencer".
+      + (c.pendientes ? '<button type="button" class="ini-pendop-badge pend" title="Informes pendientes — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'pendientes\',\''+esc(c.nombre)+'\')">'+c.pendientes+'</button>' : '')
+      + (c.sinTransmitir ? '<button type="button" class="ini-pendop-badge transm" title="Sin transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'sinTransmitir\',\''+esc(c.nombre)+'\')">'+c.sinTransmitir+'</button>' : '')
+      + (c.cup ? '<button type="button" class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+esc(c.slug)+'\',\'cup\',\''+esc(c.nombre)+'\')">'+c.cup+'</button>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }
@@ -1896,6 +1898,41 @@ async function abrirOmesPorVencer(slug){
   }).join('') : '<tr><td colspan="5" class="muted-cell">No hay OMEs por vencer en este cliente.</td></tr>';
 }
 function cerrarOmesPorVencer(){ hideModal('omesVencerModal', 'omesVencerScrim'); }
+// Detalle de pacientes detrás de un número del panel de Pendientes (pendientes
+// / sin transmitir / CUP): nunca muestra valores — informes y bandeja del CUP
+// no los tienen. Genérico por cliente y tipo: sirve para cualquier cliente
+// nuevo que se le asigne a un operador, sin tocar código.
+var PEND_DETALLE_LABEL = { pendientes: 'Informes pendientes', sinTransmitir: 'Sin transmitir', cup: 'Del informe del CUP (falta validar o transmitir)' };
+async function abrirPendientesDetalle(slug, tipo, nombreCliente){
+  var body = document.getElementById('pendDetalleBody');
+  var meta = document.getElementById('pendDetalleMeta');
+  var tit = document.getElementById('pendDetalleTitulo');
+  var colFecha = document.getElementById('pendDetalleColFecha');
+  if (!body) return;
+  if (tit) tit.textContent = (PEND_DETALLE_LABEL[tipo] || 'Pendientes') + ' — ' + (nombreCliente || '');
+  if (colFecha) colFecha.textContent = tipo === 'cup' ? 'Turno' : 'Recibido';
+  body.innerHTML = '<tr><td colspan="6" class="muted-cell">Cargando…</td></tr>';
+  if (meta) meta.textContent = '';
+  showModal('pendDetalleModal', 'pendDetalleScrim');
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pendientes-detalle?tipo=' + encodeURIComponent(tipo));
+  if (!res.ok){
+    body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
+    return;
+  }
+  var filas = (res.data && res.data.filas) || [];
+  if (meta) meta.textContent = filas.length + (filas.length === 1 ? ' paciente' : ' pacientes') + ' · sin valores (esta vista nunca los muestra)';
+  body.innerHTML = filas.length ? filas.map(function(f){
+    return '<tr>'
+      + '<td>' + esc(f.nombre || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.benef || '-') + '</td>'
+      + '<td class="ov-practica" title="' + esc(f.practica || '') + '">' + esc(f.practica || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.ome || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.estado || '-') + '</td>'
+      + '<td class="tnum">' + esc(f.turno || f.recibido || '-') + '</td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="6" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+}
+function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
 function iniCargarPendientesOperador(){ return iniRenderPendientesEn('iniPendOpList', 'iniPendOpMeta'); }
 function iniCargarMisPendientes(){ return iniRenderPendientesEn('opPendList', 'opPendMeta'); }
 

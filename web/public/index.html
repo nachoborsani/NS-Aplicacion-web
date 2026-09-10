@@ -2034,6 +2034,26 @@
       </div>
     </div>
 
+    <!-- ===== Modal: detalle de pacientes de un número del panel de Pendientes
+         (pendientes / sin transmitir / CUP) — nunca muestra valores, los
+         informes y la bandeja del CUP no los tienen. Genérico por cliente. -->
+    <div class="scrim" id="pendDetalleScrim" onclick="cerrarPendientesDetalle()"></div>
+    <div class="modal wide" id="pendDetalleModal" role="dialog" aria-modal="true">
+      <div class="modal-head"><h3 id="pendDetalleTitulo">Pendientes</h3><button class="x" onclick="cerrarPendientesDetalle()" aria-label="Cerrar">&times;</button></div>
+      <div class="modal-body">
+        <div class="ini-meta" id="pendDetalleMeta"></div>
+        <div class="table-scroll" style="margin-top:10px">
+          <table class="saved-report-table">
+            <thead><tr><th>Paciente</th><th>Beneficio</th><th>Práctica</th><th class="num">OME</th><th class="num">Estado</th><th class="num" id="pendDetalleColFecha">Turno</th></tr></thead>
+            <tbody id="pendDetalleBody"><tr><td colspan="6" class="muted-cell">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" onclick="cerrarPendientesDetalle()">Listo</button>
+      </div>
+    </div>
+
     <!-- ===== Modal: editar Accesos rápidos (Inicio) =====
          Vive en un modal (y no adentro de la tarjeta, de alto fijo) para que
          se vea completo el catálogo entero sin importar la resolución de
