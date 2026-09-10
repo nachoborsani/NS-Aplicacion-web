@@ -1432,7 +1432,14 @@ async function buildInformePdf(modeloKey, input) {
   if (firmaBuf) {
     try {
       firmaImg = await doc.embedPng(firmaBuf);
-      const enc = encajarImagen(firmaImg, 150, 55);
+      // Caja de la firma. Antes 150x55, y como los sellos son más anchos que
+      // altos entraban SIEMPRE limitados por el alto: el de Ruano (375x266)
+      // salía a 78x55 y el nombre y la matrícula que trae adentro quedaban en
+      // ~4 pt de altura de mayúscula, contra 7,4 pt del texto del informe.
+      // Recortarle los márgenes no servía (ya venía justo: 3% de ganancia); lo
+      // que faltaba era caja. Con 75 de alto sale a 106x75, y de paso queda en
+      // la medida en que Baimed pone la firma en sus propios informes (101x82).
+      const enc = encajarImagen(firmaImg, 150, 75);
       firmaW = enc.w; firmaH = enc.h;
     } catch (e) {
       // Un PNG ilegible no puede tumbar el informe: sale como si no hubiera firma.
