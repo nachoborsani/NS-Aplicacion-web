@@ -11723,6 +11723,19 @@ document.addEventListener('click', function(e){
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape') cerrarAvatarMenu(); });
 
 // Aplica la UI (menú, sidebar, saludo) para un usuario dado.
+// El título "herramientas" solo tiene sentido si abajo quedó alguna. A un rol
+// que no ve ninguna (una clínica, por ejemplo) le quedaría el rótulo solo,
+// colgando arriba de la nada.
+function acomodarSeccionHerramientas(){
+  var head = document.getElementById('navSectionHerramientas');
+  var box = document.querySelector('.nav-section-items[data-section-items="herramientas"]');
+  if (!head || !box) return;
+  var alguna = [].slice.call(box.querySelectorAll('a')).some(function(a){
+    return getComputedStyle(a).display !== 'none';
+  });
+  head.style.display = alguna ? '' : 'none';
+  box.style.display = alguna ? '' : 'none';
+}
 function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
@@ -11832,6 +11845,7 @@ function aplicarUsuario(u){
   // marcamos la clase de la vista de inicio acá según qué sección está visible.
   var _vd = document.getElementById('view-dash');
   document.body.classList.toggle('dash-view', !!(_vd && getComputedStyle(_vd).display !== 'none'));
+  acomodarSeccionHerramientas();
   iniArrancar();   // campana: mensajes del Inicio (admin/operador) o pendientes del centro (operador_clinica)
 }
 // Vistas internas de NS a las que la clínica no entra (la mandamos a su centro).
