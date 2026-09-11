@@ -6159,15 +6159,17 @@ function arrancarPollRefresco(){
     if (vueltas > 120){ clearInterval(REFRESCO_POLL); REFRESCO_POLL = null; }  // techo ~30 min
   }, 15000);
 }
-async function pedirRefrescoBandejas(btn){
+// soloActualizar: baja la bandeja sin transmitir. Es el caso raro (mirar cómo
+// quedó algo sin mandar nada a PAMI); el camino normal es el botón grande.
+async function pedirRefrescoBandejas(btn, soloActualizar){
   var label = (btn && btn.getAttribute('data-refresh-label')) || 'Transmitir y actualizar';
-  if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
+  if (btn){ btn.disabled = true; btn.textContent = soloActualizar ? '⏳' : '⏳ Pidiendo…'; }
   // Solo para el cliente que se está mirando, y transmitiendo primero: bajar la
   // bandeja sin transmitir deja afuera lo que todavía está sin mandar a PAMI, y
   // pedirlo para TODOS los clientes desde la pantalla de uno no es lo que se
   // quiso hacer. El servidor lo corre con la misma automatización de siempre.
   var cuerpo = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug)
-    ? { slugs: [ACTIVE_CLIENT.slug], forzarTransmision: true }
+    ? { slugs: [ACTIVE_CLIENT.slug], forzarTransmision: !soloActualizar }
     : {};
   var r = await req('POST', '/api/bandeja/refresco/pedir', cuerpo);
   if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 ' + label; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
@@ -6241,7 +6243,8 @@ function mesCursoBotonRefresco(label){
   var texto = label || 'Transmitir y actualizar';
   return REFRESCO_ACTIVO
     ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
-    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Transmite lo que está pendiente en PAMI y vuelve a bajar la bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
+    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Transmite lo que está pendiente en PAMI y vuelve a bajar la bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>'
+      + '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this, true)" title="Actualizar sin transmitir" style="margin-left:4px">⬇</button>';
 }
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 // El renglón de "por transmitir" ya no se muestra cuando está en cero: casi
