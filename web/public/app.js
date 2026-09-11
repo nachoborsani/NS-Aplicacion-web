@@ -4999,6 +4999,14 @@ function mesCursoAlternarVista(tipo){
 // agrupado por módulo (mismas filas, agrupadas) según MESCURSO_PANEL_VISTA[tipo].
 // accionFn (crear informe / liberar cupo) solo aplica en la vista de detalle: no
 // tiene sentido "crear informe" sobre un módulo entero.
+// Aviso de "esto igual se va a debitar": hay prácticas que, aunque se suba el
+// informe y se transmitan, PAMI las cruza con otra del mismo día y no las paga
+// (o paga una parte). Verlo ANTES de hacer el informe evita el trabajo al pedo,
+// y si igual se hace, que sea sabiendo.
+function mcTextoDebito(x){
+  if (!(Number(x && x.debito) > 0)) return '';
+  return x.debitoTipo === 'pay40' ? 'Se cobra solo el 40%' : 'No se cobra: va a débito';
+}
 function mesCursoPanelDetalleOModulo(tipo, arr, tituloBase, tono, copiaFn, accionFn){
   var vista = MESCURSO_PANEL_VISTA[tipo] || 'detalle';
   var toggleBtn = '<button class="btn btn-ghost" type="button" title="Alternar entre el detalle y el agrupado por módulo" onclick="mesCursoAlternarVista(\'' + tipo + '\')">'
@@ -5011,7 +5019,15 @@ function mesCursoPanelDetalleOModulo(tipo, arr, tituloBase, tono, copiaFn, accio
       : mesCursoVacioHtml(tituloBase, tono);
   }
   var cols = ['Benef', 'Apellido y nombre', 'Práctica', 'Turno', 'Valor'];
-  var mapInformes = function(x){ return [x.benef, x.nombre, x.practica, x.turno, moneyFmt(x.valor || 0)]; };
+  // La columna del aviso aparece sólo si hay algo que avisar: si ninguna se
+  // debita, no tiene sentido una columna entera vacía.
+  var hayDebito = (arr || []).some(function(x){ return Number(x && x.debito) > 0; });
+  if (hayDebito) cols.push('Si se sube');
+  var mapInformes = function(x){
+    var f = [x.benef, x.nombre, x.practica, x.turno, moneyFmt(x.valor || 0)];
+    if (hayDebito) f.push(mcTextoDebito(x));
+    return f;
+  };
   return arr.length ? mesCursoTablaHtml(tituloBase + ' · ' + arr.length, tono, copiaFn, cols, arr.map(mapInformes), tipo, accionFn, toggleBtn, [4])
     : mesCursoVacioHtml(tituloBase, tono);
 }
@@ -5904,8 +5920,9 @@ function mesCursoDatosDetalleOModulo(panelId, arr, tituloBase){
     return { titulo: tituloBase + ' (por módulo) - ' + cli, columnas: ['MODULO', 'CONSULTAS', 'PRACTICAS', 'FACTURACION'],
       filas: mods.map(function(m){ return [(m.code ? m.code + ' - ' : '') + m.desc, m.consultas, m.practicas, m.monto]; }), moneyCols: [3] };
   }
-  return { titulo: tituloBase + ' - ' + cli, columnas: ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'],
-    filas: (arr || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, Number(x.valor) || 0]; }), moneyCols: [4] };
+  var hayDeb = (arr || []).some(function(x){ return Number(x && x.debito) > 0; });
+  return { titulo: tituloBase + ' - ' + cli, columnas: ['BENEF', 'APELLIDO Y NOMBRE', 'PRACTICA', 'TURNO', 'VALOR'].concat(hayDeb ? ['SI SE SUBE'] : []),
+    filas: (arr || []).map(function(x){ var f = [x.benef, x.nombre, x.practica, x.turno, Number(x.valor) || 0]; if (hayDeb) f.push(mcTextoDebito(x)); return f; }), moneyCols: [4] };
 }
 function mesCursoDescargarDatosCruda(panelId){
   var debCols = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO', 'QUEDA'];

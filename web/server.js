@@ -3344,6 +3344,10 @@ function applyAutomaticExclusionDebits(rows) {
     if (yaCargado(row) || row.manualDebit) return false;
     row.iriaADebito = true;
     row.iriaADebitoMonto = montoDebito(row, monto);
+    // 'total' = no se cobra nada; 'pay40' = PAMI paga el 40%. Lo necesita el
+    // aviso de "Faltan informes": no es lo mismo hacer un informe que no se va a
+    // cobrar que uno que se cobra a la mitad.
+    row.iriaADebitoTipo = monto === "pay40" ? "pay40" : "total";
     row.iriaADebitoReason = reason;
     row.iriaADebitoRuleCodes = pairCodes || "";
     return true;
@@ -4414,12 +4418,18 @@ function buildBandejaResumen(slug) {
       // iriaADebito lo setea applyAutomaticExclusionDebits en la NO transmitida
       // cuyo par excluyente YA está transmitido (ver marcarIria).
       if (r.iriaADebito && r.iriaADebitoMonto > 0) {
-        debitoPorClave.set(r.benefit + "|" + (r._turno || "") + "|" + (r._practica || ""), r.iriaADebitoMonto);
+        debitoPorClave.set(r.benefit + "|" + (r._turno || "") + "|" + (r._practica || ""),
+          { monto: r.iriaADebitoMonto, tipo: r.iriaADebitoTipo || "total", motivo: r.iriaADebitoReason || "" });
       }
     }
     for (const mr of missingInformeRows) {
-      const d = debitoPorClave.get(mr.benef + "|" + (mr.turno || "") + "|" + (mr.practica || "")) || 0;
-      if (d > 0) { mr.debito = money(d); missingInformeDebito++; missingInformeDebitoAmount += d; }
+      const d = debitoPorClave.get(mr.benef + "|" + (mr.turno || "") + "|" + (mr.practica || ""));
+      if (d && d.monto > 0) {
+        mr.debito = money(d.monto);
+        mr.debitoTipo = d.tipo;          // total = no se cobra; pay40 = se cobra el 40%
+        mr.debitoMotivo = d.motivo || "";
+        missingInformeDebito++; missingInformeDebitoAmount += d.monto;
+      }
     }
   }
   // Grupos afiliado+día para reconstruir con qué OME(s) cruza cada débito.
