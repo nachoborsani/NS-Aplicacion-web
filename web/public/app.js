@@ -6115,9 +6115,16 @@ function arrancarPollRefresco(){
   }, 15000);
 }
 async function pedirRefrescoBandejas(btn){
-  var label = (btn && btn.getAttribute('data-refresh-label')) || 'Actualizar';
+  var label = (btn && btn.getAttribute('data-refresh-label')) || 'Transmitir y actualizar';
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
-  var r = await req('POST', '/api/bandeja/refresco/pedir', {});
+  // Solo para el cliente que se está mirando, y transmitiendo primero: bajar la
+  // bandeja sin transmitir deja afuera lo que todavía está sin mandar a PAMI, y
+  // pedirlo para TODOS los clientes desde la pantalla de uno no es lo que se
+  // quiso hacer. El servidor lo corre con la misma automatización de siempre.
+  var cuerpo = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug)
+    ? { slugs: [ACTIVE_CLIENT.slug], forzarTransmision: true }
+    : {};
+  var r = await req('POST', '/api/bandeja/refresco/pedir', cuerpo);
   if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 ' + label; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
   REFRESCO_ACTIVO = true;
   if (btn){ btn.disabled = true; btn.textContent = '⏳ Actualizando…'; btn.title = 'La PC lo está corriendo'; }
@@ -6186,10 +6193,10 @@ function mesCursoLabelPeriodo(period){
 // dos cards. Sin id: pedirRefrescoBandejas usa el botón clickeado, no getElementById.
 function mesCursoBotonRefresco(label){
   if (!(ME && (ME.role === 'admin' || ME.role === 'operador'))) return '';
-  var texto = label || 'Actualizar';
+  var texto = label || 'Transmitir y actualizar';
   return REFRESCO_ACTIVO
     ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
-    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Actualizar bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
+    : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Transmite lo que está pendiente en PAMI y vuelve a bajar la bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
 }
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
 function mesCursoCardMesEnCurso(r, estado){
@@ -6532,7 +6539,7 @@ async function loadMedCabMesCurso(){
     return String(b.month || '').localeCompare(String(a.month || ''));
   });
   if (!historial.length) {
-    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">' + esc(medCabTituloTablero()) + '</span>' + mesCursoBotonRefresco('Actualizar bandeja') + '</div>'
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-head"><span class="mescurso-title">' + esc(medCabTituloTablero()) + '</span>' + mesCursoBotonRefresco() + '</div>'
       + '<div class="mescurso-empty"><b>Esperando bandeja automática</b><span>Cuando el server baje la bandeja del CUP, acá se separan los meses que faltan validar y los que faltan informe.</span></div></div>';
     if (REFRESCO_ACTIVO) arrancarPollRefresco();
     return;
@@ -6564,7 +6571,7 @@ async function loadMedCabMesCurso(){
     + totalBtn(totalListas, 'transmitidas' + (vivo.monthLabel ? ' · ' + vivo.monthLabel : ''), 'cup-transmitidas')
     + '<button class="btn btn-ghost" type="button" title="Descargar PDF" onclick="mesCursoDescargar(\'pdf\',\'medcab-historial\',this)">📄 PDF</button>'
     + '<button class="btn btn-ghost" type="button" title="Descargar Excel" onclick="mesCursoDescargar(\'xlsx\',\'medcab-historial\',this)">📊 Excel</button>'
-    + mesCursoBotonRefresco('Actualizar bandeja')
+    + mesCursoBotonRefresco()
     + '</div></div>'
     + '<div class="mescurso-cards medcab-grid">' + cards + '</div>'
     + '<div class="medcab-columns">'
