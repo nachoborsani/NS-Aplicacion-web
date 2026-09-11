@@ -6199,6 +6199,24 @@ function mesCursoBotonRefresco(label){
     : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Transmite lo que está pendiente en PAMI y vuelve a bajar la bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>';
 }
 // Card izquierda: resumen valorizado de la bandeja del mes en curso (tipo Julio).
+// El renglón de "por transmitir" ya no se muestra cuando está en cero: casi
+// siempre lo está y ocupar lugar con un 0 enseña a no mirarlo. Aparece solo si
+// hay algo, y si ADEMÁS hoy ya se transmitió, en rojo: quiere decir que la
+// transmisión pasó y las dejó afuera, que es lo que hay que ir a mirar.
+function mcTransmitioHoy(estado){
+  var t = estado && estado.transmitAt; if (!t) return false;
+  var d = new Date(t); if (isNaN(d)) return false;
+  var h = new Date();
+  return d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth() && d.getDate() === h.getDate();
+}
+function mcPorTransmitirLinea(n, monto, onclick, caretId, esAlerta){
+  if (!(Number(n) > 0)) return '';
+  var texto = esAlerta ? 'Quedaron sin transmitir' : 'Por transmitir (consultas validadas)';
+  var tip = esAlerta ? ' title="Se transmitió y estas quedaron afuera. Son consultas validadas: no esperan informe."' : '';
+  return '<div class="mescurso-line ' + (esAlerta ? 'alert' : 'warn') + ' wide mescurso-click"' + tip + ' onclick="' + onclick + '">'
+    + '<span>' + texto + ' <span class="mescurso-caret" id="' + caretId + '">▸</span></span>'
+    + '<b>' + esc(numberFmt(n)) + mcMoneyPart(monto) + '</b></div>';
+}
 function mesCursoCardMesEnCurso(r, estado){
   var chip = (r && r.label) || mesCursoMesActualLabel();
   // Rango de días que abarca la bandeja (ej. "01/08 al 18/08"), por las dudas.
@@ -6264,7 +6282,7 @@ function mesCursoCardMesEnCurso(r, estado){
     + '<div class="mescurso-line"><span>Validadas · transmitidas</span><b>' + esc(numberFmt(r.validated || 0)) + ' · ' + esc(numberFmt(r.transmitted || 0)) + '</b></div>'
     + '<div class="mescurso-line warn' + debitosClick + '"><span>Posibles débitos' + debitosCaret + '</span><b>' + esc(numberFmt(r.posiblesDebitosCount || 0)) + mcMoneyPart(r.posiblesDebitos) + '</b></div>'
     + '<div class="mescurso-line alert' + faltanClick + '"><span>' + lblFalta + faltanCaret + '</span><b>' + esc(numberFmt(r.missingInforme || 0)) + mcMoneyPart(r.missingInformeAmount) + '</b>' + (((r.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(r.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(r.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + '<div class="mescurso-line warn wide mescurso-click" onclick="togglePorTransmitir()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirCaret">▸</span></span><b>' + esc(numberFmt(r.porTransmitir || 0)) + mcMoneyPart(r.porTransmitirAmount) + '</b></div>'
+    + mcPorTransmitirLinea(r.porTransmitir, r.porTransmitirAmount, 'togglePorTransmitir()', 'mescursoPorTransmitirCaret', mcTransmitioHoy(estado))
     + '</div>'
     + ausentesHtml
     + '<div class="mescurso-foot">' + esc(numberFmt(r.count || 0)) + ' prestaciones · ' + footNom + '</div>'
@@ -6397,7 +6415,7 @@ function mesCursoCardSinCerrar(current, reporte){
     + '<div class="mescurso-line warn' + djClick + '"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + djCaret + '</span><b>' + esc(numberFmt(debCount)) + mcMoneyPart(debMonto) + '</b></div>'
     + '<div class="mescurso-line alert' + fjClick + '"><span>Faltan informes' + fjCaret + '</span>'
     + '<b>' + esc(numberFmt(faltan)) + mcMoneyPart(faltanMonto) + '</b>' + (((current.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + '<div class="mescurso-line warn wide mescurso-click" onclick="togglePorTransmitirJulio()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirJulioCaret">▸</span></span><b>' + esc(numberFmt(porTrans)) + mcMoneyPart(porTransMonto) + '</b></div>'
+    + mcPorTransmitirLinea(porTrans, porTransMonto, 'togglePorTransmitirJulio()', 'mescursoPorTransmitirJulioCaret', true)
     + '<div class="mescurso-line mescurso-click" onclick="toggleAusentesJulio()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesJulioCaret">▸</span></span>'
     + '<b>' + esc(numberFmt(ausentes)) + mcMoneyPart(ausMonto) + '</b></div>'
     + (fueraCorte > 0 ? '<div class="mescurso-line wide mescurso-click" onclick="toggleFueraCorteJulio()"><span>A facturar fuera de corte <span class="mescurso-caret" id="mescursoFueraCorteJulioCaret">▸</span></span><b>' + esc(numberFmt(fueraCorte)) + mcMoneyPart(fueraCorteMonto) + '</b></div>' : '')
@@ -6445,7 +6463,7 @@ function mesCursoCardMesCerrado(current, reporte){
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleModulosCerrado()"><span>Consultas · prácticas <span class="mescurso-caret" id="mescursoModulosCerradoCaret">▸</span></span><b>' + esc(numberFmt(current.consultations || 0)) + ' · ' + esc(numberFmt(current.practices || 0)) + '</b></div>'
     + '<div class="mescurso-line warn mescurso-click" onclick="event.stopPropagation();toggleDebitosCerrado()"><span>' + (confDeb ? 'Débitos' : 'Posibles débitos') + ' <span class="mescurso-caret" id="mescursoDebitosCerradoCaret">▸</span></span><b>' + esc(numberFmt(debCount)) + mcMoneyPart(debMonto) + '</b></div>'
     + '<div class="mescurso-line alert mescurso-click" onclick="event.stopPropagation();toggleFaltanInformesCerrado()"><span>Faltan informes <span class="mescurso-caret" id="mescursoInformesCerradoCaret">▸</span></span><b>' + esc(numberFmt(faltan)) + mcMoneyPart(faltanMonto) + '</b>' + (((current.missingInformeDebito || 0) && veValoresCliente()) ? '<small class="mescurso-debnote">' + esc(numberFmt(current.missingInformeDebito)) + ' irían a débito · ' + esc(moneyFmt(current.missingInformeDebitoAmount || 0)) + '</small>' : '') + '</div>'
-    + '<div class="mescurso-line warn wide mescurso-click" onclick="event.stopPropagation();togglePorTransmitirCerrado()"><span>Por transmitir (consultas validadas) <span class="mescurso-caret" id="mescursoPorTransmitirCerradoCaret">▸</span></span><b>' + esc(numberFmt(porTrans)) + mcMoneyPart(porTransMonto) + '</b></div>'
+    + mcPorTransmitirLinea(porTrans, porTransMonto, 'event.stopPropagation();togglePorTransmitirCerrado()', 'mescursoPorTransmitirCerradoCaret', true)
     + '<div class="mescurso-line mescurso-click" onclick="event.stopPropagation();toggleAusentesCerrado()"><span>Ausentes sin validar <span class="mescurso-caret" id="mescursoAusentesCerradoCaret">▸</span></span><b>' + esc(numberFmt(ausentes)) + mcMoneyPart(ausMonto) + '</b></div>'
     + '</div>'
     + (current.transmittedToday > 0 ? '<div class="mescurso-sync"><span>🔁 Transmitidas hoy</span><b>' + esc(numberFmt(current.transmittedToday)) + '</b></div>' : '')
