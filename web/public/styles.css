@@ -1847,6 +1847,12 @@
     background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(11,31,58,.28);
     z-index:50;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
   .modal.wide{width:680px}
+  /* El aviso y la confirmacion van SIEMPRE arriba de todo. Se disparan desde
+     adentro de otros modales —el de crear informe vive en z-index 10000— y con
+     el z-index 50 del modal comun quedaban DETRAS: se veia la pantalla trabada
+     y el cartel tapado, sin entender que estaba esperando una respuesta. */
+  #nsAskScrim{z-index:10040}
+  #nsAskModal{z-index:10050}
   /* Para modales con TABLA de datos (detalle de pacientes, OMEs por vencer…):
      680px recorta las últimas columnas. Ancho cómodo pero siempre dentro del
      viewport, y el modal sigue centrado por la regla de arriba. */
