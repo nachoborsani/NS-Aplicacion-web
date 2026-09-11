@@ -4109,6 +4109,15 @@ async function verificarMedicosEnqueue(body){
     }
   }, 4000);
 }
+// La especialidad viene escrita de mil formas segun quien la cargo:
+// "MEDICO - GINECOLOGIA", "Cardiologia", "UROLOGIA". Para mostrarla y para
+// ordenar la lista se la lleva a una sola forma: sin el "MEDICO -" de adelante
+// y todo en mayusculas. Lo guardado no se toca.
+function medEspecialidadLinda(v){
+  var t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(m[eé]dic[oa]|dr[ae]?\.?|esp\.?|especialidad)\s*(?:[-–—:]|\sen\s)\s*/i, '');
+  return t.trim().toUpperCase();
+}
 var PAMI_BLANQUEO_URL = 'https://efectores.pami.org.ar/pami_efectores/segu_olvido_password.php';
 function renderClientMedicos(){
   var body = document.getElementById('medicosBody'); if (!body) return;
@@ -4119,10 +4128,17 @@ function renderClientMedicos(){
   var esAdminMed = ME && ME.role === 'admin';
   // Arriba los que se pueden usar. Abajo los que no sirven para trabajar:
   // primero los que no tienen clave cargada y al final los deshabilitados.
+  // Adentro de cada grupo, por especialidad y despues por nombre.
   var ordenados = MEDICOS.map(function(m, i){ return { m: m, i: i }; }).sort(function(a, b){
     var ra = a.m.deshabilitado ? 2 : (a.m.tieneClave ? 0 : 1);
     var rb = b.m.deshabilitado ? 2 : (b.m.tieneClave ? 0 : 1);
-    return ra !== rb ? ra - rb : a.i - b.i;
+    if (ra !== rb) return ra - rb;
+    var ea = medEspecialidadLinda(a.m.especialidad), eb = medEspecialidadLinda(b.m.especialidad);
+    if (!ea !== !eb) return ea ? -1 : 1;              // los que no tienen especialidad, al final
+    var c = ea.localeCompare(eb, 'es');
+    if (c) return c;
+    c = String(a.m.nombre || '').localeCompare(String(b.m.nombre || ''), 'es');
+    return c || (a.i - b.i);
   }).map(function(x){ return x.m; });
   body.innerHTML = ordenados.map(function(m){
     var mid = esc(m.id);
@@ -4150,7 +4166,7 @@ function renderClientMedicos(){
       : (m.preferido ? '<span class="med-star on" title="Preferido de esta especialidad">★</span>' : '');
     return '<tr class="' + (m.tieneClave ? '' : 'medico-sin-clave ') + (m.deshabilitado ? 'medico-deshabilitado' : '') + '">' +
       '<td><div class="med-main"><b>' + esc(m.nombre || '-') + '</b>' + (m.deshabilitado ? ' <span class="med-deshab-badge">deshabilitado</span>' : '') + '</div></td>' +
-      '<td><div class="med-spec-wrap"><span class="med-spec">' + (esc(m.especialidad) || 'Sin especialidad') + '</span>' + prefBtn + '</div></td>' +
+      '<td><div class="med-spec-wrap"><span class="med-spec">' + (esc(medEspecialidadLinda(m.especialidad)) || 'Sin especialidad') + '</span>' + prefBtn + '</div></td>' +
       '<td>' + accesoCell + '</td>' +
       '<td><span class="med-phone">' + (esc(m.telefono) || '-') + '</span></td>' +
       '<td class="row-actions medico-actions">' + acciones + '</td>' +

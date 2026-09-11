@@ -235,6 +235,15 @@ function saveClientMedicos(store) {
 function medicoPublico(m) {
   return { id: m.id, nombre: m.nombre || "", especialidad: m.especialidad || "", usuario: m.usuario || "", telefono: m.telefono || "", tieneClave: !!m.claveEnc, preferido: !!m.preferido, deshabilitado: !!m.deshabilitado, comodin: !!m.comodin, estado: m.estado || "", verificadoAt: m.verificadoAt || "", verificadoDetalle: m.verificadoDetalle || "" };
 }
+// La especialidad se escribe de mil formas ("MEDICO - GINECOLOGIA", "Ginecologia").
+// Para decidir si dos medicos son de la misma especialidad se comparan asi, que es
+// como se ven en pantalla.
+function especialidadKey(v) {
+  return String(v == null ? "" : v)
+    .replace(/\s+/g, " ").trim()
+    .replace(/^(m[eé]dic[oa]|dr[ae]?\.?|esp\.?|especialidad)\s*(?:[-–—:]|\sen\s)\s*/i, "")
+    .trim().toUpperCase();
+}
 function loadFacturas() {
   try {
     const j = JSON.parse(fs.readFileSync(facturasFile, "utf8"));
@@ -8010,11 +8019,11 @@ const server = http.createServer(async (req, res) => {
     if (!m) return json(res, 404, { error: "Médico no encontrado." });
     const body = await readBody(req);
     const nuevo = typeof body.preferido === "boolean" ? body.preferido : !m.preferido;
-    const espNorm = String(m.especialidad || "").trim().toUpperCase();
+    const espNorm = especialidadKey(m.especialidad);
     if (nuevo && espNorm) {
       // un solo preferido por especialidad
       for (const otro of lista) {
-        if (otro !== m && String(otro.especialidad || "").trim().toUpperCase() === espNorm) otro.preferido = false;
+        if (otro !== m && especialidadKey(otro.especialidad) === espNorm) otro.preferido = false;
       }
     }
     m.preferido = nuevo;
