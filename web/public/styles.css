@@ -192,6 +192,11 @@
   .nav-section-collapsible.collapsed .nav-section-chevron{transform:rotate(-90deg)}
   .nav-section-items{overflow:hidden;max-height:3000px;transition:max-height .22s ease}
   .nav-section-items.collapsed{max-height:0}
+  /* Los grupos de clientes ya no cuelgan de un rótulo "clientes": van sueltos
+     (Consultorios / Med. Cabecera / Potenciales), cada uno con su desplegable.
+     Sin el rótulo arriba necesitan su propio aire para no pegarse a la última
+     herramienta. */
+  .nav-section-items[data-section-items="clientes"]{margin-top:10px}
   /* Administración NO es una herramienta: va fuera de ese bloque, pero pegada
      abajo se leía como la octava de la lista. Una línea la separa. */
   #navGroupPagos{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.08)}
