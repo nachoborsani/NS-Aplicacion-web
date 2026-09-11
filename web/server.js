@@ -9078,6 +9078,22 @@ const server = http.createServer(async (req, res) => {
     const columns = Array.isArray(body.columns) && body.columns.length
       ? body.columns.map(String)
       : (rows[0] && typeof rows[0] === "object" ? Object.keys(rows[0]) : []);
+    // La bajada tiene que ser DE ESE MES. PAMI arrastra los filtros del export:
+    // el 11/09/2026 la corrida de Grupo Justo pidió septiembre, agosto y julio y
+    // PAMI devolvió TRES VECES septiembre — los tres historiales quedaron con las
+    // mismas 686 filas. Se corta solo cuando TODAS las filas fechadas son de otro
+    // mes (el caso real); una bandeja mezclada entra igual.
+    const mesDeFila = (r) => {
+      const t = String(getRowValue(r, ["TURNO"]) || "").trim();
+      const p = t.slice(0, 10).split("/");
+      return (p.length === 3 && p[2].length === 4) ? `${p[2]}-${p[1]}` : "";
+    };
+    const mesesFilas = rows.map(mesDeFila).filter(Boolean);
+    const deOtroMes = mesesFilas.filter((m) => m !== month).length;
+    if (mesesFilas.length && deOtroMes === mesesFilas.length) {
+      console.log(`[bandeja-historial] ${slug}: llegó ${mesesFilas[0]} para ${month}, no se guarda`);
+      return json(res, 400, { error: `La bandeja que llegó para ${month} es de ${mesesFilas[0]}. No se guarda.` });
+    }
     const entry = {
       month,
       monthLabel: String(body.monthLabel || periodLabel(month)).trim(),
