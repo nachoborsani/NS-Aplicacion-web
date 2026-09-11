@@ -4114,14 +4114,17 @@ function tipoDePractica(code) {
   }
   return tiposPracticaCache.mapa.get(c) || "";
 }
-function isConsultationRow(row) {
-  const code = String(row && row.practiceCode || "");
-  // Lo que dice PAMI manda. Solo si el codigo no esta en ningun nomenclador se
-  // cae al criterio viejo (mirar el nombre), que es mejor que no decidir nada.
+// Lo que dice PAMI manda. Solo si el codigo no esta en ningun nomenclador se cae
+// al criterio viejo (mirar si el nombre dice CONSULTA), que es mejor que no
+// decidir nada. Las filas de la bandeja traen el codigo y el texto sueltos, por
+// eso la funcion los toma asi y no una fila entera.
+function esConsultaPractica(code, texto) {
   const tipo = tipoDePractica(code);
   if (tipo) return tipo.startsWith("CONSULTA MEDICA");
-  const text = normalizeText([row && row.practiceDescription, row && row.practiceText].join(" "));
-  return code.startsWith("820") || text.includes("CONSULTA");
+  return String(code || "").startsWith("820") || normalizeText(String(texto || "")).includes("CONSULTA");
+}
+function isConsultationRow(row) {
+  return esConsultaPractica(String(row && row.practiceCode || ""), [row && row.practiceDescription, row && row.practiceText].join(" "));
 }
 // Resumen valorizado de la bandeja del mes en curso (para el "Dashboard mes en
 // curso"). La bandeja de PAMI trae la práctica como "CODIGO - DESCRIPCION" pero
@@ -4265,7 +4268,7 @@ function buildBandejaResumen(slug) {
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
-    const esConsulta = code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA");
+    const esConsulta = esConsultaPractica(code, pracRaw);
     if (esConsulta) consultations++;
     else practices++;
     const esValidada = String(row[kValid] || "").trim().toUpperCase() === "S";
@@ -4715,7 +4718,7 @@ function buildAdelanteResumenDe(bandeja) {
   for (const row of bandeja.rows) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
-    const esConsulta = code.startsWith("820") || normalizeText(pracRaw).includes("CONSULTA");
+    const esConsulta = esConsultaPractica(code, pracRaw);
     if (esConsulta) consultations++; else practices++;
     const nomRow = code ? byCode.get(code) : null;
     const valueGross = nomRow ? Number(nomRow.total || 0) : 0;
