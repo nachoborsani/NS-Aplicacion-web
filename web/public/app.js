@@ -5316,11 +5316,17 @@ function opcionesModelo(m){
   // redacta distinto (el venoso de MMII). Sin centros = para todos, como siempre.
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && delCentro(d); });
   var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key) && delCentro(md); });
+  // Si NINGÚN médico del centro tiene cargada esta práctica, abajo se ofrecen
+  // igual todos los del centro para no dejar el selector vacío. Pero eso hay que
+  // decirlo: es como termina firmando un ecodoppler de vasos de cuello el
+  // otorrino. `sinMedicoDelModelo` hace que el modal avise y no preseleccione a
+  // nadie, y que se abra siempre (aunque haya un solo médico y ningún campo).
+  var sinMedicoDelModelo = !medicos.length;
   if (!medicos.length) medicos = (INFORMES_CFG.medicos || []).filter(delCentro); // sin médico propio del modelo → los del centro
   if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // fallback: ninguno del centro → todos, para no dejar el selector vacío
   var camposReq = (m.campos || []).filter(function(c){ return c.requerido; });
-  return { presets: presets, medicos: medicos, camposReq: camposReq,
-    haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 };
+  return { presets: presets, medicos: medicos, camposReq: camposReq, sinMedicoDelModelo: sinMedicoDelModelo,
+    haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 || sinMedicoDelModelo };
 }
 // Faltantes de la MISMA visita (mismo paciente + mismo turno) que la fila x, con
 // OME y no desestimados/ya generados. Sirve para que un mismo informe cubra las
@@ -5445,6 +5451,7 @@ function mcEnsureModalCss(){
     '.mc-inf-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}',
     '.mc-inf-field label{display:block;font-size:12px;font-weight:600;color:var(--text-2,#64748b);margin-bottom:4px}',
     '.mc-inf-field label .mc-inf-hint{font-weight:500;opacity:.75}',
+    '.mc-inf-aviso{border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.45}',
     // Pantalla de revisión: la caja se agranda para que el PDF se lea de verdad.
     '.mc-inf-box.mc-inf-rev{max-width:860px;width:94vw;max-height:92vh;display:flex;flex-direction:column}',
     '.mc-inf-rev .mc-inf-body{overflow:auto;flex:1}',
@@ -5470,8 +5477,12 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
   // centro (op.medicos ya viene filtrado); si no, el primero del centro.
   var medDef = loteMedicoParaModelo(m.key);
   if (!op.medicos.some(function(md){ return md.id === medDef; })) medDef = (op.medicos[0] && op.medicos[0].id) || '';
+  // Nadie cargado para esta práctica: que NO venga elegido de fábrica. Firmar es
+  // lo último que conviene que salga por defecto.
+  if (op.sinMedicoDelModelo) medDef = '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
-  var medOpts = op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
+  var medOpts = (op.sinMedicoDelModelo ? '<option value="" selected>— Elegí quién firma —</option>' : '')
+    + op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
   var campoHtml = function(c){
     var inp;
     if (c.tipo === 'select'){
@@ -5510,7 +5521,9 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         // hay que poder distinguirlas de un vistazo antes de firmar.
         (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente' + (x.sexo ? ' <span class="mc-inf-hint">· ' + (x.sexoOrigen === 'credencial' ? 'según la credencial' : 'deducido del nombre, revisalo') + '</span>' : '') + '</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
-        '<div class="mc-inf-field"><label>Médico que firma *</label><select id="mc-inf-medico">' + medOpts + '</select></div>' +
+        '<div class="mc-inf-field"><label>Médico que firma *</label>'
+          + (op.sinMedicoDelModelo ? '<div class="mc-inf-aviso">⚠ Ningún médico de este centro tiene cargada esta práctica, así que están todos. Fijate bien quién firma — o asignásela en Configuración → Informes.</div>' : '')
+          + '<select id="mc-inf-medico">' + medOpts + '</select></div>' +
         visitaHtml +
         restoCampos.map(campoHtml).join('') +
       '</div>' +
