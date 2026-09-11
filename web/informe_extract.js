@@ -217,6 +217,27 @@ function obraSocialDe(texto) {
       return "PARTICULAR";
     }
   }
+  // Cuarta pasada: la etiqueta y el valor en RENGLONES DISTINTOS. Pasa con los
+  // informes armados como tabla — el Holter de Eccosur trae "Obra Social :" en
+  // una celda y "PRIVADO" en la de al lado, y al extraer el texto cada celda cae
+  // en su propia línea. Con las pasadas de arriba ese informe quedaba como si no
+  // declarara cobertura y se lo buscaba en el padrón de PAMI igual.
+  const ETIQUETAS_OS = ["OBRA SOCIAL", "COBERTURA", "PREPAGA", "O S", "OS"];
+  for (let i = 0; i < lineas.length; i++) {
+    const et = norm(lineas[i]).toUpperCase().replace(/[.:\-\s]+$/, "").trim();
+    if (!ETIQUETAS_OS.includes(et)) continue;
+    // El valor es alguna de las 2 líneas siguientes con contenido. Se exige corto
+    // y sin ":" para no tragarse el campo que viene después.
+    for (let j = i + 1; j < Math.min(i + 3, lineas.length); j++) {
+      const v = String(lineas[j] || "").trim();
+      if (!v) continue;
+      if (v.length <= 40 && !v.includes(":")) {
+        const limpio = v.replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
+        if (limpio) return limpio;
+      }
+      break;
+    }
+  }
   return "";
 }
 
