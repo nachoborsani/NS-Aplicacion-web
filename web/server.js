@@ -5236,17 +5236,8 @@ function reportDebitStatus(report) {
 // cargados a mano o de validación.
 function actualizarReporteEnLugar(oldReport, freshRows) {
   const congelado = reportDebitStatus(oldReport) === "confirmado";
-  // Solo se mezclan filas DE ESTE MES. PAMI arrastra los filtros del export (ya
-  // pasó con CIMA) y una bajada del mes cerrado puede volver con el mes en curso
-  // adentro; sin esto, esas filas entran como 'turno cargado tarde' y contaminan
-  // la facturación de un mes ya cerrado. Grupo Justo, 11/09/2026: 686 filas de
-  // septiembre dentro del reporte de julio.
-  const perRep = reportDashboardPeriod(oldReport) || String(oldReport.nomencladorPeriod || "");
-  const ajenas = perRep ? (freshRows || []).filter((r) => r && r.period && String(r.period) !== perRep).length : 0;
-  if (ajenas) {
-    console.log(`[reportes] ${oldReport.clientSlug} ${perRep}: ignoro ${ajenas} fila(s) de otro mes que trajo la bajada`);
-    freshRows = (freshRows || []).filter((r) => !r || !r.period || String(r.period) === perRep);
-  }
+  // Ojo: acá NO se filtra por mes. El único que sabe de qué mes es la bajada es
+  // el endpoint, que lo recibe en `period` — ver el control ahí arriba.
   const oldByKey = new Map();
   for (const r of (Array.isArray(oldReport.rows) ? oldReport.rows : [])) oldByKey.set(dashboardRowKey(r), r);
   let mergedRows;
@@ -9677,7 +9668,23 @@ const server = http.createServer(async (req, res) => {
         return json(res, 400, { error: "Subi una bandeja Excel .xls, .xlsx o .xlsm." });
       }
       const parsed = parseTransmisionWorkbook(multipart.file.data, multipart.file.filename, payload, client);
-      const freshRows = parsed.rows || [];
+      let freshRows = parsed.rows || [];
+      // La bajada tiene que ser DE ESE MES. PAMI arrastra los filtros del export
+      // (ya pasó con CIMA), y una bajada pedida para un mes cerrado puede volver
+      // con el mes en curso adentro. Sin este control esas filas REEMPLAZAN el
+      // contenido del reporte: Grupo Justo, 11/09/2026 — el reporte de agosto
+      // quedó con 686 filas de septiembre y perdió las 1.067 de agosto, y el de
+      // julio sumó otras 686 encima de las suyas.
+      const ajenas = freshRows.filter((r) => r && r.period && String(r.period) !== period).length;
+      if (ajenas) {
+        freshRows = freshRows.filter((r) => !r || !r.period || String(r.period) === period);
+        console.log(`[reportes] ${slug} ${period}: la bajada traia ${ajenas} fila(s) de otro mes, se ignoran`);
+      }
+      // Si despues de filtrar no queda nada, la bajada era de otro mes entera: se
+      // corta. Pisar el reporte con cero filas es peor que no actualizarlo.
+      if (!freshRows.length) {
+        return json(res, 400, { error: `La bajada no trae practicas de ${period}` + (ajenas ? ` (traia ${ajenas} de otro mes)` : "") + ". El reporte queda como estaba." });
+      }
       const faltanDe = (rows) => (rows || []).filter((r) => reportRowMissingInforme(r)).length;
       const debitoDe = (rows) => (rows || []).reduce((a, r) => a + reportRowDebit(r), 0);
       // -- No existe todavía: CREAR el reporte del mes sin cerrar --
