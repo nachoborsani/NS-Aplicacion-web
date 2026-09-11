@@ -311,11 +311,17 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
     if client.get("enAnalisis"):
         transmitir = False
 
-    # La corrida de la tarde (fin del día) transmite y baja HASTA HOY (los
-    # consultorios ya cerraron); la del mediodía es read-only y hasta ayer.
-    # forzar_transmision (corrida manual): transmite a CUALQUIER hora. El user lo
-    # pidió explícito — "cada vez que bajes la bandeja, antes transmití, no importa
-    # el horario". El scheduler automático NO fuerza (conserva la ventana de las 19h).
+    # La hora decide HASTA QUÉ DÍA se baja la bandeja: de las 19 en adelante (o
+    # forzada) se baja hasta HOY porque los consultorios ya cerraron; antes de esa
+    # hora, hasta ayer.
+    #
+    # Lo que la hora YA NO decide es si se transmite. Antes sí, y el 04/09/2026 la
+    # corrida diaria se movió a las 00:30: seguía bajando la bandeja todas las
+    # noches y no transmitía ninguna. Una semana después eran 1.098 consultas
+    # validadas sin transmitir ($13.176.933) en 4 clientes, sin que nada avisara.
+    # Ahora se transmite siempre que `transmitir` esté en sí, una vez por día,
+    # corra a la hora que corra. Es lo que el user pidió desde el principio:
+    # "cada vez que bajes la bandeja, antes transmití, no importa el horario".
     es_fin_dia = forzar_transmision or datetime.now().hour >= _HORA_FIN_DIA_H
     desde, hasta, label = month_range(period, hasta_hoy=es_fin_dia)
     tmp = Path(tempfile.gettempdir()) / f"bandeja_{slug}_{period}.xlsx"
@@ -328,10 +334,10 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         bot = PamiTransmisionController()
         try:
             bot.abrir_pami(usuario=cred["pamiUser"], clave=cred["pamiPassword"], headless=True)
-            # 1) Transmitir pendientes SOLO en la corrida de la tarde (1x/día). El bot
-            #    solo transmite las que tienen informe cargado; el resto queda para
+            # 1) Transmitir pendientes, 1x por día, a la hora que sea. El bot solo
+            #    transmite las que tienen informe cargado; el resto queda para
             #    "faltan informes".
-            if transmitir and es_fin_dia and not _ya_transmitido_hoy(slug):
+            if transmitir and not _ya_transmitido_hoy(slug):
                 if progress:
                     progress(f"{name}: transmitiendo pendientes…")
                 transmit_info = _correr_transmision(bot, desde, hasta, progress=progress)
