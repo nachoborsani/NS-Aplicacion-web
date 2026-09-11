@@ -30,7 +30,12 @@ _MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
 # Techo de espera para la transmisión de un cliente (el bot puede hacer varios
 # barridos). Generoso para el backlog de la 1ra corrida; las diarias terminan
 # en segundos. Si vence, seguimos con la descarga igual y reportamos lo que haya.
-_TRANSMIT_TIMEOUT_S = 1800
+#
+# 45 min y no 30: el 11/09/2026 Grupo Justo tardó 31 y quedó cortado con 17 sin
+# transmitir. El techo solo se toca cuando hay atraso acumulado — una corrida
+# diaria al día no se acerca ni de lejos —, así que subirlo no alarga nada en el
+# uso normal. Ojo con pasarse: son ~10 clientes en serie, y el techo multiplica.
+_TRANSMIT_TIMEOUT_S = 2700
 # Corridas a partir de esta hora se consideran "fin del día": transmiten y bajan
 # hasta hoy. Antes de esa hora (ej. una corrida manual al mediodía): read-only,
 # hasta ayer. El schedule por defecto es una sola corrida a las 20:00.
