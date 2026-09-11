@@ -374,7 +374,12 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
             # 1) Transmitir pendientes, 1x por día, a la hora que sea. El bot solo
             #    transmite las que tienen informe cargado; el resto queda para
             #    "faltan informes".
-            if transmitir and not _ya_transmitido_hoy(slug):
+            # Se transmite en CADA corrida, no una vez por dia. El tope de 1x/dia lo
+            # habia puesto el codigo, no el uso: si a la manana validan algo y la
+            # corrida de la tarde ya transmitio, eso esperaba hasta el dia siguiente
+            # sin razon. El bot solo manda lo elegible, asi que una corrida sin nada
+            # nuevo no hace nada. La marca del dia se sigue guardando, pero como dato.
+            if transmitir:
                 if progress:
                     progress(f"{name}: transmitiendo pendientes…")
                 transmit_info = _correr_transmision(bot, desde, hasta, progress=progress)
