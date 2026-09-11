@@ -5704,11 +5704,11 @@ function mesCursoTogglePanel(tipo){
   } else if (tipo === 'ausentes-cerrado'){
     html = mesCursoPanelDetalleOModulo('ausentes-cerrado', MESCURSO_AUSENTES_CERRADO || [], 'Ausentes sin validar (mes cerrado)', 'warn', 'copiarAusentesCerrado', accionLiberarCupoAusente('ausentes-cerrado'));
   } else if (tipo === 'portransmitir'){
-    html = mesCursoPanelDetalleOModulo('portransmitir', MESCURSO_POR_TRANSMITIR || [], 'Por transmitir', 'warn', 'copiarPorTransmitir', null);
+    html = mcNotaPorTransmitir() + mesCursoPanelDetalleOModulo('portransmitir', MESCURSO_POR_TRANSMITIR || [], mcTituloPorTransmitir(), 'warn', 'copiarPorTransmitir', null);
   } else if (tipo === 'portransmitir-julio'){
-    html = mesCursoPanelDetalleOModulo('portransmitir-julio', MESCURSO_POR_TRANSMITIR_JULIO || [], 'Por transmitir (mes anterior)', 'warn', 'copiarPorTransmitirJulio', null);
+    html = mcNotaPorTransmitir() + mesCursoPanelDetalleOModulo('portransmitir-julio', MESCURSO_POR_TRANSMITIR_JULIO || [], mcTituloPorTransmitir('(mes anterior)'), 'warn', 'copiarPorTransmitirJulio', null);
   } else if (tipo === 'portransmitir-cerrado'){
-    html = mesCursoPanelDetalleOModulo('portransmitir-cerrado', MESCURSO_POR_TRANSMITIR_CERRADO || [], 'Por transmitir (mes cerrado)', 'warn', 'copiarPorTransmitirCerrado', null);
+    html = mcNotaPorTransmitir() + mesCursoPanelDetalleOModulo('portransmitir-cerrado', MESCURSO_POR_TRANSMITIR_CERRADO || [], mcTituloPorTransmitir('(mes cerrado)'), 'warn', 'copiarPorTransmitirCerrado', null);
   } else if (tipo === 'fueracorte-julio'){
     html = mesCursoPanelDetalleOModulo('fueracorte-julio', MESCURSO_FUERACORTE_JULIO || [], 'A facturar fuera de corte (mes anterior)', 'warn', 'copiarFueraCorteJulio', null);
   } else {
@@ -6203,6 +6203,21 @@ function mesCursoBotonRefresco(label){
 // siempre lo está y ocupar lugar con un 0 enseña a no mirarlo. Aparece solo si
 // hay algo, y si ADEMÁS hoy ya se transmitió, en rojo: quiere decir que la
 // transmisión pasó y las dejó afuera, que es lo que hay que ir a mirar.
+// En un POTENCIAL este renglón no es un pendiente: es el argumento de venta. Son
+// consultas ya validadas que no esperan informe, así que alcanza con
+// transmitirlas — y eso es exactamente lo que haríamos nosotros solos, todos los
+// días, si fuera cliente. Por eso va en otro color y con otro texto.
+function mcEsPotencial(){ return !!(ACTIVE_CLIENT && ACTIVE_CLIENT.enAnalisis); }
+function mcNombreCentro(){ return (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || 'el centro'; }
+function mcTituloPorTransmitir(extra){
+  var base = mcEsPotencial() ? 'Lo que le transmitiríamos nosotros' : 'Por transmitir';
+  return base + (extra ? ' ' + extra : '');
+}
+function mcNotaPorTransmitir(){
+  if (!mcEsPotencial()) return '';
+  return '<div class="mescurso-nota-pot">💡 <span>Son consultas <b>ya validadas</b> que no esperan informe: para cobrarlas solo falta transmitirlas. '
+    + 'Hoy las tiene que transmitir ' + esc(mcNombreCentro()) + ' a mano. Si fuera cliente, esto <b>se transmitiría solo, todos los días</b>, sin que nadie entre a PAMI.</span></div>';
+}
 function mcTransmitioHoy(estado){
   var t = estado && estado.transmitAt; if (!t) return false;
   var d = new Date(t); if (isNaN(d)) return false;
@@ -6211,9 +6226,15 @@ function mcTransmitioHoy(estado){
 }
 function mcPorTransmitirLinea(n, monto, onclick, caretId, esAlerta){
   if (!(Number(n) > 0)) return '';
-  var texto = esAlerta ? 'Quedaron sin transmitir' : 'Por transmitir (consultas validadas)';
-  var tip = esAlerta ? ' title="Se transmitió y estas quedaron afuera. Son consultas validadas: no esperan informe."' : '';
-  return '<div class="mescurso-line ' + (esAlerta ? 'alert' : 'warn') + ' wide mescurso-click"' + tip + ' onclick="' + onclick + '">'
+  var pot = mcEsPotencial();
+  var texto = pot ? 'Podríamos transmitirlas nosotros'
+    : (esAlerta ? 'Quedaron sin transmitir' : 'Por transmitir (consultas validadas)');
+  var explica = pot
+    ? 'Consultas ya validadas que no esperan informe. Hoy las transmite el centro a mano; si fuera cliente, se transmitirían solas todos los días.'
+    : (esAlerta ? 'Se transmitió y estas quedaron afuera. Son consultas validadas: no esperan informe.'
+               : 'Consultas validadas que no esperan informe: solo falta transmitirlas.');
+  var tip = ' title="' + esc(explica) + '"';
+  return '<div class="mescurso-line ' + (pot ? 'oportunidad' : (esAlerta ? 'alert' : 'warn')) + ' wide mescurso-click"' + tip + ' onclick="' + onclick + '">'
     + '<span>' + texto + ' <span class="mescurso-caret" id="' + caretId + '">▸</span></span>'
     + '<b>' + esc(numberFmt(n)) + mcMoneyPart(monto) + '</b></div>';
 }
