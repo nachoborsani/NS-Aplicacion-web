@@ -5970,6 +5970,25 @@ function sendFile(res, filePath) {
 }
 
 // ---------- Server ----------
+// Mismo filtrado que usa el buscador, para que lo que se BAJA sea exactamente lo
+// que se está VIENDO. Antes el Excel y el PDF traían el nomenclador entero
+// (6.266 prácticas) aunque en pantalla hubiera 37 de un módulo.
+function filtrarFilasNomenclador(rows, url) {
+  const query = normalizeText(url.searchParams.get("q") || "");
+  const moduleValues = [
+    ...url.searchParams.getAll("module"),
+    ...String(url.searchParams.get("modules") || "").split(","),
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  const typeValue = String(url.searchParams.get("type") || "").trim();
+  const scopeValue = String(url.searchParams.get("scope") || "").trim();
+  let out = rows || [];
+  if (query) out = out.filter((row) => row.search.includes(query));
+  if (moduleValues.length) out = out.filter((row) => moduleValues.includes(String(row.moduleCode || row.moduleDescription)));
+  if (typeValue) out = out.filter((row) => row.type === typeValue);
+  if (scopeValue) out = out.filter((row) => row.scope === scopeValue);
+  return { rows: out, filtrado: !!(query || moduleValues.length || typeValue || scopeValue) };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const p = url.pathname;
@@ -9761,20 +9780,8 @@ const server = http.createServer(async (req, res) => {
     const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
 
-    const query = normalizeText(url.searchParams.get("q") || "");
-    const moduleValues = [
-      ...url.searchParams.getAll("module"),
-      ...String(url.searchParams.get("modules") || "").split(","),
-    ].map((value) => String(value || "").trim()).filter(Boolean);
-    const typeValue = String(url.searchParams.get("type") || "").trim();
-    const scopeValue = String(url.searchParams.get("scope") || "").trim();
     const limit = Math.max(1, Math.min(300, Number(url.searchParams.get("limit") || 120)));
-
-    let rows = payload.rows || [];
-    if (query) rows = rows.filter((row) => row.search.includes(query));
-    if (moduleValues.length) rows = rows.filter((row) => moduleValues.includes(String(row.moduleCode || row.moduleDescription)));
-    if (typeValue) rows = rows.filter((row) => row.type === typeValue);
-    if (scopeValue) rows = rows.filter((row) => row.scope === scopeValue);
+    const rows = filtrarFilasNomenclador(payload.rows || [], url).rows;
 
     return json(res, 200, {
       total: rows.length,
@@ -9791,14 +9798,21 @@ const server = http.createServer(async (req, res) => {
     const payload = getNomencladorByPeriod(store, url.searchParams.get("period"));
     if (!payload) return json(res, 404, { error: "Todavia no hay nomenclador cargado." });
     const labelExp = payload.label || periodLabel(payload.period);
-    // Excel/PDF: mismo formato limpio que el del cliente, pero COMPLETO (todos los
-    // módulos, sin filtrar). Sin format (o json) devuelve el JSON crudo de siempre.
+    // Excel/PDF: mismo formato limpio que el del cliente, y con LOS MISMOS FILTROS
+    // que la pantalla — se baja lo que se ve. Sin filtros sale entero, como antes.
+    // Sin format (o json) devuelve el JSON crudo de siempre.
     const formatExp = String(url.searchParams.get("format") || "json").toLowerCase();
     if (formatExp === "xlsx" || formatExp === "pdf") {
-      const rowsExp = (payload.rows || []).map(({ search, ...row }) => row);
-      const modCount = new Set(rowsExp.map((r) => String(r.moduleCode || r.moduleDescription || ""))).size;
-      const pseudoClient = { name: "todos los módulos", activeModules: new Array(modCount) };
-      const base = downloadName("Nomenclador PAMI " + labelExp) || "nomenclador";
+      const filt = filtrarFilasNomenclador(payload.rows || [], url);
+      const rowsExp = filt.rows.map(({ search, ...row }) => row);
+      if (!rowsExp.length) return json(res, 404, { error: "Con esos filtros no queda ninguna práctica para bajar." });
+      const modulos = [...new Set(rowsExp.map((r) => String(r.moduleDescription || r.moduleCode || "")))].filter(Boolean);
+      // El nombre sale en el encabezado del archivo: si se filtró un módulo solo,
+      // que diga cuál; si se filtró por otra cosa, que quede claro que es un recorte.
+      const comoSeLlama = !filt.filtrado ? "todos los módulos"
+        : (modulos.length === 1 ? modulos[0] : "selección de " + rowsExp.length + " prácticas");
+      const pseudoClient = { name: comoSeLlama, activeModules: new Array(modulos.length) };
+      const base = downloadName("Nomenclador PAMI " + labelExp + (filt.filtrado ? " - " + comoSeLlama : "")) || "nomenclador";
       try {
         if (formatExp === "pdf") {
           const buf = Buffer.from(await nomExport.buildPdf(pseudoClient, labelExp, rowsExp));

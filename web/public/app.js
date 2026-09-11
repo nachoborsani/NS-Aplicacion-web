@@ -6829,12 +6829,21 @@ async function loadClientNomenclador(){
 }
 // Descarga el nomenclador del cliente (la vista resumida, filtrada por sus
 // módulos activos) en Excel o PDF, respetando el período y la búsqueda actual.
-// Descarga el nomenclador COMPLETO (todos los módulos) en el formato limpio, como
-// el del cliente pero sin filtrar. Usa el período elegido arriba (nomPeriod).
+// Descarga el nomenclador en el formato limpio, con LO QUE SE ESTÁ VIENDO: el
+// buscador, el módulo, el ámbito y el tipo viajan igual que al buscar. Sin nada
+// filtrado baja entero, como antes.
 async function descargarNomencladorCompleto(format){
   var period = (document.getElementById('nomPeriod') || {}).value || NOM_ACTIVE_PERIOD || '';
   if (!period){ nsAlert('Primero elegí un nomenclador (período).'); return; }
   var params = new URLSearchParams({ period: period, format: format });
+  var q = ((document.getElementById('nomQ') || {}).value || '').trim();
+  var scope = (document.getElementById('nomScope') || {}).value || '';
+  var type = (document.getElementById('nomType') || {}).value || '';
+  var mods = (typeof NOM_SELECTED_MODULES !== 'undefined' ? NOM_SELECTED_MODULES : []).join(',');
+  if (q) params.set('q', q);
+  if (scope) params.set('scope', scope);
+  if (type) params.set('type', type);
+  if (mods) params.set('modules', mods);
   try {
     var r = await fetch('/api/nomencladores/export?' + params.toString());
     if (!r.ok){ var d = {}; try { d = await r.json(); } catch (e) {} nsAlert((d && d.error) || 'No se pudo generar el archivo.'); return; }
