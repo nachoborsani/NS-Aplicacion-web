@@ -211,6 +211,23 @@
             </section>
           </div>
 
+          <!-- Inicio del operador_clinica (recepción del centro): qué tiene su
+               centro para resolver, en el mes en curso y en el mes sin cerrar.
+               Nunca muestra montos (el endpoint ya los saca). Se llena por JS,
+               ver cargarPendientesCentroInicio. -->
+          <div id="centroInicioPaneles" style="display:none">
+            <section class="card ini-card">
+              <div class="ini-head">
+                <span class="ini-ic">🔔</span>
+                <div>
+                  <h2 id="centroIniTitulo">Pendientes en tu centro</h2>
+                  <div class="ini-meta" id="centroIniMeta">Cargando…</div>
+                </div>
+              </div>
+              <div id="centroIniCuerpo" class="centro-ini-cuerpo"></div>
+            </section>
+          </div>
+
           <div class="ini-grid" id="inicioPaneles" style="display:none">
             <!-- Mensajes -->
             <section class="card ini-card ini-panel-msg" data-panel="msg">

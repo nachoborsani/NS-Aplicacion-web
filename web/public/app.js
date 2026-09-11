@@ -1506,18 +1506,118 @@ function cargarInicioColaborador(){
   var cont = document.getElementById('colabPaneles');
   if (cont) cont.style.display = '';
 }
+// ===== Inicio del operador_clinica: "Pendientes en tu centro" =====
+// Las 3 categorías que ya calcula el dashboard de NS (posibles débitos, faltan
+// informe, ausentes sin validar), en los dos períodos que le importan al
+// centro, y cada número se abre para ver QUIÉNES son. Sin montos: el endpoint
+// los saca en el server, no dependemos de ocultarlos acá.
+var CENTRO_INI_CATS = [
+  { key:'debitos',  label:'Posibles débitos',     tono:'warn',  ayuda:'Prestaciones que podrían debitarse' },
+  { key:'informes', label:'Faltan informe',       tono:'alert', ayuda:'Validadas que esperan el informe' },
+  { key:'ausentes', label:'Ausentes sin validar', tono:'',      ayuda:'Tenían turno y no se validaron' }
+];
+var CENTRO_INI_DATA = { periodos: [] };
+async function cargarPendientesCentroInicio(){
+  var cuerpo = document.getElementById('centroIniCuerpo');
+  var meta = document.getElementById('centroIniMeta');
+  var tit = document.getElementById('centroIniTitulo');
+  if (!cuerpo || !(ME && ME.centro)) return;
+  // El título se pone recién con la respuesta: el nombre lindo del centro lo
+  // manda el server (clientDisplayName). Si lo sacáramos de CLIENTS acá,
+  // podría no estar cargado todavía y quedaría el slug ("cima" en vez de
+  // "CIMA"). Tampoco saluda: la cabecera de la página ya saluda arriba.
+  cuerpo.innerHTML = '<p class="nom-muted" style="margin:0;padding:4px 2px">Cargando…</p>';
+  var res = await api('/api/clientes/' + encodeURIComponent(ME.centro) + '/pendientes-centro/detalle');
+  if (!res.ok){
+    cuerpo.innerHTML = '<p class="nom-muted" style="margin:0;padding:4px 2px">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</p>';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  CENTRO_INI_DATA = res.data || { periodos: [] };
+  renderPendientesCentroInicio();
+}
+function renderPendientesCentroInicio(){
+  var cuerpo = document.getElementById('centroIniCuerpo');
+  var meta = document.getElementById('centroIniMeta');
+  var tit = document.getElementById('centroIniTitulo');
+  if (!cuerpo) return;
+  if (tit) tit.textContent = 'Pendientes en ' + ((CENTRO_INI_DATA && CENTRO_INI_DATA.nombre) || 'tu centro');
+  var periodos = (CENTRO_INI_DATA && CENTRO_INI_DATA.periodos) || [];
+  if (!periodos.length){
+    cuerpo.innerHTML = '<p class="nom-muted" style="margin:0;padding:4px 2px">Todavía no hay bandeja cargada para tu centro.</p>';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  var total = 0;
+  periodos.forEach(function(p){ CENTRO_INI_CATS.forEach(function(c){ total += ((p.items[c.key] || {}).n || 0); }); });
+  if (meta) meta.textContent = total ? (total + (total === 1 ? ' cosa para resolver' : ' cosas para resolver')) : 'Sin pendientes 🎉';
+  cuerpo.innerHTML = periodos.map(function(p){
+    var filas = CENTRO_INI_CATS.map(function(c){
+      var it = p.items[c.key] || { n:0 };
+      var hay = (it.n || 0) > 0;
+      return '<div class="mescurso-line ' + c.tono + (hay ? ' mescurso-click' : '') + '"'
+        + (hay ? ' onclick="abrirPendientesCentroDetalle(\'' + escJs(p.key) + '\',\'' + escJs(c.key) + '\')" title="Ver los pacientes"' : '')
+        + '><span>' + esc(c.label) + (hay ? ' <span class="mescurso-caret">▸</span>' : '')
+        + '<small class="centro-ini-ayuda">' + esc(c.ayuda) + '</small></span>'
+        + '<b>' + esc(numberFmt(it.n || 0)) + '</b></div>';
+    }).join('');
+    return '<div class="centro-ini-periodo">'
+      + '<div class="centro-ini-per-head"><b>' + esc(p.label || '') + '</b>'
+      + '<span class="mescurso-chip' + (p.live ? ' live' : '') + '">' + esc(p.sub || '') + '</span></div>'
+      + '<div class="mescurso-lines">' + filas + '</div>'
+      + '</div>';
+  }).join('');
+}
+// Detalle de pacientes de una categoría: reusa el mismo modal que el panel de
+// Pendientes del operador, así hay UNA sola pantalla de "quiénes son".
+function abrirPendientesCentroDetalle(periodoKey, catKey){
+  var p = ((CENTRO_INI_DATA || {}).periodos || []).filter(function(x){ return x.key === periodoKey; })[0];
+  if (!p) return;
+  var cat = CENTRO_INI_CATS.filter(function(c){ return c.key === catKey; })[0] || { label:'Pendientes' };
+  var it = (p.items || {})[catKey] || { n:0, filas:[] };
+  var body = document.getElementById('pendDetalleBody');
+  var meta = document.getElementById('pendDetalleMeta');
+  var tit = document.getElementById('pendDetalleTitulo');
+  var colFecha = document.getElementById('pendDetalleColFecha');
+  if (!body) return;
+  if (tit) tit.textContent = cat.label + ' — ' + (CENTRO_INI_DATA.nombre || '') + ' · ' + (p.label || '');
+  if (colFecha) colFecha.textContent = 'Turno';
+  if (meta) meta.textContent = (it.filas || []).length < (it.n || 0)
+    ? ('mostrando ' + (it.filas || []).length + ' de ' + it.n)
+    : ((it.n || 0) + ((it.n || 0) === 1 ? ' paciente' : ' pacientes'));
+  body.innerHTML = (it.filas || []).length ? it.filas.map(function(f){
+    return '<tr>'
+      + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
+      + '<td class="num">' + esc(f.benef || '-') + '</td>'
+      + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
+      + '<td class="numw">' + esc(f.ome || '-') + '</td>'
+      + '<td class="num">' + esc(cat.label) + '</td>'
+      + '<td class="num">' + esc(f.turno || '-') + '</td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="6" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+  showModal('pendDetalleModal', 'pendDetalleScrim');
+}
 async function cargarInicio(marcarLeido){
   var pl = document.getElementById('inicioPaneles');
   var op = document.getElementById('operadorPaneles');
   var colab = document.getElementById('colabPaneles');
+  var centroIni = document.getElementById('centroInicioPaneles');
   var actCard0 = document.getElementById('actividadOpCard');
   if (!iniPuedeVerInicio()){
     if (pl) pl.style.display = 'none';
     if (op) op.style.display = 'none';
     if (actCard0) actCard0.style.display = 'none';
+    // La recepción del centro sí tiene Inicio propio: qué tiene para resolver.
+    if (ME && ME.role === 'operador_clinica' && ME.centro){
+      if (colab) colab.style.display = 'none';
+      if (centroIni) centroIni.style.display = '';
+      return cargarPendientesCentroInicio();
+    }
+    if (centroIni) centroIni.style.display = 'none';
     return cargarInicioColaborador();
   }
   if (colab) colab.style.display = 'none';
+  if (centroIni) centroIni.style.display = 'none';
   if (!INICIO.canal) INICIO.canal = iniCanalDefault();
   var res = await api('/api/inicio?canal=' + encodeURIComponent(INICIO.canal));
   if (!res.ok){

@@ -184,7 +184,10 @@ function aplicarGateDeRol(req, meGate, p) {
     const permitidoSiempre = (p === "/api/me" || p === "/api/logout" || p === "/api/change-password" || p === "/api/version" || p === "/api/login");
     const centroCod = encodeURIComponent(meGate.centro);
     let permitido = permitidoSiempre || (esGet && p === "/api/clientes")
-      || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro`);
+      || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro`)
+      // Pendientes del centro con el detalle de pacientes (su pantalla de
+      // Inicio). El endpoint ya devuelve las filas sin montos.
+      || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro/detalle`);
     if (!permitido && opClinicaTieneModulo(meGate, "padron") && esGet) {
       permitido = p === `/api/clientes/${centroCod}/padron` || p === `/api/clientes/${centroCod}/padron/lookup`;
     }

@@ -7221,6 +7221,68 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { slug, nombre: nombreCliente, tipo, total: filtrados.length, filas });
   }
 
+  // "Pendientes del centro": lo que el centro tiene para resolver, en los dos
+  // períodos que le importan (mes en curso y el mes sin cerrar), partido en las
+  // 3 categorías que ya calcula el dashboard de NS. SIN PLATA: este endpoint es
+  // la fuente del Inicio del operador_clinica, que nunca ve montos — se sacan
+  // acá, en el server, para no depender de que el front se acuerde de ocultarlos.
+  const pendCentroDetMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/pendientes-centro\/detalle$/);
+  if (pendCentroDetMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = pendCentroDetMatch[1];
+    const cliente = loadClientsStore().find((c) => c.slug === slug);
+    if (!cliente) return json(res, 404, { error: "Cliente no encontrado." });
+    const puede = me.role === "admin"
+      || (me.role === "operador" && clientesVisiblesPara(me, [cliente]).length > 0)
+      || ((me.role === "clinica" || me.role === "operador_clinica") && me.centro === slug);
+    if (!puede) return json(res, 403, { error: "sin permiso" });
+    // Una fila = un paciente con lo mínimo para ir a buscarlo. Nada de valores.
+    const fila = (r) => ({
+      nombre: String((r && (r.nombre || r.patientName)) || ""),
+      benef: String((r && r.benef) || ""),
+      practica: String((r && r.practica) || ""),
+      turno: String((r && r.turno) || ""),
+      ome: String((r && r.ome) || ""),
+    });
+    const bolsa = (rows) => {
+      const arr = Array.isArray(rows) ? rows : [];
+      return { n: arr.length, filas: arr.slice(0, 500).map(fila) };
+    };
+    const periodos = [];
+    const resumen = buildBandejaResumen(slug);
+    if (resumen && resumen.period) {
+      periodos.push({
+        key: "curso", label: resumen.label || periodLabel(resumen.period) || "Mes en curso",
+        sub: (resumen.coversFrom && resumen.coversTo) ? `${resumen.coversFrom} al ${resumen.coversTo}` : "mes en curso",
+        live: true,
+        items: {
+          debitos: bolsa(resumen.posiblesDebitosRows),
+          informes: bolsa(resumen.missingInformeRows),
+          ausentes: bolsa(resumen.ausentesRows),
+        },
+      });
+    }
+    // Mes anterior = el calendario anterior a hoy, igual criterio que el
+    // dashboard de NS (no "el último reporte que exista").
+    const hoyAR = ahoraAR().fecha.slice(0, 7);
+    const prev = mesAnteriorYM(hoyAR);
+    const dash = prev ? buildClientDashboard(slug, prev) : null;
+    const cur = dash && dash.current;
+    if (cur && cur.period === prev && ((cur.reportCount || 0) > 0 || (cur.totalRows || 0) > 0)) {
+      periodos.push({
+        key: "anterior", label: cur.label || periodLabel(prev) || "Mes anterior",
+        sub: "sin cerrar", live: false,
+        items: {
+          debitos: bolsa(cur.posiblesDebitosRows),
+          informes: bolsa(cur.missingInformeRows),
+          ausentes: bolsa(cur.ausentesRows),
+        },
+      });
+    }
+    return json(res, 200, { slug, nombre: clientDisplayName(slug) || slug, periodos });
+  }
+
   if (p === "/api/users" && (req.method === "GET" || !req.method)) {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });

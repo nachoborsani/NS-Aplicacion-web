@@ -885,6 +885,14 @@
   .client-tabs button{border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:999px;flex-shrink:0;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
   .client-tabs button:hover{background:var(--hover);color:var(--text)}
   .client-tabs button.active{background:var(--petrol);color:#fff;border-color:var(--petrol)}
+  /* Inicio del operador_clinica: "Pendientes en tu centro", un bloque por
+     período (mes en curso / sin cerrar) con sus 3 categorías clickeables. */
+  .centro-ini-cuerpo{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;padding:14px 16px 16px}
+  .centro-ini-periodo{border:1px solid var(--border);border-radius:12px;padding:12px 13px;background:var(--surface-2)}
+  .centro-ini-per-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .centro-ini-per-head b{font-size:13.5px}
+  .centro-ini-per-head .mescurso-chip.live{background:var(--success-bg);color:var(--success)}
+  .centro-ini-ayuda{display:block;font-size:11px;color:var(--text-2);font-weight:400;margin-top:1px}
   /* Herramientas de NS como pestaña del cliente (rol operador): mismo chip que
      las solapas, pero separadas por una línea para que se lea que son otra
      familia (solapas del cliente | herramientas sobre ese cliente). */
