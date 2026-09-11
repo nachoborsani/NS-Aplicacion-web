@@ -884,6 +884,10 @@ BOT_SCRIPT = r"""
       ultimoExitoso: e.ultimoExitoso ?? '—',
       omitidos: e.omitidos.join(', ') || '—',
       omitidosDetalle: Array.isArray(e.omitidosDetalle) ? e.omitidosDetalle : [],
+      // Las que ni se intentaron y por que. Sin esto quedaban solo adentro del
+      // bot: pami_bot_status() es una lista blanca y lo que no esta aca no llega
+      // a Python, asi que la corrida reportaba 0 no elegibles siempre.
+      noElegibles: Array.isArray(e.noElegibles) ? e.noElegibles : [],
       paginaObjetivo: e.paginaObjetivo ?? 1,
       paginaDetectada: e.paginaDetectada ?? 1,
       lastError: e.lastError || '',
