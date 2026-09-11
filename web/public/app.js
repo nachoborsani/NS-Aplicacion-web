@@ -11542,6 +11542,15 @@ function abrirInforme(id){
             + '</div>';
         }).join('');
     }
+    // Buscar a mano en el padrón del cliente. Cuando el informe viene escaneado
+    // y el nombre no se leyó, no hay sugerencias — pero el afiliado está en el
+    // padrón igual. Antes había que irse a Afiliados, buscarlo, copiar el
+    // beneficio y volver.
+    if (!noPami){
+      h += '<div class="cab-cand-title" style="margin-top:10px">Buscar en el padrón</div>'
+        + '<input class="inp" id="cabPadronQ" type="text" autocomplete="off" placeholder="Apellido, DNI o N° de beneficio" oninput="buscarEnPadronCabina()">'
+        + '<div id="cabPadronRes"></div>';
+    }
     cont.innerHTML = h;
   }
   else {
@@ -11595,6 +11604,31 @@ async function usarSeleccionados(){
   if (!r.ok){ err.textContent = d.error || 'No se pudo confirmar.'; return; }
   cerrarCabinaModal();
   await refreshCabina();
+}
+// Buscar en el padrón del cliente desde la propia ficha del informe: se escribe
+// apellido, DNI o beneficio y se elige. Usa el mismo camino que una sugerencia
+// (carga el beneficio, lo aprende y re-matchea), así que no hay un segundo
+// mecanismo que mantener.
+var CAB_PADRON_T = null;
+function buscarEnPadronCabina(){
+  clearTimeout(CAB_PADRON_T);
+  CAB_PADRON_T = setTimeout(async function(){
+    var cont = document.getElementById('cabPadronRes'); if (!cont) return;
+    var q = String(((document.getElementById('cabPadronQ') || {}).value) || '').trim();
+    var slug = ((document.getElementById('cabCliente') || {}).value) || '';
+    if (q.length < 3 || !slug){ cont.innerHTML = ''; return; }
+    var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/padron?limit=8&q=' + encodeURIComponent(q));
+    var items = (r.ok && r.data && r.data.items) || [];
+    if (!items.length){ cont.innerHTML = '<div class="cab-sub">Nadie con ese dato en el padrón de este cliente.</div>'; return; }
+    cont.innerHTML = items.map(function(x){
+      var ben = String(x.beneficio || '');
+      return '<div class="cab-cand"><div class="cab-cand-main"><b>' + esc(x.nombre || '') + '</b>'
+        + '<div class="cab-sub">DNI ' + esc(x.dni || '—') + ' · benef ' + esc(ben || '—') + '</div></div>'
+        + (ben ? "<button class=\"btn btn-ghost btn-sm\" data-benef=\"" + esc(ben) + "\" onclick=\"usarSugerencia(this.dataset.benef)\">Usar</button>"
+              : '<span class="cab-sub">sin beneficio cargado</span>')
+        + '</div>';
+    }).join('');
+  }, 300);
 }
 // Usar una sugerencia del padrón: carga su beneficio (lo aprende) y re-matchea.
 function usarSugerencia(beneficio){ if(!beneficio){ return; } document.getElementById('cabBenefManual').value = beneficio; guardarBeneficioInforme(); }
