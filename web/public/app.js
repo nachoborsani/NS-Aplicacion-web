@@ -2388,11 +2388,15 @@ function removeClientReportDraft(){
   if (!key) return;
   try { localStorage.removeItem(key); } catch (e) {}
 }
-// Recepción del centro (operador_clinica) no ve montos: ve quién falta, quién faltó,
-// qué informe falta subir — pero no la facturación. Blanquear acá (y no en cada
-// llamada) es la red de seguridad: cualquier pantalla que use moneyFmt para mostrar
-// texto queda cubierta sola, sin tener que acordarse de tocarla una por una.
-function veValoresCliente(){ return !(ME && ME.role === 'operador_clinica'); }
+// Roles operativos que NUNCA ven plata: la recepción del centro
+// (operador_clinica) y el operador de NS (Javi y los que vengan). Ven quién
+// falta, quién faltó, qué informe falta subir — nunca la facturación.
+// Blanquear acá (y no en cada llamada) es la red de seguridad: cualquier
+// pantalla que use moneyFmt para mostrar texto queda cubierta sola, sin tener
+// que acordarse de tocarla una por una. Es a nivel ROL a propósito: si mañana
+// se le habilita una pantalla nueva con montos, no se filtra por olvido.
+var ROLES_SIN_VALORES = ['operador_clinica', 'operador'];
+function veValoresCliente(){ return !(ME && ROLES_SIN_VALORES.indexOf(ME.role) >= 0); }
 function moneyFmt(n){
   if (!veValoresCliente()) return '';
   var value = Number(n || 0);
