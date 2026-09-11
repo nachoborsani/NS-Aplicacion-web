@@ -1028,6 +1028,9 @@ def _detectar_obra_social_informe(text: str) -> str:
     for line in lines:
         match = re.search(
             r"\b(?:obra\s+social|cobertura|prepaga)\s*[:\-]?\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})",
+            # La sigla ("O.S: PRIVADO", "OS - OSDE") con el separador
+            # OBLIGATORIO: un "os" suelto escondería un informe de PAMI.
+            r"(?:^|\s)o\.?\s?s\.?\s*[:\-]\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})",
             line,
             flags=re.IGNORECASE,
         )

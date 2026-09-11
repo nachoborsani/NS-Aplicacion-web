@@ -181,8 +181,13 @@ function obraSocialDe(texto) {
   if (!t) return "";
   const lineas = t.split(/\r?\n/).map((x) => x.trim());
   for (const linea of lineas) {
+    // "Obra social: OSDE" y tambien la sigla "O.S: PRIVADO" / "OS - OSDE",
+    // que es como la escriben varios centros. Para la sigla el : o el - es
+    // OBLIGATORIO: un "os" suelto en la prosa esconderia un informe de PAMI,
+    // que es el error caro de esta pantalla.
     const m = linea.match(
-      /\b(?:obra\s+social|cobertura|prepaga)\s*[:\-]?\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})/i);
+      /\b(?:obra\s+social|cobertura|prepaga)\s*[:\-]?\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})/i)
+      || linea.match(/(?:^|\s)o\.?\s?s\.?\s*[:\-]\s*([A-Za-z0-9 ._ÁÉÍÓÚÜÑáéíóúüñ/-]{2,60})/i);
     if (!m) continue;
     // El valor suele venir pegado al campo siguiente en la misma linea
     // ("OSDE   DNI: 8634818"). Se corta ahi.
