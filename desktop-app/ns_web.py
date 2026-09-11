@@ -400,7 +400,8 @@ class NSWebClient:
                               error: str = "", transmitidas: int | None = None,
                               transmit_errores: int | None = None,
                               transmit_error: str = "",
-                              omitidos_detalle: list | None = None) -> dict:
+                              omitidos_detalle: list | None = None,
+                              no_elegibles: list | None = None) -> dict:
         """Reporta el resultado del último sync (para el indicador de salud).
 
         Incluye la info de transmisión si se corrió (transmitidas / errores) y el
@@ -414,6 +415,13 @@ class NSWebClient:
             body["omitidosDetalle"] = [
                 {"nroOrden": str(d.get("nroOrden", ""))[:20], "motivo": str(d.get("motivo", ""))[:200]}
                 for d in list(omitidos_detalle)[:100] if isinstance(d, dict)
+            ]
+        if no_elegibles:
+            body["noElegibles"] = [
+                {"nroOrden": str(d.get("nroOrden", ""))[:20],
+                 "nombre": str(d.get("nombre", ""))[:60],
+                 "motivo": str(d.get("motivo", ""))[:120]}
+                for d in list(no_elegibles)[:300] if isinstance(d, dict)
             ]
         return self._request(
             "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado", body=body,

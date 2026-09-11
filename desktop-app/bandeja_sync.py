@@ -170,6 +170,8 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
         time.sleep(3)
     detalle = estado.get("omitidosDetalle")
     detalle = detalle if isinstance(detalle, list) else []
+    no_eleg = estado.get("noElegibles")
+    no_eleg = no_eleg if isinstance(no_eleg, list) else []
     return {
         "transmitidas": int(estado.get("procesados") or 0),
         "errores": int(estado.get("errores") or 0),
@@ -178,6 +180,10 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
         "completo": completo,  # False = cortó por timeout, quedaron pendientes
         # OMEs que no se pudieron transmitir + la leyenda de PAMI (ej. inactivo).
         "omitidosDetalle": detalle,
+        # OMEs que el bot ni intento, con el motivo: sin validar / sin
+        # documentacion cargada. Es lo que responde 'por que quedaron afuera'
+        # sin tener que ir a mirar el panel de PAMI a mano.
+        "noElegibles": no_eleg,
     }
 
 
@@ -510,6 +516,7 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
                 transmitidas=t.get("transmitidas"), transmit_errores=t.get("errores"),
                 transmit_error=t.get("lastError"),
                 omitidos_detalle=t.get("omitidosDetalle"),
+                no_elegibles=t.get("noElegibles"),
             )
         except Exception:  # noqa: BLE001 - un fallo del reporte no corta el sync
             pass

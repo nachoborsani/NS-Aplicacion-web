@@ -100,6 +100,11 @@ BOT_SCRIPT = r"""
     errores: 0,
     omitidos: [],
     omitidosDetalle: [],
+    // Filas que el bot NO intento transmitir y por que. omitidosDetalle son las
+    // que fallaron al intentarlo; estas ni siquiera son elegibles (les falta la
+    // validacion o la documentacion). Sin esto habia que ir a mirar PAMI a mano
+    // para saber por que quedaron afuera.
+    noElegibles: [],
     lastError: '',
     timestamp: null,
     paginaObjetivo: 1,
@@ -526,7 +531,7 @@ BOT_SCRIPT = r"""
     return true;
   }
 
-  function buscarPrimerElegible(omitidos = []) {
+  function buscarPrimerElegible(omitidos = [], noElegibles = null) {
     const rows = document.querySelectorAll('table tbody tr');
     LOG(`Escaneando ${rows.length} filas en página ${getPaginaActiva()}...`);
 
@@ -556,6 +561,12 @@ BOT_SCRIPT = r"""
       if (btn && checkAzul && docAzul) {
         LOG(`Elegible: [${nroOrden}] ${nombre}`);
         return { btn, nroOrden, nombre, pagina: getPaginaActiva() };
+      }
+      // No es elegible: se anota POR QUE, una sola vez por orden.
+      if (noElegibles && !noElegibles.some((x) => x && x.nroOrden === nroOrden)) {
+        const motivo = !btn ? 'sin boton de transmitir'
+          : (!checkAzul ? 'sin validar' : 'sin documentacion cargada');
+        noElegibles.push({ nroOrden, nombre, motivo });
       }
     }
 
@@ -620,7 +631,8 @@ BOT_SCRIPT = r"""
       estado.paginaDetectada = getPaginaActiva();
       guardarEstado(estado);
 
-      const fila = buscarPrimerElegible(estado.omitidos);
+      estado.noElegibles = Array.isArray(estado.noElegibles) ? estado.noElegibles : [];
+      const fila = buscarPrimerElegible(estado.omitidos, estado.noElegibles);
       if (fila) {
         estado.paginaObjetivo = fila.pagina;
         guardarEstado(estado);

@@ -8978,12 +8978,23 @@ const server = http.createServer(async (req, res) => {
             motivo: String((d && d.motivo) || "").slice(0, 200),
           }))
         : [];
+      // Las que el bot ni intentó, con el motivo (sin validar / sin
+      // documentación cargada). Responde "por qué quedaron afuera" sin tener
+      // que ir a mirar el panel de PAMI fila por fila.
+      estado.noElegibles = Array.isArray(body.noElegibles)
+        ? body.noElegibles.slice(0, 300).map((d) => ({
+            nroOrden: String((d && d.nroOrden) || "").slice(0, 20),
+            nombre: String((d && d.nombre) || "").slice(0, 60),
+            motivo: String((d && d.motivo) || "").slice(0, 120),
+          }))
+        : [];
     } else if (prev.transmitAt) {
       estado.transmitidas = prev.transmitidas || 0;
       estado.transmitErrores = prev.transmitErrores || 0;
       estado.transmitError = prev.transmitError || "";
       estado.transmitAt = prev.transmitAt;
       estado.omitidosDetalle = Array.isArray(prev.omitidosDetalle) ? prev.omitidosDetalle : [];
+      estado.noElegibles = Array.isArray(prev.noElegibles) ? prev.noElegibles : [];
     }
     store[slug] = estado;
     saveBandejaEstado(store);
