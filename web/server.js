@@ -5236,6 +5236,17 @@ function reportDebitStatus(report) {
 // cargados a mano o de validación.
 function actualizarReporteEnLugar(oldReport, freshRows) {
   const congelado = reportDebitStatus(oldReport) === "confirmado";
+  // Solo se mezclan filas DE ESTE MES. PAMI arrastra los filtros del export (ya
+  // pasó con CIMA) y una bajada del mes cerrado puede volver con el mes en curso
+  // adentro; sin esto, esas filas entran como 'turno cargado tarde' y contaminan
+  // la facturación de un mes ya cerrado. Grupo Justo, 11/09/2026: 686 filas de
+  // septiembre dentro del reporte de julio.
+  const perRep = reportDashboardPeriod(oldReport) || String(oldReport.nomencladorPeriod || "");
+  const ajenas = perRep ? (freshRows || []).filter((r) => r && r.period && String(r.period) !== perRep).length : 0;
+  if (ajenas) {
+    console.log(`[reportes] ${oldReport.clientSlug} ${perRep}: ignoro ${ajenas} fila(s) de otro mes que trajo la bajada`);
+    freshRows = (freshRows || []).filter((r) => !r || !r.period || String(r.period) === perRep);
+  }
   const oldByKey = new Map();
   for (const r of (Array.isArray(oldReport.rows) ? oldReport.rows : [])) oldByKey.set(dashboardRowKey(r), r);
   let mergedRows;
@@ -11691,6 +11702,34 @@ const server = http.createServer(async (req, res) => {
 //     partir de las claves viejas que tenía asignadas (informes.MODELO_VIEJO_CLIENTE),
 //     y carga el logo/dirección/teléfono de Caballito y CIMA en su ficha de
 //     Cliente (los mismos valores que antes estaban fijos en informes.js).
+// Un reporte de un mes NO puede tener filas de otro mes. Pasó el 11/09/2026 con
+// Grupo Justo: la corrida refrescó el reporte de julio con una bajada que PAMI
+// devolvió del mes en curso, y le metió 686 filas de septiembre adentro de las
+// 1.062 de julio. La facturación, los informes que faltan y los ausentes de un
+// mes cerrado quedaron mezclados con los del mes vivo.
+// Esto lo limpia una sola vez; el candado para que no vuelva a entrar está en
+// actualizarReporteEnLugar.
+function limpiarReportesConFilasDeOtroMes() {
+  const store = loadClientReportsStore();
+  if (!store || store.limpiezaFilasOtroMes) return;
+  let tocados = 0, sacadas = 0;
+  for (const rep of (store.items || [])) {
+    const per = reportDashboardPeriod(rep) || String(rep.nomencladorPeriod || "");
+    if (!per || !Array.isArray(rep.rows)) continue;
+    const quedan = rep.rows.filter((r) => !r || !r.period || String(r.period) === per);
+    if (quedan.length === rep.rows.length) continue;
+    sacadas += rep.rows.length - quedan.length;
+    tocados++;
+    console.log(`[reportes] ${rep.clientSlug} ${per}: saco ${rep.rows.length - quedan.length} filas de otro mes (quedan ${quedan.length})`);
+    rep.rows = quedan;
+    rep.rowCount = quedan.length;
+    rep.summary = summarizeReportRows(quedan);
+    rep.updatedAt = new Date().toISOString();
+  }
+  store.limpiezaFilasOtroMes = new Date().toISOString();
+  saveClientReportsStore(store);
+  if (tocados) console.log(`[reportes] limpieza: ${sacadas} filas de otro mes en ${tocados} reporte(s)`);
+}
 function ensureModelosUnificados() {
   try {
     const cfg = loadInformesConfig();
@@ -11836,6 +11875,7 @@ function ensureModelosUnificados() {
   } catch (e) { console.log("[baimed-ruano-seed] omitido:", e && e.message); }
 }
 ensureModelosUnificados();
+limpiarReportesConFilasDeOtroMes();
 
 // Migración suave: deja el Holter de Caballito listo para usar aunque la config
 // ya exista (producción). Idempotente: solo actúa si el Holter no tiene resultados.
