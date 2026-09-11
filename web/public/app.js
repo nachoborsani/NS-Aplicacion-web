@@ -5237,8 +5237,10 @@ function payloadInformeDeFila(x, opts){
   opts = opts || {};
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return null; }
-  var medicoId = opts.medicoId || loteMedicoParaModelo(m.key);
-  if (!medicoId){ nsAlert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
+  // sinFirma: el informe se genera sin médico a propósito (lo firma a mano el
+  // que lo hizo). No es lo mismo que no haber elegido: eso sigue siendo un error.
+  var medicoId = opts.sinFirma ? '' : (opts.medicoId || loteMedicoParaModelo(m.key));
+  if (!medicoId && !opts.sinFirma){ nsAlert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
   var slugFila = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && scopeAplica(d.clientes, slugFila); });
   var preset = (opts.presetId ? presets.find(function(d){ return d.id === opts.presetId; }) : null) || presets[0];
@@ -5482,7 +5484,10 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
   if (op.sinMedicoDelModelo) medDef = '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
   var medOpts = (op.sinMedicoDelModelo ? '<option value="" selected>— Elegí quién firma —</option>' : '')
-    + op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('');
+    + op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('')
+    // Última y sin `selected`: que el informe sin firma sea una decisión y no lo
+    // que sale por descarte.
+    + '<option value="__sin_firma__">— Sin firma (la firma el médico a mano) —</option>';
   var campoHtml = function(c){
     var inp;
     if (c.tipo === 'select'){
@@ -5563,7 +5568,9 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
     scrim.querySelector('#mc-inf-ok').onclick = async function(){
       var presetSel = scrim.querySelector('#mc-inf-preset');
       var medicoId = scrim.querySelector('#mc-inf-medico').value;
-      if (!medicoId){ nsAlert('Elegí el médico que firma.'); return; }
+      var sinFirma = medicoId === '__sin_firma__';
+      if (sinFirma) medicoId = '';
+      if (!medicoId && !sinFirma){ nsAlert('Elegí el médico que firma.'); return; }
       var valores = {};
       var falta = null;
       op.camposReq.forEach(function(c){
@@ -5577,7 +5584,7 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
       var omes = [];
       scrim.querySelectorAll('.mc-inf-ome:checked').forEach(function(c){ if (c.value) omes.push(c.value); });
       if (!omes.length) omes = [String(x.ome || '').replace(/\D/g, '')].filter(Boolean);
-      var payload = payloadInformeDeFila(x, { medicoId: medicoId, presetId: presetSel ? presetSel.value : '', valores: valores });
+      var payload = payloadInformeDeFila(x, { medicoId: medicoId, sinFirma: sinFirma, presetId: presetSel ? presetSel.value : '', valores: valores });
       if (!payload) return;
       var sexoPac = scrim.querySelector('#mc-inf-sexo');
       if (sexoPac && sexoPac.value && payload.paciente) payload.paciente.sexo = sexoPac.value;
@@ -5589,8 +5596,14 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         var avisosRev = (m.key === 'eco-vesicoprostatica' && typeof avisosVesicoprostatica === 'function')
           ? avisosVesicoprostatica(payload.valores || {}, String(payload.textoInforme || '') + ' ' + String((payload.valores || {}).conclusion || ''))
           : [];
+        if (sinFirma) avisosRev = ['Este informe va SIN firma.'].concat(avisosRev);
         var okRev = await revisarInformePdf(payload, sub, avisosRev);
         if (!okRev) return;
+      }
+      if (subir && sinFirma){
+        var okSf = await nsConfirm('Se sube a PAMI sin la firma del médico. Solo corresponde si el informe se firma a mano después de imprimirlo.',
+          { titulo: 'Informe sin firma', okLabel: 'Subir igual', peligro: true });
+        if (!okSf) return;
       }
       scrim.remove();
       if (subir){
