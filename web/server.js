@@ -3960,16 +3960,17 @@ function reportRowNextPeriodCutoff(row) {
   return row && row.outsideCutoff ? money(row.valueGross) : 0;
 }
 function reportRowMissingInforme(row) {
-  // Falta informe = validada sin transmitir Y es PRÁCTICA. Las consultas no
-  // necesitan informe (solo transmitirse) → NO son "falta informe".
-  return !!(row && row.validated && !row.transmitted && !row.absent && !isConsultationRow(row));
+  // Falta informe = validada sin transmitir Y de las que llevan informe. Una
+  // consulta pelada no lleva: solo hay que transmitirla → NO es "falta informe".
+  return !!(row && row.validated && !row.transmitted && !row.absent && reportRowLlevaInforme(row));
 }
 function reportRowMissingInformeAmount(row) {
   return reportRowMissingInforme(row) ? money(row.valueGross) : 0;
 }
-// "Por transmitir": consulta validada sin transmitir (no necesita informe).
+// "Por transmitir": validada sin transmitir y que NO lleva informe — no le falta
+// nada, solo que alguien la transmita.
 function reportRowPorTransmitir(row) {
-  return !!(row && row.validated && !row.transmitted && !row.absent && isConsultationRow(row));
+  return !!(row && row.validated && !row.transmitted && !row.absent && !reportRowLlevaInforme(row));
 }
 function sanitizeReportRows(rows) {
   return (Array.isArray(rows) ? rows : []).map((row, index) => {
@@ -4126,6 +4127,19 @@ function esConsultaPractica(code, texto) {
 function isConsultationRow(row) {
   return esConsultaPractica(String(row && row.practiceCode || ""), [row && row.practiceDescription, row && row.practiceText].join(" "));
 }
+// Consultas que igual llevan informe, porque traen un estudio adentro:
+//   570129 - CONSULTA CON ESPECIALISTA EN CARDIOLOGIA (INCLUYE ELECTROCARDIOGRAMA)
+// PAMI las tipifica como consulta y para contar/facturar lo son; lo que cambia
+// es que sin el informe del estudio no se pueden transmitir.
+const CONSULTAS_QUE_LLEVAN_INFORME = new Set(["570129"]);
+function practicaLlevaInforme(code, texto) {
+  const c = cleanIdentifier(code);
+  if (c && CONSULTAS_QUE_LLEVAN_INFORME.has(c)) return true;
+  return !esConsultaPractica(code, texto);
+}
+function reportRowLlevaInforme(row) {
+  return practicaLlevaInforme(String(row && row.practiceCode || ""), [row && row.practiceDescription, row && row.practiceText].join(" "));
+}
 // Resumen valorizado de la bandeja del mes en curso (para el "Dashboard mes en
 // curso"). La bandeja de PAMI trae la práctica como "CODIGO - DESCRIPCION" pero
 // NINGÚN importe; el $ estimado sale de matchear cada código contra el
@@ -4269,6 +4283,7 @@ function buildBandejaResumen(slug) {
     const pracRaw = String(row[kPrac] || "");
     const code = cleanIdentifier((pracRaw.split(" - ")[0] || "").trim());
     const esConsulta = esConsultaPractica(code, pracRaw);
+    const llevaInforme = practicaLlevaInforme(code, pracRaw);
     if (esConsulta) consultations++;
     else practices++;
     const esValidada = String(row[kValid] || "").trim().toUpperCase() === "S";
@@ -4336,8 +4351,8 @@ function buildBandejaResumen(slug) {
       // Para que "Crear informe" no vuelva a preguntar el sexo cuando ya lo
       // sabemos. Vacío = se pregunta, como antes.
       { const s = sexoDePaciente(detalle.benef, detalle.nombre); detalle.sexo = s.sexo; detalle.sexoOrigen = s.origen; }
-      if (esConsulta) {
-        // Consulta validada sin transmitir: NO falta informe, solo transmitir.
+      if (!llevaInforme) {
+        // No lleva informe (consulta pelada): no falta nada, solo transmitirla.
         porTransmitir++;
         porTransmitirAmount += valueGross;
         if (porTransmitirRows.length < 2000) porTransmitirRows.push(detalle);
