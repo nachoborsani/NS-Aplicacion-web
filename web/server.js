@@ -4083,8 +4083,43 @@ function summarizeReportRows(rows) {
     return acc;
   }, { totalRows: 0, consultations: 0, practices: 0, validated: 0, transmitted: 0, facturable: 0, billable: 0, absent: 0, outsideCutoff: 0, missingInforme: 0, unmatched: 0, gross: 0, debit: 0, net: 0, nextPeriodCutoff: 0, missingInformeAmount: 0, consultationNet: 0, practiceNet: 0 });
 }
+// El nomenclador de PAMI dice, en su columna TIPO, si un codigo es una CONSULTA
+// MEDICA o una practica. Eso es lo que decide si hace falta informe, y por el
+// nombre no alcanza: "CONSULTA OFTALMOLOGICA CON PRACTICAS DIAGNOSTICAS
+// COMPLEMENTARIAS" (505020) empieza con CONSULTA y es una practica de $139.821.
+// Se arma una sola vez y se rehace cuando cambia el archivo de nomencladores.
+let tiposPracticaCache = { marca: -1, mapa: null, visto: 0 };
+function tipoDePractica(code) {
+  const c = cleanIdentifier(code);
+  if (!c) return "";
+  // Esto se pregunta una vez por fila: no hay que ir al disco cada vez. Se mira
+  // si cambio el archivo como mucho cada 5 segundos.
+  const ahora = Date.now();
+  if (tiposPracticaCache.mapa && ahora - tiposPracticaCache.visto < 5000) return tiposPracticaCache.mapa.get(c) || "";
+  let marca = 0;
+  try { marca = fs.statSync(nomencladoresFile).mtimeMs; } catch {}
+  tiposPracticaCache.visto = ahora;
+  if (!tiposPracticaCache.mapa || tiposPracticaCache.marca !== marca) {
+    const mapa = new Map();
+    const items = (loadNomencladorStore() || {}).items || {};
+    // Del mes mas nuevo al mas viejo: el tipo de un codigo no cambia, pero si el
+    // codigo ya no existe vale el de un nomenclador anterior.
+    for (const per of Object.keys(items).sort().reverse()) {
+      for (const r of ((items[per] && items[per].rows) || [])) {
+        const cc = cleanIdentifier(r.practiceCode);
+        if (cc && !mapa.has(cc)) mapa.set(cc, String(r.type || "").trim().toUpperCase());
+      }
+    }
+    tiposPracticaCache = { marca, mapa, visto: ahora };
+  }
+  return tiposPracticaCache.mapa.get(c) || "";
+}
 function isConsultationRow(row) {
   const code = String(row && row.practiceCode || "");
+  // Lo que dice PAMI manda. Solo si el codigo no esta en ningun nomenclador se
+  // cae al criterio viejo (mirar el nombre), que es mejor que no decidir nada.
+  const tipo = tipoDePractica(code);
+  if (tipo) return tipo.startsWith("CONSULTA MEDICA");
   const text = normalizeText([row && row.practiceDescription, row && row.practiceText].join(" "));
   return code.startsWith("820") || text.includes("CONSULTA");
 }
