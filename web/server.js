@@ -4153,11 +4153,23 @@ function esConsultaPractica(code, texto) {
 function isConsultationRow(row) {
   return esConsultaPractica(String(row && row.practiceCode || ""), [row && row.practiceDescription, row && row.practiceText].join(" "));
 }
-// Consultas que igual llevan informe, porque traen un estudio adentro:
+// Consultas que igual llevan informe. PAMI las tipifica como consulta y para
+// contar/facturar lo son; lo que cambia es que sin informe no se transmiten.
+// Son dos familias:
+//
 //   570129 - CONSULTA CON ESPECIALISTA EN CARDIOLOGIA (INCLUYE ELECTROCARDIOGRAMA)
-// PAMI las tipifica como consulta y para contar/facturar lo son; lo que cambia
-// es que sin el informe del estudio no se pueden transmitir.
-const CONSULTAS_QUE_LLEVAN_INFORME = new Set(["570129"]);
+//     trae un estudio adentro: hay que subir el trazado.
+//
+//   427106/108/109/110 - MEDICO CABECERA (control anual, domicilio, clínica
+//   presencial, fuera de cápita) y 427122 - CONSULTA AFILIADO EXTRACAPITA
+//     la consulta del médico de cabecera lleva su evolución. Se ve en el panel
+//     de PAMI: esas filas piden documentación igual que una práctica. Sin esto
+//     caían en "por transmitir" y el tablero decía que no faltaba ningún
+//     informe cuando faltaban 254 (Scheffelaar 77, Dubesarky 175, Navarro 11).
+const CONSULTAS_QUE_LLEVAN_INFORME = new Set([
+  "570129",
+  "427106", "427108", "427109", "427110", "427122",
+]);
 function practicaLlevaInforme(code, texto) {
   const c = cleanIdentifier(code);
   if (c && CONSULTAS_QUE_LLEVAN_INFORME.has(c)) return true;
