@@ -6644,7 +6644,16 @@ async function loadClientMesCurso(){
   // demás (informes, OMEs, reportes, honorarios) — ver normalizeClient en
   // server.js. Caballito Pediátrico es el primer caso: pago fijo, sin
   // valorización, pero NO debe "entrar" a médico de cabecera.
-  if (ACTIVE_CLIENT.tipo === 'med_cabecera' || ACTIVE_CLIENT.bandejaCup) return loadMedCabMesCurso();
+  //
+  // Ese tablero es para EL QUE TRABAJA las bandejas (operador y el centro): le
+  // muestra validar / informar / transmitir sin plata al lado, que con pago fijo
+  // no dice nada. El admin necesita lo contrario — comparar a Caballito con el
+  // resto y ver la facturación —, así que a él le sigue tocando el tablero
+  // valorizado. Un médico de cabecera va al tablero de bandejas para todos,
+  // ahí no hay nada que valorizar.
+  var soloBandejas = ACTIVE_CLIENT.tipo === 'med_cabecera'
+    || (ACTIVE_CLIENT.bandejaCup && !(ME && ME.role === 'admin'));
+  if (soloBandejas) return loadMedCabMesCurso();
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
   // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.
