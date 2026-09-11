@@ -179,6 +179,17 @@
   .nav-caret{margin-left:auto;transition:transform .15s ease}
   .nav-group.open .nav-caret{transform:rotate(180deg)}
   .nav-sub{display:none;margin:0 0 2px 29px;padding-left:9px;border-left:1px solid rgba(255,255,255,.12)}
+  /* Grupos del menú en modo rótulo (Administración y los de clientes): se leen
+     como el título "herramientas" — chiquito, en mayúsculas y sin la caja — para
+     que el menú no sea una pila de botones grandes. El ícono a ese tamaño sobra. */
+  .nav-group.rotulo>.nav-parent{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5c7189;padding:7px 12px 3px;gap:6px}
+  .nav-group.rotulo>.nav-parent:hover{background:transparent;color:#8299b3}
+  .nav-group.rotulo>.nav-parent>svg:first-child{display:none}
+  .nav-group.rotulo>.nav-parent .nav-caret{width:12px;height:12px;opacity:.75}
+  .nav-group.rotulo.active>.nav-parent{background:transparent;color:#8299b3}
+  .nav-group.rotulo.active>.nav-parent svg{color:inherit}
+  .nav-group.rotulo .nav-sub{margin-left:12px}
+  body.sidebar-collapsed .nav-group.rotulo>.nav-parent{display:none}
   .nav-group.open .nav-sub{display:grid;gap:2px}
   .client-new-btn{display:none;align-items:center;justify-content:center;margin:6px 0 2px 38px;width:calc(100% - 38px);height:34px;border:1px dashed rgba(24,183,178,.55);border-radius:9px;background:rgba(24,183,178,.08);color:#8df0ed;font-weight:800;font-size:12px;cursor:pointer}
   .client-new-btn.is-admin{display:flex}

@@ -190,7 +190,9 @@ function wireNavSecciones(){
     var items = document.querySelector('.nav-section-items[data-section-items="'+key+'"]');
     var guardado = null;
     try{ guardado = localStorage.getItem('ns-nav-sec-'+key); }catch(e){}
-    if (guardado === '0'){ header.classList.add('collapsed'); if(items) items.classList.add('collapsed'); }
+    // Arranca CERRADO salvo que el usuario lo haya dejado abierto: al entrar, el
+    // menú se ve de un vistazo y cada uno abre lo que usa. Después se recuerda.
+    if (guardado !== '1'){ header.classList.add('collapsed'); if(items) items.classList.add('collapsed'); }
     header.addEventListener('click', function(){
       if (document.body.classList.contains('sidebar-collapsed')) return;  // icon-only: no colapsa
       var col = header.classList.toggle('collapsed');
