@@ -3358,16 +3358,24 @@ function applyAutomaticExclusionDebits(rows) {
       for (const regla of reglasSet) {
         const cuando = regla.alcance === "periodo" ? "en el mes" : "el mismo día";
         if (regla.tipo === "inclusion") {
-          // El débito solo existe si la GRANDE ya está transmitida (recién ahí PAMI
+          // El débito REAL solo existe con las dos transmitidas (recién ahí PAMI
           // cruza). Con la grande transmitida: la debitada transmitida = débito real;
-          // la debitada sin transmitir = "iría a débito" (si la transmiten).
+          // la debitada sin transmitir = "iría a débito" si la transmiten. Y si la
+          // grande está validada pero sin transmitir, también se avisa: va a pasar.
           const grandeCods = (regla.conCodigos || []).map((c) => cleanIdentifier(c));
           const grandeRows = groupRows.filter((r) => expandedPamiExclusionCodes(r).some((c) => grandeCods.includes(c)));
-          if (!grandeRows.some((r) => r.transmitted)) continue;
+          const grandeTransmitida = grandeRows.some((r) => r.transmitted);
+          // La grande validada pero todavia sin transmitir: hoy no hay debito,
+          // pero lo va a haber cuando se transmitan las dos. Es el caso normal del
+          // que se sienta a hacer informes, y es justo lo que hay que avisarle
+          // ANTES: este informe, por mas que lo subas, no se cobra.
+          const grandeEnCamino = !grandeTransmitida && grandeRows.some((r) => r.validated);
+          if (!grandeTransmitida && !grandeEnCamino) continue;
           const dc = cleanIdentifier(regla.debita);
-          const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || grandeCods.join("/")}.`;
+          const reason = `${regla.debitaNombre || dc} debitada: ${cuando} se hizo ${regla.conNombre || grandeCods.join("/")}.`
+            + (grandeTransmitida ? "" : " (cuando se transmitan las dos)");
           for (const r of groupRows.filter((x) => expandedPamiExclusionCodes(x).includes(dc))) {
-            if (r.transmitted) marcar(r, "total", regla, reason, grandeCods.join("/"));
+            if (r.transmitted) { if (grandeTransmitida) marcar(r, "total", regla, reason, grandeCods.join("/")); }
             else marcarIria(r, "total", regla, reason, grandeCods.join("/"));
           }
         } else if (regla.tipo === "par") {
@@ -3386,8 +3394,13 @@ function applyAutomaticExclusionDebits(rows) {
             // si se transmite (todavía NO es débito real, no baja el neto).
             const objetivo = candidatos.find((r) => !r.transmitted);
             if (objetivo) marcarIria(objetivo, regla.monto || "pay40", regla, reason, cods.join("/"));
+          } else if (candidatos.filter((r) => r.validated).length >= 2) {
+            // Las dos validadas y ninguna transmitida: el débito todavía no existe,
+            // pero va a existir. Se avisa sobre una de las dos, que es lo que va a
+            // pasar (PAMI paga una entera y la otra al 40%).
+            const objetivo = candidatos[candidatos.length - 1];
+            if (objetivo) marcarIria(objetivo, regla.monto || "pay40", regla, reason + " (cuando se transmitan las dos)", cods.join("/"));
           }
-          // Las dos sin transmitir → nada (el débito solo aparece si se transmiten ambas).
         }
       }
     }
