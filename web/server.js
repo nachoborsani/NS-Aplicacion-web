@@ -4108,7 +4108,12 @@ function tipoDePractica(code) {
     for (const per of Object.keys(items).sort().reverse()) {
       for (const r of ((items[per] && items[per].rows) || [])) {
         const cc = cleanIdentifier(r.practiceCode);
-        if (cc && !mapa.has(cc)) mapa.set(cc, String(r.type || "").trim().toUpperCase());
+        const t = String(r.type || "").trim().toUpperCase();
+        // Hay filas con el TIPO vacio o con un 0 (las consultas del medico de
+        // cabecera, por ejemplo). Eso no es una respuesta: si lo tomaramos como
+        // valida, no diria CONSULTA MEDICA y la consulta pasaria a pedir informe.
+        // Se ignora y queda el tipo de otro mes, o el criterio por el nombre.
+        if (cc && !mapa.has(cc) && /[A-Z]/.test(t)) mapa.set(cc, t);
       }
     }
     tiposPracticaCache = { marca, mapa, visto: ahora };
