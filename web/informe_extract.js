@@ -175,6 +175,12 @@ function practicaDe(fuente) {
 // en pami_documentacion.py). Se porta igual para que las dos puntas
 // digan lo mismo del mismo PDF.
 const OBRAS_NO_PAMI = { osde: "OSDE", privado: "PRIVADO", ospeca: "OSPECA", particular: "PARTICULAR" };
+// Coberturas que sabemos reconocer cuando aparecen SUELTAS en una linea (tablas).
+// PAMI entra a proposito: si el informe dice PAMI, la respuesta correcta es PAMI,
+// no vacio. La lista es corta y de nombres inequivocos — cualquier cosa que no
+// este aca se resuelve como vacio, que significa tratarlo como PAMI.
+const COBERTURAS_CONOCIDAS = ["PAMI", "PRIVADO", "PARTICULAR", "OSDE", "OSPECA", "OMINT", "SWISS MEDICAL",
+  "GALENO", "MEDICUS", "IOMA", "SANCOR SALUD", "AVALIAN", "UNION PERSONAL", "OSECAC", "OSPRERA", "PREVENCION SALUD"];
 
 function obraSocialDe(texto) {
   const t = String(texto || "");
@@ -219,24 +225,37 @@ function obraSocialDe(texto) {
   }
   // Cuarta pasada: la etiqueta y el valor en RENGLONES DISTINTOS. Pasa con los
   // informes armados como tabla — el Holter de Eccosur trae "Obra Social :" en
-  // una celda y "PRIVADO" en la de al lado, y al extraer el texto cada celda cae
-  // en su propia línea. Con las pasadas de arriba ese informe quedaba como si no
+  // una celda y el valor en otra, y al extraer el texto cada celda cae en su
+  // propia línea. Con las pasadas de arriba ese informe quedaba como si no
   // declarara cobertura y se lo buscaba en el padrón de PAMI igual.
+  //
+  // NO se toma "la línea siguiente" a ciegas: en ese mismo Holter la celda de al
+  // lado es "23 h 59 min" y quedaba eso como obra social. Se busca una línea que
+  // SEA una cobertura conocida; si no hay ninguna cerca, se devuelve vacío (que
+  // significa "tratalo como PAMI", el default seguro).
   const ETIQUETAS_OS = ["OBRA SOCIAL", "COBERTURA", "PREPAGA", "O S", "OS"];
+  const esCobertura = (linea) => {
+    const v = norm(linea).toUpperCase().replace(/[.:\-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!v || v.length > 40) return "";
+    for (const c of COBERTURAS_CONOCIDAS) {
+      if (v === c || v.startsWith(c + " ") || v.endsWith(" " + c) || v.includes(" " + c + " ")) return c;
+    }
+    return "";
+  };
   for (let i = 0; i < lineas.length; i++) {
     const et = norm(lineas[i]).toUpperCase().replace(/[.:\-\s]+$/, "").trim();
     if (!ETIQUETAS_OS.includes(et)) continue;
-    // El valor es alguna de las 2 líneas siguientes con contenido. Se exige corto
-    // y sin ":" para no tragarse el campo que viene después.
-    for (let j = i + 1; j < Math.min(i + 3, lineas.length); j++) {
-      const v = String(lineas[j] || "").trim();
-      if (!v) continue;
-      if (v.length <= 40 && !v.includes(":")) {
-        const limpio = v.replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
-        if (limpio) return limpio;
-      }
-      break;
+    for (let j = i + 1; j < Math.min(i + 8, lineas.length); j++) {
+      const hit = esCobertura(lineas[j]);
+      if (hit) return hit;
     }
+  }
+  // Quinta: una línea que sea EXACTAMENTE una cobertura conocida, sin etiqueta a
+  // la vista. En un informe médico un renglón que dice sólo "PRIVADO" u "OSDE" es
+  // la cobertura; no hay otra cosa que pueda ser.
+  for (const linea of lineas) {
+    const v = norm(linea).toUpperCase().replace(/[.:\-\s]+$/, "").trim();
+    if (COBERTURAS_CONOCIDAS.includes(v)) return v;
   }
   return "";
 }
