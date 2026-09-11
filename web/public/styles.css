@@ -182,14 +182,23 @@
   /* Grupos del menú en modo rótulo (Administración y los de clientes): se leen
      como el título "herramientas" — chiquito, en mayúsculas y sin la caja — para
      que el menú no sea una pila de botones grandes. El ícono a ese tamaño sobra. */
-  .nav-group.rotulo>.nav-parent{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5c7189;padding:7px 12px 3px;gap:6px}
-  .nav-group.rotulo>.nav-parent:hover{background:transparent;color:#8299b3}
-  .nav-group.rotulo>.nav-parent>svg:first-child{display:none}
-  .nav-group.rotulo>.nav-parent .nav-caret{width:12px;height:12px;opacity:.75}
+  .nav-group.rotulo .nav-parent{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5c7189;padding:7px 12px 3px;gap:6px}
+  .nav-group.rotulo .nav-parent:hover{background:transparent;color:#8299b3}
+  .nav-group.rotulo .nav-parent>svg:first-child{display:none}
+  .nav-group.rotulo .nav-parent .nav-caret{width:12px;height:12px;opacity:.75}
   .nav-group.rotulo.active>.nav-parent{background:transparent;color:#8299b3}
   .nav-group.rotulo.active>.nav-parent svg{color:inherit}
   .nav-group.rotulo .nav-sub{margin-left:12px}
-  body.sidebar-collapsed .nav-group.rotulo>.nav-parent{display:none}
+  /* El rótulo de "potenciales clientes" comparte renglón con el "+" de crear uno
+     nuevo: antes era un botón grande punteado abajo de todo, ocupando una fila
+     entera para algo que se usa cada tanto. */
+  .nav-rotulo-row{display:flex;align-items:center;gap:2px}
+  .nav-rotulo-row>.nav-parent{flex:1;min-width:0}
+  .nav-rotulo-accion{display:none;align-items:center;justify-content:center;width:22px;height:22px;margin-right:10px;border:1px solid rgba(24,183,178,.45);border-radius:7px;background:rgba(24,183,178,.10);color:#8df0ed;font-size:14px;font-weight:800;line-height:1;cursor:pointer;flex:0 0 auto}
+  .nav-rotulo-accion.is-admin{display:flex}
+  .nav-rotulo-accion:hover{background:rgba(24,183,178,.22);border-color:#18B7B2;color:#fff}
+  body.sidebar-collapsed .nav-rotulo-accion{display:none}
+  body.sidebar-collapsed .nav-group.rotulo .nav-parent{display:none}
   .nav-group.open .nav-sub{display:grid;gap:2px}
   .client-new-btn{display:none;align-items:center;justify-content:center;margin:6px 0 2px 38px;width:calc(100% - 38px);height:34px;border:1px dashed rgba(24,183,178,.55);border-radius:9px;background:rgba(24,183,178,.08);color:#8df0ed;font-weight:800;font-size:12px;cursor:pointer}
   .client-new-btn.is-admin{display:flex}
