@@ -6667,6 +6667,50 @@ async function loadClientMesCurso(){
   // Si hay un refresco pendiente/corriendo, seguir sondeando (recarga al terminar).
   if (REFRESCO_ACTIVO) arrancarPollRefresco();
 }
+// Un centro "en análisis" es un POTENCIAL: se le baja la bandeja para mirarla,
+// pero no se le transmite nada ni se le hacen los informes. Eso no se veía en
+// ningún lado —había que abrir Editar cliente para enterarse— así que va acá, en
+// la cabecera, que se ve desde cualquier solapa, con el botón para pasarlo.
+function pintarChipPotencial(client){
+  var el = document.getElementById('clientPotencial'); if (!el) return;
+  if (!client || !client.enAnalisis){ el.hidden = true; el.innerHTML = ''; return; }
+  var esAdmin = ME && ME.role === 'admin';
+  el.innerHTML = '<span class="pot-chip" title="Se le baja la bandeja para analizarla. No se le transmite ni se le hacen los informes.">🔎 Potencial · en análisis</span>'
+    + (esAdmin ? '<button class="btn btn-primary" type="button" onclick="pasarAClienteReal()">Pasar a cliente</button>' : '');
+  el.hidden = false;
+}
+// Pasarlo a cliente cambia cómo trabaja el sistema con él todos los días, así que
+// antes se dice en criollo qué empieza a pasar.
+async function pasarAClienteReal(){
+  var c = ACTIVE_CLIENT;
+  if (!c || !c.enAnalisis) return;
+  var ok = await nsConfirm('', {
+    titulo: 'Pasar a cliente',
+    okLabel: 'Sí, pasarlo a cliente',
+    cuerpoHtml: '<b>' + esc(c.name) + '</b> deja de ser un potencial y pasa a ser cliente. Desde que lo confirmes:'
+      + '<ul style="margin:10px 0 0 18px;padding:0;line-height:1.65">'
+      + '<li>Se le <b>baja la bandeja todos los días</b>, junto con la de los demás.</li>'
+      + '<li>Se le <b>transmite a PAMI</b>: en la corrida de la tarde y cada vez que le des a "Transmitir y actualizar".</li>'
+      + '<li>Lo que le <b>falte informe</b> se puede generar y subir desde acá.</li>'
+      + '</ul>'
+      + '<p style="margin:10px 0 0">Se vuelve atrás cuando quieras, destildando "En análisis" en Editar cliente.</p>'
+  });
+  if (!ok) return;
+  // El PATCH pisa UGL y SAP con lo que le mandes, así que van sí o sí; el resto
+  // (tipo, módulos, dirección, logo) lo conserva solo.
+  var res = await req('PATCH', '/api/clientes/' + encodeURIComponent(c.slug), {
+    name: c.name, businessName: c.businessName, cuit: c.cuit,
+    ugl: c.ugl || '', sap: c.sap || '',
+    enAnalisis: false,
+    seccion: c.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio',
+  });
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo pasar a cliente.'); return; }
+  CLIENTS = res.data.clients || CLIENTS;
+  ACTIVE_CLIENT = res.data.client || ACTIVE_CLIENT;
+  renderClientList();
+  await renderActiveClient();
+  nsAlert(c.name + ' ya es cliente. Entra en el refresco diario y se le va a transmitir.', { titulo: 'Listo' });
+}
 async function renderActiveClient(){
   var client = ACTIVE_CLIENT;
   if (!client) return;
@@ -6677,6 +6721,7 @@ async function renderActiveClient(){
   if (DASH_MODULE_FILTER_CLIENT !== client.slug) { DASH_MODULE_FILTER = []; DASH_MODULE_FILTER_CLIENT = client.slug; }
   document.getElementById('clientCrumbName').textContent = client.name;
   document.getElementById('clientName').textContent = client.name;
+  pintarChipPotencial(client);
   setClientHeaderUp('');   // se limpia al cambiar de cliente; loadClientPami lo recarga
   aplicarPestanasCliente();
   setClientSection(CLIENT_SECTION);

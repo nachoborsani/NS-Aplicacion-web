@@ -880,6 +880,11 @@
   .client-up-header{display:inline-flex;align-items:center;gap:4px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);border-radius:999px;padding:2px 4px 2px 10px;font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
   .client-up-header b{color:var(--text);font-weight:700}
   .client-up-header .icon-btn.mini{padding:2px}
+  /* Centro que todavía es un POTENCIAL (en análisis): se avisa en la cabecera,
+     que es lo que se ve entre en la solapa que entre. */
+  .client-potencial{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .client-potencial .pot-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;color:var(--warning);background:var(--warning-bg);border:1px solid color-mix(in srgb,var(--warning) 38%,var(--border));border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .client-potencial .btn{height:28px;padding:0 11px;font-size:12px}
   .client-tabs{display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .client-tabs::-webkit-scrollbar{display:none}
   .client-tabs button{border:1px solid var(--border);background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:999px;flex-shrink:0;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
