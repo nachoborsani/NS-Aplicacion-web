@@ -262,6 +262,32 @@ def past_month_ranges(period: str, n: int = 2) -> list[tuple[str, str, str, str]
     return out
 
 
+def _mes_de_filas(rows: list[dict]) -> str:
+    """Mes dominante de una bandeja, mirando la columna TURNO ('01/09/2026 - ...').
+
+    Sirve para no subir un mes por otro: PAMI arrastra los filtros del export y
+    puede devolver el mes en curso cuando le pediste uno cerrado. El 11/09/2026
+    devolvio tres veces septiembre (septiembre, agosto y julio) y con eso piso el
+    historial de los tres meses y el reporte de agosto de Grupo Justo.
+    """
+    cuenta: dict[str, int] = {}
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        turno = ""
+        for k, v in r.items():
+            if str(k).strip().upper().startswith("TURNO"):
+                turno = str(v or "").strip()
+                break
+        partes = turno[:10].split("/")
+        if len(partes) == 3 and len(partes[2]) == 4:
+            mes = f"{partes[2]}-{partes[1]}"
+            cuenta[mes] = cuenta.get(mes, 0) + 1
+    if not cuenta:
+        return ""
+    return max(cuenta.items(), key=lambda kv: kv[1])[0]
+
+
 def parse_bandeja_excel(path: str) -> tuple[list[dict], list[str]]:
     """Lee el Excel exportado y devuelve (filas como dicts, columnas). La primera
     fila no vacía se toma como encabezado."""
@@ -413,6 +439,13 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
                 pass
 
         rows, columns = parse_bandeja_excel(exported)
+        # Control antes de subir: que lo bajado sea del mes que se pidio. PAMI
+        # arrastra los filtros del export y puede devolver otro mes.
+        mes_bajado = _mes_de_filas(rows)
+        if mes_bajado and mes_bajado != period:
+            raise RuntimeError(
+                f"PAMI devolvio la bandeja de {mes_bajado} cuando se pidio {period}; no se sube nada."
+            )
         web.upload_bandeja(slug, period, rows, columns=columns, month_label=label,
                            generated_at=date.today().isoformat())
         # Subir la bandeja de adelante (si había días futuros). Un fallo acá no
@@ -447,6 +480,15 @@ def sync_client(web: NSWebClient, client: dict, period: str, progress=None,
         for pos, (pperiod, plabel, exp_pas) in enumerate(exported_pasados):
             try:
                 rows_pas, cols_pas = parse_bandeja_excel(exp_pas)
+                mes_pas = _mes_de_filas(rows_pas)
+                if mes_pas and mes_pas != pperiod:
+                    # No se sube NI la bandeja ni el reporte: subir un mes por otro
+                    # pisa el historial y la facturacion de un mes cerrado.
+                    msg = f"PAMI devolvio {mes_pas} cuando se pidio {pperiod}"
+                    if progress:
+                        progress(f"{name}: {msg} - salteo ese mes")
+                    cerrados_refrescados.append({"period": pperiod, "error": msg})
+                    continue
                 web.upload_bandeja_historial(slug, pperiod, rows_pas, columns=cols_pas,
                                              month_label=plabel, generated_at=date.today().isoformat())
                 r = web.actualizar_reporte_cerrado(slug, pperiod, exp_pas, crear_si_falta=(pos == 0))

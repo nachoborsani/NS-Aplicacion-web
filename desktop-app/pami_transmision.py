@@ -1503,6 +1503,59 @@ class PamiTransmisionController:
                 except Exception:
                     pass
                 page.wait_for_timeout(1600)
+        # Verificacion de FECHAS: PAMI tambien arrastra el RANGO del export
+        # anterior. El 11/09/2026 la corrida de Grupo Justo pidio septiembre,
+        # agosto y julio, y el panel siguio mostrando septiembre: los tres exports
+        # salieron identicos y pisaron el historial de los tres meses y el reporte
+        # de agosto. El combo ya se verificaba; el rango no.
+        if fecha_desde or fecha_hasta:
+            for _ in range(2):
+                try:
+                    rango = page.evaluate(
+                        """() => ({
+                          d: (document.querySelector('input[name="f_turno_desde"]')?.value || '').trim(),
+                          h: (document.querySelector('input[name="f_turno_hasta"]')?.value || '').trim()
+                        })"""
+                    ) or {}
+                except Exception as exc:  # noqa: BLE001 - navegacion en curso
+                    self._log(f"[FILTRO] No pude leer el rango (sigo igual): {exc}")
+                    break
+                ok_desde = (not fecha_desde) or rango.get("d") == fecha_desde
+                ok_hasta = (not fecha_hasta) or rango.get("h") == fecha_hasta
+                if ok_desde and ok_hasta:
+                    break
+                self._log(
+                    f"[FILTRO] El rango quedo en {rango.get('d')!r}..{rango.get('h')!r} "
+                    f"cuando pedi {fecha_desde!r}..{fecha_hasta!r}; lo vuelvo a aplicar."
+                )
+                try:
+                    page.evaluate(
+                        """(f) => {
+                          const set = (sel, val) => {
+                            const el = document.querySelector(sel);
+                            if (el && val) {
+                              el.value = val;
+                              el.dispatchEvent(new Event('input', { bubbles: true }));
+                              el.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                          };
+                          set('input[name="f_turno_desde"]', f.d);
+                          set('input[name="f_turno_hasta"]', f.h);
+                          const cand = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a'))
+                            .find(el => ((el.textContent || el.value || '').trim().toLowerCase() === 'buscar')
+                              && (el.offsetParent !== null || el.getClientRects().length > 0));
+                          if (cand) cand.click();
+                        }""",
+                        {"d": fecha_desde, "h": fecha_hasta},
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self._log(f"[FILTRO] No pude re-aplicar el rango: {exc}")
+                    break
+                try:
+                    page.wait_for_load_state("networkidle", timeout=20000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(1600)
 
     def _ensure_transmision_registros_por_pagina(self, page: Page, valor: str = "50") -> None:
         actualizado = page.evaluate(
