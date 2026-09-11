@@ -5649,10 +5649,10 @@ function mesCursoTogglePanel(tipo){
     ensureInformesCfg(function(){ if (MESCURSO_PANEL_ABIERTO === tipo){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(tipo); } });
   }
   var html = '';
-  var debCols = ['Benef', 'Apellido y nombre', 'Turno', 'Práctica que se debita', 'Estado', 'Motivo', 'Se cruza con', 'Débito'];
+  var debCols = ['Benef', 'Apellido y nombre', 'Turno', 'Práctica que se debita', 'Estado', 'Motivo', 'Se cruza con', 'Débito', 'Queda'];
   // El umbral no se cruza con otra práctica (es valorización parcial): dejamos vacío
   // el "Se cruza con" para no mostrar un cruce casual.
-  var mapDebitos = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), moneyFmt(x.monto)]; };
+  var mapDebitos = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), moneyFmt(x.monto), moneyFmt(x.queda || 0)]; };
   if (tipo === 'informes'){
     html = mesCursoPanelDetalleOModulo('informes', MESCURSO_FALTAN_INFORMES || [], 'Faltan informes', 'error', 'copiarFaltanInformes', accionCrearInforme('informes'));
   } else if (tipo === 'informes-julio'){
@@ -5661,11 +5661,11 @@ function mesCursoTogglePanel(tipo){
     html = mesCursoPanelDetalleOModulo('informes-cerrado', MESCURSO_FALTAN_INFORMES_CERRADO || [], 'Faltan informes (mes cerrado)', 'error', 'copiarFaltanInformesCerrado', accionCrearInforme('informes-cerrado'));
   } else if (tipo === 'debitos-julio'){
     var dj = MESCURSO_POSIBLES_DEBITOS_JULIO || [];
-    html = dj.length ? mesCursoTablaHtml('Posibles débitos (mes anterior) · ' + dj.length, 'warn', 'copiarPosiblesDebitosJulio', debCols, dj.map(mapDebitos), 'debitos-julio', null, null, [7]) : mesCursoVacioHtml('Posibles débitos (mes anterior)', 'warn');
+    html = dj.length ? mesCursoTablaHtml('Posibles débitos (mes anterior) · ' + dj.length + mesCursoQuedaTxt(dj), 'warn', 'copiarPosiblesDebitosJulio', debCols, dj.map(mapDebitos), 'debitos-julio', null, null, [7, 8]) : mesCursoVacioHtml('Posibles débitos (mes anterior)', 'warn');
   } else if (tipo === 'debitos-cerrado'){
     var dc = MESCURSO_DEBITOS_CERRADO || [];
     // Mes cerrado: los excluyentes traen "Se cruza con"; los umbrales quedan sin cruce.
-    html = dc.length ? mesCursoTablaHtml('Débitos (mes cerrado) · ' + dc.length, 'warn', 'copiarDebitosCerrado', debCols, dc.map(mapDebitos), 'debitos-cerrado', null, null, [7]) : mesCursoVacioHtml('Débitos (mes cerrado)', 'warn');
+    html = dc.length ? mesCursoTablaHtml('Débitos (mes cerrado) · ' + dc.length + mesCursoQuedaTxt(dc), 'warn', 'copiarDebitosCerrado', debCols, dc.map(mapDebitos), 'debitos-cerrado', null, null, [7, 8]) : mesCursoVacioHtml('Débitos (mes cerrado)', 'warn');
   } else if (tipo === 'modulos' || tipo === 'modulos-julio' || tipo === 'modulos-cerrado'){
     var md = tipo === 'modulos' ? MESCURSO_MODULOS : (tipo === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modDesglose = mesCursoModHayDesglose(md);
@@ -5690,13 +5690,13 @@ function mesCursoTogglePanel(tipo){
     html = md.length ? mesCursoTablaHtml('Cantidades por módulo · ' + md.length + ' módulos', '', copiaMod, modCols, md.map(mapMod), tipo, haySinValor ? accModulos : null, null, modMoneyCols) : mesCursoVacioHtml('Cantidades por módulo', '');
   } else if (tipo === 'debitos-adelante'){
     var da = MESCURSO_POSIBLES_DEBITOS_ADELANTE || [];
-    html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length, 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante', null, null, [7]) : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');
+    html = da.length ? mesCursoTablaHtml('Posibles débitos por adelantado · ' + da.length + mesCursoQuedaTxt(da), 'warn', 'copiarPosiblesDebitosAdelante', debCols, da.map(mapDebitos), 'debitos-adelante', null, null, [7, 8]) : mesCursoVacioHtml('Posibles débitos por adelantado', 'warn');
   } else if (tipo.indexOf('debitos-futuro:') === 0){
     var perFut = tipo.slice('debitos-futuro:'.length);
     var fm = (MESCURSO_FUTUROS || []).find(function(x){ return x.period === perFut; });
     MESCURSO_POSIBLES_DEBITOS_FUTURO = (fm && fm.posiblesDebitosRows) || [];
     var tituloFut = 'Posibles débitos por adelantado · ' + ((fm && fm.label) || perFut);
-    html = MESCURSO_POSIBLES_DEBITOS_FUTURO.length ? mesCursoTablaHtml(tituloFut + ' · ' + MESCURSO_POSIBLES_DEBITOS_FUTURO.length, 'warn', 'copiarPosiblesDebitosFuturo', debCols, MESCURSO_POSIBLES_DEBITOS_FUTURO.map(mapDebitos), tipo, null, null, [7]) : mesCursoVacioHtml(tituloFut, 'warn');
+    html = MESCURSO_POSIBLES_DEBITOS_FUTURO.length ? mesCursoTablaHtml(tituloFut + ' · ' + MESCURSO_POSIBLES_DEBITOS_FUTURO.length + mesCursoQuedaTxt(MESCURSO_POSIBLES_DEBITOS_FUTURO), 'warn', 'copiarPosiblesDebitosFuturo', debCols, MESCURSO_POSIBLES_DEBITOS_FUTURO.map(mapDebitos), tipo, null, null, [7, 8]) : mesCursoVacioHtml(tituloFut, 'warn');
   } else if (tipo === 'ausentes'){
     html = mesCursoPanelDetalleOModulo('ausentes', MESCURSO_AUSENTES || [], 'Ausentes', 'warn', 'copiarAusentes', accionLiberarCupoAusente('ausentes'));
   } else if (tipo === 'ausentes-julio'){
@@ -5713,7 +5713,7 @@ function mesCursoTogglePanel(tipo){
     html = mesCursoPanelDetalleOModulo('fueracorte-julio', MESCURSO_FUERACORTE_JULIO || [], 'A facturar fuera de corte (mes anterior)', 'warn', 'copiarFueraCorteJulio', null);
   } else {
     var pd = MESCURSO_POSIBLES_DEBITOS || [];
-    html = pd.length ? mesCursoTablaHtml('Posibles débitos · ' + pd.length, 'warn', 'copiarPosiblesDebitos', debCols, pd.map(mapDebitos), 'debitos', null, null, [7]) : mesCursoVacioHtml('Posibles débitos', 'warn');
+    html = pd.length ? mesCursoTablaHtml('Posibles débitos · ' + pd.length + mesCursoQuedaTxt(pd), 'warn', 'copiarPosiblesDebitos', debCols, pd.map(mapDebitos), 'debitos', null, null, [7, 8]) : mesCursoVacioHtml('Posibles débitos', 'warn');
   }
   panel.innerHTML = html;
   MESCURSO_PANEL_ABIERTO = tipo;
@@ -5808,6 +5808,14 @@ function mcOcultarValores(headers, filas, moneyCols){
     filas: filas.map(function(row){ return keep.map(function(i){ return row[i]; }); })
   };
 }
+// De un cruce no siempre se pierde todo: hay reglas que PAMI paga parcial (el
+// ecodoppler arterial + venoso de miembros inferiores se paga uno al 40%). Sin
+// este numero, "posibles debitos" se lee como que no transmitir da lo mismo.
+function mesCursoQuedaTxt(filas){
+  if (!veValoresCliente()) return '';
+  var t = (filas || []).reduce(function(a, x){ return a + (Number(x.queda) || 0); }, 0);
+  return t > 0 ? ' · se cobra igual ' + moneyFmt(t) : '';
+}
 function mesCursoTablaHtml(titulo, tono, copiaFn, headers, filas, panelId, accionFn, extraAcciones, moneyCols){
   var oculto = mcOcultarValores(headers, filas, moneyCols);
   headers = oculto.headers; filas = oculto.filas;
@@ -5900,8 +5908,8 @@ function mesCursoDatosDetalleOModulo(panelId, arr, tituloBase){
     filas: (arr || []).map(function(x){ return [x.benef, x.nombre, x.practica, x.turno, Number(x.valor) || 0]; }), moneyCols: [4] };
 }
 function mesCursoDescargarDatosCruda(panelId){
-  var debCols = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO'];
-  var mapDeb = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), Number(x.monto) || 0]; };
+  var debCols = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO', 'QUEDA'];
+  var mapDeb = function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), Number(x.monto) || 0, Number(x.queda) || 0]; };
   var cli = (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
   if (panelId === 'ausentes') return mesCursoDatosDetalleOModulo('ausentes', MESCURSO_AUSENTES || [], 'Ausentes');
   if (panelId === 'ausentes-julio') return mesCursoDatosDetalleOModulo('ausentes-julio', MESCURSO_AUSENTES_JULIO || [], 'Ausentes sin validar (mes anterior)');
@@ -5913,8 +5921,8 @@ function mesCursoDescargarDatosCruda(panelId){
   if (panelId === 'informes') return mesCursoDatosDetalleOModulo('informes', MESCURSO_FALTAN_INFORMES || [], 'Faltan informes');
   if (panelId === 'informes-julio') return mesCursoDatosDetalleOModulo('informes-julio', MESCURSO_FALTAN_INFORMES_JULIO || [], 'Faltan informes (mes anterior)');
   if (panelId === 'informes-cerrado') return mesCursoDatosDetalleOModulo('informes-cerrado', MESCURSO_FALTAN_INFORMES_CERRADO || [], 'Faltan informes (mes cerrado)');
-  if (panelId === 'debitos-julio') return { titulo: 'Posibles débitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [7] };
-  if (panelId === 'debitos-cerrado') return { titulo: 'Débitos (mes cerrado) - ' + cli, columnas: debCols, filas: (MESCURSO_DEBITOS_CERRADO || []).map(mapDeb), moneyCols: [7] };
+  if (panelId === 'debitos-julio') return { titulo: 'Posibles débitos (mes anterior) - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_JULIO || []).map(mapDeb), moneyCols: [7, 8] };
+  if (panelId === 'debitos-cerrado') return { titulo: 'Débitos (mes cerrado) - ' + cli, columnas: debCols, filas: (MESCURSO_DEBITOS_CERRADO || []).map(mapDeb), moneyCols: [7, 8] };
   if (panelId === 'modulos' || panelId === 'modulos-julio' || panelId === 'modulos-cerrado'){
     var modArr = panelId === 'modulos' ? MESCURSO_MODULOS : (panelId === 'modulos-julio' ? MESCURSO_MODULOS_JULIO : MESCURSO_MODULOS_CERRADO);
     var modTit = panelId === 'modulos' ? 'Cantidades por módulo (mes en curso)' : (panelId === 'modulos-julio' ? 'Cantidades por módulo (mes anterior)' : 'Cantidades por módulo (mes cerrado)');
@@ -5934,13 +5942,13 @@ function mesCursoDescargarDatosCruda(panelId){
       var total = Number(d.count) || (validar + transmitir + listas);
       return [d.monthLabel || d.month || 'Mes', validar, transmitir, listas, total];
     }) };
-  if (panelId === 'debitos-adelante') return { titulo: 'Posibles débitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [7] };
+  if (panelId === 'debitos-adelante') return { titulo: 'Posibles débitos por adelantado - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_ADELANTE || []).map(mapDeb), moneyCols: [7, 8] };
   if (String(panelId).indexOf('debitos-futuro:') === 0) {
     var perF = String(panelId).slice('debitos-futuro:'.length);
     var fmF = (MESCURSO_FUTUROS || []).find(function(x){ return x.period === perF; });
-    return { titulo: 'Posibles débitos por adelantado ' + ((fmF && fmF.label) || perF) + ' - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_FUTURO || []).map(mapDeb), moneyCols: [7] };
+    return { titulo: 'Posibles débitos por adelantado ' + ((fmF && fmF.label) || perF) + ' - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS_FUTURO || []).map(mapDeb), moneyCols: [7, 8] };
   }
-  return { titulo: 'Posibles débitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [7] };
+  return { titulo: 'Posibles débitos - ' + cli, columnas: debCols, filas: (MESCURSO_POSIBLES_DEBITOS || []).map(mapDeb), moneyCols: [7, 8] };
 }
 async function mesCursoDescargar(fmt, panelId, btn){
   var d = mesCursoDescargarDatos(panelId);
@@ -6039,9 +6047,9 @@ function copiarPosiblesDebitosAdelante(btn){ var d = mesCursoDescargarDatos('deb
 // Este es dinámico (no tiene un panelId fijo: depende de qué mes futuro se está
 // mirando), así que se arma acá mismo en vez de por mesCursoDescargarDatos.
 function copiarPosiblesDebitosFuturo(btn){
-  var headers = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO'];
-  var filas = (MESCURSO_POSIBLES_DEBITOS_FUTURO || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), x.monto]; });
-  var oculto = mcOcultarValores(headers, filas, [7]);
+  var headers = ['BENEF', 'APELLIDO Y NOMBRE', 'TURNO', 'PRACTICA QUE SE DEBITA', 'ESTADO', 'MOTIVO', 'SE CRUZA CON', 'DEBITO', 'QUEDA'];
+  var filas = (MESCURSO_POSIBLES_DEBITOS_FUTURO || []).map(function(x){ return [x.benef, x.nombre, x.turno, x.practica, x.estado, x.categoria || '', (x.categoria === 'Umbral' ? '' : (x.cruce || '')), x.monto, x.queda || 0]; });
+  var oculto = mcOcultarValores(headers, filas, [7, 8]);
   mesCursoCopiar(btn, oculto.headers, oculto.filas);
 }
 function mesCursoCopiar(btn, headers, filas){

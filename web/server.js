@@ -3951,6 +3951,7 @@ function buildDebitoDetalle(rows) {
       categoria: debitoMotivoLabel(r),
       cruce: cruce.join(" + "),
       monto: money(d),
+      queda: money(Math.max(0, reportRowGross(r) - d)),
     });
   }
   return out;
@@ -4395,6 +4396,7 @@ function buildBandejaResumen(slug) {
       cruce: cruce.join(" + "),
       motivo: r.autoDebitReason || "",
       monto: money(d),
+      queda: money(Math.max(0, reportRowGross(r) - d)),
     });
   }
   // Débitos por afiliado inactivo (100% de la práctica). No es un cruce mismo-día:
@@ -4418,6 +4420,7 @@ function buildBandejaResumen(slug) {
       cruce: r._inactivoMotivo || "Afiliado inactivo al momento de la prestación",
       motivo: "Afiliado inactivo",
       monto: money(monto),
+      queda: 0,
     });
   }
   return {
@@ -4710,7 +4713,7 @@ function buildAdelanteResumenDe(bandeja) {
       .map((g) => g._practica + (g._turno ? " · " + g._turno : "")).filter(Boolean);
     if (posiblesDebitosRows.length < 2000) posiblesDebitosRows.push({
       benef: r.benefit, nombre: r._nombre || "", turno: r._turno || "", practica: r._practica || "",
-      estado: "Turno asignado", categoria: debitoMotivoLabel(r), cruce: cruce.join(" + "), motivo: r.autoDebitReason || "", monto: money(d),
+      estado: "Turno asignado", categoria: debitoMotivoLabel(r), cruce: cruce.join(" + "), motivo: r.autoDebitReason || "", monto: money(d), queda: money(Math.max(0, reportRowGross(r) - d)),
     });
   }
   return {
