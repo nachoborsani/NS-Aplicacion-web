@@ -192,6 +192,10 @@
   .nav-section-collapsible.collapsed .nav-section-chevron{transform:rotate(-90deg)}
   .nav-section-items{overflow:hidden;max-height:3000px;transition:max-height .22s ease}
   .nav-section-items.collapsed{max-height:0}
+  /* Administración NO es una herramienta: va fuera de ese bloque, pero pegada
+     abajo se leía como la octava de la lista. Una línea la separa. */
+  #navGroupPagos{margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,.08)}
+  body.sidebar-collapsed #navGroupPagos{margin-top:8px;padding-top:8px}
   body.sidebar-collapsed .nav-section-chevron{display:none}
   body.sidebar-collapsed .nav-section-items{max-height:none !important}
   .client-nav-item{display:block;text-decoration:none;border:0;background:transparent;color:#9db2c8;border-radius:8px;padding:4px 10px;text-align:left;font-size:12.5px;font-weight:600;cursor:pointer}
