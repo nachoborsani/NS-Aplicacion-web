@@ -202,7 +202,26 @@ function aplicarGateDeRol(req, meGate, p) {
       permitido = (esGet && (p === `/api/clientes/${centroCod}/liberar-cupo/candidatos` || p === `/api/clientes/${centroCod}/liberar-cupo/reporte.xlsx`))
         || (req.method === "POST" && p === `/api/clientes/${centroCod}/liberar-cupo/liberar`);
     }
-    if (!permitido) return { status: 403, body: { error: "Tu usuario todavía no tiene esa pantalla habilitada." } };
+    if (!permitido) {
+      // El mensaje tiene que decir QUÉ pasó: este 403 tenía dos causas muy
+      // distintas y el texto genérico ("no tenés esa pantalla habilitada")
+      // mandaba a revisar los módulos del usuario aunque estuvieran bien.
+      // El caso real que costó caro: los módulos estaban OK y la pantalla
+      // estaba pidiendo OTRO centro (un selector que quedó apuntando mal).
+      const mCli = p.match(/^\/api\/clientes\/([^/]+)(\/.*)?$/);
+      const pedido = mCli ? decodeURIComponent(mCli[1]) : "";
+      if (pedido && pedido !== meGate.centro) {
+        return { status: 403, body: { error: `Esta pantalla trabaja solo sobre tu centro (${meGate.centro}), y se pidió "${pedido}". Recargá la página.` } };
+      }
+      const pantalla = /\/liberar-cupo(\/|$)/.test(p) ? "Liberar cupo"
+        : /\/padron(\/|$)/.test(p) ? "Afiliados"
+        : /^\/api\/informes\//.test(p) ? "Generar informes"
+        : "";
+      if (pantalla) {
+        return { status: 403, body: { error: `Tu usuario no tiene habilitada la pantalla "${pantalla}". Pedísela a NS.` } };
+      }
+      return { status: 403, body: { error: "Tu usuario todavía no tiene esa pantalla habilitada." } };
+    }
     return null;
   }
 
