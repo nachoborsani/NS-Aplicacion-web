@@ -2213,7 +2213,7 @@ function saveInformesConfig(cfg) {
 }
 // Reglas de débito de PAMI (cruces): dos estudios que se pisan el mismo día → PAMI debita uno.
 // Confirmadas contra bandejas reales (Caballito 05/06 y GJS 06 2026). Ver memoria pami-debitos-regla-mismo-dia.
-const DEBITO_REGLAS_SEED_VERSION = 2;
+const DEBITO_REGLAS_SEED_VERSION = 3;
 const DEBITO_REGLAS_SEED = [
   { id: "prostatica-vesical", activa: true, tipo: "inclusion", monto: "total",
     debita: "180114", debitaNombre: "Ecografía prostática / vesicoprostática",
@@ -2235,6 +2235,10 @@ const DEBITO_REGLAS_SEED = [
     debita: "507315", debitaNombre: "Flujometría urinaria computarizada",
     conCodigos: ["507313"], conNombre: "Estudio urodinámico completo",
     nota: "El urodinámico completo ya incluye la flujometría. Confirmado Caballito 05 y 06/2026." },
+  { id: "ergometria-holter", activa: true, tipo: "inclusion", monto: "total",
+    debita: "570124", debitaNombre: "Ergometría computarizada de doce derivaciones",
+    conCodigos: ["570121"], conNombre: "Holter cardíaco de 3 canales 24 hs",
+    nota: "El mismo día que el holter, PAMI debita la ergometría al 100%. Salió de los débitos ya confirmados: 6 casos en CIMA y Sala Millón, siempre contra la ergometría y nunca contra el holter." },
   { id: "arterial-venoso-mmii", activa: true, tipo: "par", monto: "pay40",
     codigos: ["180610", "180606"],
     codigosNombre: "Ecodoppler arterial + venoso de miembros inferiores",
