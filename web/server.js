@@ -11689,19 +11689,26 @@ ensureHolterSeed();
 // fuerza acá en vez de depender de que alguien lo edite a mano desde la web
 // (el botón de editar cliente es solo para admin, y en producción costó
 // encontrarlo). Idempotente: solo guarda si hace falta cambiar algo.
-function ensureCaballitoConsultorio() {
+// SEMILLA, no imposición: solo actúa si a Caballito nunca se le configuró
+// `bandejaCup` (o sea, si el campo no está en clientes.json). Antes forzaba los
+// tres valores en CADA arranque, así que si un admin le cambiaba tipo/sección/
+// bandejaCup desde "Editar cliente", el próximo restart se lo revertía sin que
+// nadie entendiera por qué. Con el chequeo sobre lo GUARDADO (no sobre el merge
+// con DEFAULT_CLIENTS), una vez sembrado no vuelve a tocar nada y el admin
+// manda.
+function seedCaballitoConsultorio() {
   try {
+    const guardado = loadClientOverrides().find((c) => c && c.slug === "caballito-pediatrico");
+    if (guardado && guardado.bandejaCup !== undefined) return;   // ya configurado: no tocar
     const clients = loadClientsStore();
     const idx = clients.findIndex((c) => c.slug === "caballito-pediatrico");
     if (idx < 0) return;
-    const actual = clients[idx];
-    if (actual.tipo === "consultorio" && actual.seccion === "consultorio" && actual.bandejaCup === true) return;
-    clients[idx] = normalizeClient({ ...actual, tipo: "consultorio", seccion: "consultorio", bandejaCup: true });
+    clients[idx] = normalizeClient({ ...clients[idx], tipo: "consultorio", seccion: "consultorio", bandejaCup: true });
     saveClientsStore(clients);
-    console.log("[caballito-consultorio] tipo=consultorio, seccion=consultorio, bandejaCup=true aplicado.");
+    console.log("[caballito-consultorio] sembrado (tipo/seccion=consultorio, bandejaCup=true). No se vuelve a tocar.");
   } catch (e) { console.log("[caballito-consultorio] omitido:", e && e.message); }
 }
-ensureCaballitoConsultorio();
+seedCaballitoConsultorio();
 
 // Precarga los presets ORL en configs ya existentes (idempotente: solo agrega
 // el preset de una práctica ORL si esa práctica todavía no tiene resultados).
