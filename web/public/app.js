@@ -3661,20 +3661,41 @@ function esHerramientaDeCliente(key){
   if (!m) return false;
   return modulosClienteDe(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
 }
+// Herramientas del operador de NS en el MENÚ LATERAL (mismo diseño que las del
+// admin y las del operador de clínica: rótulo "herramientas" + ítems con ícono).
+// Son las del cliente que tiene ABIERTO y se recalculan cada vez que cambia de
+// cliente: así se ven como el resto del sistema pero siguen scopeadas, que era
+// la razón de que fueran pestañas (una herramienta apuntando al centro
+// equivocado ya costó un 403 que llevó días de diagnóstico).
+// Sin cliente abierto no se muestra ninguna: no habría a qué centro aplicarlas.
+var MENU_HERRAMIENTAS_OPERADOR = [
+  ['navInformes', 'informes'], ['navCabina', 'cabina'], ['navOmeWeb', 'omeweb'],
+  ['navLiberarCupo', 'liberarcupo'], ['navPadron', 'padron'],
+];
+function renderMenuHerramientasOperador(){
+  if (!(ME && ME.role === 'operador')) return;
+  var mods = ACTIVE_CLIENT ? modulosClienteDe(ACTIVE_CLIENT.slug) : [];
+  MENU_HERRAMIENTAS_OPERADOR.forEach(function(par){
+    var el = document.getElementById(par[0]);
+    if (!el) return;
+    var habilitada = mods.indexOf(par[1]) >= 0;
+    el.style.display = habilitada ? '' : 'none';
+    // El ítem abre la herramienta COMO SECCIÓN del cliente activo (setClientSection
+    // ya preselecciona el cliente, le esconde el selector y deja el hash listo
+    // para el F5). Ojo: no alcanza con go(), que la abriría suelta.
+    el.onclick = habilitada ? function(){ setClientSection(par[1]); return false; } : null;
+  });
+  acomodarSeccionHerramientas();   // esconde el rótulo y la caja si no quedó ninguna
+}
+// Las herramientas del operador dejaron de ser pestañas (pasaron al menú
+// lateral, ver renderMenuHerramientasOperador). Se sigue llamando desde el
+// render del cliente para dos cosas: vaciar la barra (que no quede una fila de
+// botones huérfana arriba) y refrescar el menú, porque las herramientas son las
+// del cliente que se acaba de abrir.
 function renderTabsHerramientas(){
   var cont = document.getElementById('clientToolTabs');
-  if (!cont) return;
-  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
-  var mods = modulosClienteDe(ACTIVE_CLIENT.slug);
-  cont.innerHTML = OPERADOR_MODULOS
-    .filter(function(m){ return m.tipo === 'vista' && mods.indexOf(m.key) >= 0; })
-    .map(function(m){
-      return '<button type="button"' + (CLIENT_SECTION === m.key ? ' class="active"' : '')
-        + ' data-cli-tool="' + esc(m.key) + '">' + esc(m.label) + '</button>';
-    }).join('');
-  cont.querySelectorAll('[data-cli-tool]').forEach(function(b){
-    b.addEventListener('click', function(){ setClientSection(b.getAttribute('data-cli-tool')); });
-  });
+  if (cont) cont.innerHTML = '';
+  renderMenuHerramientasOperador();
 }
 // Abre una herramienta SIN salirse del cliente: go() muestra la vista de la
 // herramienta, y acá volvemos a mostrar la vista de clientes (header +
@@ -12189,17 +12210,12 @@ function aplicarUsuario(u){
       var el = document.getElementById(id); if (el) el.style.display = 'none';
     });
   }
-  // Operador NS (Javi): las herramientas dejan de vivir sueltas en el menú y
-  // pasan a ser PESTAÑAS dentro de cada cliente, ya scopeadas a ese cliente y
-  // según lo que el admin le habilitó cliente por cliente (OPERADOR_MODULOS /
-  // modulosClienteDe). El menú le queda Inicio + sus clientes: una herramienta
-  // siempre se usa desde adentro del cliente, así no puede quedar apuntando al
-  // cliente equivocado.
-  if (u.role === 'operador') {
-    ['navInformes', 'navOmeWeb', 'navPadron', 'navCabina', 'navLiberarCupo'].forEach(function(id){
-      var el = document.getElementById(id); if (el) el.style.display = 'none';
-    });
-  }
+  // Operador NS (Javi): las herramientas van agrupadas en el MENÚ LATERAL, con
+  // el mismo diseño que las del admin y del operador de clínica. Ver
+  // renderMenuHerramientasOperador: son las del cliente que tiene ABIERTO, así
+  // que siguen scopeadas (nunca pueden quedar apuntando al centro equivocado,
+  // que es lo que se buscaba cuando eran pestañas) pero se ven como el resto.
+  if (u.role === 'operador') renderMenuHerramientasOperador();
   // Configuración general (usuarios, débitos): alguien con clientes restringidos
   // no debe entrar ahí - un operador sin restringir sí, como siempre.
   var ngen = document.getElementById('navGeneral'); if (ngen) ngen.style.display = tieneClientesRestringidos(u) ? 'none' : '';
