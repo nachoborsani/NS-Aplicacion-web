@@ -574,14 +574,28 @@ BOT_SCRIPT = r"""
         docEl?.closest('button,a,span')?.classList.contains('btn-primary') ||
         docEl?.classList.contains('btn-primary');
 
-      if (btn && checkAzul && docAzul) {
+      // Azul = hecho, verde = falta. Los medicos de cabecera tienen un boton MAS
+      // que los consultorios —el del informe—, y mirando solo el check y la
+      // documentacion el bot le hacia clic igual a filas sin informe: PAMI no
+      // abre el cuadro de confirmar y la fila se pierde en reintentos (12/09/2026:
+      // Scheffelaar 7 transmitidas y 60 'Timeout esperando modal'). En vez de
+      // buscar cada boton por su icono, se exige que TODOS los de la fila esten
+      // en azul; el de transmitir queda afuera, que siempre es verde.
+      const btnTransmitir = btn && btn.closest ? btn.closest('button,a,span') : null;
+      const accionesFila = Array.from(row.querySelectorAll('button,a.btn,a[class*=btn]'))
+        .filter((b) => b !== btnTransmitir && !(btn && b.contains(btn)) && b.querySelector('i'));
+      const verdes = accionesFila.filter((b) => !b.classList.contains('btn-primary'));
+
+      if (btn && checkAzul && docAzul && verdes.length === 0) {
         LOG(`Elegible: [${nroOrden}] ${nombre}`);
         return { btn, nroOrden, nombre, pagina: getPaginaActiva() };
       }
       // No es elegible: se anota POR QUE, una sola vez por orden.
       if (noElegibles && !noElegibles.some((x) => x && x.nroOrden === nroOrden)) {
         const motivo = !btn ? 'sin boton de transmitir'
-          : (!checkAzul ? 'sin validar' : 'sin documentacion cargada');
+          : (!checkAzul ? 'sin validar'
+          : (!docAzul ? 'falta cargar la documentacion'
+          : `le falta algo: ${verdes.length} boton(es) en verde`));
         noElegibles.push({ nroOrden, nombre, motivo });
       }
     }
