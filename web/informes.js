@@ -833,7 +833,7 @@ const MODELOS = {
     // CUALQUIER fila 180202 (el código con un único modelo no se desempata) y
     // un arterial saldría con la plantilla del venoso. Con los cuatro cargados
     // el desempate lo hace el nombre de la práctica de la fila.
-    codigoPractica: "180202",
+    codigoPractica: "180611",   // ECODOPPLER ARTERIAL DE MIEMBROS SUPERIORES
     estudio: "ECODOPPLER ARTERIAL DE MIEMBROS SUPERIORES",
     estudioArchivo: "Ecodoppler arterial MMSS",
     textoDefault: "SE REALIZÓ UNA EXPLORACIÓN DE LAS ARTERIAS DE AMBOS MIEMBROS SUPERIORES CON ECÓGRAFO PHILIPS PURE WAVE CON TRANSDUCTOR DE 5-10 MHZ. SE UTILIZARON LOS MODOS: BIDIMENSIONAL, DOPPLER PULSADO EN DIFERENTES DECÚBITOS PARA UNA VALORACIÓN COMPLETA DE LOS PARÁMETROS QUE SE DESCRIBEN A CONTINUACIÓN.\nECOTOMOGRAFÍA: ARTERIAS DE PAREDES LISAS Y DIÁMETRO NORMAL.\nDOPPLER: FLUJO TRIFÁSICO (NORMAL) A NIVEL BILATERAL.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS.",
@@ -856,7 +856,7 @@ const MODELOS = {
     practica: "Ecodoppler arterial de miembros inferiores",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "180202",
+    codigoPractica: "180610",   // ECODOPPLER ARTERIAL DE MIEMBROS INFERIORES
     estudio: "ECO-DOPPLER ARTERIAL DE MIEMBROS INFERIORES",
     estudioArchivo: "Ecodoppler arterial MMII",
     // Quien firma estos estudios lo hace con el trazo solo (no con un sello que
@@ -873,7 +873,7 @@ const MODELOS = {
     practica: "Ecodoppler venoso de miembros inferiores — 180202",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "180202",
+    codigoPractica: "180606",   // ECODOPPLER VENOSO DE MIEMBROS INFERIORES
     estudio: "ECO-DOPPLER COLOR VENOSO DE MIEMBROS INFERIORES",
     estudioArchivo: "Ecodoppler venoso MMII",
     tecnicosTitulo: "HALLAZGOS",
