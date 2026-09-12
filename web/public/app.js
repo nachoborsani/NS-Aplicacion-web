@@ -2111,6 +2111,11 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   if (colFecha) colFecha.textContent = tipo.indexOf('cup') === 0 ? 'Turno' : 'Recibido';
   var puedeCrearInforme = tipo === 'cup-informe';
   if (colAccion) colAccion.style.display = puedeCrearInforme ? '' : 'none';
+  // La columna del tilde y su "seleccionar todos" van con la de Acción: solo
+  // existen donde se pueden crear informes.
+  var colSel = document.getElementById('pendDetalleColSel');
+  if (colSel) colSel.style.display = puedeCrearInforme ? '' : 'none';
+  var selAll = document.getElementById('pendDetalleSelAll'); if (selAll) selAll.checked = false;
   PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: [] };
   body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">Cargando…</td></tr>';
   if (meta) meta.textContent = '';
