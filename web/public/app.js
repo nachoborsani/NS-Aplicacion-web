@@ -2044,23 +2044,65 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   }
   var filas = (res.data && res.data.filas) || [];
   PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: filas };
+  var generados = puedeCrearInforme ? await informesCabeceraGenerados(slug) : {};
   var total = (res.data && res.data.total) || filas.length;
   if (meta) meta.textContent = total > filas.length
     ? ('mostrando ' + filas.length + ' de ' + total)
     : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes'));
   body.innerHTML = filas.length ? filas.map(function(f, idx){
+    var omeKey = informeCabeceraOme(f);
+    var generado = puedeCrearInforme && omeKey && generados[omeKey];
+    var estadoHtml = generado
+      ? '<span style="color:#16a34a;font-weight:800">Generado</span><br><span style="color:var(--text-2);font-size:11px">' + esc(generado.plantilla || 'Informe guardado') + '</span>'
+      : esc(f.estado || '-');
+    var accionHtml = '';
+    if (puedeCrearInforme) {
+      accionHtml = generado
+        ? '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Informe generado" disabled>✓</button></td>'
+        : '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
+    }
     return '<tr>'
       + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
       + '<td class="num">' + esc(f.benef || '-') + '</td>'
       + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
       + '<td class="numw">' + esc(f.ome || '-') + '</td>'
-      + '<td class="num">' + esc(f.estado || '-') + '</td>'
+      + '<td class="num">' + estadoHtml + '</td>'
       + '<td class="num">' + esc(f.turno || f.recibido || '-') + '</td>'
-      + (puedeCrearInforme ? '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>' : '')
+      + accionHtml
       + '</tr>';
   }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
 }
 function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
+function informeCabeceraOme(item){
+  return String((item && (item.ome || item.n_orden)) || '').replace(/\D/g,'');
+}
+async function informesCabeceraGenerados(slug){
+  var out = {};
+  try{
+    var d = await fetch('/api/admin/worker/tasks', { credentials:'same-origin' }).then(function(r){ return r.ok ? r.json() : null; });
+    (d && d.tasks || []).forEach(function(t){
+      if (!t || t.type !== 'crear-informe-cabecera' || t.status !== 'done') return;
+      if (String(t.clientSlug || '') !== String(slug || '')) return;
+      var res = t.result || {};
+      var first = Array.isArray(res.detalle) ? res.detalle[0] : null;
+      var ome = informeCabeceraOme(res);
+      if (!ome && first) ome = informeCabeceraOme(first);
+      if (!ome) return;
+      out[ome] = { plantilla: res.plantilla || ((first && first.plantilla) || ''), at: t.finishedAt || t.startedAt || t.createdAt || '' };
+    });
+  }catch(e){}
+  return out;
+}
+function marcarInformeCabeceraGenerado(btn, plantilla){
+  if (!btn) return;
+  btn.textContent = '✓';
+  btn.title = 'Informe generado' + (plantilla ? ' · ' + plantilla : '');
+  btn.disabled = true;
+  btn.classList.remove('danger');
+  var tr = btn.closest ? btn.closest('tr') : null;
+  var estado = tr && tr.children ? tr.children[4] : null;
+  if (estado) estado.innerHTML = '<span style="color:#16a34a;font-weight:800">Generado</span><br><span style="color:var(--text-2);font-size:11px">' + esc(plantilla || 'Informe guardado') + '</span>';
+}
 var INFORME_CABECERA_PLANTILLAS = {
   F: [
     { codigo:'F1', taMax:'120', taMin:'80', peso:'68', motivo:'control de salud', examen:'paciente femenina en buen estado general, sin signos de alarma al momento de la consulta', diagnostico:'control de salud', tratamiento:'se indican pautas generales de cuidado, control evolutivo y recetas habituales' },
@@ -2187,9 +2229,7 @@ function seguirInformeCabeceraTarea(id, btn){
       if(t.status === 'running'){ btn.textContent = '🛠'; btn.title = 'Creando informe en PAMI'; return; }
       clearInterval(timer);
       if(t.status === 'done'){
-        btn.textContent = '✓';
-        btn.title = 'Informe guardado';
-        btn.disabled = true;
+        marcarInformeCabeceraGenerado(btn, t.result && t.result.plantilla);
         mostrarResultadoTarea('crear-informe-cabecera', t);
         if (typeof loadClientMesCurso === 'function') setTimeout(function(){ loadClientMesCurso(); }, 1200);
       } else {
