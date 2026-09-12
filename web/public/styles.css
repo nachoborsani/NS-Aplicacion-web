@@ -2267,6 +2267,9 @@
   .cab-file{font-weight:650;word-break:break-word}
   .cab-sub{font-size:11.5px;color:var(--text-2);margin-top:2px}
   .cab-asunto{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);font-size:12.5px}
+  /* Observación (motivo del desestimado / nota del reclamo): mismo trato que el
+     asunto, acotada para que no empuje la tabla. El texto completo va en el title. */
+  .cab-obs{max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);font-size:12.5px}
   .cab-ocr{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#7a5cff 16%,var(--surface));color:#5a3ec8;vertical-align:middle}
   .cab-actions{white-space:nowrap;text-align:right}
   .cab-actions .rowbtn{margin-left:2px}

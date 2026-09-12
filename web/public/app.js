@@ -2171,7 +2171,7 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
     var selHtml = !puedeCrearInforme ? ''
       : ((generado || enCurso)
         ? '<td class="num" data-col="sel"></td>'
-        : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onchange="pendSelCambio()"></td>');
+        : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onclick="pendSelClic(event, this)"></td>');
     return '<tr>' + selHtml
       + '<td class="wrap" data-col="pac">' + esc(f.nombre || '-') + '</td>'
       + '<td class="num" data-col="ben">' + esc(f.benef || '-') + '</td>'
@@ -2182,6 +2182,7 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
       + accionHtml
       + '</tr>';
   }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+  PEND_SEL_ULTIMO = -1;
   pendSelCambio();   // lista nueva: la barra de seleccion arranca escondida
 }
 function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
@@ -2353,6 +2354,20 @@ async function pedirSexoPaciente(nombre){
 // Van en UNA sola tarea, no en N: cada tarea abre y cierra el navegador de PAMI,
 // asi que 59 informes serian 59 logins. El worker los hace en una sesion.
 function pendSelCajas(){ return Array.prototype.slice.call(document.querySelectorAll('#pendDetalleBody .pend-sel')); }
+// Shift + clic marca (o desmarca) todo el tramo desde el ultimo que se toco,
+// como en cualquier lista. Sin esto, tildar 40 seguidos son 40 clics.
+var PEND_SEL_ULTIMO = -1;
+function pendSelClic(ev, caja){
+  var cajas = pendSelCajas();
+  var i = cajas.indexOf(caja);
+  if (ev && ev.shiftKey && PEND_SEL_ULTIMO >= 0 && i >= 0 && PEND_SEL_ULTIMO !== i){
+    var desde = Math.min(PEND_SEL_ULTIMO, i), hasta = Math.max(PEND_SEL_ULTIMO, i);
+    // El estado del que se acaba de tocar manda para todo el tramo.
+    for (var k = desde; k <= hasta; k++) cajas[k].checked = caja.checked;
+  }
+  if (i >= 0) PEND_SEL_ULTIMO = i;
+  pendSelCambio();
+}
 function pendSelTodos(marcar){
   pendSelCajas().forEach(function(c){ c.checked = !!marcar; });
   var all = document.getElementById('pendDetalleSelAll'); if (all) all.checked = !!marcar;
@@ -12005,7 +12020,7 @@ function cabBadge(it){
 }
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
-  if (!items.length){ body.innerHTML = '<tr><td colspan="9" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
+  if (!items.length){ body.innerHTML = '<tr><td colspan="10" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
     // Si está "Falta validar", en la columna OME mostramos SOLO la(s) que falta
@@ -12018,12 +12033,28 @@ function renderCabinaRows(slug, items){
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     var asunto = it.asunto ? esc(it.asunto) : '—';
     var rec = cabRecibido(it);
+    // Por qué está así: el motivo que se dejó al desestimar o la nota del
+    // reclamo. Viendo 23 desestimados sin esto, no hay forma de saber por qué
+    // lo está cada uno sin abrirlos de a uno.
+    var obs = '', obsTit = '';
+    if (it.desestimado){
+      obs = it.desestimado.motivo || 'Desestimado';
+      obsTit = 'Desestimado' + (it.desestimado.por ? ' por ' + it.desestimado.por : '')
+        + (it.desestimado.at ? ' · ' + iniFmtHora(it.desestimado.at) : '')
+        + (it.desestimado.motivo ? ' — ' + it.desestimado.motivo : '');
+    } else if (it.reclamado){
+      obs = it.reclamado.nota || 'Reclamado al centro';
+      obsTit = 'Reclamado' + (it.reclamado.por ? ' por ' + it.reclamado.por : '')
+        + (it.reclamado.at ? ' · ' + iniFmtHora(it.reclamado.at) : '')
+        + (it.reclamado.nota ? ' — ' + it.reclamado.nota : '');
+    }
     return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
       + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
       + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
       + '<td>'+cabBadge(it)+'</td>'
+      + '<td class="cab-obs" title="'+esc(obsTit)+'">'+(obs ? esc(obs) : '—')+'</td>'
       + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
       + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
         + (rec.hora ? '<div class="cab-sub">'+esc(rec.hora)+'</div>' : '')
