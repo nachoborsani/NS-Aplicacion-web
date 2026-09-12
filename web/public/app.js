@@ -9764,7 +9764,16 @@ function srvRender(st){
     var lblC = SRV_TIPO_LABEL[corriendo.type]||corriendo.type;
     h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text)">⏳ '+lblC+(corriendo.clientSlug?' · '+corriendo.clientSlug:'')+'</div>';
   } else {
+    // La corrida de bandejas no es una tarea del worker: la dispara un timer del
+    // server o el boton de la pantalla. Sin esto, mientras recorria diez clientes
+    // durante una hora, acá decía "inactivo".
+    var band = st && st.bandeja;
+    var pasoFresco = band && band.paso && band.pasoAt && (Date.now() - Date.parse(band.pasoAt)) < 15*60*1000;
+    if (pasoFresco){
+      h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.10);margin-bottom:16px;color:var(--text)">🔄 Recorriendo bandejas · <b>'+esc(band.paso)+'</b></div>';
+    } else {
     h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text-2)">Inactivo — esperando tareas</div>';
+    }
   }
 
   // Últimas tareas
