@@ -3638,34 +3638,23 @@ function clienteTienePlanSalud(){
 // porque TODO el flujo que ya existe — renderActiveClient, el hash, F5, el
 // localStorage de "última solapa" — pasa por CLIENT_SECTION. Con un estado
 // aparte, cada re-render volvía a la solapa anterior y cerraba la herramienta.
-// Qué herramientas tiene el usuario EN ESE CENTRO. Dos roles las usan, con la
-// misma pantalla pero distinto alcance:
-//  - operador (Javi, de NS): puede tener herramientas en VARIOS clientes, y
-//    distintas en cada uno -> las configura el admin en u.modulosCliente.
-//  - operador_clinica (empleado del centro): tiene UN solo centro, así que sus
-//    herramientas (u.modulos) valen solo ahí y en ningún otro lado.
-// La visualización es idéntica para todos los operadores de clínica: cambia qué
-// herramientas están habilitadas, nunca el diseño.
-function herramientasDeCentro(slug){
-  if (!(ME && slug)) return [];
-  if (ME.role === 'operador') return modulosClienteDe(slug);
-  if (ME.role === 'operador_clinica') return (ME.centro === slug) ? opClinicaModulos() : [];
-  return [];
-}
-function rolConHerramientasDeCliente(){
-  return !!(ME && (ME.role === 'operador' || ME.role === 'operador_clinica'));
-}
+// Las pestañas-herramienta DENTRO del cliente son del operador de NS (Javi),
+// que puede tener herramientas en VARIOS clientes y distintas en cada uno.
+// El operador_clinica tiene UN solo centro, así que las suyas van agrupadas en
+// el menú lateral (mismo diseño que las del admin, ver aplicarUsuario) y no
+// como pestañas: con un solo centro, la pestaña no aporta nada y duplicaba el
+// acceso.
 function esHerramientaDeCliente(key){
-  if (!rolConHerramientasDeCliente() || !ACTIVE_CLIENT) return false;
+  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT) return false;
   var m = OPERADOR_MODULOS.filter(function(x){ return x.key === key && x.tipo === 'vista'; })[0];
   if (!m) return false;
-  return herramientasDeCentro(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
+  return modulosClienteDe(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
 }
 function renderTabsHerramientas(){
   var cont = document.getElementById('clientToolTabs');
   if (!cont) return;
-  if (!rolConHerramientasDeCliente() || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
-  var mods = herramientasDeCentro(ACTIVE_CLIENT.slug);
+  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
+  var mods = modulosClienteDe(ACTIVE_CLIENT.slug);
   cont.innerHTML = OPERADOR_MODULOS
     .filter(function(m){ return m.tipo === 'vista' && mods.indexOf(m.key) >= 0; })
     .map(function(m){
@@ -12251,14 +12240,29 @@ function aplicarUsuario(u){
   document.body.classList.toggle('role-demo', u.role === 'demo');
   // Operador Clínica: mismo encierro visual que clínica (oculta lo interno de NS).
   document.body.classList.toggle('role-operador_clinica', u.role === 'operador_clinica');
-  // Las herramientas del operador_clinica NO van en el menú lateral: son
-  // pestañas DENTRO de su centro, igual que las del operador de NS (ver
-  // herramientasDeCentro / renderTabsHerramientas). Antes se intentaba destapar
-  // los ítems del menú sacándoles la clase .ns-only, pero el contenedor de la
-  // sección ("herramientas" en index.html) también la tiene y el CSS lo oculta
-  // con !important: los hijos quedaban destapados adentro de un padre oculto,
-  // así que el operador veía sus herramientas tildadas en la ficha de usuario y
-  // ninguna en pantalla.
+  // Herramientas habilitadas para ESTE operador_clinica: van agrupadas en el
+  // MENÚ LATERAL, con el mismo diseño que las del admin (rótulo "herramientas"
+  // + ítems con ícono), solo que con las suyas nada más.
+  // Por qué hay que destapar TRES niveles: el CSS oculta todo lo .ns-only con
+  // !important, y la clase la tienen los ítems, el RÓTULO de la sección y la
+  // CAJA que los contiene. Destapando solo los ítems (lo que se hacía antes)
+  // quedaban visibles adentro de un contenedor oculto: el operador veía sus
+  // herramientas tildadas en la ficha de usuario y ninguna en pantalla.
+  if (u.role === 'operador_clinica') {
+    var opMods = opClinicaModulos();
+    var paresHerr = [['navInformes', 'informes'], ['navLiberarCupo', 'liberarcupo'], ['navPadron', 'padron']];
+    var algunaHerr = paresHerr.some(function(par){ return opMods.indexOf(par[1]) >= 0; });
+    var headHerr = document.getElementById('navSectionHerramientas');
+    var boxHerr = document.querySelector('.nav-section-items[data-section-items="herramientas"]');
+    [headHerr, boxHerr].forEach(function(el){ if (el) el.classList.toggle('ns-only', !algunaHerr); });
+    paresHerr.forEach(function(par){
+      var el = document.getElementById(par[0]);
+      if (!el) return;
+      var habilitado = opMods.indexOf(par[1]) >= 0;
+      el.classList.toggle('ns-only', !habilitado);
+      el.style.display = habilitado ? '' : 'none';
+    });
+  }
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
   // El login normal NO pasa por go('dash') (el dashboard se ve por defecto), así que
   // marcamos la clase de la vista de inicio acá según qué sección está visible.
