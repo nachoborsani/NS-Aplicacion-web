@@ -1426,6 +1426,63 @@ function loadInformesCabGen() {
 function saveInformesCabGen(o) {
   try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(informesCabGenFile, JSON.stringify(o, null, 2)); } catch {}
 }
+// Las OMEs que lleva un pedido de informe de cabecera (una sola o una tanda).
+function omesDelPedidoCabecera(payload) {
+  const out = [];
+  const uno = (it) => {
+    const ome = String((it && (it.ome || it.n_orden)) || "").replace(/[^0-9]/g, "");
+    if (ome) out.push(ome);
+  };
+  if (payload && Array.isArray(payload.items)) payload.items.forEach((p) => uno(p && p.item));
+  else uno(payload && payload.item);
+  return out;
+}
+// Deja marcadas las OMEs como "en curso" apenas se manda el pedido. La marca de
+// "generado" se escribe recien cuando la tarea termina, y en el medio —sobre todo
+// con una tanda de 50, que tarda— la fila volvia a figurar como pendiente y se
+// podia mandar a crear el MISMO informe de nuevo.
+function marcarInformesCabEnCurso(slug, payload, taskId) {
+  try {
+    const omes = omesDelPedidoCabecera(payload);
+    if (!omes.length || !slug) return;
+    const plantillas = {};
+    const anotar = (it, pl) => {
+      const k = String((it && (it.ome || it.n_orden)) || "").replace(/[^0-9]/g, "");
+      if (k && pl && pl.codigo) plantillas[k] = String(pl.codigo).slice(0, 20);
+    };
+    if (payload && Array.isArray(payload.items)) payload.items.forEach((p) => anotar(p && p.item, p && p.plantilla));
+    else anotar(payload && payload.item, payload && payload.plantilla);
+    const store = loadInformesCabGen();
+    const mapa = (store[slug] && typeof store[slug] === "object") ? store[slug] : {};
+    const now = new Date().toISOString();
+    for (const ome of omes) {
+      if (mapa[ome] && mapa[ome].estado !== "en-curso") continue;   // ya esta hecho
+      // Se guarda tambien que plantilla le toco: sin eso, al recargar la pantalla
+      // esas no cuentan y el reparto se las vuelve a asignar a otro paciente.
+      mapa[ome] = { estado: "en-curso", at: now, taskId: String(taskId || ""), plantilla: plantillas[ome] || "" };
+    }
+    store[slug] = mapa;
+    saveInformesCabGen(store);
+  } catch { /* no cortar el alta de la tarea */ }
+}
+// Un "en curso" que quedo colgado (el worker se reinicio en el medio) no puede
+// bloquear la fila para siempre: pasadas 2 horas se considera vencido y el
+// paciente vuelve a poder crearse.
+const CAB_EN_CURSO_VENCE_MS = 2 * 60 * 60 * 1000;
+function informesCabGenVigentes(slug) {
+  const mapa = loadInformesCabGen()[slug];
+  if (!mapa || typeof mapa !== "object") return {};
+  const out = {};
+  for (const ome of Object.keys(mapa)) {
+    const it = mapa[ome] || {};
+    if (it.estado === "en-curso") {
+      const t = Date.parse(it.at || "");
+      if (!t || (Date.now() - t) > CAB_EN_CURSO_VENCE_MS) continue;
+    }
+    out[ome] = it;
+  }
+  return out;
+}
 const omeBotFile = path.join(dataDir, "ome_bot.json");
 function loadOmeBotCfg() {
   try { const j = JSON.parse(fs.readFileSync(omeBotFile, "utf8")); return { chats: Array.isArray(j.chats) ? j.chats : [], secret: String(j.secret || "") }; }
@@ -6204,14 +6261,15 @@ const server = http.createServer(async (req, res) => {
     if (task.type === "crear-ome" && task.payload && task.payload.telegramChatId) {
       notificarOmeTelegram(task, ok);
     }
-    // Informe de cabecera creado: queda anotado por OME. Es lo que hace que la
-    // fila muestre "Generado" la proxima vez que se abra la lista, aunque la
-    // tarea ya no este entre las ultimas del worker.
-    if (task.type === "crear-informe-cabecera" && ok) {
+    // Informe de cabecera: se anota por OME cual quedo hecho. Es lo que hace que
+    // la fila muestre "Generado" la proxima vez que se abra la lista, aunque la
+    // tarea ya no este entre las ultimas del worker. Los que fallaron se sueltan:
+    // quedaron marcados "en curso" al mandarlos y hay que poder reintentarlos.
+    if (task.type === "crear-informe-cabecera") {
       try {
         const r = task.result || {};
         const det = Array.isArray(r.detalle) ? r.detalle : [];
-        const filas = det.length ? det : [r];
+        const filas = ok ? (det.length ? det : [r]) : [];
         const store = loadInformesCabGen();
         const slugK = task.clientSlug || "";
         const mapa = (store[slugK] && typeof store[slugK] === "object") ? store[slugK] : {};
@@ -6219,12 +6277,19 @@ const server = http.createServer(async (req, res) => {
         for (const f of filas) {
           const ome = String((f && (f.ome || f.n_orden)) || "").replace(/[^0-9]/g, "");
           if (!ome) continue;
+          if (f && f.error) { if (mapa[ome] && mapa[ome].estado === "en-curso") { delete mapa[ome]; n++; } continue; }
           mapa[ome] = {
             plantilla: String((f && f.plantilla) || r.plantilla || "").slice(0, 60),
             at: task.finishedAt || new Date().toISOString(),
             por: String(task.createdBy || "").slice(0, 60),
           };
           n++;
+        }
+        // La tarea entera fallo: ninguno quedo hecho, se sueltan todos.
+        if (!ok) {
+          for (const ome of omesDelPedidoCabecera(task.payload || {})) {
+            if (mapa[ome] && mapa[ome].estado === "en-curso") { delete mapa[ome]; n++; }
+          }
         }
         if (n) { store[slugK] = mapa; saveInformesCabGen(store); }
       } catch { /* no cortar el /complete */ }
@@ -7131,6 +7196,7 @@ const server = http.createServer(async (req, res) => {
       payload: body && body.payload && typeof body.payload === "object" ? body.payload : {},
       createdBy: me.username,
     });
+    if (type === "crear-informe-cabecera") marcarInformesCabEnCurso(task.clientSlug, task.payload, task.id);
     return json(res, 201, { ok: true, task: publicWorkerTask(task) });
   }
 
@@ -7438,8 +7504,7 @@ const server = http.createServer(async (req, res) => {
       || (me.role === "operador" && clientesVisiblesPara(me, [cliente]).length > 0)
       || ((me.role === "clinica" || me.role === "operador_clinica") && me.centro === slug);
     if (!puede) return json(res, 403, { error: "sin permiso" });
-    const g = loadInformesCabGen()[slug];
-    return json(res, 200, { generados: (g && typeof g === "object") ? g : {} });
+    return json(res, 200, { generados: informesCabGenVigentes(slug) });
   }
 
   const pendientesDetalleMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/pendientes-detalle$/);

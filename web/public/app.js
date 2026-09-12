@@ -2133,31 +2133,43 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   PEND_DETALLE_CTX.generados = generados;
   PEND_DETALLE_CTX.usos = usos;
   var total = (res.data && res.data.total) || filas.length;
-  var conInforme = filas.reduce(function(acc, f){
-    var k = informeCabeceraOme(f); return acc + (k && generados[k] ? 1 : 0);
-  }, 0);
+  var conInforme = 0, enCursoN = 0;
+  filas.forEach(function(f){
+    var k = informeCabeceraOme(f), m = k ? generados[k] : null;
+    if (!m) return;
+    if (m.estado === 'en-curso') enCursoN++; else conInforme++;
+  });
   if (meta) meta.textContent = (total > filas.length
     ? ('mostrando ' + filas.length + ' de ' + total)
     : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes')))
-    + (conInforme ? ' · ' + conInforme + ' con el informe ya creado' : '');
+    + (conInforme ? ' · ' + conInforme + ' con el informe ya creado' : '')
+    + (enCursoN ? ' · ' + enCursoN + ' creándose' : '');
   body.innerHTML = filas.length ? filas.map(function(f, idx){
     var omeKey = informeCabeceraOme(f);
-    var generado = puedeCrearInforme && omeKey && generados[omeKey];
+    var marca = puedeCrearInforme && omeKey ? generados[omeKey] : null;
+    // "En curso" es el informe que ya se mando y todavia se esta creando en PAMI.
+    // Sin distinguirlo, la fila volvia a ofrecer crearlo y se hacia dos veces.
+    var enCurso = !!(marca && marca.estado === 'en-curso');
+    var generado = !!marca && !enCurso;
     var estadoHtml = generado
-      ? '<span style="color:#16a34a;font-weight:800">Generado</span><br><span style="color:var(--text-2);font-size:11px">' + esc(generado.plantilla || 'Informe guardado') + '</span>'
-      : esc(f.estado || '-');
+      ? '<span style="color:#16a34a;font-weight:800">Generado</span><br><span style="color:var(--text-2);font-size:11px">' + esc(marca.plantilla || 'Informe guardado') + '</span>'
+      : (enCurso
+        ? '<span style="color:#d97706;font-weight:800">Creándose…</span><br><span style="color:var(--text-2);font-size:11px">ya se mandó a PAMI</span>'
+        : esc(f.estado || '-'));
     var accionHtml = '';
     if (puedeCrearInforme) {
       accionHtml = generado
         ? '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Informe generado" disabled>✓</button></td>'
-        : '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
+        : (enCurso
+          ? '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Ya se mandó, se está creando" disabled>⏳</button></td>'
+          : '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>');
     }
     // data-col: en el celular la tabla no entra y cada fila se dibuja como una
     // ficha (ver styles.css). El atributo es lo que le dice a cada dato dónde va.
     // Solo se puede tildar lo que todavia no tiene informe: lo demas no hay
     // que volver a crearlo.
     var selHtml = !puedeCrearInforme ? ''
-      : (generado
+      : ((generado || enCurso)
         ? '<td class="num" data-col="sel"></td>'
         : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onchange="pendSelCambio()"></td>');
     return '<tr>' + selHtml
