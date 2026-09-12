@@ -10412,7 +10412,7 @@ function srvRender(st){
       h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(37,99,235,.10);margin-bottom:16px;color:var(--text)">'
         + '⏳ Actualización pedida · <b>' + esc(quienes) + '</b>' + (band.transmite ? ' (transmite)' : '')
         + '<div style="font-size:12px;color:var(--text-2);margin-top:3px">Pedida ' + esc(srvRelativo(band.pedidoAt))
-        + ' — el server la toma en su próxima vuelta (cada 10 min).</div></div>';
+        + ' — el server la toma en su próxima vuelta' + ((SRV_SCHEDULE && SRV_SCHEDULE.pollerCadaMin) ? ' (cada ' + esc(String(SRV_SCHEDULE.pollerCadaMin)) + ' min)' : '') + '.</div></div>';
     } else {
     h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text-2)">Inactivo — esperando tareas</div>';
     }
