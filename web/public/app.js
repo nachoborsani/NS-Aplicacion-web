@@ -10721,6 +10721,37 @@ async function cargarNomencladoresParaCruza(){
     sel.innerHTML = opts;
   } catch(e){}
 }
+// Pide refrescar la bandeja de PAMI del cliente elegido en Cruzas (transmite lo
+// pendiente y vuelve a bajarla) ANTES de cruzar, para no comparar contra una
+// bandeja vieja. Mismo mecanismo de "pedido" que ya usa el botón de mes en
+// curso en Clientes (server.js /api/bandeja/refresco/*), pero con su propio
+// polling: acá al terminar hay que refrescar el selector de bandejas de
+// Cruzas, no la card de mes en curso.
+var CZ_REFRESCO_POLL = null;
+async function czPedirRefrescoBandeja(btn){
+  var slug = document.getElementById('czCliente').value;
+  if (!slug){ nsAlert('Elegí un cliente arriba primero.'); return; }
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Pidiendo…'; }
+  var r = await req('POST', '/api/bandeja/refresco/pedir', { slugs: [slug], forzarTransmision: true });
+  if (!r.ok){ if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar bandeja'; } nsAlert((r.data && r.data.error) || 'No se pudo pedir el refresco.'); return; }
+  if (btn){ btn.textContent = '⏳ Actualizando…'; btn.title = 'La PC lo está corriendo'; }
+  if (CZ_REFRESCO_POLL) clearInterval(CZ_REFRESCO_POLL);
+  var vueltas = 0;
+  CZ_REFRESCO_POLL = setInterval(async function(){
+    vueltas++;
+    var e = await req('GET', '/api/bandeja/refresco/estado');
+    var activo = !!(e.ok && e.data && (e.data.pendiente || e.data.corriendo));
+    if (!activo){
+      clearInterval(CZ_REFRESCO_POLL); CZ_REFRESCO_POLL = null;
+      if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar bandeja'; }
+      // Solo si seguimos parados en el mismo cliente: recargar el selector de
+      // bandejas para que aparezca la recién bajada.
+      if (document.getElementById('czCliente').value === slug) cargarBandejasCruza();
+      return;
+    }
+    if (vueltas > 120){ clearInterval(CZ_REFRESCO_POLL); CZ_REFRESCO_POLL = null; if (btn){ btn.disabled = false; btn.textContent = '🔄 Actualizar bandeja'; } }  // techo ~30 min
+  }, 15000);
+}
 function onCambiaClienteCruzas(){
   CZ.cruceActivo = null;
   document.getElementById('czResultado').style.display = 'none';
