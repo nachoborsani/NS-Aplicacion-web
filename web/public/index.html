@@ -2082,7 +2082,6 @@
         <!-- Barra de seleccion: aparece sola cuando se tilda alguno. -->
         <div id="pendDetalleBulk" style="display:none;align-items:center;flex-wrap:wrap;gap:8px 10px;margin-top:8px">
           <span id="pendDetalleBulkTxt" style="font-size:13px;color:var(--text-2)"></span>
-          <button class="btn btn-primary btn-sm" type="button" id="pendDetalleBulkBtn" onclick="crearInformesSeleccionados(this)">Crear los informes</button>
           <button class="btn btn-ghost btn-sm" type="button" onclick="pendSelTodos(false)">Soltar</button>
         </div>
         <div class="modal-table-scroll" style="margin-top:10px">
@@ -2093,7 +2092,7 @@
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-primary" onclick="cerrarPendientesDetalle()">Listo</button>
+        <button class="btn btn-primary" id="pendDetalleFootBtn" onclick="pendDetalleFootClic()">Listo</button>
       </div>
     </div>
 

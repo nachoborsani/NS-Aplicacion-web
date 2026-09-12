@@ -2367,6 +2367,20 @@ function pendSelCambio(){
   if (txt) txt.textContent = n + (n === 1 ? ' paciente seleccionado' : ' pacientes seleccionados');
   var all = document.getElementById('pendDetalleSelAll');
   if (all) all.checked = n > 0 && n === cajas.length;
+  // Con pacientes tildados, el boton de abajo es el de crear: es lo que se va a
+  // hacer. "Listo" ahi invita a cerrar y perder la seleccion.
+  var pie = document.getElementById('pendDetalleFootBtn');
+  if (pie){
+    pie.textContent = n ? ('Crear ' + n + ' informe' + (n > 1 ? 's' : '')) : 'Listo';
+    pie.disabled = false;
+  }
+}
+// Un solo boton abajo, que hace lo que corresponda: crear si hay algo tildado,
+// cerrar si no.
+function pendDetalleFootClic(){
+  var n = pendSelCajas().filter(function(c){ return c.checked; }).length;
+  if (n) crearInformesSeleccionados(document.getElementById('pendDetalleFootBtn'));
+  else cerrarPendientesDetalle();
 }
 async function crearInformesSeleccionados(btn){
   var ctx = PEND_DETALLE_CTX || {};
@@ -2420,7 +2434,8 @@ async function crearInformesSeleccionados(btn){
     avisarEnCampana(true, 'Informes en cola', pedidos.length + ' enviados a PAMI', 'crear-informe-cabecera', null);
     seguirInformesTanda(d.task.id, pedidos, btn);
   }catch(e){
-    if (btn){ btn.disabled = false; btn.textContent = 'Crear los informes'; }
+    if (btn) btn.disabled = false;
+    pendSelCambio();   // devuelve al boton su texto
     avisarEnCampana(false, 'No se pudo enviar la tanda', (e && e.message) || 'Error', 'crear-informe-cabecera', null);
   }
 }
@@ -2438,7 +2453,7 @@ function seguirInformesTanda(id, pedidos, btn){
         return;
       }
       clearInterval(timer);
-      if (btn){ btn.disabled = false; btn.textContent = 'Crear los informes'; }
+      if (btn) btn.disabled = false;
       var res = t.result || {};
       var porOme = {};
       (res.detalle || []).forEach(function(x){ if (x && x.ome) porOme[String(x.ome).replace(/[^0-9]/g,'')] = x; });
