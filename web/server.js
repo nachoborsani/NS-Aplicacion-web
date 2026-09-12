@@ -12135,6 +12135,10 @@ function ensureModelosUnificados() {
       // Logo sacado del membrete de sus propios estudios (Holter, ago/2026). El
       // banner es horizontal, por eso el ancho es mayor que el de los otros.
       "dbaime": { logo: "baimed_logo.png", logoW: 200, direccion: "Bolivia 3618 HGD, B1653 Villa Gral. Juan Gregorio de Las Heras", telefono: "011 4764-6114" },
+      // Logo sacado de un informe de ECG suyo (Cardozo, ago/2026). El banner es
+      // apaisado (936x279): a 150 px de ancho el alto queda en 45, parecido al de
+      // los otros membretes. Direccion y telefono todavia no los tenemos.
+      "st-ignacio": { logo: "gjs_logo.png", logoW: 150 },
     };
     const clients = loadClientsStore();
     let cambioClientes = false;
