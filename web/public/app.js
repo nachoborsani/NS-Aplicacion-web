@@ -634,23 +634,57 @@ function onCentroChange(keep){
   programarPreviewVivo();
   var sel = document.getElementById('infEspecialidad'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
-  var esps = uniq((INFORMES_CFG.modelos || []).map(function(m){ return m.especialidad; }));
+  // Solo las especialidades que ESTE centro puede hacer (tiene médico asignado).
+  var disponibles = modelosDelCliente(slug);
+  var esps = uniq(disponibles.map(function(m){ return m.especialidad; }));
   sel.innerHTML = esps.map(function(e){ return opt(e, e); }).join('') || '<option value="">(sin especialidades)</option>';
   if (prev && esps.indexOf(prev) >= 0) sel.value = prev;
+  // Centro sin ningún médico asignado: no hay nada que generar, y conviene
+  // decirlo en vez de dejar el formulario vacío sin explicación.
+  var sinMed = document.getElementById('infSinMedicosAviso');
+  var mostrarAviso = !!slug && !esps.length;   // sin centro elegido todavía no hay nada que avisar
+  if (sinMed){
+    sinMed.style.display = mostrarAviso ? '' : 'none';
+    if (mostrarAviso) sinMed.textContent = 'Este centro todavía no tiene médicos asignados a ninguna práctica, así que no se pueden generar informes para él. Se asignan en Configuración → Médicos.';
+  }
+  if (resto) resto.style.display = mostrarAviso ? 'none' : '';
   onEspecialidadChange(keep);
 }
 function onEspecialidadChange(keep){
   var esp = (document.getElementById('infEspecialidad') || {}).value || '';
+  var slug = (document.getElementById('infCentro') || {}).value || '';
   var sel = document.getElementById('infPractica'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
-  var ms = (INFORMES_CFG.modelos || []).filter(function(m){ return m.especialidad === esp; });
+  var ms = modelosDelCliente(slug).filter(function(m){ return m.especialidad === esp; });
   sel.innerHTML = ms.map(function(m){ return opt(m.key, m.practica); }).join('') || '<option value="">(sin prácticas)</option>';
   if (prev && ms.some(function(m){ return m.key === prev; })) sel.value = prev;
   filtrarPorModelo();
 }
 function modeloActualKey(){ return (document.getElementById('infPractica') || {}).value || ''; }
-// Un scope vacío = disponible para cualquier informe.
+// Un scope vacío = disponible para cualquier informe. Vale para los RESULTADOS
+// (textos): un resultado genérico sirve en cualquier centro. Para los MÉDICOS
+// NO: ver medicoHabilitado.
 function scopeAplica(arr, key){ return !arr || arr.length === 0 || (key && arr.indexOf(key) >= 0); }
+// Un médico sirve SOLO en el centro donde está asignado y SOLO para las prácticas
+// que tiene tildadas: lista vacía = NINGUNO. Todos los clientes usan el mismo
+// nomenclador de PAMI, así que sin esto el médico de un centro se ofrecía para
+// hacer la misma práctica en otro.
+// Mismo criterio que medicoHabilitado() en server.js - si cambia allá, acá también.
+function medicoHabilitado(m, clienteSlug, modeloKey){
+  if (!m || !clienteSlug) return false;
+  if ((m.clientes || []).indexOf(clienteSlug) < 0) return false;
+  if (!modeloKey) return true;
+  return (m.modelos || []).indexOf(modeloKey) >= 0;
+}
+// Los modelos (prácticas) que ese centro puede hacer = los que tienen al menos
+// un médico asignado ahí. Si Baimed no tiene médico para uroflujometría, no
+// ofrecemos uroflujometría para Baimed, aunque sí la hagamos en otro centro.
+function modelosDelCliente(clienteSlug){
+  var meds = INFORMES_CFG.medicos || [];
+  return (INFORMES_CFG.modelos || []).filter(function(mod){
+    return meds.some(function(m){ return medicoHabilitado(m, clienteSlug, mod.key); });
+  });
+}
 function modeloCampos(key){
   var m = (INFORMES_CFG.modelos || []).find(function(x){ return x.key === key; });
   return (m && m.campos) || [];
@@ -947,9 +981,9 @@ function filtrarPorModelo(){
   if (med){
     var prevM = med.value;
     var clienteSel = (document.getElementById('infCentro') || {}).value || '';
-    // Solo médicos que firman esta práctica Y que están cargados para este cliente
-    // (vacío en cualquiera de las dos listas = disponible para todos).
-    var ms = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.modelos, key) && scopeAplica(m.clientes, clienteSel); });
+    // Solo médicos asignados a ESTE centro para ESTA práctica (sin asignar = no
+    // aparece en ningún lado, ver medicoHabilitado).
+    var ms = (INFORMES_CFG.medicos || []).filter(function(m){ return medicoHabilitado(m, clienteSel, key); });
     med.innerHTML = ms.map(function(m){ return opt(m.id, m.nombre + (m.hasFirma ? '' : ' (sin firma)')); }).join('')
       + opt('', 'Sin firma (deja el espacio)');
     if (prevM) med.value = prevM;
@@ -1013,8 +1047,8 @@ function renderInformesConfigLists(){
       var fila = '<div class="cfg-row"><span class="cfg-name">' + esc(m.nombre) + '</span>' + tag
         + '<label class="cfg-upload">' + (m.hasFirma ? 'Cambiar' : 'Subir') + ' firma<input type="file" accept="image/png" onchange="uploadFirmaMedico(\'' + esc(m.id) + '\',this)"></label>'
         + '<button class="rowbtn danger" title="Eliminar" onclick="deleteMedico(\'' + esc(m.id) + '\')">' + SVG_TRASH + '</button></div>';
-      var subInformes = modelos.length ? cfgSub('Informes que firma', cfgMetaInformes(m.modelos), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
-      var subClientes = clientesList.length ? cfgSub('Clientes', cfgMetaInformes(m.clientes), '<div class="cfg-scope">' + clienteChips('med-cliente', m.id, clientesList, m.clientes) + '</div>') : '';
+      var subInformes = modelos.length ? cfgSub('Informes que firma', cfgMetaAsignado(m.modelos, 'informe', 'informes'), '<div class="cfg-scope">' + scopeChips('med', m.id, modelos, m.modelos) + '</div>') : '';
+      var subClientes = clientesList.length ? cfgSub('Clientes', cfgMetaAsignado(m.clientes, 'centro', 'centros'), '<div class="cfg-scope">' + clienteChips('med-cliente', m.id, clientesList, m.clientes) + '</div>') : '';
       var search = [m.nombre, (m.clientes || []).map(function(s){ return cliNombre[s] || s; }).join(' '), espsDe(m).join(' ')].join(' ').toLowerCase();
       return '<div class="cfg-item" data-search="' + esc(search) + '">' + fila + subInformes + subClientes + '</div>';
     }
@@ -1023,13 +1057,14 @@ function renderInformesConfigLists(){
       // Agrupar por CENTRO -> ESPECIALIDAD. Un médico que trabaja en varios
       // centros aparece en CADA uno (los centros son reales); dentro del centro va
       // una sola vez, bajo su primera especialidad (según los informes que firma).
-      // Sin centro asignado -> "Todos los centros".
+      // Sin centro asignado -> "Sin centro asignado": no aparece en NINGÚN centro
+      // a la hora de generar (antes ese caso significaba "todos los centros").
       var grupos = {};
       function put(centro, esp, m){ grupos[centro] = grupos[centro] || {}; grupos[centro][esp] = grupos[centro][esp] || []; grupos[centro][esp].push(m); }
       meds.forEach(function(m){
         var esp = (espsDe(m)[0]) || 'Sin especialidad';
         var centros = (m.clientes || []).filter(Boolean);
-        if (!centros.length){ put('Todos los centros', esp, m); return; }
+        if (!centros.length){ put('⚠ Sin centro asignado', esp, m); return; }
         centros.forEach(function(slug){ put(cliNombre[slug] || slug, esp, m); });
       });
       var centrosOrden = Object.keys(grupos).sort(function(a, b){ return a.localeCompare(b); });
@@ -1174,15 +1209,17 @@ function cfgSub(titulo, meta, contenido){
   return '<details class="cfg-sub"><summary class="cfg-sub-head">' + esc(titulo)
     + ' <span class="cfg-item-meta">' + esc(meta) + '</span></summary>' + contenido + '</details>';
 }
-// Resumen de a cuántos informes está asignado (vacío = todos).
+// Resumen de a cuántos informes está asignado un RESULTADO (vacío = todos, que
+// para un texto de resultado sigue siendo cierto).
 function cfgMetaInformes(modelos){
   var n = (modelos || []).length;
   return n ? (n + ' informe' + (n > 1 ? 's' : '')) : 'todos';
 }
-// Resumen de a cuántos informes está asignado (vacío = todos).
-function cfgMetaInformes(modelos){
-  var n = (modelos || []).length;
-  return n ? (n + ' informe' + (n > 1 ? 's' : '')) : 'todos';
+// Lo mismo para un MÉDICO, donde vacío ya no es "todos" sino "no se le asignó
+// nada, no aparece en ningún lado" (ver medicoHabilitado).
+function cfgMetaAsignado(arr, sing, plur){
+  var n = (arr || []).length;
+  return n ? (n + ' ' + (n > 1 ? plur : sing)) : '⚠ sin asignar';
 }
 // Chips = informes (modelos). seleccionadas = array de keys de modelo.
 function scopeChips(kind, id, modelos, seleccionadas){
@@ -2956,8 +2993,10 @@ function loteMedicosValidos(){
   var clienteSel = (document.getElementById('loteCentro') || {}).value || '';
   var keys = LOTE_ROWS.length ? uniq(LOTE_ROWS.map(function(r){ return r.modelo; }).filter(Boolean)) : null;
   return (INFORMES_CFG.medicos || []).filter(function(m){
-    if (!scopeAplica(m.clientes, clienteSel)) return false;
-    return keys ? keys.some(function(k){ return scopeAplica(m.modelos, k); }) : true;
+    // Mismo criterio estricto que el informe de a uno: asignado a este centro y,
+    // si ya hay filas pegadas, a alguna de las prácticas detectadas.
+    if (!medicoHabilitado(m, clienteSel, '')) return false;
+    return keys ? keys.some(function(k){ return medicoHabilitado(m, clienteSel, k); }) : true;
   });
 }
 function loteLlenarMedicos(){
@@ -2988,12 +3027,19 @@ function loteParseLinea(linea){
 }
 function loteModeloPorCodigo(codigo){
   if (!codigo) return '';
-  // Un solo modelo por código de práctica ahora que no hay uno por cliente.
-  var m = (INFORMES_CFG.modelos || []).find(function(x){ return String(x.codigoPractica) === String(codigo); });
+  // Un solo modelo por código de práctica ahora que no hay uno por cliente...
+  // pero sí acotado al centro elegido: si ese centro no tiene médico para esa
+  // práctica, la fila queda "sin plantilla" en vez de generarse con la firma de
+  // un médico de otro centro.
+  var clienteSel = (document.getElementById('loteCentro') || {}).value || '';
+  var m = modelosDelCliente(clienteSel).find(function(x){ return String(x.codigoPractica) === String(codigo); });
   return m ? m.key : '';
 }
 function loteMedicoParaModelo(modelo, medDef){
-  var meds = (INFORMES_CFG.medicos || []).filter(function(m){ return scopeAplica(m.modelos, modelo); });
+  // Solo médicos de ESTE centro para ESTA práctica (antes tomaba el primero del
+  // catálogo que firmara la práctica, aunque fuera de otro centro).
+  var clienteSel = (document.getElementById('loteCentro') || {}).value || '';
+  var meds = (INFORMES_CFG.medicos || []).filter(function(m){ return medicoHabilitado(m, clienteSel, modelo); });
   if (medDef && meds.some(function(m){ return m.id === medDef; })) return medDef;
   return meds.length ? meds[0].id : '';
 }
@@ -3047,13 +3093,14 @@ function loteMedicoDefault(){
   loteRender();
 }
 function loteRender(){
-  // Los modelos ya no son por cliente (ver comentario en informes.js sobre
-  // MODELOS): antes acá se filtraba por m.centro === centro, pero listarModelos()
-  // hace rato dejó de mandar ese campo -> el filtro daba SIEMPRE vacío, y el
-  // desplegable de "Práctica" quedaba sin ninguna opción real (solo el
-  // placeholder "— sin plantilla —"), aunque el modelo ya estuviera bien
-  // detectado por código puntualmente. Se usa el catálogo completo.
-  var modelosCentro = INFORMES_CFG.modelos || [];
+  // Las prácticas que se ofrecen son las que ESE centro puede hacer (tiene médico
+  // asignado). Nota histórica: antes acá se filtraba por m.centro === centro, un
+  // campo que listarModelos() dejó de mandar -> el filtro daba SIEMPRE vacío y el
+  // desplegable quedaba sin opciones; se pasó al catálogo completo, que se fue al
+  // otro extremo (ofrecía prácticas que el centro no hace). El filtro correcto es
+  // por médico asignado, no por un campo del modelo.
+  var loteSlug = (document.getElementById('loteCentro') || {}).value || '';
+  var modelosCentro = modelosDelCliente(loteSlug);
   var body = document.getElementById('loteBody'); if (!body) return;
   var ok = 0;
   body.innerHTML = LOTE_ROWS.map(function(row, i){
@@ -3077,7 +3124,7 @@ function loteRender(){
       ? '<select class="inp lote-inp' + ((sexoCampo.requerido && !row.sexo) ? ' lote-req' : '') + '" onchange="loteSetSexo(' + i + ',this.value)"><option value="">Elegí…</option>'
         + (sexoCampo.opciones || []).map(function(o){ return '<option value="' + esc(o) + '"' + (o === row.sexo ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>'
       : '<span class="lote-muted">—</span>';
-    var meds = row.modelo ? (INFORMES_CFG.medicos || []).filter(function(mm){ return scopeAplica(mm.modelos, row.modelo); }) : (INFORMES_CFG.medicos || []);
+    var meds = (INFORMES_CFG.medicos || []).filter(function(mm){ return medicoHabilitado(mm, loteSlug, row.modelo || ''); });
     var medSel = '<select class="inp lote-inp" onchange="loteSetMedico(' + i + ',this.value)">'
       + meds.map(function(mm){ return '<option value="' + esc(mm.id) + '"' + (mm.id === row.medicoId ? ' selected' : '') + '>' + esc(mm.nombre) + (mm.hasFirma ? '' : ' (s/f)') + '</option>'; }).join('')
       + '<option value=""' + (row.medicoId ? '' : ' selected') + '>Sin firma</option></select>';
