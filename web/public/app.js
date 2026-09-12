@@ -2020,29 +2020,35 @@ var PEND_DETALLE_LABEL = {
   'cup-validar': 'Faltan validar', 'cup-informe': 'Faltan informe',
   'cup-transmitidas': 'Transmitidas', 'cup-total': 'Total en bandeja'
 };
+var PEND_DETALLE_CTX = { slug: '', tipo: '', month: '', filas: [] };
 async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   var body = document.getElementById('pendDetalleBody');
   var meta = document.getElementById('pendDetalleMeta');
   var tit = document.getElementById('pendDetalleTitulo');
   var colFecha = document.getElementById('pendDetalleColFecha');
+  var colAccion = document.getElementById('pendDetalleColAccion');
   if (!body) return;
   if (tit) tit.textContent = (PEND_DETALLE_LABEL[tipo] || 'Pendientes') + ' — ' + (nombreCliente || '');
   if (colFecha) colFecha.textContent = tipo.indexOf('cup') === 0 ? 'Turno' : 'Recibido';
-  body.innerHTML = '<tr><td colspan="6" class="muted-cell">Cargando…</td></tr>';
+  var puedeCrearInforme = tipo === 'cup-informe';
+  if (colAccion) colAccion.style.display = puedeCrearInforme ? '' : 'none';
+  PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: [] };
+  body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Cargando…</td></tr>';
   if (meta) meta.textContent = '';
   showModal('pendDetalleModal', 'pendDetalleScrim');
   var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pendientes-detalle?tipo=' + encodeURIComponent(tipo)
     + (month ? '&month=' + encodeURIComponent(month) : ''));
   if (!res.ok){
-    body.innerHTML = '<tr><td colspan="6" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
     return;
   }
   var filas = (res.data && res.data.filas) || [];
+  PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: filas };
   var total = (res.data && res.data.total) || filas.length;
   if (meta) meta.textContent = total > filas.length
     ? ('mostrando ' + filas.length + ' de ' + total)
     : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes'));
-  body.innerHTML = filas.length ? filas.map(function(f){
+  body.innerHTML = filas.length ? filas.map(function(f, idx){
     return '<tr>'
       + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
       + '<td class="num">' + esc(f.benef || '-') + '</td>'
@@ -2050,10 +2056,109 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
       + '<td class="numw">' + esc(f.ome || '-') + '</td>'
       + '<td class="num">' + esc(f.estado || '-') + '</td>'
       + '<td class="num">' + esc(f.turno || f.recibido || '-') + '</td>'
+      + (puedeCrearInforme ? '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>' : '')
       + '</tr>';
-  }).join('') : '<tr><td colspan="6" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+  }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
 }
 function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
+var INFORME_CABECERA_PLANTILLAS = {
+  F: [
+    { codigo:'F1', taMax:'120', taMin:'80', peso:'68', motivo:'control de salud', examen:'paciente femenina en buen estado general, sin signos de alarma al momento de la consulta', diagnostico:'control de salud', tratamiento:'se indican pautas generales de cuidado, control evolutivo y recetas habituales' },
+    { codigo:'F2', taMax:'130', taMin:'80', peso:'72', motivo:'control clínico periódico', examen:'paciente femenina lúcida, orientada, afebril, sin síntomas agudos referidos', diagnostico:'control clínico', tratamiento:'continúa con controles habituales y medicación indicada previamente' },
+    { codigo:'F3', taMax:'140', taMin:'90', peso:'86', motivo:'control de salud', examen:'no presenta intercurrencias al momento de la evaluación', diagnostico:'control de salud', tratamiento:'recetas y seguimiento por médico de cabecera' },
+    { codigo:'F4', taMax:'125', taMin:'75', peso:'64', motivo:'seguimiento de antecedentes clínicos', examen:'paciente femenina estable, sin dificultad respiratoria ni dolor referido', diagnostico:'seguimiento clínico', tratamiento:'se refuerzan pautas de alarma y controles programados' },
+    { codigo:'F5', taMax:'135', taMin:'85', peso:'78', motivo:'renovación de tratamiento habitual', examen:'paciente femenina sin cambios clínicos relevantes referidos', diagnostico:'control y renovación de medicación', tratamiento:'se emiten recetas de medicación habitual y control posterior' },
+    { codigo:'F6', taMax:'110', taMin:'70', peso:'60', motivo:'consulta de control', examen:'paciente femenina compensada, sin hallazgos clínicos agudos informados', diagnostico:'control médico', tratamiento:'control clínico, medidas generales y seguimiento' },
+    { codigo:'F7', taMax:'145', taMin:'90', peso:'82', motivo:'control de presión arterial y salud general', examen:'paciente femenina estable, refiere encontrarse sin síntomas de alarma', diagnostico:'control cardiovascular', tratamiento:'se indica control de presión arterial, pautas higiénico dietéticas y seguimiento' },
+    { codigo:'F8', taMax:'128', taMin:'82', peso:'70', motivo:'control mensual de salud', examen:'paciente femenina en seguimiento, sin novedades clínicas relevantes', diagnostico:'control de salud', tratamiento:'se continúa seguimiento habitual y recetas correspondientes' }
+  ],
+  M: [
+    { codigo:'M1', taMax:'120', taMin:'80', peso:'75', motivo:'control de salud', examen:'paciente masculino en buen estado general, sin signos de alarma al momento de la consulta', diagnostico:'control de salud', tratamiento:'se indican pautas generales de cuidado, control evolutivo y recetas habituales' },
+    { codigo:'M2', taMax:'130', taMin:'85', peso:'80', motivo:'control clínico periódico', examen:'paciente masculino lúcido, orientado, afebril, sin síntomas agudos referidos', diagnostico:'control clínico', tratamiento:'continúa con controles habituales y medicación indicada previamente' },
+    { codigo:'M3', taMax:'140', taMin:'90', peso:'88', motivo:'control de salud', examen:'no presenta intercurrencias al momento de la evaluación', diagnostico:'control de salud', tratamiento:'recetas y seguimiento por médico de cabecera' },
+    { codigo:'M4', taMax:'125', taMin:'80', peso:'77', motivo:'seguimiento de antecedentes clínicos', examen:'paciente masculino estable, sin dificultad respiratoria ni dolor referido', diagnostico:'seguimiento clínico', tratamiento:'se refuerzan pautas de alarma y controles programados' },
+    { codigo:'M5', taMax:'135', taMin:'85', peso:'84', motivo:'renovación de tratamiento habitual', examen:'paciente masculino sin cambios clínicos relevantes referidos', diagnostico:'control y renovación de medicación', tratamiento:'se emiten recetas de medicación habitual y control posterior' },
+    { codigo:'M6', taMax:'115', taMin:'75', peso:'72', motivo:'consulta de control', examen:'paciente masculino compensado, sin hallazgos clínicos agudos informados', diagnostico:'control médico', tratamiento:'control clínico, medidas generales y seguimiento' },
+    { codigo:'M7', taMax:'145', taMin:'90', peso:'90', motivo:'control de presión arterial y salud general', examen:'paciente masculino estable, refiere encontrarse sin síntomas de alarma', diagnostico:'control cardiovascular', tratamiento:'se indica control de presión arterial, pautas higiénico dietéticas y seguimiento' },
+    { codigo:'M8', taMax:'128', taMin:'82', peso:'79', motivo:'control mensual de salud', examen:'paciente masculino en seguimiento, sin novedades clínicas relevantes', diagnostico:'control de salud', tratamiento:'se continúa seguimiento habitual y recetas correspondientes' }
+  ]
+};
+function informeCabeceraGenero(item){
+  var benef = String((item && (item.benef || item.beneficio || item.gp)) || '').replace(/\D/g,'');
+  if (benef.indexOf('15') === 0) return 'F';
+  if (benef.indexOf('14') === 0) return 'M';
+  var n = omeNorm((item && (item.nombre || item.paciente)) || '');
+  if (/\b(maria|ana|elena|silvia|gloria|marta|lucia|irene|claudia|adriana|susana|cristina|rosa|beatriz|patricia|graciela|mirta|elsa|sofia|isabel|irlanda|delia|esther)\b/.test(n)) return 'F';
+  if (/\b(juan|pedro|jose|osvaldo|daniel|domingo|pascual|carlos|jorge|miguel|roque|hugo|atilio|alberto|ignacio|omar|martin|ricardo|hector)\b/.test(n)) return 'M';
+  return 'F';
+}
+function informeCabeceraHash(item){
+  var txt = String((item && (item.ome || item.n_orden || item.benef || item.nombre)) || '');
+  var h = 0;
+  for (var i=0;i<txt.length;i++) h = ((h * 31) + txt.charCodeAt(i)) >>> 0;
+  return h;
+}
+function plantillaInformeCabeceraWeb(item){
+  var genero = informeCabeceraGenero(item || {});
+  var lista = INFORME_CABECERA_PLANTILLAS[genero] || INFORME_CABECERA_PLANTILLAS.F;
+  var base = lista[informeCabeceraHash(item || {}) % lista.length] || lista[0];
+  return Object.assign({}, base, { genero: genero });
+}
+async function crearInformeCabeceraDesdeDetalle(idx, btn){
+  var ctx = PEND_DETALLE_CTX || {};
+  var item = (ctx.filas || [])[idx];
+  if (!ctx.slug || !item){ nsAlert('No encontré el paciente para crear el informe.'); return; }
+  if (!item.ome){ nsAlert('La fila no tiene número de OME.'); return; }
+  var original = btn ? btn.textContent : '';
+  if (btn){ btn.disabled = true; btn.textContent = '⏳'; btn.title = 'Enviando al worker'; }
+  try{
+    var r = await fetch('/api/admin/worker/tasks', {
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      credentials:'same-origin',
+      body: JSON.stringify({
+        type:'crear-informe-cabecera',
+        clientSlug: ctx.slug,
+        payload:{ item:item, month:ctx.month || '', plantilla:plantillaInformeCabeceraWeb(item) }
+      })
+    });
+    var d = await r.json().catch(function(){ return {}; });
+    if(!r.ok){ throw new Error((d && d.error) || 'No se pudo crear la tarea.'); }
+    if(!(d.task && d.task.id)){ throw new Error('La tarea se creó sin número de seguimiento.'); }
+    if (btn){ btn.textContent = '⏳'; btn.title = 'En cola'; }
+    seguirInformeCabeceraTarea(d.task.id, btn);
+  }catch(e){
+    if (btn){ btn.disabled = false; btn.textContent = original || '📝'; btn.title = 'Crear informe'; }
+    nsAlert(e && e.message ? e.message : 'No se pudo enviar al worker.');
+  }
+}
+function seguirInformeCabeceraTarea(id, btn){
+  if (!id || !btn) return;
+  var vueltas = 0;
+  var timer = setInterval(async function(){
+    vueltas++;
+    try{
+      var d = await fetch('/api/admin/worker/tasks', { credentials:'same-origin' }).then(function(r){ return r.json(); });
+      var t = (d.tasks || []).find(function(x){ return x.id === id; });
+      if(!t) return;
+      if(t.status === 'pending'){ btn.textContent = '⏳'; btn.title = 'En cola' + (vueltas > 8 ? ' · revisá si el worker está prendido' : ''); return; }
+      if(t.status === 'running'){ btn.textContent = '🛠'; btn.title = 'Creando informe en PAMI'; return; }
+      clearInterval(timer);
+      if(t.status === 'done'){
+        btn.textContent = '✓';
+        btn.title = 'Informe guardado';
+        btn.disabled = true;
+        mostrarResultadoTarea('crear-informe-cabecera', t);
+        if (typeof loadClientMesCurso === 'function') setTimeout(function(){ loadClientMesCurso(); }, 1200);
+      } else {
+        btn.textContent = '!';
+        btn.title = t.error || 'Error del worker';
+        btn.disabled = false;
+        mostrarResultadoTarea('crear-informe-cabecera', t);
+      }
+    }catch(e){}
+  }, 3000);
+}
 function iniCargarPendientesOperador(){ return iniRenderPendientesEn('iniPendOpList', 'iniPendOpMeta'); }
 function iniCargarMisPendientes(){ return iniRenderPendientesEn('opPendList', 'opPendMeta'); }
 
@@ -9448,7 +9553,7 @@ function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remo
 // sin necesidad de entrar por SSH. Solo admin.
 var SRV_POLL = null;       // refresco mientras el modal está abierto
 var SRV_DOT_POLL = null;   // refresco de fondo del puntito del botón
-var SRV_TIPO_LABEL = { 'healthcheck':'Prueba', 'auditar-informes':'Auditar informes', 'subir-informes':'Subir informe', 'bandeja-sync':'Sincronizar bandeja', 'liberar-cupo':'Liberar cupo', 'crear-ome':'Generar OME' };
+var SRV_TIPO_LABEL = { 'healthcheck':'Prueba', 'auditar-informes':'Auditar informes', 'subir-informes':'Subir informe', 'bandeja-sync':'Sincronizar bandeja', 'liberar-cupo':'Liberar cupo', 'crear-ome':'Generar OME', 'crear-informe-cabecera':'Crear informe' };
 
 function srvRelativo(iso){
   if(!iso) return '—';
@@ -10400,7 +10505,7 @@ async function limpiarTransmitidos(){
   }catch(e){ cabEstado('',''); nsAlert('Error de red al limpiar.'); }
 }
 function seguirTarea(id, tipo){
-  var accion=(tipo==='subir-informes')?'Subiendo a PAMI':'Auditando en PAMI';
+  var accion=(tipo==='subir-informes')?'Subiendo a PAMI':(tipo==='crear-informe-cabecera'?'Creando informe en PAMI':'Auditando en PAMI');
   var vueltas=0;
   var timer=setInterval(async function(){
     vueltas++;
@@ -10464,6 +10569,18 @@ function mostrarResultadoTarea(tipo, t){
       var okd = ['transmitido','ya_transmitido'].indexOf(d.estado) >= 0;
       var etq = d.estado==='ya_transmitido' ? 'ya estaba transmitido' : (okd ? 'transmitido' : (d.motivo || d.estado || 'sin subir'));
       return row(okd?'✅':'⚠️', d.filename || ('OME '+(d.ome||'')), etq, okd?'#16a34a':'#b45309');
+    }).join('');
+  } else if (tipo === 'crear-informe-cabecera'){
+    var detInf = res.detalle || [];
+    var guardados = res.guardados || 0;
+    var totalInf = res.total || detInf.length || (res.ome ? 1 : 0);
+    titulo = '📝 Informe de cabecera';
+    resumen = '<b>'+guardados+'</b> de <b>'+totalInf+'</b> informe(s) guardados'
+      + (guardados < totalInf ? ' · <span style="color:#b45309">'+(totalInf-guardados)+' con problema</span>' : ' ✅');
+    filas = (detInf.length ? detInf : [{ paciente:res.paciente, ome:res.ome, estado:guardados ? 'guardado' : 'sin guardar' }]).map(function(d){
+      var okd = String(d.estado || '').toLowerCase() === 'guardado';
+      var pl = d.plantilla || res.plantilla || '';
+      return row(okd?'✅':'⚠️', d.paciente || ('OME '+(d.ome||'')), (pl ? pl+' · ' : '')+'OME '+(d.ome||'-')+' · '+(d.estado||'-'), okd?'#16a34a':'#b45309');
     }).join('');
   } else {
     var det2 = res.detalle || [];

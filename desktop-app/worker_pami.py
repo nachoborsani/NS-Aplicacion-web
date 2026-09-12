@@ -11,6 +11,7 @@ Tipos de tarea:
   - subir-informes     : adjunta el informe a la OME en PAMI (upload real + transmite).
   - liberar-cupo       : cancela aceptaciones de OMEs no validadas para liberar cupo.
   - crear-ome          : genera una OME especialista con credenciales del médico.
+  - crear-informe-cabecera : completa y guarda el informe CUP de médico de cabecera.
 
 Auth: el token de la cola lo obtiene logueado como admin (/api/admin/worker/token);
 los datos (informes, clave PAMI, archivos) los saca con la sesión admin.
@@ -424,6 +425,75 @@ def tarea_crear_ome(web, slug, payload, tlog):
     }
 
 
+def _plantilla_informe_cabecera(payload):
+    plantilla = payload.get("plantilla") if isinstance(payload.get("plantilla"), dict) else {}
+    return {
+        "codigo": str(plantilla.get("codigo") or "").strip(),
+        "genero": str(plantilla.get("genero") or "").strip(),
+        "taMax": str(plantilla.get("taMax") or "140").strip() or "140",
+        "taMin": str(plantilla.get("taMin") or "90").strip() or "90",
+        "peso": str(plantilla.get("peso") or "86").strip() or "86",
+        "motivo": str(plantilla.get("motivo") or "control de salud").strip() or "control de salud",
+        "examen": str(plantilla.get("examen") or "no presenta").strip() or "no presenta",
+        "diagnostico": str(plantilla.get("diagnostico") or "control de salud").strip() or "control de salud",
+        "tratamiento": str(plantilla.get("tratamiento") or "recetas").strip() or "recetas",
+    }
+
+
+def tarea_crear_informe_cabecera(web, slug, payload, tlog):
+    from pami_informes_cabecera import PamiInformesCabeceraController
+
+    item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+    if not item:
+        raise RuntimeError("No llegó el paciente para crear el informe.")
+    ome = "".join(ch for ch in str(item.get("ome") or item.get("n_orden") or "") if ch.isdigit())
+    if not ome:
+        raise RuntimeError("La fila no tiene número de OME.")
+    user, clave = _creds(web, slug)
+    if not user or not clave:
+        raise RuntimeError("El cliente no tiene usuario/clave PAMI cargados en la web.")
+
+    nombre = str(item.get("nombre") or item.get("paciente") or "").strip()
+    practica = str(item.get("practica") or "").strip()
+    plantilla = _plantilla_informe_cabecera(payload)
+    tlog(f"Creando informe de cabecera para {nombre or ome} · OME {ome}.")
+    if plantilla.get("codigo"):
+        tlog(f"Plantilla: {plantilla.get('codigo')}.")
+    if practica:
+        tlog(f"Práctica: {practica[:120]}")
+
+    ctrl = PamiInformesCabeceraController(
+        log_callback=lambda m: tlog(str(m)),
+        status_callback=lambda m: tlog(str(m)),
+        headless=True,
+    )
+    try:
+        res = ctrl.abrir_y_preparar_informe(
+            usuario=user,
+            clave=clave,
+            item=item,
+            plantilla=plantilla,
+        )
+    finally:
+        ctrl.cerrar()
+
+    return {
+        "total": 1,
+        "guardados": 1,
+        "ome": ome,
+        "paciente": nombre,
+        "practica": practica,
+        "plantilla": plantilla.get("codigo", ""),
+        "detalle": [{
+            "ome": ome,
+            "paciente": nombre,
+            "practica": practica,
+            "plantilla": plantilla.get("codigo", ""),
+            "estado": (res or {}).get("estado") or "guardado",
+        }],
+    }
+
+
 def tarea_liberar_cupo(web, slug, payload, tlog):
     from pami_liberar_cupo import PamiLiberarCupoController
 
@@ -480,6 +550,8 @@ def dispatch(task, web, cola):
         return tarea_subir(web, slug, payload, tlog, cola, tid)
     if tipo == "crear-ome":
         return tarea_crear_ome(web, slug, payload, tlog)
+    if tipo == "crear-informe-cabecera":
+        return tarea_crear_informe_cabecera(web, slug, payload, tlog)
     if tipo == "verificar-medico":
         return tarea_verificar_medicos(web, slug, payload, tlog)
     if tipo == "plan-salud-benef":

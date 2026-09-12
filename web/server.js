@@ -6980,17 +6980,18 @@ const server = http.createServer(async (req, res) => {
     if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const body = await readBody(req);
     const type = String((body && body.type) || "healthcheck").trim().toLowerCase();
-    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes", "liberar-cupo", "crear-ome"]);
+    const allowed = new Set(["healthcheck", "bandeja-sync", "auditar-informes", "subir-informes", "liberar-cupo", "crear-ome", "crear-informe-cabecera"]);
     if (!allowed.has(type)) return json(res, 400, { error: "Tipo de tarea no soportado todavía." });
     // El operador solo dispara tareas de informes (subir/auditar a PAMI); la
     // sincronización de bandeja y las pruebas quedan para el admin.
-    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes" && type !== "liberar-cupo" && type !== "crear-ome") {
+    if (me.role === "operador" && type !== "auditar-informes" && type !== "subir-informes" && type !== "liberar-cupo" && type !== "crear-ome" && type !== "crear-informe-cabecera") {
       return json(res, 403, { error: "Solo un administrador." });
     }
     const LABELS = {
       healthcheck: "Prueba de worker", "bandeja-sync": "Sincronizar bandeja",
       "auditar-informes": "Verificar informes en PAMI", "subir-informes": "Subir informes a PAMI",
       "liberar-cupo": "Liberar cupo PAMI", "crear-ome": "Generar OME especialista",
+      "crear-informe-cabecera": "Crear informe médico cabecera",
     };
     const task = enqueueWorkerTask({
       type,
