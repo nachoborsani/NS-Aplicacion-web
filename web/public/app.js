@@ -2124,6 +2124,14 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   var filas = (res.data && res.data.filas) || [];
   PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: filas };
   var generados = puedeCrearInforme ? await informesCabeceraGenerados(slug) : {};
+  // Cuantas veces se uso cada plantilla en este centro: es lo que evita repetirlas.
+  var usos = {};
+  Object.keys(generados).forEach(function(k){
+    var c = (generados[k] && generados[k].plantilla) || '';
+    if (c) usos[c] = (usos[c] || 0) + 1;
+  });
+  PEND_DETALLE_CTX.generados = generados;
+  PEND_DETALLE_CTX.usos = usos;
   var total = (res.data && res.data.total) || filas.length;
   var conInforme = filas.reduce(function(acc, f){
     var k = informeCabeceraOme(f); return acc + (k && generados[k] ? 1 : 0);
@@ -2255,12 +2263,24 @@ function informeCabeceraHash(item){
   for (var i=0;i<txt.length;i++) h = ((h * 31) + txt.charCodeAt(i)) >>> 0;
   return h;
 }
-function plantillaInformeCabeceraWeb(item){
+// Elige la plantilla MENOS usada de las que ya se generaron en esta bandeja. Con
+// 8 por sexo y eligiendo solo por el hash del paciente, dos pacientes caian en la
+// misma seguido (paso con F1) — y dos informes iguales en la misma bandeja es lo
+// primero que salta en una auditoria. A igualdad de uso decide el hash, asi no
+// arrancan todos por la primera de la lista.
+function plantillaInformeCabeceraWeb(item, usos){
   var genero = informeCabeceraGenero(item || {});
   if (!genero) return null;
   var lista = INFORME_CABECERA_PLANTILLAS[genero] || INFORME_CABECERA_PLANTILLAS.F;
-  var base = lista[informeCabeceraHash(item || {}) % lista.length] || lista[0];
-  return Object.assign({}, base, { genero: genero });
+  var uso = usos || {};
+  var arranque = informeCabeceraHash(item || {}) % lista.length;
+  var base = null, menos = Infinity;
+  for (var i = 0; i < lista.length; i++){
+    var cand = lista[(arranque + i) % lista.length];
+    var veces = uso[cand.codigo] || 0;
+    if (veces < menos){ menos = veces; base = cand; if (!veces) break; }
+  }
+  return Object.assign({}, base || lista[0], { genero: genero });
 }
 function informeCabeceraErrorVisible(msg){
   msg = String(msg || '').trim();
@@ -2313,12 +2333,12 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
   var item = (ctx.filas || [])[idx];
   if (!ctx.slug || !item){ nsAlert('No encontré el paciente para crear el informe.'); return; }
   if (!item.ome){ nsAlert('La fila no tiene número de OME.'); return; }
-  var plantilla = plantillaInformeCabeceraWeb(item);
+  var plantilla = plantillaInformeCabeceraWeb(item, ctx.usos);
   if (!plantilla){
     var elegido = await pedirSexoPaciente(item.nombre || item.paciente);
     if (!elegido) return;   // cerró sin elegir: no se crea nada
     item.sexo = elegido;    // queda en la fila, no se vuelve a preguntar en esta lista
-    plantilla = plantillaInformeCabeceraWeb(item);
+    plantilla = plantillaInformeCabeceraWeb(item, ctx.usos);
     if (!plantilla){ nsAlert('No pude armar el informe para ese paciente.', { titulo:'Revisar paciente' }); return; }
   }
   var original = btn ? btn.textContent : '';
@@ -2338,6 +2358,9 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
     if(!r.ok){ throw new Error((d && d.error) || 'No se pudo crear la tarea.'); }
     if(!(d.task && d.task.id)){ throw new Error('La tarea se creó sin número de seguimiento.'); }
     if (btn){ btn.textContent = '⏳'; btn.title = 'En cola'; }
+    // Se cuenta ya, sin esperar a que termine: si no, creando varios seguidos
+    // todos verian la misma cuenta y volverian a elegir la misma plantilla.
+    if (ctx.usos && plantilla.codigo) ctx.usos[plantilla.codigo] = (ctx.usos[plantilla.codigo] || 0) + 1;
     seguirInformeCabeceraTarea(d.task.id, btn);
   }catch(e){
     marcarInformeCabeceraError(btn, e && e.message ? e.message : 'No se pudo enviar al worker.');
