@@ -6454,7 +6454,20 @@ const server = http.createServer(async (req, res) => {
       // Por donde va la corrida de bandejas (la de las 20:00 o la del boton). No
       // es una tarea del worker, asi que sin esto la pantalla decia "inactivo"
       // mientras el server estaba recorriendo diez clientes.
-      bandeja: (() => { const st = loadBandejaRefresco(); return { paso: st.paso || "", pasoAt: st.pasoAt || "" }; })(),
+      // Va tambien si hay un pedido esperando: el refresco lo levanta un timer del
+      // server, no el worker, asi que entre que se aprieta el boton y arranca la
+      // vuelta pasan minutos en los que la pantalla decia "inactivo" — y se lee
+      // como que el boton no hizo nada.
+      bandeja: (() => {
+        const st = loadBandejaRefresco();
+        return {
+          paso: st.paso || "", pasoAt: st.pasoAt || "",
+          pendiente: !!st.pedidoAt && st.pedidoAt !== st.ackAt,
+          pedidoAt: st.pedidoAt || "",
+          slugs: Array.isArray(st.slugs) ? st.slugs : [],
+          transmite: !!st.forzarTransmision,
+        };
+      })(),
     });
   }
   // Horario de la automatización del server (editable). El server lo lee cada pocos

@@ -10320,6 +10320,17 @@ function srvRender(st){
     var pasoFresco = band && band.paso && band.pasoAt && (Date.now() - Date.parse(band.pasoAt)) < 15*60*1000;
     if (pasoFresco){
       h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.10);margin-bottom:16px;color:var(--text)">🔄 Recorriendo bandejas · <b>'+esc(band.paso)+'</b></div>';
+    } else if (band && band.pendiente){
+      // Pedido anotado y todavia sin arrancar: el refresco lo levanta un timer
+      // del server, no el worker. Sin este cartel, apretar "Transmitir y
+      // actualizar" y leer "Inactivo" se entiende como que el boton no anduvo.
+      var quienes = (band.slugs && band.slugs.length)
+        ? band.slugs.map(function(sl){ var c = (CLIENTS || []).filter(function(x){ return x.slug === sl; })[0]; return (c && c.name) || sl; }).join(', ')
+        : 'todas las bandejas';
+      h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(37,99,235,.10);margin-bottom:16px;color:var(--text)">'
+        + '⏳ Actualización pedida · <b>' + esc(quienes) + '</b>' + (band.transmite ? ' (transmite)' : '')
+        + '<div style="font-size:12px;color:var(--text-2);margin-top:3px">Pedida ' + esc(srvRelativo(band.pedidoAt))
+        + ' — el server la toma en su próxima vuelta (cada 10 min).</div></div>';
     } else {
     h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.04);margin-bottom:16px;color:var(--text-2)">Inactivo — esperando tareas</div>';
     }
