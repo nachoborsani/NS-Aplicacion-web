@@ -547,8 +547,15 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
         except Exception:  # noqa: BLE001
             transmitir = False
 
+    # Cuantos clientes va a recorrer y cuantos lleva: es lo que se muestra en
+    # "Estado del server" mientras corre.
+    clientes = [c for c in web.list_clients()
+                if not (only_slugs and c.get("slug") not in only_slugs)
+                and not (not only_slugs and c.get("slug") in EXCLUIDOS_AUTO)]
+    total_clientes = len(clientes)
+    hechos = 0
     results: list[dict] = []
-    for client in web.list_clients():
+    for client in clientes:
         slug = client.get("slug")
         if only_slugs and slug not in only_slugs:
             continue
