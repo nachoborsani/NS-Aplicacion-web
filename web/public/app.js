@@ -1989,6 +1989,13 @@ async function iniRenderPendientesEn(listId, metaId){
   var clientes = d.clientes || [];
   var metaTxt = (d.totalPendientes||0) + ' pendientes · ' + (d.totalSinTransmitir||0) + ' sin transmitir';
   if (d.totalCup) metaTxt += ' · ' + d.totalCup + ' del CUP';
+  // Desde cuándo son estos números. Se muestra la bandeja MÁS VIEJA de las que
+  // se están contando: si el poller no corrió en algún cliente, el total ya no
+  // es de ahora y hay que poder darse cuenta. El dashboard siempre mostró su
+  // "última actualización"; acá no había nada y un dato viejo se veía igual de
+  // confiable que uno recién bajado.
+  var fechas = clientes.map(function(c){ return c.actualizado; }).filter(Boolean).sort();
+  if (fechas.length) metaTxt += ' · datos al ' + mesCursoFechaHora(fechas[0]);
   // Lo que se vence va primero en el texto: es lo único con fecha de caducidad.
   if (d.totalPorVencer) metaTxt = '⏳ ' + d.totalPorVencer + ' por vencer · ' + metaTxt;
   if (meta) meta.textContent = metaTxt;
@@ -2022,7 +2029,7 @@ async function iniRenderPendientesEn(listId, metaId){
       // del CUP nunca los tuvieron) — mismo patrón que los chips de "por vencer".
       + (c.pendientes ? '<button type="button" class="ini-pendop-badge pend" title="Informes pendientes — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'pendientes\',\''+escJs(c.nombre)+'\')">'+c.pendientes+'</button>' : '')
       + (c.sinTransmitir ? '<button type="button" class="ini-pendop-badge transm" title="Sin transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'sinTransmitir\',\''+escJs(c.nombre)+'\')">'+c.sinTransmitir+'</button>' : '')
-      + (c.cup ? '<button type="button" class="ini-pendop-badge cup" title="Del informe del CUP: falta validar o transmitir — tocá para ver cuáles" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'cup\',\''+escJs(c.nombre)+'\')">'+c.cup+'</button>' : '')
+      + (c.cup ? '<button type="button" class="ini-pendop-badge cup" title="' + esc('De la bandeja del CUP: falta validar o transmitir — tocá para ver cuáles.' + (c.actualizado ? ' Bandeja actualizada el ' + mesCursoFechaHora(c.actualizado) + '.' : '')) + '" onclick="event.stopPropagation();abrirPendientesDetalle(\''+escJs(c.slug)+'\',\'cup\',\''+escJs(c.nombre)+'\')">'+c.cup+'</button>' : '')
       + '</span></li>';
   }).join('') : '<li class="ini-empty">Sin pendientes 🎉</li>';
 }

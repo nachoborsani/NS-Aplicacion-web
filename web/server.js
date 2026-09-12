@@ -881,9 +881,12 @@ function pendientesDeCliente(slug, cliente, informes, bandejas) {
   const bandeja = (bandejas || {})[slug];
   let cup = 0;
   // Vale para el médico de cabecera Y para un consultorio con tablero de bandeja
-  // CUP (bandejaCup, ej. Caballito): es el MISMO número que muestra su dashboard
-  // en la tarjeta del mes en curso (faltan validar + faltan informe), así que el
-  // panel de Pendientes y el dashboard no pueden divergir.
+  // CUP (bandejaCup, ej. Caballito). Sale de bandejaResumenCup(), la MISMA
+  // función que alimenta la tarjeta del mes en curso de su dashboard, así que el
+  // panel de Pendientes y el dashboard no pueden divergir. Es lo que falta
+  // cerrar de la bandeja: sin validar + validadas sin transmitir. (El comentario
+  // viejo decía "faltan validar + faltan informe": el número siempre estuvo
+  // bien, el texto no.)
   if (cliente && (cliente.tipo === "med_cabecera" || cliente.bandejaCup)) {
     if (bandeja && Array.isArray(bandeja.rows) && bandeja.rows.length) {
       const r = bandejaResumenCup(bandeja);
@@ -894,6 +897,10 @@ function pendientesDeCliente(slug, cliente, informes, bandejas) {
   // cabecera): el plazo de PAMI corre igual para cualquier centro.
   const riesgo = omesEnRiesgoDeBandeja(bandeja);
   return { pendientes, sinTransmitir, cup,
+    // Cuándo se bajó por última vez esa bandeja. El dashboard ya lo muestra y el
+    // panel de Pendientes no: sin eso, un número viejo (el poller no corrió) se
+    // ve idéntico a uno recién actualizado.
+    actualizado: (bandeja && bandeja.uploadedAt) || "",
     porVencer: riesgo.porVencer, vencidas: riesgo.vencidas, diasRestantesMin: riesgo.diasRestantesMin };
 }
 // Filas para exportar la cabina (PDF/Excel): un renglón por informe con su match.
@@ -7282,7 +7289,7 @@ const server = http.createServer(async (req, res) => {
     let totalPendientes = 0, totalSinTransmitir = 0, totalCup = 0, totalPorVencer = 0, totalVencidas = 0;
     for (const slug of slugsVisibles) {
       const cliente = todosClientes.find((c) => c.slug === slug);
-      const { pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin } =
+      const { pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin, actualizado } =
         pendientesDeCliente(slug, cliente, informes, bandejas);
       if (pendientes || sinTransmitir || cup || porVencer || vencidas) {
         // `tipo` viaja para que el panel sepa a dónde mandar al hacer clic: el
@@ -7292,7 +7299,7 @@ const server = http.createServer(async (req, res) => {
           // bandejaCup viaja para que el panel sepa que este consultorio también
           // se trabaja en SU dashboard de bandeja, no en la Cabina de informes.
           bandejaCup: !!(cliente && cliente.bandejaCup),
-          pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin });
+          pendientes, sinTransmitir, cup, porVencer, vencidas, diasRestantesMin, actualizado });
         totalPendientes += pendientes;
         totalSinTransmitir += sinTransmitir;
         totalCup += cup;
