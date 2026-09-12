@@ -2333,6 +2333,10 @@ function firmaExiste(name) {
   return false;
 }
 
+// Vínculo médico ↔ centro ↔ práctica (módulo aparte para poder testearlo sin
+// levantar el server). Ver web/informes_scope.js: lista vacía = NINGUNO.
+const { medicoHabilitado, hayMedicoPara, validarMedicoDeInforme } = require("./informes_scope");
+
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -11320,7 +11324,13 @@ const server = http.createServer(async (req, res) => {
       const cfg = loadInformesConfig();
       // Mismo filtro que /informes/config: un médico atado a otro cliente (o su
       // firma) no debe poder usarse desde acá, aunque el id se mande a mano.
-      const medico = medicosVisiblesPara(me, cfg.medicos || []).find((m) => m.id === body.medicoId);
+      const medicosOk = medicosVisiblesPara(me, cfg.medicos || []);
+      // Y además el vínculo del negocio: el médico tiene que estar asignado a
+      // ESTE centro para ESTA práctica (el front ya no los ofrece, pero el id
+      // viaja en el body y hay que cerrarlo también acá).
+      const errMed = validarMedicoDeInforme(medicosOk, cliente.slug, modelo, body.medicoId, cliente.name);
+      if (errMed) return json(res, 400, { error: errMed });
+      const medico = medicosOk.find((m) => m.id === body.medicoId);
       const membrete = membreteDeCliente(cliente);
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: body.paciente || {},
@@ -11387,7 +11397,13 @@ const server = http.createServer(async (req, res) => {
     if (faltan.length) return json(res, 400, { error: "Falta " + faltan.join(", ") + " para subir." });
     try {
       const cfg = loadInformesConfig();
-      const medico = (cfg.medicos || []).find((m) => m.id === body.medicoId);
+      // Igual que /generar: el médico tiene que ser visible para el usuario Y
+      // estar asignado a este centro para esta práctica (antes acá ni siquiera
+      // se filtraba por medicosVisiblesPara).
+      const medicosOk = medicosVisiblesPara(me, cfg.medicos || []);
+      const errMed = validarMedicoDeInforme(medicosOk, cliente.slug, modelo, body.medicoId, cliente.name);
+      if (errMed) return json(res, 400, { error: errMed });
+      const medico = medicosOk.find((m) => m.id === body.medicoId);
       const membrete = membreteDeCliente(cliente);
       const bytes = await informes.buildInformePdf(modelo, {
         paciente: pac,
@@ -11460,6 +11476,7 @@ const server = http.createServer(async (req, res) => {
       const medicosOk = medicosVisiblesPara(me, cfg.medicos || []);
       const archivos = [];
       const usados = {};
+      const omitidos = [];
       for (const it of items) {
         const modelo = String(it.modelo || "");
         if (!informes.MODELOS[modelo]) continue;
@@ -11472,7 +11489,12 @@ const server = http.createServer(async (req, res) => {
         // /informes/generar.
         if ((me.role === "operador_clinica" || me.role === "clinica") && cliente.slug !== me.centro) continue;
         // Mismo filtro que /informes/config: no usar un médico (ni su firma) de
-        // otro cliente aunque el id se mande a mano.
+        // otro cliente aunque el id se mande a mano. Y además el vínculo del
+        // negocio (médico asignado a ESE centro para ESA práctica): la fila que
+        // no cumple se saltea, como el resto de las filas inválidas del lote,
+        // pero guardamos el motivo para poder explicarlo si no queda ninguna.
+        const errMed = validarMedicoDeInforme(medicosOk, cliente.slug, modelo, it.medicoId, cliente.name);
+        if (errMed) { omitidos.push(errMed); continue; }
         const medico = medicosOk.find((m) => m.id === it.medicoId);
         const bytes = await informes.buildInformePdf(modelo, {
           paciente: pac,
@@ -11490,7 +11512,13 @@ const server = http.createServer(async (req, res) => {
         else usados[nombre] = 1;
         archivos.push({ name: nombre, data: Buffer.from(bytes) });
       }
-      if (!archivos.length) return json(res, 400, { error: "Ningún paciente tenía plantilla y datos válidos para generar." });
+      if (!archivos.length) {
+        // Si lo que frenó todo fue el vínculo médico/centro, decirlo con nombre
+        // y apellido en vez del genérico "datos válidos" (que manda a buscar el
+        // problema donde no está).
+        const motivo = [...new Set(omitidos)].slice(0, 3).join(" ");
+        return json(res, 400, { error: motivo || "Ningún paciente tenía plantilla y datos válidos para generar." });
+      }
       const zbuf = zipMin.zip(archivos);
       res.writeHead(200, {
         "content-type": "application/zip",
@@ -11654,7 +11682,8 @@ const server = http.createServer(async (req, res) => {
     saveInformesConfig(cfg);
     return json(res, 201, { ok: true, id });
   }
-  // Asignar informes (modelos) a un médico (si queda vacío = disponible para todos).
+  // Asignar informes (modelos) a un médico. Si queda vacío, el médico no firma
+  // NINGUNA práctica (antes vacío significaba "todas"; ver medicoHabilitado).
   const medScopeMatch = p.match(/^\/api\/informes\/medicos\/([a-z0-9-]+)\/scope$/);
   if (medScopeMatch && req.method === "POST") {
     const me = getSessionUser(req);

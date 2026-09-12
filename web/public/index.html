@@ -1592,6 +1592,9 @@
               <label>Cliente</label>
               <select class="inp" id="infCentro" onchange="onCentroChange()"></select>
             </div>
+            <!-- Centro sin ningún médico asignado: no hay práctica que ofrecer.
+                 Lo llena onCentroChange(). -->
+            <p class="nom-muted" id="infSinMedicosAviso" style="display:none"></p>
             <div id="infFormResto">
             <div class="field">
               <label>Especialidad</label>
