@@ -2728,9 +2728,9 @@ function avisosCampanaHtml(){
   var bien = AVISOS_SESION.filter(function(a){ return a.ok; }).length;
   var mal = AVISOS_SESION.length - bien;
   var h = '<div style="padding:10px 14px 6px;font-size:11.5px;font-weight:800;color:var(--text-2);'
-    + 'text-transform:uppercase;letter-spacing:.5px">En esta sesion</div>';
+    + 'text-transform:uppercase;letter-spacing:.5px">Recién</div>';
   h += '<div style="padding:0 14px 8px;font-size:13px;color:var(--text)">'
-    + (bien ? '<b>' + bien + '</b> lista' + (bien > 1 ? 's' : '') : '')
+    + (bien ? '<b>' + bien + '</b> ' + (bien > 1 ? 'salieron' : 'salió') + ' bien' : '')
     + (bien && mal ? ' · ' : '')
     + (mal ? '<b style="color:#dc2626">' + mal + '</b> con error' : '')
     + '</div>';
