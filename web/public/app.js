@@ -2084,13 +2084,29 @@ var INFORME_CABECERA_PLANTILLAS = {
   ]
 };
 function informeCabeceraGenero(item){
-  var benef = String((item && (item.benef || item.beneficio || item.gp)) || '').replace(/\D/g,'');
-  if (benef.indexOf('15') === 0) return 'F';
-  if (benef.indexOf('14') === 0) return 'M';
   var n = omeNorm((item && (item.nombre || item.paciente)) || '');
-  if (/\b(maria|ana|elena|silvia|gloria|marta|lucia|irene|claudia|adriana|susana|cristina|rosa|beatriz|patricia|graciela|mirta|elsa|sofia|isabel|irlanda|delia|esther)\b/.test(n)) return 'F';
-  if (/\b(juan|pedro|jose|osvaldo|daniel|domingo|pascual|carlos|jorge|miguel|roque|hugo|atilio|alberto|ignacio|omar|martin|ricardo|hector)\b/.test(n)) return 'M';
-  return 'F';
+  var tokens = n.split(/\s+/).filter(Boolean);
+  var femeninos = {
+    alejandra:1, alicia:1, ana:1, andrea:1, angela:1, antonia:1, beatriz:1, carmen:1, catalina:1, cecilia:1,
+    celia:1, claudia:1, cristina:1, delia:1, elba:1, elda:1, elena:1, elisa:1, elvira:1, emilia:1,
+    estela:1, ester:1, esther:1, eva:1, gabriela:1, graciela:1, gloria:1, irene:1, iris:1, isabel:1,
+    isabela:1, janet:1, laura:1, liliana:1, lucia:1, luisa:1, mabel:1, marcela:1, margarita:1, maria:1,
+    mariana:1, marisa:1, marta:1, mercedes:1, mirta:1, monica:1, nelida:1, nicolasa:1, norma:1, olga:1,
+    patricia:1, ramona:1, rosa:1, rosalia:1, sara:1, silvia:1, sofia:1, sonia:1, susana:1, teresa:1,
+    valeria:1, vivian:1, yolanda:1
+  };
+  var masculinos = {
+    abel:1, alberto:1, alejandro:1, alfredo:1, arnaldo:1, arturo:1, atilio:1, carlos:1, daniel:1,
+    domingo:1, eduardo:1, enrique:1, ernesto:1, esteban:1, ezequiel:1, francisco:1, hector:1, horacio:1,
+    hugo:1, ignacio:1, jorge:1, jose:1, juan:1, luis:1, manuel:1, marcelo:1, martin:1, miguel:1,
+    omar:1, oscar:1, osvaldo:1, pablo:1, pascual:1, pedro:1, primo:1, raul:1, ricardo:1, roberto:1,
+    roque:1, ruben:1, vicente:1
+  };
+  for (var i=0;i<tokens.length;i++){
+    if (femeninos[tokens[i]]) return 'F';
+    if (masculinos[tokens[i]]) return 'M';
+  }
+  return '';
 }
 function informeCabeceraHash(item){
   var txt = String((item && (item.ome || item.n_orden || item.benef || item.nombre)) || '');
@@ -2100,6 +2116,7 @@ function informeCabeceraHash(item){
 }
 function plantillaInformeCabeceraWeb(item){
   var genero = informeCabeceraGenero(item || {});
+  if (!genero) return null;
   var lista = INFORME_CABECERA_PLANTILLAS[genero] || INFORME_CABECERA_PLANTILLAS.F;
   var base = lista[informeCabeceraHash(item || {}) % lista.length] || lista[0];
   return Object.assign({}, base, { genero: genero });
@@ -2130,6 +2147,11 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
   var item = (ctx.filas || [])[idx];
   if (!ctx.slug || !item){ nsAlert('No encontré el paciente para crear el informe.'); return; }
   if (!item.ome){ nsAlert('La fila no tiene número de OME.'); return; }
+  var plantilla = plantillaInformeCabeceraWeb(item);
+  if (!plantilla){
+    nsAlert('No pude inferir si corresponde plantilla femenina o masculina por el nombre. Revisalo manualmente antes de crear el informe.', { titulo:'Revisar paciente' });
+    return;
+  }
   var original = btn ? btn.textContent : '';
   if (btn){ btn.disabled = true; btn.textContent = '⏳'; btn.title = 'Enviando al worker'; }
   try{
@@ -2140,7 +2162,7 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
       body: JSON.stringify({
         type:'crear-informe-cabecera',
         clientSlug: ctx.slug,
-        payload:{ item:item, month:ctx.month || '', plantilla:plantillaInformeCabeceraWeb(item) }
+        payload:{ item:item, month:ctx.month || '', plantilla:plantilla }
       })
     });
     var d = await r.json().catch(function(){ return {}; });
