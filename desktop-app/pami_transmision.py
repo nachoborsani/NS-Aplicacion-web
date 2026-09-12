@@ -554,18 +554,29 @@ BOT_SCRIPT = r"""
         checkEl?.closest('button,a,span')?.classList.contains('btn-primary') ||
         checkEl?.classList.contains('btn-primary');
 
-      const docAzul =
-        docEl?.closest('button,a,span')?.classList.contains('btn-primary') ||
-        docEl?.classList.contains('btn-primary');
+      // Elegible = validada y con boton de transmitir. Antes se exigia ademas que
+      // el boton de documentacion estuviera AZUL, y eso dejaba afuera justo a las
+      // que hay que transmitir.
+      //
+      // Lo que dice PAMI (leido en el panel, 12/09/2026):
+      //   upload AZUL  (btn-primary) = todavia no se cargo la documentacion
+      //   upload VERDE (btn-success) = ya tiene la documentacion cargada
+      // El title es "Cargar documentacion" en los dos casos; lo unico que cambia
+      // es el color. La regla vieja transmitia SOLO las azules —las que NO tienen
+      // informe— y salteaba las verdes. Por eso cada corrida dejaba un resto que
+      // el registro anotaba como "sin documentacion cargada" cuando era al reves:
+      // eran las que estaban listas. En CIMA eran 129 de 133.
+      const docVerde =
+        docEl?.closest('button,a,span')?.classList.contains('btn-success') ||
+        docEl?.classList.contains('btn-success');
 
-      if (btn && checkAzul && docAzul) {
-        LOG(`Elegible: [${nroOrden}] ${nombre}`);
+      if (btn && checkAzul) {
+        LOG(`Elegible: [${nroOrden}] ${nombre}${docVerde ? ' (con documentacion)' : ''}`);
         return { btn, nroOrden, nombre, pagina: getPaginaActiva() };
       }
       // No es elegible: se anota POR QUE, una sola vez por orden.
       if (noElegibles && !noElegibles.some((x) => x && x.nroOrden === nroOrden)) {
-        const motivo = !btn ? 'sin boton de transmitir'
-          : (!checkAzul ? 'sin validar' : 'sin documentacion cargada');
+        const motivo = !btn ? 'sin boton de transmitir' : 'sin validar';
         noElegibles.push({ nroOrden, nombre, motivo });
       }
     }
