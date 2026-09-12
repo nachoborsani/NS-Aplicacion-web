@@ -2301,7 +2301,9 @@ function marcarInformeCabeceraError(btn, msg){
     var estado = tr && tr.children ? tr.children[4] : null;
     if (estado) estado.innerHTML = '<span style="color:#dc2626;font-weight:800">Error</span><br><span style="color:var(--text-2);font-size:11px">' + esc(texto).slice(0, 90) + '</span>';
   }
-  nsAlert(texto, { titulo:'No se pudo crear el informe' });
+  // Mismo criterio que el aviso de OK: no traba, queda en la campana. El
+  // renglon ya muestra el error y el motivo al pasar el mouse.
+  avisarEnCampana(false, 'No se pudo crear el informe', texto, 'crear-informe-cabecera', null);
 }
 // Cuando no se puede deducir el sexo, se pregunta. Antes salía un aviso sin
 // salida ("revisalo manualmente") y no había dónde revisarlo: la fila quedaba
@@ -2378,13 +2380,18 @@ function seguirInformeCabeceraTarea(id, btn){
       if(t.status === 'pending'){ btn.textContent = '⏳'; btn.title = 'En cola' + (vueltas > 8 ? ' · revisá si el worker está prendido' : ''); return; }
       if(t.status === 'running'){ btn.textContent = '🛠'; btn.title = 'Creando informe en PAMI'; return; }
       clearInterval(timer);
+      var res = (t.result || {});
       if(t.status === 'done'){
-        marcarInformeCabeceraGenerado(btn, t.result && t.result.plantilla);
-        mostrarResultadoTarea('crear-informe-cabecera', t);
+        marcarInformeCabeceraGenerado(btn, res.plantilla);
+        // A la campana y no a una ventana: creando una bandeja entera, cada
+        // ventana corta el trabajo. La fila ya queda marcada como Generado y el
+        // detalle completo sigue a un clic desde el aviso.
+        avisarEnCampana(true, 'Informe creado',
+          (res.paciente || res.ome || '') + (res.plantilla ? ' · ' + res.plantilla : ''),
+          'crear-informe-cabecera', t);
         if (typeof loadClientMesCurso === 'function') setTimeout(function(){ loadClientMesCurso(); }, 1200);
       } else {
         marcarInformeCabeceraError(btn, t.error || 'Error del worker');
-        mostrarResultadoTarea('crear-informe-cabecera', t);
       }
     }catch(e){}
   }, 3000);
@@ -2690,11 +2697,56 @@ function iniPanelesWireDrag(scope){
     });
   });
 }
+// ===== Avisos de la sesion (campana) =====
+// El resultado de crear o subir un informe salia en una ventana que hay que
+// cerrar. Creando los 59 de una bandeja eso son 59 ventanas, cada una cortando
+// el trabajo. Ahora se juntan en la campana, en una linea, y el detalle completo
+// sigue estando a un clic. Viven en memoria: son de esta sesion, no hacen falta
+// despues de recargar (lo que importa de verdad ya queda marcado en la fila).
+var AVISOS_SESION = [];
+var AVISOS_NO_LEIDOS = 0;
+function avisarEnCampana(ok, titulo, detalle, tipo, tarea){
+  AVISOS_SESION.unshift({
+    id: 'av' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    ok: !!ok, titulo: String(titulo || ''), detalle: String(detalle || ''),
+    at: new Date().toISOString(), tipo: tipo || '', tarea: tarea || null
+  });
+  if (AVISOS_SESION.length > 40) AVISOS_SESION.length = 40;
+  AVISOS_NO_LEIDOS++;
+  iniActualizarBell();
+  var dr = document.getElementById('drawer');
+  if (dr && dr.classList.contains('show')) iniRenderDrawer();
+}
+function avisoCampanaAbrir(id){
+  var a = AVISOS_SESION.find(function(x){ return x.id === id; });
+  if (!a || !a.tarea) return;
+  closeDrawer();
+  mostrarResultadoTarea(a.tipo, a.tarea);
+}
+function avisosCampanaHtml(){
+  if (!AVISOS_SESION.length) return '';
+  var bien = AVISOS_SESION.filter(function(a){ return a.ok; }).length;
+  var mal = AVISOS_SESION.length - bien;
+  var h = '<div style="padding:10px 14px 6px;font-size:11.5px;font-weight:800;color:var(--text-2);'
+    + 'text-transform:uppercase;letter-spacing:.5px">En esta sesion</div>';
+  h += '<div style="padding:0 14px 8px;font-size:13px;color:var(--text)">'
+    + (bien ? '<b>' + bien + '</b> lista' + (bien > 1 ? 's' : '') : '')
+    + (bien && mal ? ' · ' : '')
+    + (mal ? '<b style="color:#dc2626">' + mal + '</b> con error' : '')
+    + '</div>';
+  AVISOS_SESION.slice(0, 8).forEach(function(a){
+    var clic = a.tarea ? ' onclick="avisoCampanaAbrir(&quot;' + a.id + '&quot;)" style="cursor:pointer"' : '';
+    h += '<div class="drawer-item"' + clic + '>'
+      + '<div class="di-ic">' + (a.ok ? '✅' : '⚠️') + '</div>'
+      + '<div class="di-tx"><b>' + esc(a.titulo) + '</b><span>' + esc(a.detalle) + '</span></div></div>';
+  });
+  return h;
+}
 function iniActualizarBell(){
   var dot = document.getElementById('bellDot');
   var total = iniTotalNoLeidos();   // campana = todos los canales
   var n = INICIO.unread || 0;        // badge del panel = canal actual
-  if (dot) dot.style.display = total>0 ? '' : 'none';
+  if (dot) dot.style.display = (total > 0 || AVISOS_NO_LEIDOS > 0) ? '' : 'none';
   ['iniUnread','opUnread'].forEach(function(id){
     var badge = document.getElementById(id);
     if (!badge) return;
@@ -2711,7 +2763,21 @@ async function iniRefrescarBell(){
     iniRenderCanales();
   }
 }
+// Los avisos de la sesion van ARRIBA de lo que ya dibujaba la campana. Se hace
+// envolviendo y no tocando cada rama de adentro: son tres y cada una arma su
+// propio HTML.
 function iniRenderDrawer(){
+  iniRenderDrawerBase();
+  var body = document.getElementById('drawerBody'); if (!body) return;
+  var avisos = avisosCampanaHtml();
+  if (!avisos) return;
+  // Con avisos a la vista, el cartel de "no hay notificaciones" se contradice.
+  if (body.querySelector('.empty')) body.innerHTML = '';
+  body.innerHTML = avisos + body.innerHTML;
+  AVISOS_NO_LEIDOS = 0;
+  iniActualizarBell();
+}
+function iniRenderDrawerBase(){
   var body = document.getElementById('drawerBody'); if(!body) return;
   // Operador Clínica: la campana no avisa de mensajes del Inicio (no los ve),
   // avisa de lo que el centro tiene pendiente - mismo número que la pantalla
