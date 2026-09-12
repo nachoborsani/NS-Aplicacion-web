@@ -427,6 +427,20 @@ class NSWebClient:
             "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado", body=body,
         )
 
+    def report_refresco_paso(self, paso: str) -> None:
+        """Avisa a la web por donde va la corrida de bandejas (informativo).
+
+        La pantalla de Estado del server miraba solo las tareas del worker, asi
+        que mientras el server recorria diez clientes decia "inactivo". Un fallo
+        aca no puede cortar el sync: se ignora.
+        """
+        try:
+            self._request(
+                "POST", "/api/bandeja/refresco/paso", body={"paso": str(paso or "")[:160]},
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     # --- Nomencladores ------------------------------------------------------
     def list_nomencladores(self) -> tuple[list[dict], str]:
         """Devuelve (lista de periodos disponibles, periodo activo).

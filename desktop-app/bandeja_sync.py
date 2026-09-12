@@ -558,6 +558,12 @@ def sync_all(period: str | None = None, only_slugs: list[str] | None = None,
             if progress:
                 progress(f"{client.get('name', slug)}: omitido (no baja bandeja)")
             continue
+        # Por donde va, para la pantalla de Estado del server.
+        try:
+            web.report_refresco_paso(f"{hechos + 1}/{total_clientes} · {client.get('name', slug)}")
+        except Exception:  # noqa: BLE001
+            pass
+        hechos += 1
         res = sync_client(web, client, period, progress=progress, transmitir=transmitir,
                           forzar_transmision=forzar_transmision)
         # Reportamos el resultado (ok/error + transmisión) para el indicador de salud.
