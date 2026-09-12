@@ -2141,16 +2141,18 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
     var accionHtml = '';
     if (puedeCrearInforme) {
       accionHtml = generado
-        ? '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Informe generado" disabled>✓</button></td>'
-        : '<td class="num"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
+        ? '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" title="Informe generado" disabled>✓</button></td>'
+        : '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
     }
+    // data-col: en el celular la tabla no entra y cada fila se dibuja como una
+    // ficha (ver styles.css). El atributo es lo que le dice a cada dato dónde va.
     return '<tr>'
-      + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
-      + '<td class="num">' + esc(f.benef || '-') + '</td>'
-      + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
-      + '<td class="numw">' + esc(f.ome || '-') + '</td>'
-      + '<td class="num">' + estadoHtml + '</td>'
-      + '<td class="num">' + esc(f.turno || f.recibido || '-') + '</td>'
+      + '<td class="wrap" data-col="pac">' + esc(f.nombre || '-') + '</td>'
+      + '<td class="num" data-col="ben">' + esc(f.benef || '-') + '</td>'
+      + '<td class="wrap" data-col="pra">' + esc(f.practica || '-') + '</td>'
+      + '<td class="numw" data-col="ome">' + esc(f.ome || '-') + '</td>'
+      + '<td class="num" data-col="est">' + estadoHtml + '</td>'
+      + '<td class="num" data-col="tur">' + esc(f.turno || f.recibido || '-') + '</td>'
       + accionHtml
       + '</tr>';
   }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
