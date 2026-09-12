@@ -12128,6 +12128,11 @@ function ensureOrlSeed() {
       { id: "henriquez-gomez-leydy", nombre: "Dra. Leydy Henriquez Gomez", modelos: ["derma-electro", "derma-biopsia"], clientes: CAB },
       { id: "sanchez-jamilyn", nombre: "Dra. Jamilyn Sánchez", matricula: "MN 189.271", modelos: ["eco-musculo"], clientes: CAB },
       { id: "nirenberg-alberto", nombre: "Dr. Alberto Nirenberg", matricula: "MN 54398", modelos: ["eco-musculo"], clientes: CAB },
+      // Ecodoppler de vasos de cuello y venoso de miembros superiores en Caballito.
+      // La firma se sube aparte desde la pantalla de Informes (el PNG no viaja en
+      // el repo); hasta que esté, el informe sale con el nombre y la matrícula.
+      { id: "mc-loughlin-mario", nombre: "Dr. Mario J. Mc Loughlin", matricula: "CCPM · MN 53698",
+        modelos: ["eco-doppler-cuello", "eco-doppler-venoso-mmss"], clientes: CAB },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
