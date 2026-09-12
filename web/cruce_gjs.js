@@ -96,9 +96,10 @@ const COLUMNAS_AGENDA = {
   beneficio: ["NUMERO AFILIADO", "NRO AFILIADO", "N AFILIADO", "NUMERO DE AFILIADO", "BENEFICIO", "NRO BENEFICIO", "NUMERO DE BENEFICIO", "N BENEFICIO"],
   coseguro: ["COSEGURO"],
   practica: ["PRACTICA"],
+  profesional: ["PROFESIONAL"],
 };
-// campos sin los que no se puede armar el cruce (hora y documento son
-// informativos, no bloquean si faltan).
+// campos sin los que no se puede armar el cruce (hora, documento y
+// profesional son informativos, no bloquean si faltan).
 const COLUMNAS_AGENDA_OBLIGATORIAS = ["fecha", "especialidad", "nombre", "beneficio", "coseguro", "practica"];
 function resolverColumnasAgenda(headerRow) {
   const normalizados = (headerRow || []).map(normalizarEncabezado);
@@ -316,7 +317,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
     cons.push({
       beneficio, dni: soloDigitos(celda(r, col.documento)), nombre: limpiar(celda(r, col.nombre)),
       fecha: limpiar(celda(r, col.fecha)), hora: limpiar(celda(r, col.hora)), especialidad, especialidadDisplay,
-      practica: claveComp(celda(r, col.practica)),
+      practica: claveComp(celda(r, col.practica)), profesional: claveComp(celda(r, col.profesional)),
     });
   }
   // Encabezado correcto (pasó resolverColumnasAgenda) pero ninguna fila trajo
@@ -406,8 +407,14 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
         if (filaLavado.length) esperados.push(Object.assign({ clave: "LAVAJE DE OIDO", turno: turnoDe(filaLavado), especialidadDisplay: espDisplay }, buscarMapa("LAVAJE DE OIDO")));
       } else if (esp === "CARDIO ESTUDIOS") {
         for (const f of filasEsp) {
-          const m = buscarMapa(f.practica);
-          if (m) esperados.push(Object.assign({ clave: f.practica, turno: `${f.fecha} ${f.hora}`.trim(), especialidadDisplay: espDisplay }, m));
+          // En "CARDIO ESTUDIOS" la Práctica suele quedar genérica ("CONSULTA")
+          // y el estudio real (ELECTROCARDIOGRAMA, DOPPLER CARDÍACO, etc.) queda
+          // cargado en la columna "Profesional" - no es un profesional real, es
+          // como AgendaPro nombra el recurso/estudio acá. Si la práctica no
+          // resuelve nada pero el profesional sí, usar ese.
+          const clave = (!buscarMapa(f.practica) && buscarMapa(f.profesional)) ? f.profesional : f.practica;
+          const m = buscarMapa(clave);
+          if (m) esperados.push(Object.assign({ clave, turno: `${f.fecha} ${f.hora}`.trim(), especialidadDisplay: espDisplay }, m));
           else sinMapeo = true;
         }
       } else {
