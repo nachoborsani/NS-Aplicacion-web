@@ -2171,7 +2171,7 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
     var selHtml = !puedeCrearInforme ? ''
       : ((generado || enCurso)
         ? '<td class="num" data-col="sel"></td>'
-        : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onclick="pendSelClic(event, this)"></td>');
+        : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onclick="pendSelCambio()"></td>');
     return '<tr>' + selHtml
       + '<td class="wrap" data-col="pac">' + esc(f.nombre || '-') + '</td>'
       + '<td class="num" data-col="ben">' + esc(f.benef || '-') + '</td>'
@@ -2182,7 +2182,6 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
       + accionHtml
       + '</tr>';
   }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
-  PEND_SEL_ULTIMO = -1;
   pendSelCambio();   // lista nueva: la barra de seleccion arranca escondida
 }
 function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
@@ -2354,20 +2353,6 @@ async function pedirSexoPaciente(nombre){
 // Van en UNA sola tarea, no en N: cada tarea abre y cierra el navegador de PAMI,
 // asi que 59 informes serian 59 logins. El worker los hace en una sesion.
 function pendSelCajas(){ return Array.prototype.slice.call(document.querySelectorAll('#pendDetalleBody .pend-sel')); }
-// Shift + clic marca (o desmarca) todo el tramo desde el ultimo que se toco,
-// como en cualquier lista. Sin esto, tildar 40 seguidos son 40 clics.
-var PEND_SEL_ULTIMO = -1;
-function pendSelClic(ev, caja){
-  var cajas = pendSelCajas();
-  var i = cajas.indexOf(caja);
-  if (ev && ev.shiftKey && PEND_SEL_ULTIMO >= 0 && i >= 0 && PEND_SEL_ULTIMO !== i){
-    var desde = Math.min(PEND_SEL_ULTIMO, i), hasta = Math.max(PEND_SEL_ULTIMO, i);
-    // El estado del que se acaba de tocar manda para todo el tramo.
-    for (var k = desde; k <= hasta; k++) cajas[k].checked = caja.checked;
-  }
-  if (i >= 0) PEND_SEL_ULTIMO = i;
-  pendSelCambio();
-}
 function pendSelTodos(marcar){
   pendSelCajas().forEach(function(c){ c.checked = !!marcar; });
   var all = document.getElementById('pendDetalleSelAll'); if (all) all.checked = !!marcar;
@@ -2403,7 +2388,17 @@ async function crearInformesSeleccionados(btn){
     nsAlert('No pude armar ninguno: ' + (sinSexo.length ? 'no se sabe si son mujer o varón. Creálos de a uno y elegí.' : 'las filas no tienen OME.'), { titulo:'Revisar' });
     return;
   }
-  var aviso = sinSexo.length ? ' Quedan afuera ' + sinSexo.length + ' porque no se sabe si es mujer o varón: esos creálos de a uno.' : '';
+  // Los que quedan afuera van con nombre y apellido: entre 173 renglones, saber
+  // que son "2" no sirve de nada si hay que ir a buscarlos.
+  var salto = String.fromCharCode(10);
+  var aviso = '';
+  if (sinSexo.length){
+    var muestra = sinSexo.slice(0, 6).map(function(x){ return '• ' + x; }).join(salto);
+    var resto = sinSexo.length - 6;
+    aviso = salto + salto + 'Quedan afuera ' + sinSexo.length + ' porque no se sabe si es mujer o varón.'
+      + ' Creálos de a uno con el botón de la fila y elegí:' + salto + muestra
+      + (resto > 0 ? salto + '• y ' + resto + ' más' : '');
+  }
   var ok = await nsConfirm('Se van a crear ' + pedidos.length + ' informe' + (pedidos.length > 1 ? 's' : '') + ' en PAMI, uno atrás del otro.' + aviso,
     { titulo:'Crear los informes', okLabel:'Crear' });
   if (!ok) return;
@@ -10146,6 +10141,51 @@ async function saveDelete(){
   closeDelModal();
   await renderUsers();
 }
+
+// ===== Shift + clic: marcar un tramo en cualquier lista de tildes =====
+// Tildar 40 renglones seguidos eran 40 clics. Va en un solo lugar y no en cada
+// lista: todas avisan a su manera (cabToggleSel, mcFaltCheckSel, pendSelCambio)
+// pero las tres recalculan mirando el DOM, asi que alcanza con mover los tildes
+// y volver a llamar al aviso de esa lista una vez.
+// La lista es explicita a proposito: un tilde de configuracion no es una fila, y
+// mover 20 de una ahi seria un desastre en vez de una comodidad.
+var TILDES_EN_LISTA = ['pend-sel', 'cab-check', 'mc-falt-chk'];
+var TILDE_ANCLA = {};
+function tildeGrupoDe(caja, clase){
+  // Mismo panel y misma tabla: en el dashboard conviven varios paneles con la
+  // misma clase, separados por data-panel.
+  var panel = caja.getAttribute('data-panel');
+  var sel = '.' + clase + (panel ? '[data-panel="' + panel + '"]' : '');
+  var cont = (caja.closest && (caja.closest('tbody') || caja.closest('table'))) || document;
+  var todas = [].slice.call(cont.querySelectorAll(sel));
+  if (!todas.length) todas = [].slice.call(document.querySelectorAll(sel));
+  // Las filas escondidas por un buscador no entran en el tramo: marcar lo que no
+  // se ve es justo lo que no se espera de un Shift.
+  return todas.filter(function(c){
+    var tr = c.closest ? c.closest('tr') : null;
+    return !tr || tr.style.display !== 'none';
+  });
+}
+document.addEventListener('click', function(ev){
+  var caja = ev.target;
+  if (!caja || caja.tagName !== 'INPUT' || caja.type !== 'checkbox') return;
+  var clase = TILDES_EN_LISTA.filter(function(c){ return caja.classList.contains(c); })[0];
+  if (!clase) return;
+  var grupo = tildeGrupoDe(caja, clase);
+  var i = grupo.indexOf(caja);
+  var llave = clase + '|' + (caja.getAttribute('data-panel') || '');
+  var ancla = TILDE_ANCLA[llave];
+  if (ev.shiftKey && typeof ancla === 'number' && ancla >= 0 && i >= 0 && ancla !== i){
+    var desde = Math.min(ancla, i), hasta = Math.max(ancla, i);
+    // Manda el estado del que se acaba de tocar: sirve igual para marcar el tramo
+    // que para soltarlo.
+    for (var k = desde; k <= hasta; k++) grupo[k].checked = caja.checked;
+    // El aviso de la lista ya corrió con un solo tilde cambiado; se le vuelve a
+    // avisar para que el contador cuente todo el tramo.
+    if (typeof caja.onclick === 'function') caja.onclick(ev);
+  }
+  TILDE_ANCLA[llave] = i;
+});
 
 // Las ventanas se apilan (el aviso se abre desde adentro del detalle), asi que
 // se lleva la cuenta de cual quedo arriba: es la que cierra Escape.
