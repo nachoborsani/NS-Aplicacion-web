@@ -12006,7 +12006,19 @@ function cabMostrarUltimaImport(iso){
   el.textContent = 'Última importación del mail: ' + f + ' ' + h;
 }
 // Fecha del informe para filtrar/mostrar: la del mail si la tenemos, si no cuándo se bajó.
-function cabFecha(it){ return String((it && (it.fecha || it.storedAt)) || '').slice(0,10); }
+// La fecha con la que se FILTRA tiene que ser la misma que se VE en la columna
+// Recibido. La guardada esta en UTC y la que se muestra es local: un informe que
+// entre despues de las 21:00 cae al dia siguiente para el filtro y quedaria fuera
+// del rango sin que se entienda por que. Con los 837 de Caballito no paso ninguna
+// vez —llegan en horario de trabajo—, pero el dia que pase seria invisible.
+function cabFecha(it){
+  var r = cabRecibido(it);            // DD/MM/AAAA, ya en hora local
+  if (r && r.txt && r.txt !== '—'){
+    var p = r.txt.split('/');
+    if (p.length === 3) return p[2] + '-' + p[1] + '-' + p[0];
+  }
+  return String((it && (it.fecha || it.storedAt)) || '').slice(0,10);
+}
 // Cuándo entró el informe, para la columna "Recibido". Los que vinieron por mail
 // muestran la fecha del mail (y la hora, si el import la guardó: `fechaHora` se
 // empezó a guardar después, los viejos tienen solo el día). Los subidos a mano no

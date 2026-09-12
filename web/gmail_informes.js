@@ -90,10 +90,19 @@ async function descargarAdjuntos(token, desde, hasta, filtros) {
     // `fechaHora` guarda además el momento exacto, para mostrar a qué hora entró:
     // va en un campo aparte porque el filtro Desde/Hasta compara `fecha` como
     // texto, y un ISO completo rompería el "hasta" del último día.
+    // `fecha` va en hora de Argentina, no en UTC: es la que usa el filtro
+    // Desde/Hasta y tiene que coincidir con el dia que se muestra en pantalla.
+    // Con la de UTC, un mail que entra despues de las 21:00 se guarda como del
+    // dia siguiente y queda fuera del rango que uno pide.
     let fecha = "", fechaHora = "";
     try {
       const d = new Date(Number(msg.data.internalDate));
-      if (!isNaN(d)) { fecha = d.toISOString().slice(0, 10); fechaHora = d.toISOString(); }
+      if (!isNaN(d)) {
+        fechaHora = d.toISOString();
+        try {
+          fecha = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(d);
+        } catch { fecha = d.toISOString().slice(0, 10); }
+      }
     } catch { /* sin fecha */ }
     // Asunto del mail (para mostrarlo como columna en la cabina).
     let asunto = "";

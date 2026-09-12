@@ -11124,7 +11124,18 @@ const server = http.createServer(async (req, res) => {
     const store = loadInformes();
     const cli = store[slug] || { items: [] };
     const items = cli.items || [];
-    const fechaDe = (it) => String((it && (it.fecha || it.storedAt)) || "").slice(0, 10);
+    // Mismo dia que muestra la pantalla: hora de Argentina, no UTC. Con la de UTC,
+    // un informe que entro despues de las 21:00 cuenta como del dia siguiente y un
+    // "limpiar hasta el 31" lo dejaria afuera (o se llevaria uno del 1).
+    const fechaDe = (it) => {
+      const iso = String((it && (it.fechaHora || it.storedAt || it.fecha)) || "");
+      if (!iso) return "";
+      if (!/T\d{2}:/.test(iso)) return iso.slice(0, 10);
+      const d = new Date(iso);
+      if (isNaN(d)) return iso.slice(0, 10);
+      try { return new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" }).format(d); }
+      catch { return iso.slice(0, 10); }
+    };
     let borrados = 0;
     const quedan = [];
     for (const it of items) {
