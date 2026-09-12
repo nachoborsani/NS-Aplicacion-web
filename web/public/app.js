@@ -3638,17 +3638,34 @@ function clienteTienePlanSalud(){
 // porque TODO el flujo que ya existe — renderActiveClient, el hash, F5, el
 // localStorage de "última solapa" — pasa por CLIENT_SECTION. Con un estado
 // aparte, cada re-render volvía a la solapa anterior y cerraba la herramienta.
+// Qué herramientas tiene el usuario EN ESE CENTRO. Dos roles las usan, con la
+// misma pantalla pero distinto alcance:
+//  - operador (Javi, de NS): puede tener herramientas en VARIOS clientes, y
+//    distintas en cada uno -> las configura el admin en u.modulosCliente.
+//  - operador_clinica (empleado del centro): tiene UN solo centro, así que sus
+//    herramientas (u.modulos) valen solo ahí y en ningún otro lado.
+// La visualización es idéntica para todos los operadores de clínica: cambia qué
+// herramientas están habilitadas, nunca el diseño.
+function herramientasDeCentro(slug){
+  if (!(ME && slug)) return [];
+  if (ME.role === 'operador') return modulosClienteDe(slug);
+  if (ME.role === 'operador_clinica') return (ME.centro === slug) ? opClinicaModulos() : [];
+  return [];
+}
+function rolConHerramientasDeCliente(){
+  return !!(ME && (ME.role === 'operador' || ME.role === 'operador_clinica'));
+}
 function esHerramientaDeCliente(key){
-  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT) return false;
+  if (!rolConHerramientasDeCliente() || !ACTIVE_CLIENT) return false;
   var m = OPERADOR_MODULOS.filter(function(x){ return x.key === key && x.tipo === 'vista'; })[0];
   if (!m) return false;
-  return modulosClienteDe(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
+  return herramientasDeCentro(ACTIVE_CLIENT.slug).indexOf(key) >= 0;
 }
 function renderTabsHerramientas(){
   var cont = document.getElementById('clientToolTabs');
   if (!cont) return;
-  if (!(ME && ME.role === 'operador') || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
-  var mods = modulosClienteDe(ACTIVE_CLIENT.slug);
+  if (!rolConHerramientasDeCliente() || !ACTIVE_CLIENT){ cont.innerHTML = ''; return; }
+  var mods = herramientasDeCentro(ACTIVE_CLIENT.slug);
   cont.innerHTML = OPERADOR_MODULOS
     .filter(function(m){ return m.tipo === 'vista' && mods.indexOf(m.key) >= 0; })
     .map(function(m){
@@ -12234,20 +12251,14 @@ function aplicarUsuario(u){
   document.body.classList.toggle('role-demo', u.role === 'demo');
   // Operador Clínica: mismo encierro visual que clínica (oculta lo interno de NS).
   document.body.classList.toggle('role-operador_clinica', u.role === 'operador_clinica');
-  // Módulos puntuales habilitados para ESTE operador_clinica (afiliados/informes/
-  // liberar cupo): el CSS de arriba oculta TODO lo .ns-only con !important, así
-  // que para destapar un ítem hay que sacarle la clase (un display inline no le
-  // gana al !important).
-  if (u.role === 'operador_clinica') {
-    var opMods = Array.isArray(u.modulos) ? u.modulos : [];
-    [['navPadron', 'padron'], ['navInformes', 'informes'], ['navLiberarCupo', 'liberarcupo']].forEach(function(par){
-      var el = document.getElementById(par[0]);
-      if (!el) return;
-      var habilitado = opMods.indexOf(par[1]) >= 0;
-      el.classList.toggle('ns-only', !habilitado);
-      el.style.display = habilitado ? '' : 'none';
-    });
-  }
+  // Las herramientas del operador_clinica NO van en el menú lateral: son
+  // pestañas DENTRO de su centro, igual que las del operador de NS (ver
+  // herramientasDeCentro / renderTabsHerramientas). Antes se intentaba destapar
+  // los ítems del menú sacándoles la clase .ns-only, pero el contenedor de la
+  // sección ("herramientas" en index.html) también la tiene y el CSS lo oculta
+  // con !important: los hijos quedaban destapados adentro de un padre oculto,
+  // así que el operador veía sus herramientas tildadas en la ficha de usuario y
+  // ninguna en pantalla.
   var tabRep = document.getElementById('clientTabReportes'); if (tabRep) tabRep.style.display = (u.role === 'clinica') ? 'none' : '';
   // El login normal NO pasa por go('dash') (el dashboard se ve por defecto), así que
   // marcamos la clase de la vista de inicio acá según qué sección está visible.

@@ -2148,14 +2148,19 @@
 
   /* Rol operador_clinica (empleado del centro, no el dueño): mismo encierro que
      clínica - solo su centro, oculta lo interno de NS y navega por el menú
-     izquierdo dentro de un cliente (Información básica/Pendientes). Los
-     módulos puntuales que se le habiliten (Afiliados/Informes/Liberar cupo)
-     son vistas APARTE, no tienen nada que ver con esta barra - por eso el
-     scope a #view-clientes (ej. la pestaña Generar/Varios pacientes de
-     Informes usa la misma clase .client-tabs y no debe ocultarse). */
+     izquierdo dentro de un cliente (Información básica/Pendientes). El scope a
+     #view-clientes es necesario porque .client-tabs se reusa en otras pantallas
+     (ej. la barra Generar/Varios pacientes de Informes, que no debe ocultarse). */
   body.role-operador_clinica .ns-only,
   body.role-operador_clinica #clientNewBtn{display:none !important}
-  body.role-operador_clinica #view-clientes .client-tabs{display:none}
+  /* Se ocultan los BOTONES de sección, NO la barra entera: adentro de esa misma
+     barra vive #clientToolTabs, con las herramientas habilitadas en SU centro
+     (las dibuja renderTabsHerramientas). Ocultando el contenedor, un operador
+     con Afiliados/Informes/Liberar cupo tildados en su ficha no veía ninguna en
+     pantalla. Con los botones ocultos la barra mide 0 cuando no hay
+     herramientas, así que el que no tenga ninguna ve lo mismo que antes.
+     (Es la tercera vez que esta regla tapa de más: ojo al tocarla.) */
+  body.role-operador_clinica #view-clientes .client-tabs > button{display:none}
 
   /* Rol demo en Afiliados: SOLO VE la lista y la búsqueda. Se ocultan las acciones
      (consultar cápita, credencial, subir turnera) — el backend igual las bloquea. */
