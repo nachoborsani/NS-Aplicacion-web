@@ -351,13 +351,27 @@ def tarea_verificar_medicos(web, slug, payload, tlog):
 def tarea_crear_ome(web, slug, payload, tlog):
     from pami_ome_generator import run_batch_sync
 
+    # Sin médico llega desde el bot de Telegram, donde la OME la genera un médico
+    # de cabecera: es uno solo y deriva a todas las especialidades, así que firma
+    # con el usuario de PAMI del propio centro y no hay a quién elegir.
     medico_id = str(payload.get("medicoId", "") or "").strip()
-    if not medico_id:
-        raise RuntimeError("No llegó el médico especialista.")
-    cred = _medico_creds(web, slug, medico_id)
+    if medico_id:
+        cred = _medico_creds(web, slug, medico_id)
+        quien = cred["nombre"] or cred["usuario"]
+        falta = "El médico seleccionado no tiene usuario/clave PAMI cargados en la web."
+    else:
+        cli = web.client_pami(slug) or {}
+        cred = {
+            "nombre": str(payload.get("medicoNombre", "") or "").strip(),
+            "especialidad": "",
+            "usuario": str(cli.get("pamiUser", "") or "").strip(),
+            "clave": str(cli.get("pamiPassword", "") or ""),
+        }
+        quien = cred["nombre"] or cred["usuario"]
+        falta = "El centro no tiene usuario/clave PAMI cargados en la web."
     user, clave = cred["usuario"], cred["clave"]
     if not user or not clave:
-        raise RuntimeError("El médico seleccionado no tiene usuario/clave PAMI cargados en la web.")
+        raise RuntimeError(falta)
 
     modo = str(payload.get("modo", "") or "").strip().upper()
     beneficio = "".join(ch for ch in str(payload.get("beneficio", "") or "") if ch.isdigit())
@@ -391,7 +405,7 @@ def tarea_crear_ome(web, slug, payload, tlog):
             "practica": codigo,
         })
 
-    tlog(f"Generando OME especialista con {cred['nombre'] or user}.")
+    tlog(f"Generando OME especialista con {quien or user}.")
     tlog(f"Paciente {nombre or afiliado} · práctica {codigo}{(' - ' + practica_desc) if practica_desc else ''}.")
     summary = run_batch_sync(
         input_path=input_path,

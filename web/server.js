@@ -1392,9 +1392,11 @@ function loadTelegramCfg() {
 }
 function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(telegramFile, JSON.stringify({ chats: cfg.chats || [] }, null, 2)); }
 // ---- Bot de OMEs (Telegram) ----
-// Cliente que pide OMEs por chat (por ahora el único). Chats autorizados y secret
-// del webhook viven en el volumen; el token del bot en TELEGRAM_OME_BOT_TOKEN.
-const OME_BOT_CLIENTE = "caballito-pediatrico";
+// Todas las OMEs del chat las genera el Dr. Dubesarky, sin importar para qué
+// centro es el paciente: es médico de cabecera y deriva a cualquier
+// especialidad con su propio usuario de PAMI. Chats autorizados y secret del
+// webhook viven en el volumen; el token del bot en TELEGRAM_OME_BOT_TOKEN.
+const OME_BOT_CLIENTE = "dubesarky-ezequiel";
 const omeBotFile = path.join(dataDir, "ome_bot.json");
 function loadOmeBotCfg() {
   try { const j = JSON.parse(fs.readFileSync(omeBotFile, "utf8")); return { chats: Array.isArray(j.chats) ? j.chats : [], secret: String(j.secret || "") }; }
@@ -1452,11 +1454,18 @@ async function omeBotMensaje(msg) {
   }
   const medicosStore = loadClientMedicos();
   const medicos = Array.isArray(medicosStore[OME_BOT_CLIENTE]) ? medicosStore[OME_BOT_CLIENTE] : [];
-  const { medico, varios } = omeParser.resolverMedico(parsed.especialidad, medicos);
+  // En un consultorio cada especialidad la firma un médico distinto, con su
+  // propio usuario de PAMI, así que hay que encontrar cuál. Un médico de
+  // cabecera es uno solo y deriva a todas: firma con el usuario del centro.
+  const clienteBot = loadClientsStore().find((c) => c.slug === OME_BOT_CLIENTE);
+  const esCabecera = !!clienteBot && clienteBot.tipo === "med_cabecera";
+  const { medico, varios } = esCabecera ? { medico: null, varios: false }
+    : omeParser.resolverMedico(parsed.especialidad, medicos);
   const faltan = [];
   if (!parsed.especialidad) faltan.push("no reconocí la especialidad");
   if (!parsed.dni && !parsed.beneficio) faltan.push("falta DNI o beneficio");
-  if (parsed.especialidad && !medico) faltan.push(`no hay médico de ${parsed.especialidad.key} cargado`);
+  if (!clienteBot) faltan.push("el centro del bot no está cargado en la web");
+  if (!esCabecera && parsed.especialidad && !medico) faltan.push(`no hay médico de ${parsed.especialidad.key} cargado`);
   if (medico && medico.deshabilitado) faltan.push(`el usuario PAMI del médico ${medico.nombre} está DESHABILITADO`);
   if (medico && !medico.usuario) faltan.push(`el médico ${medico.nombre} no tiene usuario PAMI`);
   if (medico && !medico.claveEnc) faltan.push(`el médico ${medico.nombre} está sin clave`);
@@ -1464,12 +1473,14 @@ async function omeBotMensaje(msg) {
   const resumen = "<b>Pedido de OME</b>\n👤 " + escapeHtml(parsed.nombre || "—") +
     "\n🪪 " + escapeHtml(ident) +
     "\n🩺 " + escapeHtml(parsed.especialidad ? parsed.especialidad.key : "—") + (parsed.especialidad ? " (" + parsed.especialidad.codigo + ")" : "") +
-    "\n👨‍⚕️ " + escapeHtml(medico ? medico.nombre : "—");
+    "\n👨‍⚕️ " + escapeHtml(medico ? medico.nombre : (clienteBot ? (clienteBot.name || clienteBot.slug) : "—"));
   if (faltan.length) {
     return omeBot.enviar(chatId, resumen + "\n\n⚠️ No puedo crearla: " + escapeHtml(faltan.join("; ")) + ".").catch(() => {});
   }
   const payload = {
-    medicoId: medico.id, medicoNombre: medico.nombre || "", medicoEspecialidad: medico.especialidad || "",
+    // Sin medicoId el worker firma con el usuario de PAMI del propio centro.
+    medicoId: medico ? medico.id : "", medicoNombre: medico ? (medico.nombre || "") : (clienteBot.name || ""),
+    medicoEspecialidad: medico ? (medico.especialidad || "") : "",
     modo: parsed.beneficio ? "BENEF" : "DNI", afiliado: parsed.beneficio || parsed.dni,
     beneficio: parsed.beneficio || "", dni: parsed.dni || "", nombre: parsed.nombre || "",
     diagnostico: "Z000", codigo: parsed.especialidad.codigo,
@@ -1478,7 +1489,7 @@ async function omeBotMensaje(msg) {
   };
   const id = omeBotGuardarPendiente({ chatId, payload });
   let extra = "";
-  if (varios && !medico.preferido) extra += "\n<i>(hay varios médicos de esta especialidad; verificá que sea el correcto o marcá un preferido en la web)</i>";
+  if (varios && medico && !medico.preferido) extra += "\n<i>(hay varios médicos de esta especialidad; verificá que sea el correcto o marcá un preferido en la web)</i>";
   if (!parsed.nombre) extra += "\n<i>(sin nombre — PAMI lo resuelve por el DNI/beneficio)</i>";
   return omeBot.enviar(chatId, resumen + extra + "\n\n¿La genero?", [[{ text: "✅ Crear OME", data: "ok:" + id }, { text: "❌ Cancelar", data: "no:" + id }]]).catch(() => {});
 }

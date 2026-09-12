@@ -5,13 +5,40 @@
 // (med) y el código de consulta del nomenclador (codigo).
 
 const ESPECIALIDADES = [
-  { key: "Cardiología",       codigo: "570129", rx: /cardiolog/,           med: /cardiolog/ },
-  { key: "Neumonología",      codigo: "820157", rx: /neumonolog|neumolog/, med: /neumonolog|neumolog/ },
-  { key: "Urología",          codigo: "820167", rx: /urolog/,              med: /urolog/ },
-  { key: "Traumatología",     codigo: "820165", rx: /traumato|ortopedia/,  med: /traumatolog|ortopedia/ },
-  { key: "Ginecología",       codigo: "820145", rx: /ginec/,               med: /ginecolog/ },
-  { key: "Gastroenterología", codigo: "820139", rx: /gastro/,              med: /gastroenterolog/ },
-  { key: "ORL",               codigo: "820168", rx: /\borl\b|otorrino/,    med: /otorrinolaring/ },
+  // Ojo con el orden: gana la primera que matchea. Psico-oncologia va ANTES que
+  // oncologia, si no "psico oncologia" cae en oncologia.
+  { key: "Cardiología",        codigo: "570129", rx: /cardiolog/,                 med: /cardiolog/ },
+  { key: "Neumonología",       codigo: "820157", rx: /neumonolog|neumolog/,       med: /neumonolog|neumolog/ },
+  { key: "Urología",           codigo: "820167", rx: /urolog/,                    med: /urolog/ },
+  { key: "Traumatología",      codigo: "820165", rx: /traumato|ortoped/,          med: /traumatolog|ortoped/ },
+  { key: "Ginecología",        codigo: "820145", rx: /ginec/,                     med: /ginecolog/ },
+  { key: "Obstetricia",        codigo: "820147", rx: /obstetric/,                 med: /obstetric/ },
+  { key: "Gastroenterología",  codigo: "820139", rx: /gastro/,                    med: /gastroenterolog/ },
+  { key: "ORL",                codigo: "820168", rx: /orl|otorrino/,          med: /otorrinolaring/ },
+  { key: "Reumatología",       codigo: "820163", rx: /reumato/,                   med: /reumatolog/ },
+  { key: "Endocrinología",     codigo: "820118", rx: /endocrin/,                  med: /endocrinolog/ },
+  { key: "Diabetología",       codigo: "820171", rx: /diabet/,                    med: /diabetolog/ },
+  { key: "Dermatología",       codigo: "820116", rx: /dermato/,                   med: /dermatolog/ },
+  { key: "Nutrición",          codigo: "820159", rx: /nutricion|nutricionista/,   med: /nutricion/ },
+  { key: "Neurología",         codigo: "820129", rx: /neurolog/,                  med: /neurolog/ },
+  { key: "Nefrología",         codigo: "820155", rx: /nefrolog/,                  med: /nefrolog/ },
+  { key: "Hepatología",        codigo: "820149", rx: /hepatolog/,                 med: /hepatolog/ },
+  { key: "Hematología",        codigo: "820121", rx: /hematolog/,                 med: /hematolog/ },
+  { key: "Infectología",       codigo: "820151", rx: /infectolog/,                med: /infectolog/ },
+  { key: "Pediatría",          codigo: "820173", rx: /pediatr/,                   med: /pediatr/ },
+  { key: "Flebología",         codigo: "820143", rx: /flebolog/,                  med: /flebolog/ },
+  { key: "Alergia",            codigo: "820111", rx: /alergi/,                    med: /alergi/ },
+  { key: "Inmunología",        codigo: "820124", rx: /inmunolog/,                 med: /inmunolog/ },
+  { key: "Fonoaudiología",     codigo: "820137", rx: /fonoaudiolog|fonoaudio/,    med: /fonoaudiolog/ },
+  { key: "Fisiatría",          codigo: "820135", rx: /fisiatr/,                   med: /fisiatr/ },
+  { key: "Cirugía",            codigo: "820126", rx: /cirugia|cirujano/,          med: /cirugia|cirujano/ },
+  { key: "Genética",           codigo: "820120", rx: /genetic/,                   med: /genetic/ },
+  { key: "Psico-oncología",    codigo: "559002", rx: /psico ?oncolog/,            med: /psico ?oncolog/ },
+  { key: "Oncología",          codigo: "144003", rx: /oncolog/,                   med: /oncolog/ },
+  { key: "Geriatría",          codigo: "560002", rx: /geriatr/,                   med: /geriatr/ },
+  // "dolor" suelto no alcanza: casi todos los pedidos dicen que al paciente le
+  // duele algo. Tiene que venir nombrada la especialidad.
+  { key: "Tratamiento del dolor", codigo: "820161", rx: /tratamiento del dolor|clinica del dolor/, med: /dolor/ },
 ];
 
 function norm(s) {
