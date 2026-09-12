@@ -277,7 +277,23 @@ BOT_SCRIPT = r"""
     }
   }
 
-  async function waitForModalVisible(timeout = 6000) {
+  // Lo que se ve en pantalla cuando el cuadro no aparece. Sirve para saber si
+  // el cuadro tardo mas de la cuenta, si quedo abierto otro, o si en ese perfil
+  // de PAMI el boton se llama distinto: sin esto el log solo decia 'timeout' y
+  // no habia forma de distinguirlos.
+  function botonesVisibles() {
+    return Array.from(document.querySelectorAll('button,a.btn,input[type=button],input[type=submit]'))
+      .filter((b) => b.offsetParent !== null)
+      .map((b) => (b.textContent || b.value || '').trim())
+      .filter(Boolean)
+      .slice(0, 20);
+  }
+
+  // El cuadro de confirmacion tarda distinto segun el perfil y la carga de PAMI.
+  // Con 6 s alcanzaba en los consultorios y no en los medicos de cabecera, donde
+  // casi todas las filas caian por timeout (12/09/2026: 1 transmitida, 18
+  // errores, contra 198 sin un error en CIMA el mismo dia).
+  async function waitForModalVisible(timeout = 15000) {
     try {
       await waitFor(() =>
         Array.from(document.querySelectorAll('button'))
@@ -287,7 +303,7 @@ BOT_SCRIPT = r"""
       LOG('Modal visible.');
       return true;
     } catch {
-      WARN('Timeout esperando modal.');
+      WARN(`Timeout esperando modal. En pantalla: ${botonesVisibles().join(' | ') || 'ningun boton visible'}`);
       return false;
     }
   }
@@ -591,7 +607,7 @@ BOT_SCRIPT = r"""
     guardarEstado(estado);
 
     fila.btn.click();
-    return await waitForModalVisible(6000);
+    return await waitForModalVisible();
   }
 
   async function confirmarTransmision(fila, estado) {
