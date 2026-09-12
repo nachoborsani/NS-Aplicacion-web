@@ -455,58 +455,98 @@ def _plantilla_informe_cabecera(payload):
 
 
 def tarea_crear_informe_cabecera(web, slug, payload, tlog):
+    """Crea uno o varios informes de cabecera en UNA sola sesión de PAMI.
+
+    La pantalla puede mandar un solo paciente (`item` + `plantilla`) o una tanda
+    (`items`: [{item, plantilla}, ...]). La tanda entra acá y no como N tareas
+    porque cada tarea abre y cierra el navegador: 59 informes serían 59 logins.
+    Reusando la sesión, el login se hace una vez.
+
+    Un paciente que falla no corta la tanda: queda anotado con su motivo y se
+    sigue con el resto. Cortar dejaría a medio hacer algo que ya no se sabe por
+    dónde iba.
+    """
     from pami_informes_cabecera import PamiInformesCabeceraController
 
-    item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
-    if not item:
-        raise RuntimeError("No llegó el paciente para crear el informe.")
-    ome = "".join(ch for ch in str(item.get("ome") or item.get("n_orden") or "") if ch.isdigit())
-    if not ome:
-        raise RuntimeError("La fila no tiene número de OME.")
+    pedidos = payload.get("items")
+    if not isinstance(pedidos, list) or not pedidos:
+        item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+        if not item:
+            raise RuntimeError("No llegó el paciente para crear el informe.")
+        pedidos = [{"item": item, "plantilla": payload.get("plantilla")}]
+
     user, clave = _creds(web, slug)
     if not user or not clave:
         raise RuntimeError("El cliente no tiene usuario/clave PAMI cargados en la web.")
-
-    nombre = str(item.get("nombre") or item.get("paciente") or "").strip()
-    practica = str(item.get("practica") or "").strip()
-    plantilla = _plantilla_informe_cabecera(payload)
-    tlog(f"Creando informe de cabecera para {nombre or ome} · OME {ome}.")
-    if plantilla.get("codigo"):
-        tlog(f"Plantilla: {plantilla.get('codigo')}.")
-    if practica:
-        tlog(f"Práctica: {practica[:120]}")
 
     ctrl = PamiInformesCabeceraController(
         log_callback=lambda m: tlog(str(m)),
         status_callback=lambda m: tlog(str(m)),
         headless=True,
     )
+    detalle: list[dict] = []
+    guardados = 0
+    errores = 0
     try:
-        res = ctrl.abrir_y_preparar_informe(
-            usuario=user,
-            clave=clave,
-            item=item,
-            plantilla=plantilla,
-        )
+        for i, pedido in enumerate(pedidos, start=1):
+            item = pedido.get("item") if isinstance(pedido, dict) else {}
+            if not isinstance(item, dict):
+                item = {}
+            ome = "".join(ch for ch in str(item.get("ome") or item.get("n_orden") or "") if ch.isdigit())
+            nombre = str(item.get("nombre") or item.get("paciente") or "").strip()
+            practica = str(item.get("practica") or "").strip()
+            plantilla = _plantilla_informe_cabecera(pedido)
+            if not ome:
+                errores += 1
+                detalle.append({"ome": "", "paciente": nombre, "practica": practica,
+                                "plantilla": plantilla.get("codigo", ""),
+                                "error": "la fila no tiene número de OME"})
+                continue
+            if len(pedidos) > 1:
+                tlog(f"[{i}/{len(pedidos)}] {nombre or ome} · OME {ome}")
+            else:
+                tlog(f"Creando informe de cabecera para {nombre or ome} · OME {ome}.")
+            if plantilla.get("codigo"):
+                tlog(f"Plantilla: {plantilla.get('codigo')}.")
+            if practica:
+                tlog(f"Práctica: {practica[:120]}")
+            try:
+                res = ctrl.abrir_y_preparar_informe(
+                    usuario=user,
+                    clave=clave,
+                    item=item,
+                    plantilla=plantilla,
+                )
+                guardados += 1
+                detalle.append({"ome": ome, "paciente": nombre, "practica": practica,
+                                "plantilla": plantilla.get("codigo", ""),
+                                "estado": (res or {}).get("estado") or "guardado"})
+            except Exception as exc:  # noqa: BLE001 - uno que falla no corta la tanda
+                errores += 1
+                motivo = str(exc).strip() or "error al crear el informe"
+                tlog(f"ERROR en {nombre or ome}: {motivo}")
+                detalle.append({"ome": ome, "paciente": nombre, "practica": practica,
+                                "plantilla": plantilla.get("codigo", ""), "error": motivo[:300]})
     finally:
         ctrl.cerrar()
 
-    return {
-        "total": 1,
-        "guardados": 1,
-        "ome": ome,
-        "paciente": nombre,
-        "practica": practica,
-        "plantilla": plantilla.get("codigo", ""),
-        "detalle": [{
-            "ome": ome,
-            "paciente": nombre,
-            "practica": practica,
-            "plantilla": plantilla.get("codigo", ""),
-            "estado": (res or {}).get("estado") or "guardado",
-        }],
-    }
+    # Si no se guardó NINGUNO, la tarea es un fracaso y tiene que verse como tal:
+    # devolverla como "lista" con 0 hechos se lee como que salió bien.
+    if not guardados:
+        primero = next((d.get("error") for d in detalle if d.get("error")), "")
+        raise RuntimeError(primero or "No se pudo crear ningún informe.")
 
+    primero = detalle[0] if detalle else {}
+    return {
+        "total": len(pedidos),
+        "guardados": guardados,
+        "errores": errores,
+        "ome": primero.get("ome", ""),
+        "paciente": primero.get("paciente", ""),
+        "practica": primero.get("practica", ""),
+        "plantilla": primero.get("plantilla", ""),
+        "detalle": detalle,
+    }
 
 def tarea_liberar_cupo(web, slug, payload, tlog):
     from pami_liberar_cupo import PamiLiberarCupoController

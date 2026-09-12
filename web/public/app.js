@@ -1661,12 +1661,12 @@ function abrirPendientesCentroDetalle(periodoKey, catKey){
     : ((it.n || 0) + ((it.n || 0) === 1 ? ' paciente' : ' pacientes'));
   body.innerHTML = (it.filas || []).length ? it.filas.map(function(f){
     return '<tr>'
-      + '<td class="wrap">' + esc(f.nombre || '-') + '</td>'
-      + '<td class="num">' + esc(f.benef || '-') + '</td>'
-      + '<td class="wrap">' + esc(f.practica || '-') + '</td>'
-      + '<td class="numw">' + esc(f.ome || '-') + '</td>'
-      + '<td class="num">' + esc(cat.label) + '</td>'
-      + '<td class="num">' + esc(f.turno || '-') + '</td>'
+      + '<td class="wrap" data-col="pac">' + esc(f.nombre || '-') + '</td>'
+      + '<td class="num" data-col="ben">' + esc(f.benef || '-') + '</td>'
+      + '<td class="wrap" data-col="pra">' + esc(f.practica || '-') + '</td>'
+      + '<td class="numw" data-col="ome">' + esc(f.ome || '-') + '</td>'
+      + '<td class="num" data-col="est">' + esc(cat.label) + '</td>'
+      + '<td class="num" data-col="tur">' + esc(f.turno || '-') + '</td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="6" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
   showModal('pendDetalleModal', 'pendDetalleScrim');
@@ -2112,13 +2112,13 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   var puedeCrearInforme = tipo === 'cup-informe';
   if (colAccion) colAccion.style.display = puedeCrearInforme ? '' : 'none';
   PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: [] };
-  body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Cargando…</td></tr>';
+  body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">Cargando…</td></tr>';
   if (meta) meta.textContent = '';
   showModal('pendDetalleModal', 'pendDetalleScrim');
   var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/pendientes-detalle?tipo=' + encodeURIComponent(tipo)
     + (month ? '&month=' + encodeURIComponent(month) : ''));
   if (!res.ok){
-    body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</td></tr>';
     return;
   }
   var filas = (res.data && res.data.filas) || [];
@@ -2149,12 +2149,18 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
     var accionHtml = '';
     if (puedeCrearInforme) {
       accionHtml = generado
-        ? '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" title="Informe generado" disabled>✓</button></td>'
-        : '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
+        ? '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Informe generado" disabled>✓</button></td>'
+        : '<td class="num" data-col="acc"><button type="button" class="rowbtn pend-informe-btn" data-idx="' + idx + '" title="Crear informe" onclick="crearInformeCabeceraDesdeDetalle(' + idx + ',this)">📝</button></td>';
     }
     // data-col: en el celular la tabla no entra y cada fila se dibuja como una
     // ficha (ver styles.css). El atributo es lo que le dice a cada dato dónde va.
-    return '<tr>'
+    // Solo se puede tildar lo que todavia no tiene informe: lo demas no hay
+    // que volver a crearlo.
+    var selHtml = !puedeCrearInforme ? ''
+      : (generado
+        ? '<td class="num" data-col="sel"></td>'
+        : '<td class="num" data-col="sel"><input type="checkbox" class="pend-sel" value="' + idx + '" onchange="pendSelCambio()"></td>');
+    return '<tr>' + selHtml
       + '<td class="wrap" data-col="pac">' + esc(f.nombre || '-') + '</td>'
       + '<td class="num" data-col="ben">' + esc(f.benef || '-') + '</td>'
       + '<td class="wrap" data-col="pra">' + esc(f.practica || '-') + '</td>'
@@ -2163,7 +2169,8 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
       + '<td class="num" data-col="tur">' + esc(f.turno || f.recibido || '-') + '</td>'
       + accionHtml
       + '</tr>';
-  }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '7' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+  }).join('') : '<tr><td colspan="' + (puedeCrearInforme ? '8' : '6') + '" class="muted-cell">Sin pacientes en esta categoría.</td></tr>';
+  pendSelCambio();   // lista nueva: la barra de seleccion arranca escondida
 }
 function cerrarPendientesDetalle(){ hideModal('pendDetalleModal', 'pendDetalleScrim'); }
 function informeCabeceraOme(item){
@@ -2329,6 +2336,109 @@ async function pedirSexoPaciente(nombre){
   var ok = false;
   try { ok = await p; } finally { if (okB) okB.disabled = false; }
   return ok ? _NS_SEXO_ELEGIDO : '';
+}
+// ===== Crear varios informes de una =====
+// Van en UNA sola tarea, no en N: cada tarea abre y cierra el navegador de PAMI,
+// asi que 59 informes serian 59 logins. El worker los hace en una sesion.
+function pendSelCajas(){ return Array.prototype.slice.call(document.querySelectorAll('#pendDetalleBody .pend-sel')); }
+function pendSelTodos(marcar){
+  pendSelCajas().forEach(function(c){ c.checked = !!marcar; });
+  var all = document.getElementById('pendDetalleSelAll'); if (all) all.checked = !!marcar;
+  pendSelCambio();
+}
+function pendSelCambio(){
+  var cajas = pendSelCajas();
+  var n = cajas.filter(function(c){ return c.checked; }).length;
+  var barra = document.getElementById('pendDetalleBulk');
+  var txt = document.getElementById('pendDetalleBulkTxt');
+  if (barra) barra.style.display = n ? 'flex' : 'none';
+  if (txt) txt.textContent = n + (n === 1 ? ' paciente seleccionado' : ' pacientes seleccionados');
+  var all = document.getElementById('pendDetalleSelAll');
+  if (all) all.checked = n > 0 && n === cajas.length;
+}
+async function crearInformesSeleccionados(btn){
+  var ctx = PEND_DETALLE_CTX || {};
+  var idxs = pendSelCajas().filter(function(c){ return c.checked; }).map(function(c){ return Number(c.value); });
+  if (!idxs.length) return;
+  var pedidos = [], sinSexo = [];
+  idxs.forEach(function(i){
+    var item = (ctx.filas || [])[i];
+    if (!item || !item.ome) return;
+    var plantilla = plantillaInformeCabeceraWeb(item, ctx.usos);
+    // Los que no se sabe si son mujer o varon quedan afuera: preguntar 20 veces
+    // seguidas es justo lo que esta tanda viene a evitar. Se avisan al final y
+    // se hacen de a uno, que ahi si aparece la pregunta.
+    if (!plantilla){ sinSexo.push(item.nombre || item.ome); return; }
+    if (ctx.usos && plantilla.codigo) ctx.usos[plantilla.codigo] = (ctx.usos[plantilla.codigo] || 0) + 1;
+    pedidos.push({ item: item, plantilla: plantilla, idx: i });
+  });
+  if (!pedidos.length){
+    nsAlert('No pude armar ninguno: ' + (sinSexo.length ? 'no se sabe si son mujer o varón. Creálos de a uno y elegí.' : 'las filas no tienen OME.'), { titulo:'Revisar' });
+    return;
+  }
+  var aviso = sinSexo.length ? ' Quedan afuera ' + sinSexo.length + ' porque no se sabe si es mujer o varón: esos creálos de a uno.' : '';
+  var ok = await nsConfirm('Se van a crear ' + pedidos.length + ' informe' + (pedidos.length > 1 ? 's' : '') + ' en PAMI, uno atrás del otro.' + aviso,
+    { titulo:'Crear los informes', okLabel:'Crear' });
+  if (!ok) return;
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Enviando…'; }
+  pedidos.forEach(function(p){
+    var b = document.querySelector('#pendDetalleBody .pend-informe-btn[data-idx="' + p.idx + '"]');
+    if (b){ b.disabled = true; b.textContent = '⏳'; b.title = 'En cola'; }
+  });
+  try{
+    var r = await fetch('/api/admin/worker/tasks', {
+      method:'POST', headers:{'content-type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({
+        type:'crear-informe-cabecera', clientSlug: ctx.slug,
+        payload:{ month: ctx.month || '', items: pedidos.map(function(p){ return { item:p.item, plantilla:p.plantilla }; }) }
+      })
+    });
+    var d = await r.json().catch(function(){ return {}; });
+    if(!r.ok || !(d.task && d.task.id)) throw new Error((d && d.error) || 'No se pudo crear la tarea.');
+    avisarEnCampana(true, 'Informes en cola', pedidos.length + ' enviados a PAMI', 'crear-informe-cabecera', null);
+    seguirInformesTanda(d.task.id, pedidos, btn);
+  }catch(e){
+    if (btn){ btn.disabled = false; btn.textContent = 'Crear los informes'; }
+    avisarEnCampana(false, 'No se pudo enviar la tanda', (e && e.message) || 'Error', 'crear-informe-cabecera', null);
+  }
+}
+// Sigue la tanda y va marcando cada renglon con lo que dijo PAMI.
+function seguirInformesTanda(id, pedidos, btn){
+  var vueltas = 0;
+  var timer = setInterval(async function(){
+    vueltas++;
+    try{
+      var d = await fetch('/api/admin/worker/tasks', { credentials:'same-origin' }).then(function(r){ return r.json(); });
+      var t = (d.tasks || []).find(function(x){ return x.id === id; });
+      if(!t) return;
+      if(t.status === 'pending' || t.status === 'running'){
+        if (btn) btn.textContent = t.status === 'pending' ? '⏳ En cola' : '🛠 Creando…';
+        return;
+      }
+      clearInterval(timer);
+      if (btn){ btn.disabled = false; btn.textContent = 'Crear los informes'; }
+      var res = t.result || {};
+      var porOme = {};
+      (res.detalle || []).forEach(function(x){ if (x && x.ome) porOme[String(x.ome).replace(/[^0-9]/g,'')] = x; });
+      pedidos.forEach(function(p){
+        var b = document.querySelector('#pendDetalleBody .pend-informe-btn[data-idx="' + p.idx + '"]');
+        var det = porOme[String(p.item.ome || '').replace(/[^0-9]/g,'')];
+        if (!b) return;
+        if (det && !det.error) marcarInformeCabeceraGenerado(b, det.plantilla || (p.plantilla && p.plantilla.codigo));
+        else marcarInformeCabeceraError(b, (det && det.error) || t.error || 'No se creó.');
+      });
+      if (t.status === 'done'){
+        avisarEnCampana(!res.errores, 'Informes creados',
+          (res.guardados || 0) + ' de ' + (res.total || pedidos.length) + ' listos'
+          + (res.errores ? ' · ' + res.errores + ' con error' : ''),
+          'crear-informe-cabecera', t);
+        if (typeof loadClientMesCurso === 'function') setTimeout(function(){ loadClientMesCurso(); }, 1200);
+      } else {
+        avisarEnCampana(false, 'La tanda falló', t.error || 'Error del worker', 'crear-informe-cabecera', t);
+      }
+      pendSelTodos(false);
+    }catch(e){}
+  }, 4000);
 }
 async function crearInformeCabeceraDesdeDetalle(idx, btn){
   var ctx = PEND_DETALLE_CTX || {};
@@ -10010,8 +10120,32 @@ async function saveDelete(){
   await renderUsers();
 }
 
-function showModal(id, scrimId){ document.getElementById(scrimId).classList.add('show'); document.getElementById(id).classList.add('show'); }
-function hideModal(id, scrimId){ document.getElementById(scrimId).classList.remove('show'); document.getElementById(id).classList.remove('show'); }
+// Las ventanas se apilan (el aviso se abre desde adentro del detalle), asi que
+// se lleva la cuenta de cual quedo arriba: es la que cierra Escape.
+var MODALES_ABIERTOS = [];
+function showModal(id, scrimId){
+  document.getElementById(scrimId).classList.add('show');
+  document.getElementById(id).classList.add('show');
+  MODALES_ABIERTOS = MODALES_ABIERTOS.filter(function(m){ return m.id !== id; });
+  MODALES_ABIERTOS.push({ id: id, scrimId: scrimId });
+}
+function hideModal(id, scrimId){
+  document.getElementById(scrimId).classList.remove('show');
+  document.getElementById(id).classList.remove('show');
+  MODALES_ABIERTOS = MODALES_ABIERTOS.filter(function(m){ return m.id !== id; });
+}
+// Escape cierra la ventana de arriba. No se cierra a mano con hideModal: se le
+// hace clic al propio boton de cerrar, que es el que ademas hace la limpieza de
+// cada pantalla (frenar el refresco del server, resolver la promesa del aviso,
+// etc.). Cerrar por afuera dejaria esas cosas colgadas.
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  var top = MODALES_ABIERTOS[MODALES_ABIERTOS.length - 1];
+  if (!top) return;
+  var el = document.getElementById(top.id);
+  var cerrar = el && el.querySelector('.modal-head .x');
+  if (cerrar) cerrar.click(); else hideModal(top.id, top.scrimId);
+});
 
 // ================= Estado del server (worker + automatización) =================
 // La web ya recibe el heartbeat del worker (cada ~5s) en /api/admin/worker/status.
@@ -10825,6 +10959,13 @@ async function verCapitaAfiliado(nombre, dni, beneficio){
   if (!r.ok) {
     content.innerHTML = '<div class="msg err">' + esc((r.data && r.data.error) || 'No se pudo consultar PAMI.') + '</div>';
     return;
+  }
+  // El nombre puede venir de la fila (cuando se entra desde el listado) o del
+  // padrón (cuando se consulta a mano por DNI + beneficio). Sin esto, la capita
+  // consultada a mano decía solo "Afiliado" y había que ir a buscar de quién era.
+  if (meta){
+    var quien = nombre || r.data.nombre || '';
+    meta.textContent = (quien || 'Afiliado') + ' — DNI ' + dni + ' · Beneficio ' + beneficio;
   }
   var modulos = r.data.modulos || [];
   var destacados = modulos.filter(function(m){ return m.prioridad; });

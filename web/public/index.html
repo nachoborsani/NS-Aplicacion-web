@@ -2079,9 +2079,15 @@
       <div class="modal-head"><h3 id="pendDetalleTitulo">Pendientes</h3><button class="x" onclick="cerrarPendientesDetalle()" aria-label="Cerrar">&times;</button></div>
       <div class="modal-body">
         <div class="ini-meta" id="pendDetalleMeta"></div>
+        <!-- Barra de seleccion: aparece sola cuando se tilda alguno. -->
+        <div id="pendDetalleBulk" style="display:none;align-items:center;flex-wrap:wrap;gap:8px 10px;margin-top:8px">
+          <span id="pendDetalleBulkTxt" style="font-size:13px;color:var(--text-2)"></span>
+          <button class="btn btn-primary btn-sm" type="button" id="pendDetalleBulkBtn" onclick="crearInformesSeleccionados(this)">Crear los informes</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="pendSelTodos(false)">Soltar</button>
+        </div>
         <div class="modal-table-scroll" style="margin-top:10px">
           <table class="modal-table">
-            <thead><tr><th class="wrap">Paciente</th><th class="num">Beneficio</th><th class="wrap">Práctica</th><th class="num">OME</th><th class="num">Estado</th><th class="num" id="pendDetalleColFecha">Turno</th><th class="num" id="pendDetalleColAccion" style="display:none">Acción</th></tr></thead>
+            <thead><tr><th class="num" id="pendDetalleColSel" style="display:none;width:30px"><input type="checkbox" id="pendDetalleSelAll" title="Seleccionar todos" onclick="pendSelTodos(this.checked)"></th><th class="wrap">Paciente</th><th class="num">Beneficio</th><th class="wrap">Práctica</th><th class="num">OME</th><th class="num">Estado</th><th class="num" id="pendDetalleColFecha">Turno</th><th class="num" id="pendDetalleColAccion" style="display:none">Acción</th></tr></thead>
             <tbody id="pendDetalleBody"><tr><td colspan="7" class="muted-cell">Cargando…</td></tr></tbody>
           </table>
         </div>

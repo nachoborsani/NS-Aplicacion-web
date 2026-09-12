@@ -1915,8 +1915,8 @@
   @media(max-width:640px){
     #pendDetalleModal .modal-table thead{display:none}
     #pendDetalleModal .modal-table,#pendDetalleModal .modal-table tbody{display:block;width:100%}
-    #pendDetalleModal .modal-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;
-      grid-template-areas:'pac acc' 'pra acc' 'ben acc' 'ome acc' 'tur acc' 'est acc';
+    #pendDetalleModal .modal-table tbody tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-areas:'sel pac acc' 'sel pra acc' 'sel ben acc' 'sel ome acc' 'sel tur acc' 'sel est acc';
       gap:1px 10px;padding:11px 12px;border-bottom:1px solid var(--border);align-items:start}
     #pendDetalleModal .modal-table tbody tr:last-child{border-bottom:0}
     #pendDetalleModal .modal-table tbody td{display:block;border:0;padding:0;white-space:normal;min-width:0}
@@ -1927,6 +1927,8 @@
     #pendDetalleModal .modal-table td[data-col='tur']{grid-area:tur;color:var(--text-2);font-size:11.5px}
     #pendDetalleModal .modal-table td[data-col='est']{grid-area:est;font-size:11.5px;margin-top:3px}
     #pendDetalleModal .modal-table td[data-col='acc']{grid-area:acc;align-self:center}
+    /* La columna del tilde: cuando la lista no lo lleva, no ocupa nada. */
+    #pendDetalleModal .modal-table td[data-col='sel']{grid-area:sel;align-self:center;padding-right:4px}
     /* Sin el rótulo de la columna, un número suelto no dice qué es. */
     #pendDetalleModal .modal-table td[data-col='ben']::before{content:'Benef ';opacity:.7}
     #pendDetalleModal .modal-table td[data-col='ome']::before{content:'OME ';opacity:.7}

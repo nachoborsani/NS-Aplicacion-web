@@ -1181,6 +1181,24 @@ async function cartillaPrestadores(cookieHeader, categoria, modulo) {
     total: Number((data && data.total) || 0),
   };
 }
+// Nombre del afiliado según NUESTRO padrón (cualquier cliente). Mi Cartilla no
+// lo devuelve —el login contesta 'OK' y nada más—, y una capita que dice solo
+// 'DNI 14022449' obliga a ir a buscar de quién es a otra pantalla.
+function nombreDePadron(dni, beneficio) {
+  const d = String(dni || '').replace(/[^0-9]/g, '');
+  const b = String(beneficio || '').replace(/[^0-9]/g, '');
+  const store = loadPadron();
+  for (const slug of Object.keys(store)) {
+    const cli = store[slug] || {};
+    if (d && cli[d] && cli[d].nombre) return String(cli[d].nombre);
+    if (!b) continue;
+    for (const k of Object.keys(cli)) {
+      const it = cli[k] || {};
+      if (String(it.beneficio || '').replace(/[^0-9]/g, '') === b && it.nombre) return String(it.nombre);
+    }
+  }
+  return '';
+}
 // Consulta la capita completa: login + un pedido por cada módulo capitado
 // (en paralelo). Tira si el login falla (afiliado/DNI incorrectos).
 async function cartillaConsultarCapita(beneficio, dni) {
@@ -10579,7 +10597,7 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const modulos = await cartillaConsultarCapita(beneficio, dni);
-      return json(res, 200, { ok: true, modulos });
+      return json(res, 200, { ok: true, modulos, nombre: nombreDePadron(dni, beneficio) });
     } catch (e) {
       return json(res, 400, { error: String((e && e.message) || e) || "No se pudo consultar PAMI." });
     }
