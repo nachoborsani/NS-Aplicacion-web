@@ -2416,25 +2416,66 @@ function pendDetalleFootClic(){
   if (n) crearInformesSeleccionados(document.getElementById('pendDetalleFootBtn'));
   else cerrarPendientesDetalle();
 }
+// Varios a la vez, en UNA ventana: una por paciente serian veinte ventanas, y
+// dejarlos afuera obliga a hacerlos a mano despues. Devuelve {idx: 'F'|'M'} con
+// los que se eligieron; los que queden sin elegir no entran.
+var _NS_SEXOS_VARIOS = {};
+function nsSexoVariosElegir(idx, v){
+  _NS_SEXOS_VARIOS[idx] = v;
+  var n = Object.keys(_NS_SEXOS_VARIOS).length;
+  var ok = document.getElementById('nsAskOkBtn');
+  var tot = Number((document.getElementById('nsSexoTotal') || {}).textContent || 0);
+  if (ok){ ok.disabled = false; ok.textContent = n >= tot ? 'Crear los informes' : ('Crear con ' + n + ' de ' + tot); }
+  var falta = document.getElementById('nsSexoFalta');
+  if (falta) falta.textContent = n >= tot ? 'Listo, están todos.' : ('Faltan ' + (tot - n) + ' — los que dejes sin elegir quedan afuera.');
+}
+async function pedirSexoVarios(lista){
+  _NS_SEXOS_VARIOS = {};
+  var fila = function(x){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border)">'
+      + '<span style="flex:1;min-width:0;font-size:13.5px">' + esc(x.nombre) + '</span>'
+      + '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">'
+      + '<input type="radio" name="nsSx' + x.idx + '" value="F" style="width:auto" onchange="nsSexoVariosElegir(' + x.idx + ', this.value)"> Mujer</label>'
+      + '<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">'
+      + '<input type="radio" name="nsSx' + x.idx + '" value="M" style="width:auto" onchange="nsSexoVariosElegir(' + x.idx + ', this.value)"> Varón</label>'
+      + '</div>';
+  };
+  var html = '<p style="margin:0 0 4px">De <b id="nsSexoTotal">' + lista.length + '</b> no puedo saber por el nombre si es mujer o varón, y el informe cambia según eso.</p>'
+    + '<p id="nsSexoFalta" style="margin:0 0 8px;color:var(--text-2);font-size:12.5px">Faltan ' + lista.length + ' — los que dejes sin elegir quedan afuera.</p>'
+    + '<div style="max-height:46vh;overflow:auto">' + lista.map(fila).join('') + '</div>';
+  var p = nsConfirm('', { titulo:'¿Mujer o varón?', cuerpoHtml: html, okLabel:'Crear los informes' });
+  var okB = document.getElementById('nsAskOkBtn'); if (okB) okB.disabled = true;
+  var ok = false;
+  try { ok = await p; } finally { if (okB) okB.disabled = false; }
+  return ok ? _NS_SEXOS_VARIOS : null;
+}
 async function crearInformesSeleccionados(btn){
   var ctx = PEND_DETALLE_CTX || {};
   var idxs = pendSelCajas().filter(function(c){ return c.checked; }).map(function(c){ return Number(c.value); });
   if (!idxs.length) return;
-  // Los pocos que no se sabe si son mujer o varon se preguntan acá mismo: con
-  // uno o dos tildados, mandarlo a "creálos de a uno" es mandarlo a hacer lo que
-  // ya estaba haciendo. De ahi para arriba se dejan afuera y se avisan, que
-  // preguntar veinte veces seguidas es lo que la tanda viene a evitar.
+  // Los que no se sabe si son mujer o varon se preguntan acá mismo, antes de
+  // mandar nada: uno solo con la ventana de siempre, y varios en UNA ventana con
+  // todos juntos. Una ventana por paciente serian veinte ventanas seguidas, y
+  // dejarlos afuera obliga a hacerlos a mano despues.
   var dudosos = idxs.filter(function(i){
     var it = (ctx.filas || [])[i];
     return it && it.ome && !informeCabeceraGenero(it);
   });
-  if (dudosos.length && dudosos.length <= 3){
-    for (var q = 0; q < dudosos.length; q++){
-      var itq = (ctx.filas || [])[dudosos[q]];
-      var elegido = await pedirSexoPaciente(itq.nombre || itq.paciente);
-      if (!elegido) return;   // cerró sin elegir: no se manda nada
-      itq.sexo = elegido;
-    }
+  if (dudosos.length === 1){
+    var itq = (ctx.filas || [])[dudosos[0]];
+    var elegido = await pedirSexoPaciente(itq.nombre || itq.paciente);
+    if (!elegido) return;   // cerró sin elegir: no se manda nada
+    itq.sexo = elegido;
+  } else if (dudosos.length > 1){
+    var elegidos = await pedirSexoVarios(dudosos.map(function(i){
+      var it = (ctx.filas || [])[i];
+      return { idx: i, nombre: it.nombre || it.paciente || ('OME ' + it.ome) };
+    }));
+    if (!elegidos) return;   // cerró la ventana: no se manda nada
+    Object.keys(elegidos).forEach(function(i){
+      var it = (ctx.filas || [])[Number(i)];
+      if (it) it.sexo = elegidos[i];
+    });
   }
   var pedidos = [], sinSexo = [];
   idxs.forEach(function(i){
