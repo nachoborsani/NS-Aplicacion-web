@@ -4131,7 +4131,11 @@ async function loadClientHonorarios(reporteId){
   if (!ACTIVE_CLIENT) return;
   var err = document.getElementById('honError'); if (err) err.style.display = 'none';
   var qs = reporteId ? ('?reporte=' + encodeURIComponent(reporteId)) : '';
-  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/honorarios' + qs);
+  var slugHon = ACTIVE_CLIENT.slug;
+  var tbHon = document.getElementById('honBody');
+  if (tbHon) tbHon.innerHTML = '<tr><td colspan="9" class="muted-cell">Cargando…</td></tr>';
+  var res = await api('/api/clientes/' + encodeURIComponent(slugHon) + '/honorarios' + qs);
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slugHon) return;   // cambió de cliente mientras cargaba
   if (!res.ok){ if (err){ err.style.display = ''; err.textContent = (res.data && res.data.error) || 'No se pudo cargar.'; } return; }
   var d = res.data;
   HON = { periodo: d.periodo || '', codigos: d.codigos || [], config: d.config || {}, reportes: d.reportes || [], reporteId: d.reporteId || '', fuente: d.fuente || '', reporteNombre: d.reporteNombre || '' };
@@ -4263,7 +4267,14 @@ var MEDICOS = [];
 async function loadClientMedicos(){
   if (!ACTIVE_CLIENT) return;
   var err = document.getElementById('medicosError'); if (err) err.style.display = 'none';
-  var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/medicos');
+  // Se vacía la tabla antes de pedir: son los médicos y las claves de OTRO
+  // centro los que quedaban a la vista mientras cargaba.
+  var slug = ACTIVE_CLIENT.slug;
+  MEDICOS = [];
+  var tb = document.getElementById('medicosBody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" class="muted-cell">Cargando…</td></tr>';
+  var res = await api('/api/clientes/' + encodeURIComponent(slug) + '/medicos');
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return;   // cambió de cliente mientras cargaba
   MEDICOS = (res.ok && res.data && res.data.medicos) ? res.data.medicos : [];
   renderClientMedicos();
 }
@@ -6793,6 +6804,14 @@ async function loadMedCabMesCurso(){
 async function loadClientMesCurso(){
   var box = document.getElementById('clientMesCurso');
   if (!box || !ACTIVE_CLIENT) return;
+  // Lo primero es BORRAR lo del cliente anterior. Si no, mientras llega la
+  // respuesta se queda en pantalla el dashboard del otro centro abajo del nombre
+  // del que acabás de abrir: números, plata y pacientes que no son de ese
+  // cliente. Preferimos un cartel de cargando a un dato equivocado.
+  if (box.getAttribute('data-cliente') !== ACTIVE_CLIENT.slug){
+    box.setAttribute('data-cliente', ACTIVE_CLIENT.slug);
+    box.innerHTML = '<div class="mescurso-card"><div class="mescurso-empty"><b>Cargando…</b><span>Buscando la bandeja de ' + esc(ACTIVE_CLIENT.name || '') + '.</span></div></div>';
+  }
   // "bandejaCup": mismo tablero que un médico de cabecera (sin valorizar por
   // práctica), pero en un cliente que sigue siendo Consultorio en todo lo
   // demás (informes, OMEs, reportes, honorarios) — ver normalizeClient en
@@ -7814,6 +7833,10 @@ function toggleDashboardModuleDetail(index, kind){
 }
 async function loadClientDashboard(){
   if (!ACTIVE_CLIENT) return;
+  // Igual que el resto: si la respuesta llega cuando ya cambiaste de cliente, se
+  // descarta. Es el dashboard con la facturacion del mes: pintar el de otro
+  // centro abajo de este nombre es el peor error posible de esta pantalla.
+  var slugDash = ACTIVE_CLIENT.slug;
   var period = document.getElementById('clientDashPeriod');
   var compare = document.getElementById('clientDashCompare');
   var params = new URLSearchParams();
@@ -7823,6 +7846,7 @@ async function loadClientDashboard(){
   // mandamos 'none' para que el server NO caiga por default al mes anterior.
   else if (compare && compare.options.length > 1) params.set('compare', 'none');
   var res = await api('/api/clientes/' + encodeURIComponent(ACTIVE_CLIENT.slug) + '/dashboard' + (params.toString() ? '?' + params.toString() : ''));
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slugDash) return;   // cambió de cliente mientras cargaba
   if (res.ok) renderClientDashboard(res.data);
 }
 function reportBaseGross(row){
