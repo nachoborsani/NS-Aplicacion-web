@@ -1397,6 +1397,17 @@ function saveTelegramCfg(cfg) { fs.mkdirSync(dataDir, { recursive: true }); fs.w
 // especialidad con su propio usuario de PAMI. Chats autorizados y secret del
 // webhook viven en el volumen; el token del bot en TELEGRAM_OME_BOT_TOKEN.
 const OME_BOT_CLIENTE = "dubesarky-ezequiel";
+// Informes de cabecera ya creados, anotados por OME y para siempre. La lista de
+// tareas del worker se va renovando, asi que sin esto la fila volvia a figurar
+// como "falta informe" y se ofrecia crearlo de nuevo, aunque ya estuviera hecho.
+const informesCabGenFile = path.join(dataDir, "informes_cabecera_generados.json");
+function loadInformesCabGen() {
+  try { const j = JSON.parse(fs.readFileSync(informesCabGenFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
+  catch { return {}; }
+}
+function saveInformesCabGen(o) {
+  try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(informesCabGenFile, JSON.stringify(o, null, 2)); } catch {}
+}
 const omeBotFile = path.join(dataDir, "ome_bot.json");
 function loadOmeBotCfg() {
   try { const j = JSON.parse(fs.readFileSync(omeBotFile, "utf8")); return { chats: Array.isArray(j.chats) ? j.chats : [], secret: String(j.secret || "") }; }
@@ -6175,6 +6186,31 @@ const server = http.createServer(async (req, res) => {
     if (task.type === "crear-ome" && task.payload && task.payload.telegramChatId) {
       notificarOmeTelegram(task, ok);
     }
+    // Informe de cabecera creado: queda anotado por OME. Es lo que hace que la
+    // fila muestre "Generado" la proxima vez que se abra la lista, aunque la
+    // tarea ya no este entre las ultimas del worker.
+    if (task.type === "crear-informe-cabecera" && ok) {
+      try {
+        const r = task.result || {};
+        const det = Array.isArray(r.detalle) ? r.detalle : [];
+        const filas = det.length ? det : [r];
+        const store = loadInformesCabGen();
+        const slugK = task.clientSlug || "";
+        const mapa = (store[slugK] && typeof store[slugK] === "object") ? store[slugK] : {};
+        let n = 0;
+        for (const f of filas) {
+          const ome = String((f && (f.ome || f.n_orden)) || "").replace(/[^0-9]/g, "");
+          if (!ome) continue;
+          mapa[ome] = {
+            plantilla: String((f && f.plantilla) || r.plantilla || "").slice(0, 60),
+            at: task.finishedAt || new Date().toISOString(),
+            por: String(task.createdBy || "").slice(0, 60),
+          };
+          n++;
+        }
+        if (n) { store[slugK] = mapa; saveInformesCabGen(store); }
+      } catch { /* no cortar el /complete */ }
+    }
     // Verificación de médicos: guardar el estado (activo/inactivo/error) + fecha.
     if (task.type === "verificar-medico" && task.result && Array.isArray(task.result.resultados)) {
       try {
@@ -7372,6 +7408,22 @@ const server = http.createServer(async (req, res) => {
   // mostrarlos sin valores); "cup" sale de la bandeja del CUP (médico de
   // cabecera). Genérico por slug: sirve para cualquier cliente nuevo que se
   // le asigne a un operador, sin tocar código.
+  // Los informes de cabecera ya creados de un centro (por OME).
+  const infCabGenMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes-cabecera\/generados$/);
+  if (infCabGenMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const slug = decodeURIComponent(infCabGenMatch[1]);
+    const cliente = loadClientsStore().find((c) => c.slug === slug);
+    if (!cliente) return json(res, 404, { error: "Cliente no encontrado." });
+    const puede = me.role === "admin"
+      || (me.role === "operador" && clientesVisiblesPara(me, [cliente]).length > 0)
+      || ((me.role === "clinica" || me.role === "operador_clinica") && me.centro === slug);
+    if (!puede) return json(res, 403, { error: "sin permiso" });
+    const g = loadInformesCabGen()[slug];
+    return json(res, 200, { generados: (g && typeof g === "object") ? g : {} });
+  }
+
   const pendientesDetalleMatch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/pendientes-detalle$/);
   if (pendientesDetalleMatch && req.method === "GET") {
     const me = getSessionUser(req);

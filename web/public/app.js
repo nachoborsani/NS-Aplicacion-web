@@ -2125,9 +2125,13 @@ async function abrirPendientesDetalle(slug, tipo, nombreCliente, month){
   PEND_DETALLE_CTX = { slug: slug || '', tipo: tipo || '', month: month || '', filas: filas };
   var generados = puedeCrearInforme ? await informesCabeceraGenerados(slug) : {};
   var total = (res.data && res.data.total) || filas.length;
-  if (meta) meta.textContent = total > filas.length
+  var conInforme = filas.reduce(function(acc, f){
+    var k = informeCabeceraOme(f); return acc + (k && generados[k] ? 1 : 0);
+  }, 0);
+  if (meta) meta.textContent = (total > filas.length
     ? ('mostrando ' + filas.length + ' de ' + total)
-    : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes'));
+    : (filas.length + (filas.length === 1 ? ' paciente' : ' pacientes')))
+    + (conInforme ? ' · ' + conInforme + ' con el informe ya creado' : '');
   body.innerHTML = filas.length ? filas.map(function(f, idx){
     var omeKey = informeCabeceraOme(f);
     var generado = puedeCrearInforme && omeKey && generados[omeKey];
@@ -2157,6 +2161,16 @@ function informeCabeceraOme(item){
 }
 async function informesCabeceraGenerados(slug){
   var out = {};
+  // Lo que quedó anotado al crear el informe: es permanente, no depende de que
+  // la tarea siga entre las últimas del worker. Sin esto, una fila con el
+  // informe ya hecho volvía a figurar sin él y se ofrecía crearlo de nuevo.
+  try{
+    var g = await fetch('/api/clientes/' + encodeURIComponent(slug) + '/informes-cabecera/generados', { credentials:'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null; });
+    var mapa = (g && g.generados) || {};
+    Object.keys(mapa).forEach(function(k){ out[k] = { plantilla: (mapa[k] && mapa[k].plantilla) || '', at: (mapa[k] && mapa[k].at) || '' }; });
+  }catch(e){}
+  // Las recién terminadas (y las de antes de que se anotaran) salen de la cola.
   try{
     var d = await fetch('/api/admin/worker/tasks', { credentials:'same-origin' }).then(function(r){ return r.ok ? r.json() : null; });
     (d && d.tasks || []).forEach(function(t){
