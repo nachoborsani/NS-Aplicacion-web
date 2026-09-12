@@ -200,7 +200,13 @@ for (const [k, v] of Object.entries(MAPA_CODIGO_RAW)) MAPA_CODIGO.set(claveComp(
 function buscarMapa(clave) { return MAPA_CODIGO.get(claveComp(clave)); }
 
 const HERMANO_REGION = { "180610": "180611", "180611": "180610", "180606": "180612", "180612": "180606" };
-const SEVERIDAD = { ERROR_REGION: 5, AUSENTE: 4, FALTA_INFORME: 3, PENDIENTE: 2, OK: 1 };
+// Códigos de estudios DISTINTOS pero fáciles de confundir en la agenda (ej.
+// Holter y MAPA son los dos monitoreos ambulatorios de 24hs) - si en la
+// bandeja aparece el código hermano en vez del esperado, no es que falte la
+// OME (por eso no es AUSENTE ni ERROR_REGION, que son rojo): es una
+// incongruencia a revisar a mano (gris).
+const HERMANO_INCONGRUENTE = { "570120": "570121", "570121": "570120" }; // MAPA <-> Holter
+const SEVERIDAD = { INCONGRUENCIA: 6, ERROR_REGION: 5, AUSENTE: 4, FALTA_INFORME: 3, PENDIENTE: 2, OK: 1 };
 function peor(a, b) { return SEVERIDAD[a] >= SEVERIDAD[b] ? a : b; }
 
 function readRows(buffer) {
@@ -242,6 +248,8 @@ function estadoCodigo(rowsBand, codigo) {
   }
   const hermano = HERMANO_REGION[codigo];
   if (hermano && rowsBand.some((b) => b.codigo === hermano)) return { estado: "ERROR_REGION", hermano };
+  const incongruente = HERMANO_INCONGRUENTE[codigo];
+  if (incongruente && rowsBand.some((b) => b.codigo === incongruente)) return { estado: "INCONGRUENCIA", hermano: incongruente };
   return { estado: "AUSENTE" };
 }
 
@@ -444,6 +452,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
         const r = estadoCodigo(rowsBand, cod);
         estadoItem = peor(estadoItem, r.estado);
         if (r.estado === "ERROR_REGION") notas.push(`se encontró ${r.hermano} (región opuesta) en vez de ${cod}`);
+        if (r.estado === "INCONGRUENCIA") notas.push(`se encontró ${r.hermano} en vez de ${cod} - revisar cuál código corresponde`);
       }
       peorEstado = peor(peorEstado, estadoItem);
       const textos = {
@@ -451,6 +460,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
         PENDIENTE: "presente pero no transmitida/validada",
         FALTA_INFORME: "falta informe (validada, pendiente de transmitir)",
         ERROR_REGION: "posible error de región" + (notas.length ? " - " + notas.join("; ") : ""),
+        INCONGRUENCIA: "posible código equivocado" + (notas.length ? " - " + notas.join("; ") : ""),
         AUSENTE: "NO encontrado en bandeja",
       };
       detalle.push(`${e.nombre}: ${textos[estadoItem]}`);
@@ -462,6 +472,8 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       } else if (estadoItem === "AUSENTE" || estadoItem === "ERROR_REGION") {
         faltaOmeAuto.push({ turno: e.turno || "", especialidad: e.especialidadDisplay || "", nombre: info.nombre, beneficio, obs: "Sin ome", valor: valores.get(codigoPrincipal) || 0 });
       }
+      // INCONGRUENCIA no va a "faltaOmeAuto": SÍ hay una OME (solo que con el
+      // código hermano) - contarla como "sin OME" sería engañoso.
     }
     if (sinMapeo) { peorEstado = peor(peorEstado, "PENDIENTE"); detalle.push("Especialidad/practica sin mapeo conocido (posible Holter u otra no catalogada) - revisar en CUP"); }
     if (!esperadosUnicos.length && !sinMapeo) { peorEstado = peor(peorEstado, "PENDIENTE"); detalle.push("Sin tipo de practica reconocido"); }
@@ -471,7 +483,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       color = "GRIS";
       detalle.unshift(`⚠ Nombre${matchPorNombre.aproximado ? " (por similitud)" : ""} encontrado en la bandeja con MÁS DE UN beneficio distinto - no se pudo elegir cuál es, revisar a mano.`);
     } else {
-      color = { OK: "VERDE", PENDIENTE: "AMARILLO", FALTA_INFORME: "NARANJA", AUSENTE: "ROJO", ERROR_REGION: "ROJO" }[peorEstado];
+      color = { OK: "VERDE", PENDIENTE: "AMARILLO", FALTA_INFORME: "NARANJA", AUSENTE: "ROJO", ERROR_REGION: "ROJO", INCONGRUENCIA: "GRIS" }[peorEstado];
       if (matchPorNombre && matchPorNombre.aproximado) {
         detalle.unshift(`ℹ Nombre distinto pero similar (${Math.round(matchPorNombre.promedio * 100)}% de coincidencia: agenda "${info.nombre}" vs bandeja "${matchPorNombre.nombreBandeja}") y beneficio no coincide (agenda ${beneficio} / bandeja ${matchPorNombre.beneficioBandeja}).`);
       } else if (matchPorNombre) {
