@@ -656,7 +656,10 @@ function onEspecialidadChange(keep){
   var sel = document.getElementById('infPractica'); if (!sel) return;
   var prev = keep === true ? sel.value : '';
   var ms = modelosDelCliente(slug).filter(function(m){ return m.especialidad === esp; });
-  sel.innerHTML = ms.map(function(m){ return opt(m.key, m.practica); }).join('') || '<option value="">(sin prácticas)</option>';
+  // practicaConCodigo (no `practica`): la etiqueta pareja "CÓDIGO - Nombre" para
+  // todas las prácticas. Antes algunas traían el código escrito en el nombre y
+  // otras no, así que el mismo desplegable mezclaba formatos.
+  sel.innerHTML = ms.map(function(m){ return opt(m.key, m.practicaConCodigo || m.practica); }).join('') || '<option value="">(sin prácticas)</option>';
   if (prev && ms.some(function(m){ return m.key === prev; })) sel.value = prev;
   filtrarPorModelo();
 }
@@ -1137,7 +1140,7 @@ function renderInformesConfigLists(){
         // "Informes y valores" del propio resultado (antes se repetía bajo cada uno).
         ests.sort(function(a, b){ return (a.practica || '').localeCompare(b.practica || ''); });
         var m = ests[0];
-        put(m.especialidad || 'General', m.key, m.practica || m.key, d);
+        put(m.especialidad || 'General', m.key, m.practicaConCodigo || m.practica || m.key, d);
       });
       var esps = Object.keys(grupos).sort(function(a, b){ return a.localeCompare(b); });
       var html = '<div style="margin-bottom:6px"><input class="inp" id="infDescFiltro" placeholder="Buscar por nombre, estudio o especialidad… (ej: electro)" oninput="filtrarResultadosInforme()"></div>';
@@ -1225,7 +1228,7 @@ function cfgMetaAsignado(arr, sing, plur){
 function scopeChips(kind, id, modelos, seleccionadas){
   return (modelos || []).map(function(m){
     var on = (seleccionadas || []).indexOf(m.key) >= 0;
-    return '<button type="button" class="scope-chip' + (on ? ' on' : '') + '" title="' + esc(m.label) + '" onclick="toggleScope(\'' + kind + '\',\'' + esc(id) + '\',\'' + esc(m.key) + '\')">' + esc(m.short) + '</button>';
+    return '<button type="button" class="scope-chip' + (on ? ' on' : '') + '" title="' + esc(m.practicaConCodigo || m.label) + '" onclick="toggleScope(\'' + kind + '\',\'' + esc(id) + '\',\'' + esc(m.key) + '\')">' + esc(m.shortConCodigo || m.short) + '</button>';
   }).join('');
 }
 // Chips = clientes. seleccionados = array de slugs. Vacío = disponible para todos.
@@ -3108,7 +3111,7 @@ function loteRender(){
     var listo = row.modelo && (!modeloRequiereSexo(row.modelo) || row.sexo);
     if (listo) ok++;
     var pracSel = '<select class="inp lote-inp" onchange="loteSetPractica(' + i + ',this.value)"><option value="">— sin plantilla —</option>'
-      + modelosCentro.map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === row.modelo ? ' selected' : '') + '>' + esc(x.short) + '</option>'; }).join('') + '</select>';
+      + modelosCentro.map(function(x){ return '<option value="' + esc(x.key) + '"' + (x.key === row.modelo ? ' selected' : '') + '>' + esc(x.shortConCodigo || x.short) + '</option>'; }).join('') + '</select>';
     var presets = row.modelo ? (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, row.modelo); }) : [];
     var presetSel = presets.length
       ? '<select class="inp lote-inp" onchange="loteSetPreset(' + i + ',this.value)">'
@@ -3549,7 +3552,15 @@ function clientSeccionesPermitidas(){
   // Operador Clínica (empleado del centro): Información básica + Pendientes
   // (mismo contador que ve Javi de este centro). Cero plata, cero gráficas.
   // Lista propia y corta, igual criterio que arriba.
-  if (ME && ME.role === 'operador_clinica') return ['basica', 'pendientes'];
+  // Operador Clínica: Pendientes + Datos del centro, y el Dashboard mes en curso
+  // si el admin se lo habilitó. Es EL MISMO tablero que ve un operador de NS —
+  // que ya se dibuja sin plata para los dos roles (ROLES_SIN_VALORES) —, nada
+  // más que de su centro. Nunca el Dashboard general ni nada con valores.
+  if (ME && ME.role === 'operador_clinica') {
+    var secOpCli = ['pendientes', 'basica'];
+    if (opClinicaModulos().indexOf('mescurso') >= 0) secOpCli.splice(1, 0, 'mescurso');
+    return secOpCli;
+  }
   // El operador ve, de un médico de cabecera (Scheffelaar/Dubesarky), lo
   // mismo que un admin salvo OSDOP (facturación, no es su trabajo) - es una
   // lista propia, no "la del admin menos algo": si mañana se suma OTRA
@@ -5614,7 +5625,7 @@ async function crearYSubirInforme(panelId, idx, btn){
   delete payload._modelo;
   payload.ome = x.ome; payload.practicaTexto = x.practica || '';
   if (!await nsConfirm('', { titulo:'Crear y subir a PAMI',
-      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)+'<br>Modelo: '+esc(m.label || m.key)+'<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
+      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)+'<br>Modelo: '+esc(m.practicaConCodigo || m.label || m.key)+'<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
       okLabel:'Crear y subir' })) return;
   ejecutarCrearYSubir(payload, x, btn);
 }

@@ -450,7 +450,7 @@ const MODELOS = {
     practica: "ECG simple",
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología",
-    codigoPractica: "",
+    codigoPractica: "570129",
     estudio: "Electrocardiograma",
     textoDefault: "Ecg sin complicaciones, trazado sin valor patológico.",
   },
@@ -460,7 +460,7 @@ const MODELOS = {
     practica: "Holter cardíaco 24 hs",
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología",
-    codigoPractica: "",
+    codigoPractica: "570121",
     estudio: "Holter cardíaco de 3 canales 24 hs.",
     estudioArchivo: "Holter 24 hs",
     textoDefault: "Ritmo sinusal durante todo el estudio. Conducción AV dentro de límites fisiológicos. No se observaron arritmias supraventriculares ni ventriculares significativas. No se observaron cambios significativos del segmento ST-T. No se observaron pausas significativas. No refirió síntomas durante el estudio. Se analizó registro electrocardiográfico de 24 hs.",
@@ -662,7 +662,7 @@ const MODELOS = {
     practica: "Tratamiento esclerosante",
     servicio: "SERVICIO DE FLEBOLOGÍA",
     especialidad: "Flebología / Cirugía vascular",
-    codigoPractica: "",
+    codigoPractica: "487610",
     estudio: "TRATAMIENTO ESCLEROSANTE",
     estudioArchivo: "Tratamiento esclerosante",
     textoDefault: "PACIENTE QUE CONSULTA POR VARICES. CLASIFICACIÓN CEAP III CON TRAYECTORIA VARICOSA QUE PROVOCA PRURITO, LO QUE DETERMINÓ FLEBITIS REACTIVA. SE INDICÓ TRATAMIENTO ESCLEROSANTE SOBRE TRAYECTO AFECTADO.",
@@ -681,7 +681,7 @@ const MODELOS = {
     practica: "Ecografía abdominal completa",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180112",
     estudio: "ECOGRAFÍA ABDOMINAL COMPLETA",
     estudioArchivo: "Ecografia abdominal completa",
     textoDefault: "HÍGADO DE TAMAÑO, FORMA Y ECOESTRUCTURA CONSERVADOS, SIN IMÁGENES FOCALES. VESÍCULA BILIAR DE PAREDES FINAS, SIN IMÁGENES LITIÁSICAS EN SU INTERIOR. VÍA BILIAR NO DILATADA. PÁNCREAS DE ECOESTRUCTURA HOMOGÉNEA. BAZO DE TAMAÑO Y ECOESTRUCTURA CONSERVADOS. AMBOS RIÑONES DE FORMA, TAMAÑO Y ECOESTRUCTURA CONSERVADOS, SIN SIGNOS DE UROPATÍA OBSTRUCTIVA NI LITIASIS. NO SE OBSERVA LÍQUIDO LIBRE EN CAVIDAD.",
@@ -692,7 +692,7 @@ const MODELOS = {
     practica: "Ecografía renal",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180116",
     estudio: "ECOGRAFÍA RENAL",
     estudioArchivo: "Ecografia renal",
     textoDefault: "RIÑÓN DERECHO: FORMA CONSERVADA. ECOESTRUCTURA HOMOGÉNEA. RELACIÓN CORTICOMEDULAR CONSERVADA. NO SE OBSERVAN SIGNOS DE URONEFROSIS NI MACROLITIASIS. TAMAÑO: DL 103 MM X AP 46 MM X DT 37 MM, EP 15 MM.\nRIÑÓN IZQUIERDO: FORMA CONSERVADA. ECOESTRUCTURA HOMOGÉNEA. RELACIÓN CORTICOMEDULAR CONSERVADA. NO SE OBSERVAN SIGNOS DE URONEFROSIS NI MACROLITIASIS. TAMAÑO: DL 102 MM X AP 55 MM X DT 49 MM, EP 24 MM.",
@@ -715,7 +715,7 @@ const MODELOS = {
     practica: "Ecografía vesical con residuo posmiccional",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180123",
     estudio: "ECOGRAFÍA VESICAL CON RESIDUO POSMICCIONAL",
     estudioArchivo: "Ecografia vesical con residuo",
     textoDefault: "VEJIGA EN REPLECIÓN, DE PAREDES FINAS Y REGULARES, SIN IMÁGENES COMPATIBLES CON LITIASIS NI FORMACIONES SÓLIDAS EN SU INTERIOR. LUEGO DE LA MICCIÓN ESPONTÁNEA SE CONSTATA RESIDUO POSMICCIONAL ESTIMADO EN — ML.",
@@ -769,7 +769,7 @@ const MODELOS = {
     practica: "Ecografía de partes blandas",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "186001",
     estudio: "ECOGRAFÍA DE PARTES BLANDAS: REGIÓN INGUINAL DERECHA/IZQUIERDA",
     estudioArchivo: "Ecografia de partes blandas",
     textoDefault: "SE EXPLORA CON TRANSDUCTOR DE ALTA FRECUENCIA EN CONCORDANCIA CON ÁREA REFERIDA POR EL/LA PACIENTE, EVIDENCIÁNDOSE AL MOMENTO DEL ESTUDIO:\nREGIÓN INGUINAL: ANILLO HERNIARIO DE — MM CON SACO HERNIARIO DE — MM X — MM, SIENDO SU CONTENIDO ASAS INTESTINALES Y TEJIDO ADIPOSO PROTRUYENDO EL MISMO ANTE MANIOBRA DE VALSALVA Y CON REDUCCIÓN TOTAL/PARCIAL ANTE LA RELAJACIÓN.",
@@ -780,7 +780,7 @@ const MODELOS = {
     practica: "Ecografía de tiroides",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180110",
     estudio: "ECOGRAFÍA DE TIROIDES",
     estudioArchivo: "Ecografia de tiroides",
     textoDefault: "LÓBULO DERECHO: FORMA CONSERVADA, ECOESTRUCTURA HOMOGÉNEA, SIN IMÁGENES NODULARES.\nLÓBULO IZQUIERDO: FORMA CONSERVADA, ECOESTRUCTURA HOMOGÉNEA, SIN IMÁGENES NODULARES.\nISTMO DE ESPESOR CONSERVADO, HOMOGÉNEO.",
@@ -791,7 +791,7 @@ const MODELOS = {
     practica: "Ecografía mamaria",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180106",
     estudio: "ECOGRAFÍA MAMARIA",
     estudioArchivo: "Ecografia mamaria",
     textoDefault: "PARÉNQUIMA HETEROGÉNEO FIBROGLANDULAR.\nMAMA DERECHA: NO SE OBSERVAN IMÁGENES SÓLIDAS NI QUÍSTICAS AGREGADAS.\nMAMA IZQUIERDA: NO SE OBSERVAN IMÁGENES SÓLIDAS NI QUÍSTICAS AGREGADAS.\nBIRADS ECOGRÁFICO: 1.",
@@ -802,7 +802,7 @@ const MODELOS = {
     practica: "Ecografía ginecológica transvaginal",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecografía",
-    codigoPractica: "",
+    codigoPractica: "180128",
     estudio: "ECOGRAFÍA GINECOLÓGICA TRANSVAGINAL",
     estudioArchivo: "Ecografia ginecologica TV",
     tecnicosTitulo: "DATOS DEL ÚTERO",
@@ -895,7 +895,7 @@ const MODELOS = {
     practica: "Ecodoppler de arteria aorta abdominal",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
+    codigoPractica: "180603",
     estudio: "ECODOPPLER DE ARTERIA AORTA ABDOMINAL",
     estudioArchivo: "Ecodoppler aorta abdominal",
     textoDefault: "SE REALIZA ESTUDIO DOPPLER COLOR ARTERIAL DE ARTERIA AORTA ABDOMINAL CON EQUIPO DE ALTA RESOLUCIÓN COLOR Y CON TRANSDUCTORES DE 3,5 MHZ.\nARTERIA AORTA ABDOMINAL: EN SU TRAYECTO EVALUADO SE OBSERVA DIÁMETRO ANTEROPOSTERIOR DE 13 MM A NIVEL SUPRAUMBILICAL Y DE CALIBRE CONSERVADO, MÁXIMO INFRAUMBILICAL DE 16 MM. ONDAS DE TIPO TRIFÁSICA CON VELOCIDADES CONSERVADAS.\nSE MENCIONAN AISLADAS PLACAS ATEROMATOSAS FIBROCALCÍCICAS QUE NO GENERAN ALTERACIÓN HEMODINÁMICA SIGNIFICATIVA.",
@@ -906,7 +906,7 @@ const MODELOS = {
     practica: "Ecodoppler de tiroides",
     servicio: "SERVICIO DE DIAGNÓSTICO POR IMÁGENES",
     especialidad: "Diagnóstico por imágenes / Ecodoppler",
-    codigoPractica: "",
+    codigoPractica: "180609",
     estudio: "ECODOPPLER DE TIROIDES",
     estudioArchivo: "Ecodoppler tiroides",
     textoDefault: "SE ESTUDIA GLÁNDULA TIROIDES CON DOPPLER COLOR Y ESPECTRAL. VASCULARIZACIÓN INTRAPARENQUIMATOSA DE DISTRIBUCIÓN Y PATRÓN NORMAL, SIN SIGNOS DE HIPERVASCULARIZACIÓN FOCAL NI DIFUSA.\nCONCLUSIÓN: ESTUDIO DENTRO DE LÍMITES FISIOLÓGICOS.",
@@ -918,7 +918,7 @@ const MODELOS = {
     practica: "Ecocardiograma doppler color",
     servicio: "SERVICIO DE CARDIOLOGÍA",
     especialidad: "Cardiología / Diagnóstico por imágenes",
-    codigoPractica: "",
+    codigoPractica: "180301",
     estudio: "ECOCARDIOGRAMA DOPPLER COLOR",
     estudioArchivo: "Ecocardiograma",
     tecnicosTitulo: "DATOS TÉCNICOS DEL ECOCARDIOGRAMA",
@@ -932,7 +932,7 @@ const MODELOS = {
     practica: "Espirometría computarizada",
     servicio: "SERVICIO DE NEUMONOLOGÍA",
     especialidad: "Neumonología / Estudios funcionales respiratorios",
-    codigoPractica: "",
+    codigoPractica: "687114",
     estudio: "ESPIROMETRÍA COMPUTARIZADA CURVA FLUJO-VOLUMEN, PRE Y POST BRONCODILATADORES",
     estudioArchivo: "Espirometria",
     tecnicosTitulo: "RESULTADOS DE LA PRUEBA DE FUNCIÓN PULMONAR",
@@ -978,6 +978,26 @@ const MODELO_VIEJO_CLIENTE = {
   "caballito-sibo": "caballito-pediatrico", "cima-mapa": "cima", "cima-ergo": "cima",
   "caballito-flujometria": "caballito-pediatrico",
 };
+// El nombre de la práctica estaba escrito de TRES formas distintas según el
+// modelo: con el código adelante ("186001 - Ecografía musculoesquelética"), con
+// el código atrás ("Consulta cardiológica c/ ECG — 570129") o sin código
+// ("Ecografía renal"). Como cada pantalla mostraba el campo tal cual, el mismo
+// desplegable mezclaba los tres formatos. Estas dos funciones limpian el nombre
+// y rearman la etiqueta pareja para TODAS las vistas.
+function nombreSinCodigo(texto) {
+  return String(texto || "")
+    .replace(/^\s*\d[\d\s+]*\s*[-–—]\s*/, "")   // "717111 + 717122 - Nombre"
+    .replace(/\s*[-–—]\s*\d[\d\s+]*\s*$/, "")   // "Nombre — 570129"
+    .trim();
+}
+// Etiqueta para MOSTRAR en cualquier lista de prácticas: siempre "CÓDIGO - Nombre".
+// Si algún modelo nuevo entra sin código cargado, va el nombre solo (nunca se
+// inventa un código).
+function etiquetaConCodigo(codigo, texto) {
+  const nombre = nombreSinCodigo(texto);
+  const cod = String(codigo || "").trim();
+  return cod ? cod + " - " + nombre : nombre;
+}
 // Para el desplegable del front (una sola fuente de verdad).
 function listarModelos() {
   return Object.keys(MODELOS).map((k) => ({
@@ -985,6 +1005,11 @@ function listarModelos() {
     label: MODELOS[k].label || k,
     short: MODELOS[k].short || MODELOS[k].label || k,
     practica: MODELOS[k].practica || MODELOS[k].estudio || k,
+    // Las dos etiquetas "para mostrar", ya parejas. `practica`/`short` se dejan
+    // crudas porque el dashboard las usa para matchear la fila del reporte
+    // contra el modelo (ver modeloParaPracticaRow en app.js).
+    practicaConCodigo: etiquetaConCodigo(MODELOS[k].codigoPractica, MODELOS[k].practica || MODELOS[k].estudio || k),
+    shortConCodigo: etiquetaConCodigo(MODELOS[k].codigoPractica, MODELOS[k].short || MODELOS[k].label || k),
     especialidad: MODELOS[k].especialidad || "",
     codigoPractica: MODELOS[k].codigoPractica || "",
     campos: MODELOS[k].campos || [],

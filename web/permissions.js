@@ -93,7 +93,7 @@ function medicosVisiblesPara(me, medicos) {
 // SIN ninguna pantalla de datos habilitada — se le suman de a un módulo (ver
 // PDF "Empleado Cliente"). Nivel básico siempre: nada de dashboards,
 // honorarios ni reportes, tenga los módulos que tenga.
-const OPERADOR_CLINICA_MODULOS = new Set(["padron", "informes", "liberarcupo"]);
+const OPERADOR_CLINICA_MODULOS = new Set(["mescurso", "padron", "informes", "liberarcupo"]);
 function opClinicaTieneModulo(me, modulo) {
   return !!(me && me.role === "operador_clinica" && Array.isArray(me.modulos) && me.modulos.includes(modulo));
 }
@@ -188,6 +188,20 @@ function aplicarGateDeRol(req, meGate, p) {
       // Pendientes del centro con el detalle de pacientes (su pantalla de
       // Inicio). El endpoint ya devuelve las filas sin montos.
       || (esGet && p === `/api/clientes/${centroCod}/pendientes-centro/detalle`);
+    // Dashboard mes en curso: el MISMO tablero que ve un operador de NS (que ya
+    // se renderiza sin plata para los dos roles, ver ROLES_SIN_VALORES en
+    // app.js), pero solo de SU centro. Son las 6 lecturas que arma
+    // loadClientMesCurso() - todas GET, ninguna escribe. "Transmitir y
+    // actualizar" (POST) queda AFUERA a propósito: transmitir a PAMI sigue
+    // siendo tarea de NS, no del centro.
+    if (!permitido && opClinicaTieneModulo(meGate, "mescurso") && esGet) {
+      permitido = p === `/api/clientes/${centroCod}/dashboard`
+        || p === `/api/clientes/${centroCod}/bandeja/resumen`
+        || p === `/api/clientes/${centroCod}/reportes`
+        || p === `/api/clientes/${centroCod}/informes/omes-generadas`
+        || p === `/api/clientes/${centroCod}/faltantes-desestimados`
+        || p === "/api/bandeja/refresco/estado";
+    }
     if (!permitido && opClinicaTieneModulo(meGate, "padron") && esGet) {
       permitido = p === `/api/clientes/${centroCod}/padron` || p === `/api/clientes/${centroCod}/padron/lookup`;
     }
