@@ -2219,6 +2219,10 @@ var INFORME_CABECERA_PLANTILLAS = {
   ]
 };
 function informeCabeceraGenero(item){
+  // Si la fila ya trae el sexo (sale de la credencial del padrón, o lo eligió
+  // el operador), se usa ese: adivinar por el nombre es el último recurso.
+  var dado = String((item && item.sexo) || '').trim().toUpperCase().charAt(0);
+  if (dado === 'F' || dado === 'M') return dado;
   var n = omeNorm((item && (item.nombre || item.paciente)) || '');
   var tokens = n.split(/\s+/).filter(Boolean);
   var femeninos = {
@@ -2277,6 +2281,31 @@ function marcarInformeCabeceraError(btn, msg){
   }
   nsAlert(texto, { titulo:'No se pudo crear el informe' });
 }
+// Cuando no se puede deducir el sexo, se pregunta. Antes salía un aviso sin
+// salida ("revisalo manualmente") y no había dónde revisarlo: la fila quedaba
+// trabada para siempre. Devuelve 'F', 'M' o '' si se cancela.
+var _NS_SEXO_ELEGIDO = '';
+function nsSexoElegir(v){
+  _NS_SEXO_ELEGIDO = v;
+  var ok = document.getElementById('nsAskOkBtn'); if (ok) ok.disabled = false;
+}
+async function pedirSexoPaciente(nombre){
+  _NS_SEXO_ELEGIDO = '';
+  var op = function(val, txt){
+    return '<label style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);'
+      + 'border-radius:10px;padding:10px 14px;cursor:pointer;flex:1">'
+      + '<input type="radio" name="nsSexoPac" value="' + val + '" style="width:auto" '
+      + 'onchange="nsSexoElegir(this.value)"> ' + txt + '</label>';
+  };
+  var html = '<p style="margin:0 0 12px">Por el nombre no puedo saber si <b>' + esc(nombre || 'el paciente')
+    + '</b> es mujer o varón, y el informe cambia según eso. Elegí cuál corresponde:</p>'
+    + '<div style="display:flex;gap:10px">' + op('F', 'Mujer') + op('M', 'Varón') + '</div>';
+  var p = nsConfirm('', { titulo:'¿Mujer o varón?', cuerpoHtml: html, okLabel:'Crear informe' });
+  var okB = document.getElementById('nsAskOkBtn'); if (okB) okB.disabled = true;
+  var ok = false;
+  try { ok = await p; } finally { if (okB) okB.disabled = false; }
+  return ok ? _NS_SEXO_ELEGIDO : '';
+}
 async function crearInformeCabeceraDesdeDetalle(idx, btn){
   var ctx = PEND_DETALLE_CTX || {};
   var item = (ctx.filas || [])[idx];
@@ -2284,8 +2313,11 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
   if (!item.ome){ nsAlert('La fila no tiene número de OME.'); return; }
   var plantilla = plantillaInformeCabeceraWeb(item);
   if (!plantilla){
-    nsAlert('No pude inferir si corresponde plantilla femenina o masculina por el nombre. Revisalo manualmente antes de crear el informe.', { titulo:'Revisar paciente' });
-    return;
+    var elegido = await pedirSexoPaciente(item.nombre || item.paciente);
+    if (!elegido) return;   // cerró sin elegir: no se crea nada
+    item.sexo = elegido;    // queda en la fila, no se vuelve a preguntar en esta lista
+    plantilla = plantillaInformeCabeceraWeb(item);
+    if (!plantilla){ nsAlert('No pude armar el informe para ese paciente.', { titulo:'Revisar paciente' }); return; }
   }
   var original = btn ? btn.textContent : '';
   if (btn){ btn.disabled = true; btn.textContent = '⏳'; btn.title = 'Enviando al worker'; }

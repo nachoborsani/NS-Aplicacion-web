@@ -7456,6 +7456,10 @@ const server = http.createServer(async (req, res) => {
       const filas = todas.filter(pasa).slice(0, 500).map((r) => ({
         ome: r.nOrden, benef: r.beneficio, nombre: r.nombre, practica: r.practica, turno: r.turno,
         estado: r.transmitida ? "Transmitida" : (r.validada ? "Validada, falta informe" : "Sin validar"),
+        // El informe de cabecera tiene plantilla femenina y masculina, y por el
+        // nombre no siempre se sabe. La credencial del padrón sí lo dice; cuando
+        // no está, queda vacío y la pantalla lo pregunta.
+        sexo: sexoDePaciente(r.beneficio, r.nombre).sexo,
       }));
       return json(res, 200, { slug, nombre: nombreCliente, tipo, month: mes, total: todas.filter(pasa).length, filas });
     }
