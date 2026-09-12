@@ -6033,7 +6033,7 @@ function filtrarFilasNomenclador(rows, url) {
 
 const server = http.createServer(async (req, res) => {
   // Se anota en la respuesta (no en una variable global: hay pedidos en paralelo).
-  res._gzipOk = /gzip/i.test(String(req.headers["accept-encoding"] || ""));
+  res._gzipOk = String(req.headers["accept-encoding"] || "").toLowerCase().includes("gzip");
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const p = url.pathname;
 
