@@ -2153,14 +2153,9 @@
      (ej. la barra Generar/Varios pacientes de Informes, que no debe ocultarse). */
   body.role-operador_clinica .ns-only,
   body.role-operador_clinica #clientNewBtn{display:none !important}
-  /* Se ocultan los BOTONES de sección, NO la barra entera: adentro de esa misma
-     barra vive #clientToolTabs, con las herramientas habilitadas en SU centro
-     (las dibuja renderTabsHerramientas). Ocultando el contenedor, un operador
-     con Afiliados/Informes/Liberar cupo tildados en su ficha no veía ninguna en
-     pantalla. Con los botones ocultos la barra mide 0 cuando no hay
-     herramientas, así que el que no tenga ninguna ve lo mismo que antes.
-     (Es la tercera vez que esta regla tapa de más: ojo al tocarla.) */
-  body.role-operador_clinica #view-clientes .client-tabs > button{display:none}
+  /* La barra de pestañas del cliente no va para este rol: sus herramientas
+     están agrupadas en el MENÚ LATERAL (ver aplicarUsuario), no acá adentro. */
+  body.role-operador_clinica #view-clientes .client-tabs{display:none}
 
   /* Rol demo en Afiliados: SOLO VE la lista y la búsqueda. Se ocultan las acciones
      (consultar cápita, credencial, subir turnera) — el backend igual las bloquea. */
