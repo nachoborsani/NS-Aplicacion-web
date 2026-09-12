@@ -99,16 +99,41 @@ def error_legible(msg: str) -> str:
     return str(msg or "").strip()[:50]
 
 
+def _nombre_cliente(r: dict) -> str:
+    return str(r.get("name") or r.get("slug") or "").strip() or "sin nombre"
+
+
+def _cliente_con_transmitidas(r: dict) -> str:
+    """Nombre del cliente y, si transmitió, cuántas. 'Cima (412 transmitidas)'."""
+    n = int(((r.get("transmit") or {}).get("transmitidas")) or 0)
+    if not n:
+        return _nombre_cliente(r)
+    return f"{_nombre_cliente(r)} ({n} transmitida{'' if n == 1 else 's'})"
+
+
+def _lista_corta(nombres: list[str], tope: int = 6) -> str:
+    """Los nombres separados por coma; si son muchos, los primeros y 'y N más'."""
+    if not nombres:
+        return "ninguno"
+    if len(nombres) <= tope:
+        return ", ".join(nombres)
+    return ", ".join(nombres[:tope]) + f" y {len(nombres) - tope} más"
+
+
 def armar_aviso_telegram(resultados: list[dict], periodo: str, titulo: str = "Bandejas") -> str:
     """Mensaje de Telegram que separa 'clave equivocada' de 'error transitorio'."""
     ok = [r for r in resultados if r.get("ok")]
     fallo = [r for r in resultados if not r.get("ok")]
     if not fallo:
-        return f"✅ <b>{titulo}</b> {periodo}: todo ok — {len(ok)} clientes actualizados."
+        # Decir QUÉ bandejas: "1 clientes actualizados" no dice cuál se actualizó.
+        detalle = _lista_corta([_cliente_con_transmitidas(r) for r in ok])
+        return f"✅ <b>{titulo}</b> {periodo}: todo ok — {detalle}."
     cred = [r for r in fallo if clasificar_error(r.get("error")) == "credencial"]
     sin_clave = [r for r in fallo if clasificar_error(r.get("error")) == "sin_clave"]
     otros = [r for r in fallo if clasificar_error(r.get("error")) in ("transitorio", "otro")]
     lineas = [f"⚠️ <b>{titulo}</b> {periodo}: {len(ok)}/{len(resultados)} ok."]
+    if ok:
+        lineas.append("✅ " + _lista_corta([_cliente_con_transmitidas(r) for r in ok]))
     if cred:
         lineas.append("🔑 <b>Clave equivocada</b> — revisar acceso PAMI: "
                       + ", ".join(r.get("name", "") for r in cred))
