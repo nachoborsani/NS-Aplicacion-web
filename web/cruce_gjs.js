@@ -175,6 +175,11 @@ const MAPA_CODIGO_RAW = {
   "CARDIOLOGIA|CONSULTA": { codigo: "570129", nombre: "Consulta Cardiologia (c/ECG)" },
   "ELECTROCARDIOGRAMA": { codigo: "570129", nombre: "Consulta Cardiologia (c/ECG)" },
   "DOPPLER CARDÍACO": { codigo: "180301", nombre: "Ecodoppler Cardiaco" },
+  // Cuando la especialidad "DOPPLER CARDIACO" trae Practica="CONSULTA"
+  // generica (en vez del nombre del estudio directo, como en la clave de
+  // arriba) hay que resolverla como especialidad+consulta, igual que
+  // Otorrino/Diabetologia/etc.
+  "DOPPLER CARDIACO|CONSULTA": { codigo: "180301", nombre: "Ecodoppler Cardiaco" },
   "DOPPLER VASOS DE CUELLO": { codigo: "180607", nombre: "Ecodoppler vasos del cuello" },
   "MAPA": { codigo: "570120", nombre: "Presurometria / MAPA" },
   "HOLTER": { codigo: "570121", nombre: "Holter cardiaco de 3 canales 24 hs" },
