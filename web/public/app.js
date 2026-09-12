@@ -11240,7 +11240,7 @@ async function loadCabinaView(){
     // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
     // cargan a mano, más adelante entran solas varias veces por día.
     // Cuando se sume otro cliente, agregar su slug acá.
-    var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel'];
+    var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel', 'dbaime'];
     list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
         .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
   }
