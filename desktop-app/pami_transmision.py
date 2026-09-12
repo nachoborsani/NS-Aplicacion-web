@@ -574,28 +574,34 @@ BOT_SCRIPT = r"""
         docEl?.closest('button,a,span')?.classList.contains('btn-primary') ||
         docEl?.classList.contains('btn-primary');
 
-      // Azul = hecho, verde = falta. Los medicos de cabecera tienen un boton MAS
-      // que los consultorios —el del informe—, y mirando solo el check y la
-      // documentacion el bot le hacia clic igual a filas sin informe: PAMI no
-      // abre el cuadro de confirmar y la fila se pierde en reintentos (12/09/2026:
-      // Scheffelaar 7 transmitidas y 60 'Timeout esperando modal'). En vez de
-      // buscar cada boton por su icono, se exige que TODOS los de la fila esten
+      // Azul = hecho, verde = falta, y los botones de la fila son <i> sueltos con
+      // la clase encima (no van dentro de un <button>). Los medicos de cabecera
+      // tienen uno MAS que los consultorios: 'Formulario' (i.pe-btn-formulario),
+      // que es el informe. Mirando solo el check y la documentacion, el bot le
+      // hacia clic igual a filas sin formulario; PAMI ignora el clic sin abrir
+      // nada ni avisar, y la fila se iba en reintentos (12/09/2026: Scheffelaar
+      // 7 transmitidas y 60 'Timeout esperando modal', contra 198 sin un error en
+      // CIMA el mismo dia). Por eso se exige que TODOS los botones de accion esten
       // en azul; el de transmitir queda afuera, que siempre es verde.
-      const btnTransmitir = btn && btn.closest ? btn.closest('button,a,span') : null;
-      const accionesFila = Array.from(row.querySelectorAll('button,a.btn,a[class*=btn]'))
-        .filter((b) => b !== btnTransmitir && !(btn && b.contains(btn)) && b.querySelector('i'));
-      const verdes = accionesFila.filter((b) => !b.classList.contains('btn-primary'));
+      const acciones = Array.from(row.querySelectorAll('i.boton-historial'))
+        .filter((ic) => !ic.classList.contains('transmitir'));
+      const verdes = acciones.filter((ic) => !ic.classList.contains('btn-primary'));
 
-      if (btn && checkAzul && docAzul && verdes.length === 0) {
+      if (btn && checkAzul && verdes.length === 0) {
         LOG(`Elegible: [${nroOrden}] ${nombre}`);
         return { btn, nroOrden, nombre, pagina: getPaginaActiva() };
       }
-      // No es elegible: se anota POR QUE, una sola vez por orden.
+      // No es elegible: se anota POR QUE, una sola vez por orden. El motivo sale
+      // del nombre que PAMI le pone al boton que quedo en verde (Formulario,
+      // Cargar documentacion), asi se lee sin tener que ir a mirar la pantalla.
       if (noElegibles && !noElegibles.some((x) => x && x.nroOrden === nroOrden)) {
+        const nombresVerdes = verdes
+          .map((ic) => ic.getAttribute('data-original-title') || ic.getAttribute('title') || '')
+          .map((t) => String(t).split(' - ')[0].trim())
+          .filter(Boolean);
         const motivo = !btn ? 'sin boton de transmitir'
           : (!checkAzul ? 'sin validar'
-          : (!docAzul ? 'falta cargar la documentacion'
-          : `le falta algo: ${verdes.length} boton(es) en verde`));
+          : (nombresVerdes.length ? `falta: ${nombresVerdes.join(', ')}` : 'le falta algo en la fila'));
         noElegibles.push({ nroOrden, nombre, motivo });
       }
     }
