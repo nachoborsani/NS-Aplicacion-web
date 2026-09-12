@@ -7098,14 +7098,20 @@ async function loadClientMesCurso(){
   //
   // Ese tablero es para EL QUE TRABAJA las bandejas: validar / informar /
   // transmitir, sin plata al lado. Quién lo ve no lo decide el cliente sino el
-  // permiso: al que NO ve valores (operador y operador de clínica) el tablero
-  // valorizado no le sirve — le quedarían las tarjetas con los importes en
-  // blanco. El que sí ve valores necesita lo contrario: comparar este cliente
-  // con el resto y ver la facturación.
+  // permiso: al que NO ve valores el tablero valorizado no le sirve — le
+  // quedarían las tarjetas con los importes en blanco.
   // Un médico de cabecera va al tablero de bandejas para todos: es capitado, ahí
   // no hay nada que valorizar.
+  //
+  // EXCEPCIÓN, el operador de NS (Javi): ve el MISMO formato en todos sus
+  // centros. Un consultorio de pago fijo (bandejaCup, ej. Caballito) le salía
+  // con el tablero de bandejas mientras el resto de sus consultorios le salían
+  // con el dashboard de siempre, así que tenía que leer dos pantallas distintas
+  // para lo mismo. Ahora le sale el dashboard de siempre también acá (con las
+  // cantidades y sin importes, como ya lo ve en los demás centros).
+  // Los otros roles siguen exactamente como estaban.
   var soloBandejas = ACTIVE_CLIENT.tipo === 'med_cabecera'
-    || (ACTIVE_CLIENT.bandejaCup && !veValoresCliente());
+    || (ACTIVE_CLIENT.bandejaCup && !veValoresCliente() && !(ME && ME.role === 'operador'));
   if (soloBandejas) return loadMedCabMesCurso();
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
