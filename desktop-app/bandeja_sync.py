@@ -190,8 +190,26 @@ def _correr_transmision(bot, desde: str, hasta: str, progress=None) -> dict:
     estado: dict = {}
     completo = False
     fin = time.monotonic() + _TRANSMIT_TIMEOUT_S
+    # Vigia de bot colgado: el bot reporta su estado cada pocos segundos, asi que
+    # si su marca de tiempo no se mueve en varios minutos es que se quedo trabado
+    # (paso el 12/09/2026: PAMI pidio refrescar la pagina, no recargo sola y el bot
+    # espero esa recarga 45 minutos hasta cortar por tiempo). Se corta antes y el
+    # resto de la corrida —bajar la bandeja, el resto de los clientes— sigue.
+    _SIN_AVANCE_S = 8 * 60
+    ultima_marca = ""
+    ultimo_avance = time.monotonic()
     while time.monotonic() < fin:
         estado = bot.obtener_estado() or {}
+        marca = f"{estado.get('timestamp', '')}|{estado.get('procesados', 0)}"
+        if marca != ultima_marca:
+            ultima_marca = marca
+            ultimo_avance = time.monotonic()
+        elif time.monotonic() - ultimo_avance > _SIN_AVANCE_S:
+            if progress:
+                progress("el bot quedo trabado; corto la transmision y sigo")
+            estado = dict(estado)
+            estado["status"] = "TRABADO"
+            break
         if progress:
             progress(f"transmitiendo… {estado.get('procesados', 0)} enviadas")
         if estado.get("status") in ("DONE", "ERROR"):

@@ -127,6 +127,15 @@ BOT_SCRIPT = r"""
       if (/INFORMACI[?O]N TRANSMITIDA/i.test(texto)) {
         clearLastError();
       }
+      // PAMI a veces rechaza la transmision y pide refrescar la pagina. Cuando
+      // eso pasa NO recarga sola, y el bot se queda esperando la recarga que
+      // viene despues de cada confirmacion: el 12/09/2026 quedo colgado 45
+      // minutos con 103 transmitidas, hasta cortar por tiempo. Se recarga solo:
+      // al volver, el ciclo revalida la fila y la reintenta como cualquier otra.
+      if (/refresque la p[aá]gina|no se pudo transmitir/i.test(texto)) {
+        LOG('PAMI pidio refrescar la pagina: recargo y sigo.');
+        setTimeout(() => { try { location.reload(); } catch (e) { ERR(`No pude recargar: ${e}`); } }, 1200);
+      }
     };
   } catch (e) {
     LOG(`No se pudo overridear alert: ${e}`);
