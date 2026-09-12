@@ -2247,30 +2247,47 @@ var INFORME_CABECERA_PLANTILLAS = {
     { codigo:'M8', taMax:'128', taMin:'82', peso:'79', motivo:'control mensual de salud', examen:'paciente masculino en seguimiento, sin novedades clínicas relevantes', diagnostico:'control de salud', tratamiento:'se continúa seguimiento habitual y recetas correspondientes' }
   ]
 };
+// Mujer o varon segun el nombre de pila. Es el ULTIMO recurso: primero manda el
+// sexo de la credencial del padron, y si tampoco esta se le pregunta al operador.
+// Se recorre DE ATRAS PARA ADELANTE porque PAMI escribe apellido(s) y despues el
+// nombre: mirando desde el principio, "MARTIN GONZALEZ ANA" se quedaba con el
+// apellido Martin y la daba por varon.
 function informeCabeceraGenero(item){
-  // Si la fila ya trae el sexo (sale de la credencial del padrón, o lo eligió
-  // el operador), se usa ese: adivinar por el nombre es el último recurso.
   var dado = String((item && item.sexo) || '').trim().toUpperCase().charAt(0);
   if (dado === 'F' || dado === 'M') return dado;
   var n = omeNorm((item && (item.nombre || item.paciente)) || '');
   var tokens = n.split(/\s+/).filter(Boolean);
   var femeninos = {
-    alejandra:1, alicia:1, ana:1, andrea:1, angela:1, antonia:1, beatriz:1, carmen:1, catalina:1, cecilia:1,
-    celia:1, claudia:1, cristina:1, delia:1, elba:1, elda:1, elena:1, elisa:1, elvira:1, emilia:1,
-    estela:1, ester:1, esther:1, eva:1, gabriela:1, graciela:1, gloria:1, irene:1, iris:1, isabel:1,
-    isabela:1, janet:1, laura:1, liliana:1, lucia:1, luisa:1, mabel:1, marcela:1, margarita:1, maria:1,
-    mariana:1, marisa:1, marta:1, mercedes:1, mirta:1, monica:1, nelida:1, nicolasa:1, norma:1, olga:1,
-    patricia:1, ramona:1, rosa:1, rosalia:1, sara:1, silvia:1, sofia:1, sonia:1, susana:1, teresa:1,
-    valeria:1, vivian:1, yolanda:1
+    alejandra:1, alicia:1, ana:1, andrea:1, angela:1, antonia:1, beatriz:1, blanca:1, carmen:1,
+    catalina:1, cecilia:1, celia:1, clara:1, claudia:1, clementina:1, cristina:1, delia:1, dolores:1,
+    dora:1, edith:1, elba:1, elda:1, elena:1, elisa:1, elsa:1, elvira:1, emilia:1,
+    erica:1, estela:1, ester:1, esther:1, eva:1, felisa:1, florencia:1, francisca:1, gabriela:1,
+    gladys:1, gloria:1, graciela:1, griselda:1, haydee:1, hilda:1, hipolita:1, ines:1, irene:1,
+    iris:1, irma:1, isabel:1, isabela:1, josefa:1, josefina:1, juana:1, julia:1, laura:1,
+    leonor:1, lidia:1, liliana:1, lucia:1, luisa:1, luz:1, mabel:1, magdalena:1, marcela:1,
+    margarita:1, maria:1, mariana:1, marisa:1, marta:1, martina:1, mercedes:1, micaela:1, mirta:1,
+    monica:1, nelida:1, nicolasa:1, nilda:1, noemi:1, nora:1, norma:1, ofelia:1, olga:1,
+    patricia:1, paula:1, petrona:1, pura:1, ramona:1, raquel:1, rita:1, rosa:1, rosalia:1,
+    rosana:1, sara:1, silvia:1, sofia:1, soledad:1, sonia:1, stella:1, susana:1, teresa:1,
+    teresita:1, valeria:1, victoria:1, violeta:1, vivian:1, yolanda:1, ysabel:1, zulema:1
   };
   var masculinos = {
-    abel:1, alberto:1, alejandro:1, alfredo:1, arnaldo:1, arturo:1, atilio:1, carlos:1, daniel:1,
-    domingo:1, eduardo:1, enrique:1, ernesto:1, esteban:1, ezequiel:1, francisco:1, hector:1, horacio:1,
-    hugo:1, ignacio:1, jorge:1, jose:1, juan:1, luis:1, manuel:1, marcelo:1, martin:1, miguel:1,
-    omar:1, oscar:1, osvaldo:1, pablo:1, pascual:1, pedro:1, primo:1, raul:1, ricardo:1, roberto:1,
-    roque:1, ruben:1, vicente:1
+    abel:1, adolfo:1, alberto:1, alejandro:1, alfonso:1, alfredo:1, amado:1, andres:1, angel:1,
+    anibal:1, antonio:1, armando:1, arnaldo:1, arturo:1, atilio:1, aurelio:1, bautista:1, benito:1,
+    bernardo:1, blas:1, candido:1, carlos:1, cayetano:1, cesar:1, ciriaco:1, claudio:1, daniel:1,
+    dario:1, david:1, diego:1, domingo:1, eduardo:1, elias:1, emilio:1, enrique:1, ernesto:1,
+    esteban:1, eugenio:1, ezequiel:1, fabian:1, federico:1, felipe:1, fernando:1, florencio:1, francisco:1,
+    gabriel:1, gerardo:1, german:1, gregorio:1, guillermo:1, gustavo:1, hector:1, hipolito:1, horacio:1,
+    hugo:1, humberto:1, ignacio:1, isidro:1, jacinto:1, javier:1, jesus:1, joaquin:1, jorge:1,
+    jose:1, juan:1, julian:1, julio:1, justo:1, leandro:1, leonardo:1, lorenzo:1, lucas:1,
+    luis:1, manuel:1, marcelo:1, marcos:1, mario:1, martin:1, mateo:1, matias:1, mauricio:1,
+    miguel:1, modesto:1, nelson:1, nestor:1, nicolas:1, norberto:1, octavio:1, omar:1, orlando:1,
+    oscar:1, osvaldo:1, pablo:1, pascual:1, patricio:1, pedro:1, primo:1, rafael:1, ramon:1,
+    raul:1, reinaldo:1, ricardo:1, roberto:1, rodolfo:1, rodrigo:1, rogelio:1, rolando:1, roque:1,
+    ruben:1, rufino:1, salvador:1, santiago:1, santos:1, sebastian:1, sergio:1, silvio:1, simon:1,
+    teodoro:1, tomas:1, vicente:1, victor:1, walter:1
   };
-  for (var i=0;i<tokens.length;i++){
+  for (var i = tokens.length - 1; i >= 0; i--){
     if (femeninos[tokens[i]]) return 'F';
     if (masculinos[tokens[i]]) return 'M';
   }
