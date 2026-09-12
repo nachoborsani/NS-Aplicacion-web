@@ -3038,10 +3038,15 @@ function loteModeloPorCodigo(codigo){
   var m = modelosDelCliente(clienteSel).find(function(x){ return String(x.codigoPractica) === String(codigo); });
   return m ? m.key : '';
 }
-function loteMedicoParaModelo(modelo, medDef){
+function loteMedicoParaModelo(modelo, medDef, centro){
   // Solo médicos de ESTE centro para ESTA práctica (antes tomaba el primero del
   // catálogo que firmara la práctica, aunque fuera de otro centro).
-  var clienteSel = (document.getElementById('loteCentro') || {}).value || '';
+  // El centro puede venir dado (las filas del Dashboard son del cliente abierto);
+  // si no, sale del selector de la pantalla de lote, y en última instancia del
+  // cliente abierto. Sin centro no hay médico posible y el informe no se puede
+  // crear, que es lo que pasaba al crear desde el Dashboard.
+  var clienteSel = centro || (document.getElementById('loteCentro') || {}).value
+    || ((typeof ACTIVE_CLIENT !== 'undefined' && ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '');
   var meds = (INFORMES_CFG.medicos || []).filter(function(m){ return medicoHabilitado(m, clienteSel, modelo); });
   if (medDef && meds.some(function(m){ return m.id === medDef; })) return medDef;
   return meds.length ? meds[0].id : '';
@@ -5522,7 +5527,7 @@ function payloadInformeDeFila(x, opts){
   if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return null; }
   // sinFirma: el informe se genera sin médico a propósito (lo firma a mano el
   // que lo hizo). No es lo mismo que no haber elegido: eso sigue siendo un error.
-  var medicoId = opts.sinFirma ? '' : (opts.medicoId || loteMedicoParaModelo(m.key));
+  var medicoId = opts.sinFirma ? '' : (opts.medicoId || loteMedicoParaModelo(m.key, '', (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || ''));
   if (!medicoId && !opts.sinFirma){ nsAlert('El modelo "' + (m.label || m.key) + '" no tiene un médico asignado.\nCargalo desde la sección Informes.'); return null; }
   var slugFila = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && scopeAplica(d.clientes, slugFila); });
@@ -5760,7 +5765,7 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
   mcEnsureModalCss();
   // Default: el médico habitual del modelo, pero solo si está entre los del
   // centro (op.medicos ya viene filtrado); si no, el primero del centro.
-  var medDef = loteMedicoParaModelo(m.key);
+  var medDef = loteMedicoParaModelo(m.key, '', (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '');
   if (!op.medicos.some(function(md){ return md.id === medDef; })) medDef = (op.medicos[0] && op.medicos[0].id) || '';
   // Nadie cargado para esta práctica: que NO venga elegido de fábrica. Firmar es
   // lo último que conviene que salga por defecto.
