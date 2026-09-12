@@ -5140,6 +5140,24 @@ function dashboardRowKey(row) {
   if (order) return "o:" + order;
   return "p:" + cleanIdentifier(row && row.benefit) + "|" + cleanIdentifier(row && row.practiceCode) + "|" + String((row && row.appointmentAt) || "");
 }
+// El dashboard de un mes pesa ~1,1 MB y casi todo es el DETALLE de filas (hasta
+// 2.000 por lista: faltan informe, ausentes, débitos, por transmitir). En la
+// pantalla del mes en curso solo se muestran los totales; el detalle recién hace
+// falta si alguien abre un desplegable, y para eso se vuelve a pedir con
+// detalle=1. Con ?sinDetalle=1 la respuesta baja a unos 20 KB.
+const LISTAS_DETALLE = ["missingInformeRows", "ausentesRows", "posiblesDebitosRows",
+  "porTransmitirRows", "fueraCorteRows"];
+function sacarDetalleDashboard(data) {
+  if (!data || typeof data !== "object") return data;
+  const limpiar = (periodo) => {
+    if (!periodo || typeof periodo !== "object") return periodo;
+    const out = { ...periodo };
+    for (const k of LISTAS_DETALLE) if (Array.isArray(out[k])) out[k] = [];
+    out.detalleOmitido = true;
+    return out;
+  };
+  return { ...data, current: limpiar(data.current), compare: limpiar(data.compare) };
+}
 function buildClientDashboard(slug, periodFilter, compareFilter) {
   const reports = (loadClientReportsStore().items || []).filter((report) => report.clientSlug === slug);
   const byPeriod = new Map();
@@ -8039,7 +8057,9 @@ const server = http.createServer(async (req, res) => {
     const slug = decodeURIComponent(clientDashboardMatch[1]);
     const client = loadClientsStore().find((item) => item.slug === slug);
     if (!client) return json(res, 404, { error: "Cliente no encontrado." });
-    return json(res, 200, buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare")));
+    const datos = buildClientDashboard(slug, url.searchParams.get("period"), url.searchParams.get("compare"));
+    const sinDetalle = ["1", "true", "si"].includes(String(url.searchParams.get("sinDetalle") || "").toLowerCase());
+    return json(res, 200, sinDetalle ? sacarDetalleDashboard(datos) : datos);
   }
 
   // Export de la comparativa mes vs mes (XLSX con fórmulas o PDF).

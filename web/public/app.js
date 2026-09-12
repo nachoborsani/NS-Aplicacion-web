@@ -5871,7 +5871,45 @@ function redibujarPanelFaltantesAbierto(){
   }
 }
 // Abre/cierra debajo de los cuadros el detalle copiable.
-function mesCursoTogglePanel(tipo){
+// El dashboard del mes en curso pide los dos meses cerrados SIN el detalle de
+// filas (son 1,1 MB cada uno y en pantalla solo se ven los totales). Cuando
+// alguien abre un desplegable de esos meses, recién ahí se pide el detalle, una
+// sola vez por mes.
+var MESCURSO_DETALLE_PEDIDO = {};   // periodo -> promesa, para no pedirlo dos veces
+function mesCursoDetallePendiente(tipo){
+  if (/-julio$/.test(tipo)) return { periodo: MESCURSO_PERIODO_JULIO, cual: 'julio' };
+  if (/-cerrado$/.test(tipo)) return { periodo: MESCURSO_PERIODO_CERRADO, cual: 'cerrado' };
+  return null;
+}
+async function asegurarDetalleMes(tipo){
+  var q = mesCursoDetallePendiente(tipo);
+  if (!q || !q.periodo) return;
+  var slug = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
+  if (!slug) return;
+  var clave = slug + '|' + q.periodo;
+  if (!MESCURSO_DETALLE_PEDIDO[clave]) {
+    MESCURSO_DETALLE_PEDIDO[clave] = (async function(){
+      var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(q.periodo));
+      var cur = (r.ok && r.data && r.data.current) ? r.data.current : null;
+      if (!cur) return;
+      if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return;   // cambió de cliente mientras cargaba
+      if (q.cual === 'julio') {
+        MESCURSO_FALTAN_INFORMES_JULIO = cur.missingInformeRows || [];
+        MESCURSO_POSIBLES_DEBITOS_JULIO = cur.posiblesDebitosRows || [];
+        MESCURSO_AUSENTES_JULIO = cur.ausentesRows || [];
+        MESCURSO_POR_TRANSMITIR_JULIO = cur.porTransmitirRows || [];
+        MESCURSO_FUERACORTE_JULIO = cur.fueraCorteRows || [];
+      } else {
+        MESCURSO_FALTAN_INFORMES_CERRADO = cur.missingInformeRows || [];
+        MESCURSO_DEBITOS_CERRADO = cur.posiblesDebitosRows || [];
+        MESCURSO_AUSENTES_CERRADO = cur.ausentesRows || [];
+        MESCURSO_POR_TRANSMITIR_CERRADO = cur.porTransmitirRows || [];
+      }
+    })();
+  }
+  try { await MESCURSO_DETALLE_PEDIDO[clave]; } catch (e) { /* si falla, el panel se abre vacío */ }
+}
+async function mesCursoTogglePanel(tipo){
   var panel = document.getElementById('mescursoInformesPanel');
   if (!panel) return;
   var apagarCarets = function(){
@@ -5888,6 +5926,9 @@ function mesCursoTogglePanel(tipo){
   if (/^informes/.test(tipo) && !(INFORMES_CFG.modelos || []).length){
     ensureInformesCfg(function(){ if (MESCURSO_PANEL_ABIERTO === tipo){ MESCURSO_PANEL_ABIERTO = ''; mesCursoTogglePanel(tipo); } });
   }
+  // Si el panel es de un mes cerrado, el detalle no vino con la carga inicial:
+  // se pide ahora (una sola vez por mes) antes de dibujar.
+  await asegurarDetalleMes(tipo);
   var html = '';
   var debCols = ['Benef', 'Apellido y nombre', 'Turno', 'Práctica que se debita', 'Estado', 'Motivo', 'Se cruza con', 'Débito', 'Queda'];
   // El umbral no se cruza con otra práctica (es valorización parcial): dejamos vacío
@@ -6907,10 +6948,10 @@ async function loadClientMesCurso(){
   var prev2 = mesCursoMesAntes(prev);   // el mes ANTES del "sin cerrar" (ej. junio)
   var results = await Promise.all([
     api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/resumen'),
-    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev)),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev) + '&sinDetalle=1'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
     api('/api/bandeja/refresco/estado'),
-    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2)),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2) + '&sinDetalle=1'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados'),
   ]);
@@ -6931,6 +6972,9 @@ async function loadClientMesCurso(){
   MESCURSO_PERIODO_ACTUAL = (resumen && resumen.period) || '';
   MESCURSO_POSIBLES_DEBITOS_ADELANTE = (adelante && adelante.posiblesDebitosRows) || [];
   MESCURSO_FUTUROS = futuros || [];
+  // El detalle de los meses cerrados se vuelve a pedir: si la bandeja se
+  // refresco, lo que estaba cacheado quedo viejo.
+  MESCURSO_DETALLE_PEDIDO = {};
   MESCURSO_PANEL_ABIERTO = '';
   var dash = (results[1].ok && results[1].data) ? results[1].data : null;
   var current = dash && dash.current ? dash.current : null;
