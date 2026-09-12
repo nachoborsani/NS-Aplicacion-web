@@ -53,6 +53,49 @@ function claveNombre(v) {
 }
 function tokensDe(v) { return claveComp(v).split(" ").filter(Boolean); }
 
+// ---- Columnas del "Listado de consultas" por NOMBRE de encabezado, no por
+// posición fija. El export de AgendaPro cambia de un centro a otro (o de una
+// vez a otra del mismo centro) - por ejemplo, a veces trae columna "Hora" y a
+// veces no, lo que corre todo lo demás un lugar. Buscar por nombre evita que
+// eso rompa el cruce en silencio.
+function normalizarEncabezado(v) {
+  return claveComp(v).replace(/[^A-Z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+const COLUMNAS_AGENDA = {
+  fecha: ["FECHA"],
+  hora: ["HORA"],
+  especialidad: ["ESPECIALIDAD"],
+  nombre: ["NOMBRE PACIENTE", "PACIENTE", "APELLIDO Y NOMBRE"],
+  documento: ["DOCUMENTO", "DNI"],
+  beneficio: ["NUMERO AFILIADO", "NRO AFILIADO", "N AFILIADO", "NUMERO DE AFILIADO", "BENEFICIO", "NRO BENEFICIO", "NUMERO DE BENEFICIO", "N BENEFICIO"],
+  coseguro: ["COSEGURO"],
+  practica: ["PRACTICA"],
+};
+// campos sin los que no se puede armar el cruce (hora y documento son
+// informativos, no bloquean si faltan).
+const COLUMNAS_AGENDA_OBLIGATORIAS = ["fecha", "especialidad", "nombre", "beneficio", "coseguro", "practica"];
+function resolverColumnasAgenda(headerRow) {
+  const normalizados = (headerRow || []).map(normalizarEncabezado);
+  const idx = {};
+  for (const [campo, candidatos] of Object.entries(COLUMNAS_AGENDA)) {
+    idx[campo] = -1;
+    for (const cand of candidatos) {
+      const pos = normalizados.indexOf(normalizarEncabezado(cand));
+      if (pos >= 0) { idx[campo] = pos; break; }
+    }
+  }
+  const faltantes = COLUMNAS_AGENDA_OBLIGATORIAS.filter((campo) => idx[campo] < 0);
+  if (faltantes.length) {
+    throw new Error(
+      `No se encontraron en el encabezado del Listado de consultas las columnas: ${faltantes.join(", ")}. ` +
+      `Revisá que sea el archivo correcto (el encabezado esperado tiene columnas como "Fecha", "Especialidad", ` +
+      `"Nombre Paciente", "Número Afiliado", "Coseguro" y "Práctica").`
+    );
+  }
+  return idx;
+}
+function celda(r, i) { return i >= 0 && i < r.length ? r[i] : ""; }
+
 // ---- Similitud de texto (estilo difflib.SequenceMatcher.ratio: 2*M/T) ----
 function bloqueComunMasLargo(a, alo, ahi, b, blo, bhi) {
   let mejor = 0, mi = alo, mj = blo;
@@ -212,32 +255,33 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
   const valores = valorPorCodigo || new Map();
   const rows1 = readRows(agendaBuffer);
   validarFilas(agendaBuffer, rows1, "Listado de consultas");
+  const col = resolverColumnasAgenda(rows1[0]);
   const EXCLUIR_ESPECIALIDAD = new Set(["MEDICOS DE CABECERA PAMI"]);
   const cons = [];
   let excluidosCabecera = 0, excluidosParticular = 0;
   for (let i = 1; i < rows1.length; i++) {
     const r = rows1[i];
     if (!r || !r.length) continue;
-    const beneficio = soloDigitos(r[10]);
+    const beneficio = soloDigitos(celda(r, col.beneficio));
     if (!beneficio) continue;
-    const especialidadDisplay = limpiar(r[5]);
-    const especialidad = claveComp(r[5]);
-    const coseguro = Number(String(r[20]).replace(/[^\d.-]/g, "")) || 0;
+    const especialidadDisplay = limpiar(celda(r, col.especialidad));
+    const especialidad = claveComp(celda(r, col.especialidad));
+    const coseguro = Number(String(celda(r, col.coseguro)).replace(/[^\d.-]/g, "")) || 0;
     if (EXCLUIR_ESPECIALIDAD.has(especialidad)) { excluidosCabecera++; continue; }
     if (coseguro > 0) { excluidosParticular++; continue; }
     cons.push({
-      beneficio, dni: soloDigitos(r[7]), nombre: limpiar(r[6]),
-      fecha: limpiar(r[0]), hora: limpiar(r[1]), especialidad, especialidadDisplay,
-      practica: claveComp(r[25]),
+      beneficio, dni: soloDigitos(celda(r, col.documento)), nombre: limpiar(celda(r, col.nombre)),
+      fecha: limpiar(celda(r, col.fecha)), hora: limpiar(celda(r, col.hora)), especialidad, especialidadDisplay,
+      practica: claveComp(celda(r, col.practica)),
     });
   }
-  // Filas sí hay (pasó validarFilas), pero ninguna trajo beneficio (columna
-  // K vacía en todas): layout distinto al esperado, no un archivo sin
-  // consultas. Cortar acá en vez de seguir con un cruce vacío/engañoso.
+  // Encabezado correcto (pasó resolverColumnasAgenda) pero ninguna fila trajo
+  // beneficio: layout raro puntual o archivo realmente sin datos. Cortar acá
+  // en vez de seguir con un cruce vacío/engañoso.
   if (!cons.length && !excluidosCabecera && !excluidosParticular) {
     throw new Error(
       "El Listado de consultas tiene filas pero ninguna trae número de beneficio en la columna esperada. " +
-      "Revisá que sea el archivo correcto (puede ser un export con columnas distintas a las de siempre)."
+      "Revisá que sea el archivo correcto."
     );
   }
 
