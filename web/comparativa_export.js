@@ -1,7 +1,10 @@
 "use strict";
 // Export de la comparativa mes vs mes (Dashboard de reportes) a XLSX (con
 // fórmulas, para que el cliente pueda editar y proyectar) y a PDF (para presentar).
-const XLSX = require("xlsx");
+// xlsx-js-style (no "xlsx" a secas) para que los estilos de encabezado
+// sobrevivan al escribir el archivo - mismo look que el Reporte de cliente.
+const XLSX = require("xlsx-js-style");
+const xlsxStyle = require("./xlsx_style");
 
 // ---- Agregación: arma la estructura de comparación desde los datos del dashboard.
 function agregar(data) {
@@ -96,6 +99,7 @@ function buildXlsx(client, data) {
     if (g.money) fmtCells(wsR, [r], [1, 2], MONEY);
   });
   wsR["!cols"] = [{ wch: 32 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 10 }];
+  xlsxStyle.tituloYEncabezado(XLSX, wsR, 5, resStart - 1);
   XLSX.utils.book_append_sheet(wb, wsR, "Resumen");
 
   // Hoja Por especialidad
@@ -124,6 +128,8 @@ function buildXlsx(client, data) {
     setF(wsE, tr, 10, 'IFERROR((' + col(7) + (tr + 1) + "-" + col(8) + (tr + 1) + ")/" + col(8) + (tr + 1) + ',"")', null, PCT);
   }
   wsE["!cols"] = [{ wch: 30 }].concat(Array(10).fill({ wch: 13 }));
+  xlsxStyle.styleTitle(wsE, "A1");
+  xlsxStyle.styleHeaderRow(XLSX, wsE, espStart - 1, 11);
   XLSX.utils.book_append_sheet(wb, wsE, "Por especialidad");
 
   // Hoja Por código
@@ -140,6 +146,8 @@ function buildXlsx(client, data) {
     fmtCells(wsC, [r], [5, 6], MONEY);
   });
   wsC["!cols"] = [{ wch: 10 }, { wch: 42 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 9 }];
+  xlsxStyle.styleTitle(wsC, "A1");
+  xlsxStyle.styleHeaderRow(XLSX, wsC, codStart - 1, 9);
   XLSX.utils.book_append_sheet(wb, wsC, "Por código");
 
   return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });

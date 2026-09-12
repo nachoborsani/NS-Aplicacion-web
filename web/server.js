@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const XLSX = require("xlsx");
 const XLSXStyle = require("xlsx-js-style"); // solo para el Excel con estilo del reporte
+const xlsxStyle = require("./xlsx_style"); // estilo compartido (navy/blanco) para todos los Excel
 const informes = require("./informes");
 const padronLib = require("./padron");
 const cabinaLib = require("./informes_cabina");
@@ -9242,20 +9243,33 @@ const server = http.createServer(async (req, res) => {
     if (me.role === "operador" && !clientesVisiblesPara(me, [data.client]).length) {
       return json(res, 403, { error: "No tenés acceso a este cliente." });
     }
-    const rows = data.rows.map((r) => ({
-      "Nro. OME": r.n_orden,
-      "Turno": r.turno,
-      "Beneficio/GP": r.beneficio,
-      "Paciente": r.nombre,
-      "Código": r.practiceCode,
-      "Práctica": r.practica,
-      "Módulo": [r.moduleCode, r.moduleDescription].filter(Boolean).join(" - "),
-      "Estado": r.estado,
-      "Vencimiento aceptación": r.f_vencimiento,
-    }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "No validadas");
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    // Mismo estilo (navy/blanco, título, anchos) que el Reporte de cliente -
+    // antes esto era un json_to_sheet crudo sin ancho de columna ni encabezado
+    // pintado, se veía "de Excel sin tocar".
+    const XS = XLSXStyle;
+    const headers = ["Nro. OME", "Turno", "Beneficio/GP", "Paciente", "Código", "Práctica", "Módulo", "Estado", "Vencimiento aceptación"];
+    const aoa = [
+      [String(data.client.name || "").toUpperCase()],
+      ["Liberar cupo — " + (data.label || data.period || "")],
+      [],
+      headers,
+    ];
+    for (const r of data.rows) {
+      aoa.push([
+        r.n_orden || "", r.turno || "", r.beneficio || "", r.nombre || "",
+        r.practiceCode || "", r.practica || "",
+        [r.moduleCode, r.moduleDescription].filter(Boolean).join(" - "),
+        r.estado || "", r.f_vencimiento || "",
+      ]);
+    }
+    const ws = XS.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 16 }, { wch: 20 }, { wch: 18 }, { wch: 30 }, { wch: 10 }, { wch: 34 }, { wch: 26 }, { wch: 16 }, { wch: 20 }];
+    xlsxStyle.tituloYEncabezado(XS, ws, headers.length, 3);
+    ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: 3, c: headers.length - 1 } }) };
+    ws["!freeze"] = { xSplit: 0, ySplit: 4 };
+    const wb = XS.utils.book_new();
+    XS.utils.book_append_sheet(wb, ws, "No validadas");
+    const buf = XS.write(wb, { type: "buffer", bookType: "xlsx" });
     const base = downloadName(`Liberar cupo ${data.client.name} ${data.label || data.period}`) || "liberar_cupo";
     res.writeHead(200, {
       "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -11455,11 +11469,26 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="${base}.pdf"`, "cache-control": "no-store" });
       return res.end(buf);
     }
-    const aoa = [[titulo], [], columnas].concat(filas);
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Detalle");
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    // Mismo estilo (navy/blanco, título, anchos) que el resto de los reportes -
+    // antes esto era un aoa_to_sheet crudo sin ancho de columna ni encabezado
+    // pintado (ni formato de moneda, aunque el front ya mandaba moneyCols), se
+    // veía "de Excel sin tocar" y con celdas recortadas.
+    const XS = XLSXStyle;
+    const ncols = columnas.length;
+    const aoa = [[titulo], [`${filas.length} fila(s)`], [], columnas].concat(filas);
+    const ws = XS.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = columnas.map((h, i) => {
+      let w = String(h || "").length;
+      for (const f of filas) w = Math.max(w, String(f[i] == null ? "" : f[i]).length);
+      return { wch: Math.max(10, Math.min(50, w + 2)) };
+    });
+    xlsxStyle.tituloYEncabezado(XS, ws, ncols, 3);
+    moneyCols.forEach((c) => { if (c < ncols) xlsxStyle.styleMoneyColumn(XS, ws, c, 4, 4 + filas.length); });
+    ws["!autofilter"] = { ref: XS.utils.encode_range({ s: { r: 3, c: 0 }, e: { r: 3, c: ncols - 1 } }) };
+    ws["!freeze"] = { xSplit: 0, ySplit: 4 };
+    const wb = XS.utils.book_new();
+    XS.utils.book_append_sheet(wb, ws, "Detalle");
+    const buf = XS.write(wb, { type: "buffer", bookType: "xlsx" });
     res.writeHead(200, { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="${base}.xlsx"`, "cache-control": "no-store" });
     return res.end(buf);
   }
