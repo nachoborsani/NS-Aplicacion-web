@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
 const XLSX = require("xlsx");
 const XLSXStyle = require("xlsx-js-style"); // solo para el Excel con estilo del reporte
 const xlsxStyle = require("./xlsx_style"); // estilo compartido (navy/blanco) para todos los Excel
@@ -2741,9 +2742,36 @@ function staleWorkerTask(t, nowMs) {
 }
 
 // ---------- Helpers ----------
+// ---- Compresión ----
+// El JSON del dashboard de un cliente son 1,1 MB por mes y se piden dos al abrir
+// cada centro: medido, 2,6 de los 4,2 segundos que tarda en cargar. Nada se
+// comprimía (ni el JSON ni el app.js de 780 KB). Con gzip eso baja a menos de la
+// décima parte y no cambia una línea del resto del código: cada respuesta mira si
+// el navegador lo acepta y, si el cuerpo es chico, lo manda tal cual.
+const GZIP_DESDE = 1024;                 // menos que esto no vale la pena
+function aceptaGzip(res) { return !!(res && res._gzipOk); }
+function enviarComprimido(res, code, headers, cuerpo, tipo) {
+  const buf = Buffer.isBuffer(cuerpo) ? cuerpo : Buffer.from(String(cuerpo), "utf8");
+  const h = Object.assign({}, headers);
+  if (aceptaGzip(res) && buf.length >= GZIP_DESDE && COMPRIMIBLE.test(String(tipo || h["content-type"] || ""))) {
+    let z = null;
+    try { z = zlib.gzipSync(buf, { level: 6 }); } catch { z = null; }
+    if (z && z.length < buf.length) {
+      h["content-encoding"] = "gzip";
+      h["vary"] = h["vary"] ? h["vary"] + ", Accept-Encoding" : "Accept-Encoding";
+      res.writeHead(code, h);
+      res.end(z);
+      return;
+    }
+  }
+  res.writeHead(code, h);
+  res.end(buf);
+}
+// Solo texto: las imágenes y los PDF ya vienen comprimidos y volver a pasarlos por
+// gzip es gastar CPU para agrandarlos.
+const COMPRIMIBLE = /json|javascript|text\/|xml|svg/i;
 function json(res, code, obj) {
-  res.writeHead(code, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-  res.end(JSON.stringify(obj));
+  enviarComprimido(res, code, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }, JSON.stringify(obj));
 }
 function downloadName(value) {
   return String(value || "reporte")
@@ -5979,8 +6007,7 @@ function sendFile(res, filePath) {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { "content-type": contentTypes[ext] || "application/octet-stream", "cache-control": "no-store" });
-    res.end(data);
+    enviarComprimido(res, 200, { "content-type": contentTypes[ext] || "application/octet-stream", "cache-control": "no-store" }, data);
   });
 }
 
@@ -6005,6 +6032,8 @@ function filtrarFilasNomenclador(rows, url) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Se anota en la respuesta (no en una variable global: hay pedidos en paralelo).
+  res._gzipOk = /gzip/i.test(String(req.headers["accept-encoding"] || ""));
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const p = url.pathname;
 
@@ -6260,6 +6289,10 @@ const server = http.createServer(async (req, res) => {
       tokenFromEnv: !!String(process.env.NS_WORKER_TOKEN || process.env.WORKER_API_TOKEN || "").trim(),
       workers,
       tasks,
+      // Por donde va la corrida de bandejas (la de las 20:00 o la del boton). No
+      // es una tarea del worker, asi que sin esto la pantalla decia "inactivo"
+      // mientras el server estaba recorriendo diez clientes.
+      bandeja: (() => { const st = loadBandejaRefresco(); return { paso: st.paso || "", pasoAt: st.pasoAt || "" }; })(),
     });
   }
   // Horario de la automatización del server (editable). El server lo lee cada pocos
@@ -8900,6 +8933,21 @@ const server = http.createServer(async (req, res) => {
     saveBandejaRefresco(st);
     return json(res, 200, { ok: true, pedidoAt: st.pedidoAt });
   }
+  // La corrida de bandejas avisa por donde va ("3/10 · CIMA: transmitiendo…").
+  // Es solo informativo: se guarda con su hora y la pantalla lo muestra si es
+  // reciente. A proposito no toca "corriendo": las corridas del timer no ackean
+  // y dejarian el estado pegado.
+  if (p === "/api/bandeja/refresco/paso" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin" && me.role !== "operador") return json(res, 403, { error: "sin permiso" });
+    const b = await readBody(req);
+    const st = loadBandejaRefresco();
+    st.paso = String((b && b.paso) || "").slice(0, 160);
+    st.pasoAt = new Date().toISOString();
+    saveBandejaRefresco(st);
+    return json(res, 200, { ok: true });
+  }
   if (p === "/api/bandeja/refresco/estado" && req.method === "GET") {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
@@ -8919,6 +8967,7 @@ const server = http.createServer(async (req, res) => {
       corriendoAt: st.corriendoAt || null, corriendoStale,
       slugs: Array.isArray(st.slugs) ? st.slugs : [],
       forzarTransmision: !!st.forzarTransmision,
+      paso: st.paso || "", pasoAt: st.pasoAt || "",
     });
   }
   // La PC avisa que arrancó (corriendo=true) o que terminó (ack del pedido).
@@ -11742,8 +11791,7 @@ const server = http.createServer(async (req, res) => {
       html = html
         .replace('href="/styles.css"', 'href="/styles.css?v=' + ASSET_VER + '"')
         .replace('src="/app.js"', 'src="/app.js?v=' + ASSET_VER + '"');
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-      res.end(html);
+      enviarComprimido(res, 200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }, html);
     });
     return;
   }
