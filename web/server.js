@@ -12329,6 +12329,12 @@ function ensureOrlSeed() {
       // el repo); hasta que esté, el informe sale con el nombre y la matrícula.
       { id: "mc-loughlin-mario", nombre: "Dr. Mario J. Mc Loughlin", matricula: "CCPM · MN 53698",
         modelos: ["eco-doppler-cuello", "eco-doppler-venoso-mmss"], clientes: CAB },
+      // Grupo Justo Salud. Firma y matricula sacadas de un informe de ECG suyo
+      // (Cardozo, ago/2026). Por ahora solo la consulta con ECG, que es lo que
+      // se lo vio firmar: es el 39 de sus 123 informes pendientes. Si tambien
+      // firma Holter, presurometria o los ecodoppler, se le suman esos modelos.
+      { id: "cameselle-mario", nombre: "Dr. Mario Cameselle", matricula: "M.P. 29982 · M.N. 70413",
+        modelos: ["consulta-570129"], clientes: ["st-ignacio"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
