@@ -2104,6 +2104,27 @@ function plantillaInformeCabeceraWeb(item){
   var base = lista[informeCabeceraHash(item || {}) % lista.length] || lista[0];
   return Object.assign({}, base, { genero: genero });
 }
+function informeCabeceraErrorVisible(msg){
+  msg = String(msg || '').trim();
+  if (!msg) return 'No se pudo crear el informe.';
+  if (/Tipo de tarea no soportado|no soportado|not supported/i.test(msg)) return 'El server PAMI todavía no está actualizado para crear informes.';
+  if (/No module named|ModuleNotFound|pami_informes_cabecera/i.test(msg)) return 'Al server PAMI le falta actualizar el bot de informes.';
+  if (/usuario\/clave|usuario y clave|credencial/i.test(msg)) return 'Falta revisar el usuario o la clave PAMI del cliente.';
+  return msg;
+}
+function marcarInformeCabeceraError(btn, msg){
+  var texto = informeCabeceraErrorVisible(msg);
+  if (btn){
+    btn.disabled = false;
+    btn.textContent = '⚠';
+    btn.title = texto;
+    btn.classList.add('danger');
+    var tr = btn.closest ? btn.closest('tr') : null;
+    var estado = tr && tr.children ? tr.children[4] : null;
+    if (estado) estado.innerHTML = '<span style="color:#dc2626;font-weight:800">Error</span><br><span style="color:var(--text-2);font-size:11px">' + esc(texto).slice(0, 90) + '</span>';
+  }
+  nsAlert(texto, { titulo:'No se pudo crear el informe' });
+}
 async function crearInformeCabeceraDesdeDetalle(idx, btn){
   var ctx = PEND_DETALLE_CTX || {};
   var item = (ctx.filas || [])[idx];
@@ -2128,8 +2149,7 @@ async function crearInformeCabeceraDesdeDetalle(idx, btn){
     if (btn){ btn.textContent = '⏳'; btn.title = 'En cola'; }
     seguirInformeCabeceraTarea(d.task.id, btn);
   }catch(e){
-    if (btn){ btn.disabled = false; btn.textContent = original || '📝'; btn.title = 'Crear informe'; }
-    nsAlert(e && e.message ? e.message : 'No se pudo enviar al worker.');
+    marcarInformeCabeceraError(btn, e && e.message ? e.message : 'No se pudo enviar al worker.');
   }
 }
 function seguirInformeCabeceraTarea(id, btn){
@@ -2151,9 +2171,7 @@ function seguirInformeCabeceraTarea(id, btn){
         mostrarResultadoTarea('crear-informe-cabecera', t);
         if (typeof loadClientMesCurso === 'function') setTimeout(function(){ loadClientMesCurso(); }, 1200);
       } else {
-        btn.textContent = '!';
-        btn.title = t.error || 'Error del worker';
-        btn.disabled = false;
+        marcarInformeCabeceraError(btn, t.error || 'Error del worker');
         mostrarResultadoTarea('crear-informe-cabecera', t);
       }
     }catch(e){}

@@ -1853,10 +1853,15 @@
      y el cartel tapado, sin entender que estaba esperando una respuesta. */
   #nsAskScrim{z-index:10040}
   #nsAskModal{z-index:10050}
+  #taskResScrim{z-index:10020}
+  #taskResModal{z-index:10030}
   /* Para modales con TABLA de datos (detalle de pacientes, OMEs por vencer…):
      680px recorta las últimas columnas. Ancho cómodo pero siempre dentro del
      viewport, y el modal sigue centrado por la regla de arriba. */
   .modal.xwide{width:1060px}
+  #pendDetalleModal{width:min(1320px,calc(100vw - 48px));max-height:calc(100vh - 24px)}
+  #pendDetalleModal .modal-body{padding:16px 18px}
+  #pendDetalleModal .modal-table-scroll{max-height:min(72vh,720px)}
   .modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
   .modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)}
   .modal-head h3{margin:0;font-size:15.5px}
