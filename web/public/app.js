@@ -600,9 +600,28 @@ async function loadInformesConfig(){
 function llenarCentros(){
   var sel = document.getElementById('infCentro'); if (!sel) return;
   var prev = sel.value;
-  var clientes = INFORMES_CFG.clientes || [];
-  sel.innerHTML = clientes.map(function(c){ return opt(c.slug, c.name); }).join('') || '<option value="">(sin clientes)</option>';
+  var clientes = (INFORMES_CFG.clientes || []).filter(function(c){
+    // El operador de NS solo puede generar en los centros donde el admin le
+    // habilitó Informes (la herramienta es una sola pantalla y el centro se
+    // elige acá, así que el recorte tiene que estar en el selector).
+    if (ME && ME.role === 'operador' && Array.isArray(ME.clientes) && ME.clientes.length) {
+      return modulosClienteDe(c.slug).indexOf('informes') >= 0;
+    }
+    return true;
+  });
+  // Se arranca SIN elegir: los médicos y las prácticas dependen del centro, así
+  // que generar sin elegirlo no significa nada. Se autoselecciona solo para los
+  // roles atados a UN centro (el dueño y su recepción), donde no hay nada que
+  // elegir; el operador de NS elige siempre, aunque hoy tenga un solo centro
+  // habilitado — la herramienta es una sola y tiene que quedar explícito sobre
+  // qué centro está trabajando.
+  var rolDeUnCentro = !!(ME && (ME.role === 'clinica' || ME.role === 'operador_clinica'));
+  var unico = clientes.length === 1 && rolDeUnCentro;
+  sel.innerHTML = (clientes.length
+    ? (unico ? '' : '<option value="">— Elegí un centro —</option>') + clientes.map(function(c){ return opt(c.slug, c.name); }).join('')
+    : '<option value="">(sin clientes)</option>');
   if (prev && clientes.some(function(c){ return c.slug === prev; })) sel.value = prev;
+  else if (!unico) sel.value = '';
   onCentroChange(true);
 }
 // Un médico de cabecera (Scheffelaar/Dubesarky) no es una clínica: la cascada
@@ -641,13 +660,18 @@ function onCentroChange(keep){
   if (prev && esps.indexOf(prev) >= 0) sel.value = prev;
   // Centro sin ningún médico asignado: no hay nada que generar, y conviene
   // decirlo en vez de dejar el formulario vacío sin explicación.
+  // Dos motivos para no mostrar el formulario, cada uno con su explicación:
+  // todavía no eligió centro, o el centro elegido no tiene médicos asignados.
   var sinMed = document.getElementById('infSinMedicosAviso');
-  var mostrarAviso = !!slug && !esps.length;   // sin centro elegido todavía no hay nada que avisar
+  var faltaCentro = !slug;
+  var faltanMedicos = !!slug && !esps.length;
+  var ocultarForm = faltaCentro || faltanMedicos;
   if (sinMed){
-    sinMed.style.display = mostrarAviso ? '' : 'none';
-    if (mostrarAviso) sinMed.textContent = 'Este centro todavía no tiene médicos asignados a ninguna práctica, así que no se pueden generar informes para él. Se asignan en Configuración → Médicos.';
+    sinMed.style.display = ocultarForm ? '' : 'none';
+    if (faltaCentro) sinMed.textContent = 'Elegí el centro para el que vas a generar el informe: las prácticas y los médicos que firman dependen de él.';
+    else if (faltanMedicos) sinMed.textContent = 'Este centro todavía no tiene médicos asignados a ninguna práctica, así que no se pueden generar informes para él. Se asignan en Configuración → Médicos.';
   }
-  if (resto) resto.style.display = mostrarAviso ? 'none' : '';
+  if (resto) resto.style.display = ocultarForm ? 'none' : '';
   onEspecialidadChange(keep);
 }
 function onEspecialidadChange(keep){
@@ -1374,12 +1398,20 @@ function clientesVisiblesPara(u, clientes){
 // Liberar cupo), ya re-filtrada por el usuario EFECTIVO (ME) - así el modo
 // espejo muestra exactamente lo que ese usuario vería, no la lista completa
 // que le llega a la sesión real del admin.
-async function clientesParaSelector(){
+// `herramienta` (opcional: informes/cabina/omeweb/padron/liberarcupo): para el
+// operador de NS, el selector de una herramienta solo ofrece los centros donde
+// el admin le habilitó ESA herramienta. Sin esto, el selector mostraba todos sus
+// centros y podía abrir la herramienta en uno donde no le corresponde.
+async function clientesParaSelector(herramienta){
   try {
     var r = await fetch('/api/clientes');
     var raw = await r.json();
     var list = Array.isArray(raw) ? raw : (raw && raw.clients) || [];
-    return clientesVisiblesPara(ME, list);
+    var out = clientesVisiblesPara(ME, list);
+    if (herramienta && ME && ME.role === 'operador' && Array.isArray(ME.clientes) && ME.clientes.length) {
+      out = out.filter(function(c){ return modulosClienteDe(c.slug).indexOf(herramienta) >= 0; });
+    }
+    return out;
   } catch (e) { return []; }
 }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -3677,18 +3709,29 @@ var MENU_HERRAMIENTAS_OPERADOR = [
   ['navInformes', 'informes'], ['navCabina', 'cabina'], ['navOmeWeb', 'omeweb'],
   ['navLiberarCupo', 'liberarcupo'], ['navPadron', 'padron'],
 ];
+// Qué herramientas ve en el menú: la UNIÓN de las que tiene habilitadas en sus
+// clientes. La herramienta es una pantalla suelta y elige el centro adentro, con
+// su propio selector — NO depende del cliente que tenga abierto. Se probó atarla
+// al cliente activo y no sirvió: el menú se rehacía a cada rato (parecía un
+// refresco constante) y obligaba a entrar a un cliente antes de poder trabajar.
+function herramientasHabilitadasOperador(){
+  var slugs = (ME && Array.isArray(ME.clientes)) ? ME.clientes : [];
+  // Operador sin lista de clientes = ve todos: no hay con qué acotar, así que
+  // le quedan todas las herramientas del catálogo (como fue siempre).
+  if (!slugs.length) return MENU_HERRAMIENTAS_OPERADOR.map(function(p){ return p[1]; });
+  var vistas = {};
+  slugs.forEach(function(s){ modulosClienteDe(s).forEach(function(k){ vistas[k] = 1; }); });
+  return Object.keys(vistas);
+}
 function renderMenuHerramientasOperador(){
   if (!(ME && ME.role === 'operador')) return;
-  var mods = ACTIVE_CLIENT ? modulosClienteDe(ACTIVE_CLIENT.slug) : [];
+  var mods = herramientasHabilitadasOperador();
   MENU_HERRAMIENTAS_OPERADOR.forEach(function(par){
     var el = document.getElementById(par[0]);
     if (!el) return;
     var habilitada = mods.indexOf(par[1]) >= 0;
     el.style.display = habilitada ? '' : 'none';
-    // El ítem abre la herramienta COMO SECCIÓN del cliente activo (setClientSection
-    // ya preselecciona el cliente, le esconde el selector y deja el hash listo
-    // para el F5). Ojo: no alcanza con go(), que la abriría suelta.
-    el.onclick = habilitada ? function(){ setClientSection(par[1]); return false; } : null;
+    el.onclick = habilitada ? function(){ go(par[1], el); return false; } : null;
   });
   acomodarSeccionHerramientas();   // esconde el rótulo y la caja si no quedó ninguna
 }
@@ -5390,14 +5433,27 @@ function modeloParaPracticaRow(practica){
   var modelos = INFORMES_CFG.modelos || [];
   var cod = codigoDePractica(practica);
   if (cod){
-    var porCod = modelos.filter(function(m){ return String(m.codigoPractica || '') === cod; });
+    // Ojo con los códigos COMPUESTOS: los modelos de ORL valen por varias
+    // prácticas juntas ("717111 + 717122"), y la fila de la bandeja trae una
+    // sola. Hay que partir por "+" y ver si alguna coincide, si no el cerumen
+    // se quedaba sin modelo.
+    var porCod = modelos.filter(function(m){
+      return String(m.codigoPractica || '').split('+').map(function(s){ return s.trim(); }).indexOf(cod) >= 0;
+    });
     if (porCod.length === 1) return porCod[0];
     // Varios modelos con el mismo código (ej. PAMI usa 180114 para vesical Y
     // próstata): desempata por el nombre de la fila.
     if (porCod.length > 1) return _mejorModeloPorNombre(practica, porCod) || porCod[0];
+    // Código conocido SIN modelo (ej. 607158, videoendoscopia digestiva): esa
+    // práctica no la informamos nosotros. Antes se caía al match por nombre y
+    // elegía cualquier cosa que compartiera una palabra: una endoscopia terminó
+    // ofreciendo "Extracción de tapón de cerumen" (comparten "extracción",
+    // "cuerpo extraño", "tratamiento") con el botón de subirlo a PAMI al lado.
+    // Sin modelo no hay informe que crear: mejor nada que el equivocado.
+    return null;
   }
-  // Sin código o código sin modelo: matchea por nombre (los modelos de ecografía
-  // tienen codigoPractica vacío pero el estudio identifica la práctica).
+  // Sin código en la fila (raro): último recurso por nombre. Ya no es el caso
+  // de las ecografías, que desde el 12/09 tienen todas su código cargado.
   return _mejorModeloPorNombre(practica, modelos);
 }
 function faltanInformesDe(panelId){
@@ -5426,12 +5482,22 @@ function accionCrearInforme(panelId){
     if (omeDig && MESCURSO_OMES_GEN[omeDig]) {
       return '<span class="mc-generado" style="color:#16a34a;font-weight:600;font-size:12px;white-space:nowrap" title="Ya se generó un informe para esta OME (subiéndose o subido). Cuando la bandeja se refresque, sale de la lista.">✅ Generado</span>';
     }
-    var puedeCrear = !!modeloParaPracticaRow(x.practica);
+    // Hacen falta las DOS cosas: modelo para esa práctica y un médico de este
+    // centro que la firme. Si falta alguna no se ofrece crear (antes se ofrecía
+    // igual: una videoendoscopia proponía "tapón de cerumen" firmado por
+    // cualquiera, con el botón de subirlo a PAMI al lado).
+    var puedeCrear = !!informeCreable(x.practica);
     var btn = '';
     if (puedeCrear) {
       btn += '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
       // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
       if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
+    } else {
+      // Decir POR QUÉ no se puede, así el admin sabe qué falta configurar.
+      var _m = modeloParaPracticaRow(x.practica);
+      btn += '<span class="lote-muted" title="' + (_m
+        ? 'Ningún médico de este centro tiene asignada esta práctica. Se asigna en Configuración → Informes → Médicos.'
+        : 'No tenemos modelo de informe para esta práctica.') + '">' + (_m ? 'sin médico' : 'sin modelo') + '</span>';
     }
     // "Desestimar": disponible siempre que haya OME (para poder marcarlo), aunque
     // no exista modelo para la práctica.
@@ -5584,6 +5650,7 @@ async function crearYSubirSeleccionadosPanel(panelId){
     var m = modeloParaPracticaRow(x.practica);
     if (!m){ saltados++; continue; }   // sin modelo no se puede crear
     var op = opcionesModelo(m);
+    if (!op.medicos.length){ saltados++; continue; }   // ni sin médico que la firme
     if (op.haceFalta){
       var ok = await modalOpcionesInforme(x, m, op, true, null);   // abre modal, espera confirmar/cancelar
       if (ok){ hechos++; MESCURSO_OMES_GEN[omeDig] = 1; } else { saltados++; }
@@ -5599,24 +5666,31 @@ async function crearYSubirSeleccionadosPanel(panelId){
 }
 function opcionesModelo(m){
   var slug = (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '';
-  // Un médico pertenece a ESTE centro si no tiene clientes (global) o si lo
-  // incluye. Antes el desplegable mostraba médicos de TODOS los centros.
-  var delCentro = function(md){ return !Array.isArray(md.clientes) || md.clientes.length === 0 || (slug && md.clientes.indexOf(slug) >= 0); };
-  // Los resultados también se acotan al centro: hay prácticas que cada centro
-  // redacta distinto (el venoso de MMII). Sin centros = para todos, como siempre.
+  // Los resultados se acotan al centro: hay prácticas que cada centro redacta
+  // distinto (el venoso de MMII). Un resultado sin centros vale para todos.
+  var delCentro = function(d){ return !Array.isArray(d.clientes) || d.clientes.length === 0 || (slug && d.clientes.indexOf(slug) >= 0); };
   var presets = (INFORMES_CFG.descripciones || []).filter(function(d){ return scopeAplica(d.modelos, m.key) && delCentro(d); });
-  var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return scopeAplica(md.modelos, m.key) && delCentro(md); });
-  // Si NINGÚN médico del centro tiene cargada esta práctica, abajo se ofrecen
-  // igual todos los del centro para no dejar el selector vacío. Pero eso hay que
-  // decirlo: es como termina firmando un ecodoppler de vasos de cuello el
-  // otorrino. `sinMedicoDelModelo` hace que el modal avise y no preseleccione a
-  // nadie, y que se abra siempre (aunque haya un solo médico y ningún campo).
-  var sinMedicoDelModelo = !medicos.length;
-  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []).filter(delCentro); // sin médico propio del modelo → los del centro
-  if (!medicos.length) medicos = (INFORMES_CFG.medicos || []); // fallback: ninguno del centro → todos, para no dejar el selector vacío
+  // Médicos: SOLO los asignados a ESTE centro para ESTA práctica (mismo criterio
+  // que el resto del sistema, ver medicoHabilitado). Antes había dos fallbacks
+  // -"si ninguno tiene la práctica, ofrecé todos los del centro" y "si no, todos
+  // los del sistema"- que existían para no dejar el selector vacío. El resultado
+  // era peor que el problema: terminaba firmando un ecodoppler de cuello el
+  // otorrino, o un médico de otro centro. Si no hay médico, no se crea el
+  // informe (el botón queda deshabilitado, ver informeCreable).
+  var medicos = (INFORMES_CFG.medicos || []).filter(function(md){ return medicoHabilitado(md, slug, m.key); });
   var camposReq = (m.campos || []).filter(function(c){ return c.requerido; });
-  return { presets: presets, medicos: medicos, camposReq: camposReq, sinMedicoDelModelo: sinMedicoDelModelo,
-    haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 || sinMedicoDelModelo };
+  return { presets: presets, medicos: medicos, camposReq: camposReq,
+    haceFalta: presets.length > 1 || medicos.length !== 1 || camposReq.length > 0 };
+}
+// ¿Se puede crear el informe de esta fila? Hacen falta las dos cosas: un modelo
+// para esa práctica y al menos un médico asignado a este centro para firmarla.
+// Sin eso no se ofrece ni "Crear" ni "Crear y subir" — no hay informe posible y
+// lo que salía era un informe de otra práctica firmado por cualquiera.
+function informeCreable(practica){
+  var m = modeloParaPracticaRow(practica);
+  if (!m) return null;
+  var op = opcionesModelo(m);
+  return op.medicos.length ? m : null;
 }
 // Faltantes de la MISMA visita (mismo paciente + mismo turno) que la fila x, con
 // OME y no desestimados/ya generados. Sirve para que un mismo informe cubra las
@@ -5644,6 +5718,10 @@ async function crearYSubirInforme(panelId, idx, btn){
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ await nsConfirm('No hay un modelo cargado para esa práctica.', { titulo:'Sin modelo', okLabel:'Entendido', cancelLabel:'' }); return; }
   var op = opcionesModelo(m);
+  if (!op.medicos.length){
+    await nsConfirm('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.', { titulo:'Sin médico para esta práctica', okLabel:'Entendido', cancelLabel:'' });
+    return;
+  }
   var visita = faltantesDeVisita(panelId, x);
   if (op.haceFalta || visita.length > 1){ modalOpcionesInforme(x, m, op, true, btn, visita); return; }
   var payload = payloadInformeDeFila(x);
@@ -5706,6 +5784,7 @@ async function crearInformeDirecto(panelId, idx, btn){
   var m = modeloParaPracticaRow(x.practica);
   if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return; }
   var op = opcionesModelo(m);
+  if (!op.medicos.length){ nsAlert('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.'); return; }
   if (op.haceFalta){ modalOpcionesInforme(x, m, op, false, btn); return; }
   var payload = payloadInformeDeFila(x);
   if (!payload) return;
@@ -5767,12 +5846,10 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
   // centro (op.medicos ya viene filtrado); si no, el primero del centro.
   var medDef = loteMedicoParaModelo(m.key, '', (ACTIVE_CLIENT && ACTIVE_CLIENT.slug) || '');
   if (!op.medicos.some(function(md){ return md.id === medDef; })) medDef = (op.medicos[0] && op.medicos[0].id) || '';
-  // Nadie cargado para esta práctica: que NO venga elegido de fábrica. Firmar es
-  // lo último que conviene que salga por defecto.
-  if (op.sinMedicoDelModelo) medDef = '';
   var presOpts = op.presets.map(function(p, i){ return '<option value="' + esc(p.id) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(p.nombre) + '</option>'; }).join('');
-  var medOpts = (op.sinMedicoDelModelo ? '<option value="" selected>— Elegí quién firma —</option>' : '')
-    + op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('')
+  // Los médicos que llegan acá ya son los de ESTE centro para ESTA práctica (si
+  // no hubiera ninguno, el informe no se ofrece: ver informeCreable).
+  var medOpts = op.medicos.map(function(md){ return '<option value="' + esc(md.id) + '"' + (md.id === medDef ? ' selected' : '') + '>' + esc(md.nombre) + '</option>'; }).join('')
     // Última y sin `selected`: que el informe sin firma sea una decisión y no lo
     // que sale por descarte.
     + '<option value="__sin_firma__">— Sin firma (la firma el médico a mano) —</option>';
@@ -5815,7 +5892,6 @@ function modalOpcionesInforme(x, m, op, subir, btn, visita){
         (!sexoCampo ? '<div class="mc-inf-field"><label>Sexo del paciente' + (x.sexo ? ' <span class="mc-inf-hint">· ' + (x.sexoOrigen === 'credencial' ? 'según la credencial' : 'deducido del nombre, revisalo') + '</span>' : '') + '</label><select id="mc-inf-sexo"><option value="">— Sin especificar —</option><option value="Masculino"' + (String(x.sexo || '').toLowerCase().indexOf('masc') === 0 ? ' selected' : '') + '>Masculino</option><option value="Femenino"' + (String(x.sexo || '').toLowerCase().indexOf('fem') === 0 ? ' selected' : '') + '>Femenino</option></select></div>' : '') +
         (op.presets.length > 1 ? '<div class="mc-inf-field"><label>Resultado del informe</label><select id="mc-inf-preset">' + presOpts + '</select></div>' : '') +
         '<div class="mc-inf-field"><label>Médico que firma *</label>'
-          + (op.sinMedicoDelModelo ? '<div class="mc-inf-aviso">⚠ Ningún médico de este centro tiene cargada esta práctica, así que están todos. Fijate bien quién firma — o asignásela en Configuración → Informes.</div>' : '')
           + '<select id="mc-inf-medico">' + medOpts + '</select></div>' +
         visitaHtml +
         restoCampos.map(campoHtml).join('') +
@@ -10044,7 +10120,7 @@ var PADRON_SEARCH_TIMER = null;
 async function loadPadronView(){
   var sel = document.getElementById('padCliente');
   if (sel && !sel.options.length){
-    var list = await clientesParaSelector();
+    var list = await clientesParaSelector('padron');
     list.forEach(function(c){
       var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o);
     });
@@ -10645,7 +10721,7 @@ function cabMatchBusca(it){
 async function loadCabinaView(){
   var sel = document.getElementById('cabCliente');
   if (sel && !sel.options.length){
-    var list = await clientesParaSelector();
+    var list = await clientesParaSelector('cabina');
     // Solo los clientes que usan el sistema de informes. Scheffelaar y
     // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
     // cargan a mano, más adelante entran solas varias veces por día.
@@ -10964,7 +11040,7 @@ async function loadOmeWebView(){
   var sel = document.getElementById('omeCliente');
   if (sel && !sel.options.length){
     try {
-      var list = await clientesParaSelector();
+      var list = await clientesParaSelector('omeweb');
       sel.innerHTML = list.map(function(c){ return '<option value="' + esc(c.slug) + '">' + esc(c.name || c.slug) + '</option>'; }).join('');
       try {
         var last = localStorage.getItem('ns-ome-cliente') || '';
@@ -11188,7 +11264,7 @@ async function loadLiberarCupoView(){
     // centro), no tiene sentido mostrarle un selector - se ve como una
     // herramienta de NS con un cliente de más, en vez de "el liberar cupo de
     // este centro". Se oculta y se deja autoseleccionado.
-    var list = await clientesParaSelector();
+    var list = await clientesParaSelector('liberarcupo');
     list.forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
     var wrap = document.getElementById('lcClienteWrap');
     if (wrap) wrap.style.display = (list.length <= 1) ? 'none' : '';
