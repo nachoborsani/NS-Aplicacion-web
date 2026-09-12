@@ -2762,17 +2762,7 @@ function removeClientReportDraft(){
 // que acordarse de tocarla una por una. Es a nivel ROL a propósito: si mañana
 // se le habilita una pantalla nueva con montos, no se filtra por olvido.
 var ROLES_SIN_VALORES = ['operador_clinica', 'operador'];
-function veValoresCliente(){
-  if (ME && ROLES_SIN_VALORES.indexOf(ME.role) >= 0) return false;
-  // Consultorio de pago fijo (bandejaCup, ej. Caballito): en SU dashboard del
-  // mes en curso no van importes para nadie, ni para el admin. Lo que cobra no
-  // sale de valorizar práctica por práctica, así que ese número sería engañoso.
-  // Se acota a esa sección a propósito: honorarios, reportes y facturación del
-  // mismo centro siguen mostrando plata como siempre.
-  if (typeof CLIENT_SECTION !== 'undefined' && CLIENT_SECTION === 'mescurso'
-      && typeof ACTIVE_CLIENT !== 'undefined' && ACTIVE_CLIENT && ACTIVE_CLIENT.bandejaCup) return false;
-  return true;
-}
+function veValoresCliente(){ return !(ME && ROLES_SIN_VALORES.indexOf(ME.role) >= 0); }
 function moneyFmt(n){
   if (!veValoresCliente()) return '';
   var value = Number(n || 0);
@@ -7106,16 +7096,17 @@ async function loadClientMesCurso(){
   // server.js. Caballito Pediátrico es el primer caso: pago fijo, sin
   // valorización, pero NO debe "entrar" a médico de cabecera.
   //
-  // El tablero de bandejas (validar / informar / transmitir, un panel por mes)
-  // es SOLO para el médico de cabecera: es capitado, ahí no hay nada que
-  // valorizar. Un consultorio de pago fijo (bandejaCup, ej. Caballito) usa el
-  // MISMO tablero que el resto de los consultorios — las 4 tarjetas de siempre,
-  // con las cantidades — nada más que sin importes, porque el pago no sale de
-  // valorizar cada práctica (ver veValoresCliente).
-  // Antes dependía de quién miraba: al que no ve valores (el operador) se le
-  // daba el tablero de bandejas y al admin el valorizado, así que el mismo
-  // centro se veía de dos formas distintas según el rol.
-  if (ACTIVE_CLIENT.tipo === 'med_cabecera') return loadMedCabMesCurso();
+  // Ese tablero es para EL QUE TRABAJA las bandejas: validar / informar /
+  // transmitir, sin plata al lado. Quién lo ve no lo decide el cliente sino el
+  // permiso: al que NO ve valores (operador y operador de clínica) el tablero
+  // valorizado no le sirve — le quedarían las tarjetas con los importes en
+  // blanco. El que sí ve valores necesita lo contrario: comparar este cliente
+  // con el resto y ver la facturación.
+  // Un médico de cabecera va al tablero de bandejas para todos: es capitado, ahí
+  // no hay nada que valorizar.
+  var soloBandejas = ACTIVE_CLIENT.tipo === 'med_cabecera'
+    || (ACTIVE_CLIENT.bandejaCup && !veValoresCliente());
+  if (soloBandejas) return loadMedCabMesCurso();
   var slug = ACTIVE_CLIENT.slug;
   // OMEs que ya tienen informe generado (para ocultar "Crear/Crear y subir" aunque
   // la bandeja no esté refrescada). Fire-and-forget: los paneles se abren después.
