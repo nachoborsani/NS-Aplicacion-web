@@ -5899,11 +5899,13 @@ async function asegurarDetalleMes(tipo){
         MESCURSO_AUSENTES_JULIO = cur.ausentesRows || [];
         MESCURSO_POR_TRANSMITIR_JULIO = cur.porTransmitirRows || [];
         MESCURSO_FUERACORTE_JULIO = cur.fueraCorteRows || [];
+        MESCURSO_MODULOS_JULIO = mescMods(cur.modules);
       } else {
         MESCURSO_FALTAN_INFORMES_CERRADO = cur.missingInformeRows || [];
         MESCURSO_DEBITOS_CERRADO = cur.posiblesDebitosRows || [];
         MESCURSO_AUSENTES_CERRADO = cur.ausentesRows || [];
         MESCURSO_POR_TRANSMITIR_CERRADO = cur.porTransmitirRows || [];
+        MESCURSO_MODULOS_CERRADO = mescMods(cur.modules);
       }
     })();
   }
@@ -6948,10 +6950,10 @@ async function loadClientMesCurso(){
   var prev2 = mesCursoMesAntes(prev);   // el mes ANTES del "sin cerrar" (ej. junio)
   var results = await Promise.all([
     api('/api/clientes/' + encodeURIComponent(slug) + '/bandeja/resumen'),
-    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev) + '&sinDetalle=1'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev) + '&sinDetalle=1&compare=none'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/reportes'),
     api('/api/bandeja/refresco/estado'),
-    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2) + '&sinDetalle=1'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2) + '&sinDetalle=1&compare=none'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados'),
   ]);

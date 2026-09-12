@@ -5145,8 +5145,11 @@ function dashboardRowKey(row) {
 // pantalla del mes en curso solo se muestran los totales; el detalle recién hace
 // falta si alguien abre un desplegable, y para eso se vuelve a pedir con
 // detalle=1. Con ?sinDetalle=1 la respuesta baja a unos 20 KB.
+// Medido sobre Caballito agosto: de los 1.156 KB del mes, 527 son "modules" (el
+// desglose por modulo con su detalle) y el resto las listas de filas. Van todos:
+// la tarjeta muestra numeros, no detalle.
 const LISTAS_DETALLE = ["missingInformeRows", "ausentesRows", "posiblesDebitosRows",
-  "porTransmitirRows", "fueraCorteRows"];
+  "porTransmitirRows", "fueraCorteRows", "modules"];
 function sacarDetalleDashboard(data) {
   if (!data || typeof data !== "object") return data;
   const limpiar = (periodo) => {
