@@ -1,7 +1,10 @@
 "use strict";
 // Export del nomenclador del cliente (la vista resumida, ya filtrada por sus
 // módulos activos) a Excel o PDF, limpio para mandarle al cliente.
-const XLSX = require("xlsx");
+// xlsx-js-style (no "xlsx" a secas) para que los estilos de encabezado
+// sobrevivan al escribir el archivo - mismo look que el Reporte de cliente.
+const XLSX = require("xlsx-js-style");
+const xlsxStyle = require("./xlsx_style");
 
 function cleanType(v) { const t = String(v || "").trim(); return (!t || t === "0") ? "-" : t; }
 function scopeLabel(s) { return s === "internacion" ? "Internación" : s === "ambulatorio" ? "Ambulatorio" : "Otros"; }
@@ -43,6 +46,17 @@ function buildXlsx(client, label, rows) {
   }
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws["!cols"] = [{ wch: 9 }, { wch: 26 }, { wch: 10 }, { wch: 48 }, { wch: 16 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 14 }];
+  xlsxStyle.styleTitle(ws, "A1");
+  xlsxStyle.styleSubtitle(ws, "A2");
+  xlsxStyle.styleSubtitle(ws, "A3");
+  xlsxStyle.styleHeaderRow(XLSX, ws, 4, 10);
+  // Honorarios / Gastos / Total con formato moneda (antes salían como
+  // numero pelado, sin "$", aunque el PDF de al lado si los formatea).
+  xlsxStyle.styleMoneyColumn(XLSX, ws, 6, 5, aoa.length);
+  xlsxStyle.styleMoneyColumn(XLSX, ws, 7, 5, aoa.length);
+  xlsxStyle.styleMoneyColumn(XLSX, ws, 8, 5, aoa.length);
+  ws["!autofilter"] = { ref: "A5:J5" };
+  ws["!freeze"] = { xSplit: 0, ySplit: 5 };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Nomenclador");
   return XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
