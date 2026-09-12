@@ -129,6 +129,31 @@ function readRows(buffer) {
   return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: "" });
 }
 
+// AgendaPro exporta a veces como "Página web, con archivos": el .xls que se
+// descarga es solo un frameset (HTML con <frameset>/<link href="...files/...">)
+// que apunta a un archivo aparte (".files/sheet001.htm") donde está la tabla
+// de verdad. Si se sube ese .xls solo, XLSX no tira error: lo lee como si
+// fuera una hoja vacía (0 filas de datos), y el cruce sigue de largo
+// mostrando "todo en cero" como si no hubiera nada pendiente. Se detecta acá
+// para cortar con un mensaje claro en vez de un resultado silenciosamente
+// vacío.
+function esFramesetSinTabla(buffer) {
+  const texto = buffer.toString("utf8", 0, Math.min(buffer.length, 8192)).toLowerCase();
+  return /<frameset|\.files\//.test(texto);
+}
+function validarFilas(buffer, rows, etiqueta) {
+  if (esFramesetSinTabla(buffer)) {
+    throw new Error(
+      `El archivo de ${etiqueta} es un "frameset" (la página apunta a otro archivo .files con la tabla real, ` +
+      `pero ese .xls por sí solo no trae los datos). Volvé a exportarlo desde AgendaPro como Excel de una sola ` +
+      `hoja, o subí el archivo que sí tiene la tabla adentro.`
+    );
+  }
+  if (!rows || rows.length <= 1) {
+    throw new Error(`No se encontraron filas de datos en el archivo de ${etiqueta}. Revisá que sea el archivo correcto.`);
+  }
+}
+
 function estadoCodigo(rowsBand, codigo) {
   const filas = rowsBand.filter((b) => b.codigo === codigo);
   if (filas.length) {
@@ -144,6 +169,7 @@ function estadoCodigo(rowsBand, codigo) {
 // Filas de la bandeja cruda (Excel de PAMI) al shape interno del cruce.
 function bandDesdeExcel(bandejaBuffer) {
   const rows2 = readRows(bandejaBuffer);
+  validarFilas(bandejaBuffer, rows2, "bandeja de transmisión");
   const band = [];
   for (let i = 1; i < rows2.length; i++) {
     const r = rows2[i];
@@ -185,6 +211,7 @@ function bandDesdeMatcher(rows) {
 function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodigo }) {
   const valores = valorPorCodigo || new Map();
   const rows1 = readRows(agendaBuffer);
+  validarFilas(agendaBuffer, rows1, "Listado de consultas");
   const EXCLUIR_ESPECIALIDAD = new Set(["MEDICOS DE CABECERA PAMI"]);
   const cons = [];
   let excluidosCabecera = 0, excluidosParticular = 0;
@@ -203,6 +230,15 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       fecha: limpiar(r[0]), hora: limpiar(r[1]), especialidad, especialidadDisplay,
       practica: claveComp(r[25]),
     });
+  }
+  // Filas sí hay (pasó validarFilas), pero ninguna trajo beneficio (columna
+  // K vacía en todas): layout distinto al esperado, no un archivo sin
+  // consultas. Cortar acá en vez de seguir con un cruce vacío/engañoso.
+  if (!cons.length && !excluidosCabecera && !excluidosParticular) {
+    throw new Error(
+      "El Listado de consultas tiene filas pero ninguna trae número de beneficio en la columna esperada. " +
+      "Revisá que sea el archivo correcto (puede ser un export con columnas distintas a las de siempre)."
+    );
   }
 
   const band = bandejaBuffer ? bandDesdeExcel(bandejaBuffer) : bandDesdeMatcher(bandejaRows);
