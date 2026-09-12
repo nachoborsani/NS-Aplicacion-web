@@ -39,8 +39,34 @@
 const XLSX = require("xlsx");
 
 function soloDigitos(v) { return String(v == null ? "" : v).replace(/\D+/g, ""); }
+
+// Algunos exports de AgendaPro guardan el nombre con la codificación corrida:
+// los bytes UTF-8 de una tilde se vuelven a interpretar como Windows-1252 antes
+// de re-guardarlos como UTF-8 ("RAMÓN" -> "RAMÃ“N"). Esto rompe el matcheo por
+// nombre (el que salva los casos donde el beneficio no coincide dígito a
+// dígito con el de la bandeja). Se detecta y repara reconstruyendo los bytes
+// originales - si el resultado no decodifica limpio como UTF-8, no era este
+// tipo de corrupción y se deja el texto tal cual vino.
+const CP1252_ESPECIALES = {
+  0x20ac: 0x80, 0x201a: 0x82, 0x0192: 0x83, 0x201e: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87,
+  0x02c6: 0x88, 0x2030: 0x89, 0x0160: 0x8a, 0x2039: 0x8b, 0x0152: 0x8c, 0x017d: 0x8e,
+  0x2018: 0x91, 0x2019: 0x92, 0x201c: 0x93, 0x201d: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+  0x02dc: 0x98, 0x2122: 0x99, 0x0161: 0x9a, 0x203a: 0x9b, 0x0153: 0x9c, 0x017e: 0x9e, 0x0178: 0x9f,
+};
+function repararMojibakeCp1252(s) {
+  if (!s) return s;
+  const bytes = [];
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    if (cp <= 0xff) { bytes.push(cp); continue; }
+    if (CP1252_ESPECIALES[cp] != null) { bytes.push(CP1252_ESPECIALES[cp]); continue; }
+    return s; // caracter fuera de rango: no es esta corrupción, no tocar.
+  }
+  const arreglado = Buffer.from(bytes).toString("utf8");
+  return arreglado.includes("�") ? s : arreglado; // decodificó mal: no era esto.
+}
 function limpiar(v) {
-  return String(v == null ? "" : v)
+  return repararMojibakeCp1252(String(v == null ? "" : v))
     .replace(/&aacute;/g, "á").replace(/&eacute;/g, "é").replace(/&iacute;/g, "í")
     .replace(/&oacute;/g, "ó").replace(/&uacute;/g, "ú").replace(/&Uacute;/g, "Ú")
     .replace(/¿/g, "Ñ").replace(/\s+/g, " ").trim();
@@ -150,6 +176,7 @@ const MAPA_CODIGO_RAW = {
   "DOPPLER CARDÍACO": { codigo: "180301", nombre: "Ecodoppler Cardiaco" },
   "DOPPLER VASOS DE CUELLO": { codigo: "180607", nombre: "Ecodoppler vasos del cuello" },
   "MAPA": { codigo: "570120", nombre: "Presurometria / MAPA" },
+  "HOLTER": { codigo: "570121", nombre: "Holter cardiaco de 3 canales 24 hs" },
   "ERGOMETRIA": { codigo: "570124", nombre: "Ergometria" },
   "ESCLEROTERAPIA": { codigo: "487610", nombre: "Tto. esclerosante" },
   "ECO DOPPLER ARTERIAL DE MMII": { codigo: "180610", nombre: "Ecodoppler arterial MMII" },
