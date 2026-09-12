@@ -10397,8 +10397,11 @@ function srvRender(st){
     // durante una hora, acá decía "inactivo".
     var band = st && st.bandeja;
     var pasoFresco = band && band.paso && band.pasoAt && (Date.now() - Date.parse(band.pasoAt)) < 15*60*1000;
+    // Mientras corre manda "corriendo", aunque todavia no haya reportado por
+    // donde va: si no, una corrida en curso se muestra como "pedida".
+    if (band && band.corriendo && !pasoFresco) pasoFresco = true;
     if (pasoFresco){
-      h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.10);margin-bottom:16px;color:var(--text)">🔄 Recorriendo bandejas · <b>'+esc(band.paso)+'</b></div>';
+      h += '<div style="padding:10px 12px;border-radius:10px;background:rgba(217,119,6,.10);margin-bottom:16px;color:var(--text)">🔄 Recorriendo bandejas' + (band.paso ? ' · <b>'+esc(band.paso)+'</b>' : '') + '</div>';
     } else if (band && band.pendiente){
       // Pedido anotado y todavia sin arrancar: el refresco lo levanta un timer
       // del server, no el worker. Sin este cartel, apretar "Transmitir y

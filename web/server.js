@@ -6463,6 +6463,9 @@ const server = http.createServer(async (req, res) => {
         return {
           paso: st.paso || "", pasoAt: st.pasoAt || "",
           pendiente: !!st.pedidoAt && st.pedidoAt !== st.ackAt,
+          // Corriendo de verdad: el poller lo marca al arrancar y lo suelta al
+          // terminar. Vence a los 30 min por si la corrida murio en el medio.
+          corriendo: !!st.corriendo && !!st.corriendoAt && (Date.now() - Date.parse(st.corriendoAt)) < 30 * 60000,
           pedidoAt: st.pedidoAt || "",
           slugs: Array.isArray(st.slugs) ? st.slugs : [],
           transmite: !!st.forzarTransmision,
