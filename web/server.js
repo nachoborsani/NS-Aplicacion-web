@@ -11614,9 +11614,17 @@ const server = http.createServer(async (req, res) => {
         nombre: String(pac.nombre || "").trim(), practica: String(body.practicaTexto || body.estudio || "").trim(),
         fecha: String(pac.fecha || "").trim(),
       };
+      // `fecha` viaja en AAAA-MM-DD como la de los mails: el filtro Desde/Hasta
+      // compara texto, y guardarla DD/MM/AAAA —como llega del formulario— la deja
+      // siempre por debajo de cualquier "desde", asi que el informe no se veia.
+      const fechaIso = (() => {
+        const t = String(extract.fecha || "").trim();
+        const m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        return m ? `${m[3]}-${m[2]}-${m[1]}` : t.slice(0, 10);
+      })();
       const item = {
         id, filename, ext: ".pdf", stored, origen: "generado",
-        storedAt: new Date().toISOString(), fecha: extract.fecha,
+        storedAt: new Date().toISOString(), fecha: fechaIso,
         extract, match: matchearInforme(slug, extract),
         resuelto: { ome: omesUnicas[0], omes: omesUnicas, beneficio: extract.beneficio, por: me.username || me.name || "", at: new Date().toISOString(), todoTransmitido: false },
         error: null,
