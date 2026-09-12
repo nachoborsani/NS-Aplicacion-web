@@ -2270,6 +2270,15 @@ function informeCabeceraGenero(item){
     patricia:1, paula:1, petrona:1, pura:1, ramona:1, raquel:1, rita:1, rosa:1, rosalia:1,
     rosana:1, sara:1, silvia:1, sofia:1, soledad:1, sonia:1, stella:1, susana:1, teresa:1,
     teresita:1, valeria:1, victoria:1, violeta:1, vivian:1, yolanda:1, ysabel:1, zulema:1
+,
+    amalia:1, angelica:1, aurora:1, benita:1, bernarda:1, casimira:1, celestina:1, concepcion:1, dominga:1,
+    elvia:1, ercilia:1, estanislada:1, eugenia:1, eulalia:1, eustaquia:1, fermina:1, filomena:1, fortunata:1,
+    genoveva:1, gumersinda:1, herminia:1, honoria:1, hortensia:1, ignacia:1, jacinta:1, juliana:1, justina:1,
+    lastenia:1, leocadia:1, leticia:1, liboria:1, lucrecia:1, ludovica:1, lujan:1, marcelina:1, marciana:1,
+    matilde:1, maximina:1, melania:1, nidia:1, nieves:1, olimpia:1, otilia:1, palmira:1, paulina:1,
+    perpetua:1, primitiva:1, prudencia:1, ramonita:1, regina:1, remedios:1, rosario:1, rufa:1, rufina:1,
+    santina:1, saturnina:1, seferina:1, segunda:1, serafina:1, severina:1, sinforosa:1, telma:1, tomasa:1,
+    toribia:1, valentina:1, venancia:1, victorina:1, visitacion:1, zoraida:1
   };
   var masculinos = {
     abel:1, adolfo:1, alberto:1, alejandro:1, alfonso:1, alfredo:1, amado:1, andres:1, angel:1,
@@ -2286,6 +2295,14 @@ function informeCabeceraGenero(item){
     raul:1, reinaldo:1, ricardo:1, roberto:1, rodolfo:1, rodrigo:1, rogelio:1, rolando:1, roque:1,
     ruben:1, rufino:1, salvador:1, santiago:1, santos:1, sebastian:1, sergio:1, silvio:1, simon:1,
     teodoro:1, tomas:1, vicente:1, victor:1, walter:1
+,
+    abelardo:1, aldo:1, americo:1, atanasio:1, bartolome:1, casimiro:1, cirilo:1, clemente:1, cosme:1,
+    dionisio:1, eleuterio:1, epifanio:1, estanislao:1, eulogio:1, eusebio:1, evaristo:1, faustino:1, feliciano:1,
+    fermin:1, fidel:1, florentino:1, fructuoso:1, genaro:1, gumersindo:1, hilario:1, honorio:1, ismael:1,
+    jacobo:1, leoncio:1, leopoldo:1, lisandro:1, mamerto:1, marcial:1, maximo:1, narciso:1, natalio:1,
+    nicanor:1, olegario:1, ovidio:1, pantaleon:1, pastor:1, ponciano:1, procopio:1, remigio:1, rosendo:1,
+    saturnino:1, segundo:1, serafin:1, sixto:1, telmo:1, tiburcio:1, urbano:1, valentin:1, venancio:1,
+    wenceslao:1, zacarias:1
   };
   for (var i = tokens.length - 1; i >= 0; i--){
     if (femeninos[tokens[i]]) return 'F';
@@ -2403,6 +2420,22 @@ async function crearInformesSeleccionados(btn){
   var ctx = PEND_DETALLE_CTX || {};
   var idxs = pendSelCajas().filter(function(c){ return c.checked; }).map(function(c){ return Number(c.value); });
   if (!idxs.length) return;
+  // Los pocos que no se sabe si son mujer o varon se preguntan acá mismo: con
+  // uno o dos tildados, mandarlo a "creálos de a uno" es mandarlo a hacer lo que
+  // ya estaba haciendo. De ahi para arriba se dejan afuera y se avisan, que
+  // preguntar veinte veces seguidas es lo que la tanda viene a evitar.
+  var dudosos = idxs.filter(function(i){
+    var it = (ctx.filas || [])[i];
+    return it && it.ome && !informeCabeceraGenero(it);
+  });
+  if (dudosos.length && dudosos.length <= 3){
+    for (var q = 0; q < dudosos.length; q++){
+      var itq = (ctx.filas || [])[dudosos[q]];
+      var elegido = await pedirSexoPaciente(itq.nombre || itq.paciente);
+      if (!elegido) return;   // cerró sin elegir: no se manda nada
+      itq.sexo = elegido;
+    }
+  }
   var pedidos = [], sinSexo = [];
   idxs.forEach(function(i){
     var item = (ctx.filas || [])[i];
@@ -2416,7 +2449,7 @@ async function crearInformesSeleccionados(btn){
     pedidos.push({ item: item, plantilla: plantilla, idx: i });
   });
   if (!pedidos.length){
-    nsAlert('No pude armar ninguno: ' + (sinSexo.length ? 'no se sabe si son mujer o varón. Creálos de a uno y elegí.' : 'las filas no tienen OME.'), { titulo:'Revisar' });
+    nsAlert('No pude armar ninguno: ' + (sinSexo.length ? 'de ' + sinSexo.length + ' no se sabe si son mujer o varón. Elegilos de a uno con el botón de la fila.' : 'las filas no tienen número de OME.'), { titulo:'Revisar' });
     return;
   }
   // Los que quedan afuera van con nombre y apellido: entre 173 renglones, saber
