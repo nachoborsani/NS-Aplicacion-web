@@ -305,10 +305,24 @@ function extraerDatos(texto, filename) {
   if (!dni) { m = t.match(/\b(\d{7,9})\s*ID\b/); if (m) dni = dig(m[1]); }
   // Espirometría: benef/dni en el nombre del archivo ("11178682~Ramundo~...")
   if (!dni) { m = fn.match(/^(\d{6,})~/); if (m) dni = dig(m[1]); }
-  // HOLTER: etiquetas y valores pegados en filas distintas -> DNI suelto si hay "Documento"
+  // HOLTER: etiquetas y valores pegados en filas distintas -> DNI suelto si hay
+  // "Documento". Tomaba el PRIMER numero de 7-8 digitos de TODO el documento, y en
+  // los informes que vienen con los datos del paciente EN BLANCO ese numero era el
+  // telefono del centro en el pie ("Tel: 6338713 / 46330078"). Asi, cuatro informes
+  // de pacientes distintos de Caballito quedaron pegados al mismo afiliado — el que
+  // en el padron tiene ese DNI (13/09/2026).
+  // Ahora se saltean los numeros que vienen detras de un telefono. Si no queda
+  // ninguno, el informe se queda SIN dni, que es lo correcto: cae en "revisar
+  // nombre" y lo resuelve una persona, en vez de pegarse al paciente equivocado.
   if (!dni && /(?:documento|d\.?n\.?i)/i.test(t)) {
-    m = t.match(/(?<!\d)(\d{7,8})(?!\d)/);
-    if (m) dni = dig(m[1]);
+    const sueltos = /(?<!\d)(\d{7,8})(?!\d)/g;
+    let c;
+    while ((c = sueltos.exec(t))) {
+      const antes = t.slice(Math.max(0, c.index - 26), c.index);
+      if (/\b(?:tel|telefono|tel\u00e9fono|cel|celular|fax|interno|whatsapp|wsp)\b[\s.:\/-]*[\d\s.\/-]*$/i.test(antes)) continue;
+      dni = dig(c[1]);
+      break;
+    }
   }
 
   // Nombre — cardio "NOMBRE: X EDAD"
