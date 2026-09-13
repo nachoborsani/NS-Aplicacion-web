@@ -12766,8 +12766,22 @@ function abrirInforme(id){
     // cada fila sigue sirviendo para el caso de una sola.
     // Ya tildadas: lo que resolvió el operador, o —si todavía no lo tocó— las que
     // el matcher encontró solo cuando el informe cubre varias prácticas.
-    var yaSel = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : [])))
-      || (it.match && it.match.omes) || [];
+    // Qué viene tildado al abrir: lo que ya resolvió el operador; si todavía no lo
+    // tocó, lo que encontró el matcher. Ojo con el caso de UNA sola práctica: ahí el
+    // match deja el número en `ome` y `omes` vacío, así que un informe "Listo para
+    // subir" se abría sin nada tildado — decía que estaba listo y abajo no había
+    // ninguna marcada (13/09/2026). Lo ya transmitido no se tilda solo: sería
+    // invitar a subirlo de nuevo.
+    var yaSel = [];
+    if (it.resuelto) yaSel = it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []);
+    else {
+      var delMatch = (it.match && it.match.omes && it.match.omes.length) ? it.match.omes
+                   : ((it.match && it.match.ome) ? [it.match.ome] : []);
+      yaSel = delMatch.filter(function(o){
+        var c = cands.filter(function(x){ return x.ome === o; })[0];
+        return c && !c.transmitida;
+      });
+    }
     cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
       + cands.map(function(c){
         var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
