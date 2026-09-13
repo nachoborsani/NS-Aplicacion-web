@@ -19,6 +19,30 @@ const money = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
 const normNombre = (v) => clean(v).toLowerCase().normalize("NFD").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
 function storeFile(dataDir) { return path.join(dataDir, "lab_gestion.json"); }
+// Los archivos de los estudios NO van adentro del JSON: se guardan al lado, uno por
+// archivo, con el id del estudio como nombre. Un PDF de ecografia pesa 10 MB.
+function estudiosDir(dataDir) { return path.join(dataDir, "lab_estudios"); }
+
+// Tipos de estudio. Sale del mapa de Global App, que es el que usan los centros de
+// verdad: la ficha de la historia clinica dice QUE es antes de abrir el archivo.
+const TIPOS_ESTUDIO = [
+  { cod: "CONS", nombre: "Consulta / evolución" },
+  { cod: "EC", nombre: "Ecografía" },
+  { cod: "EDC", nombre: "Ecodoppler cardíaco" },
+  { cod: "EVC", nombre: "Ecodoppler de vasos de cuello" },
+  { cod: "EDA", nombre: "Ecodoppler arterial" },
+  { cod: "EDV", nombre: "Ecodoppler venoso" },
+  { cod: "ECG", nombre: "Electrocardiograma" },
+  { cod: "HOL", nombre: "Holter" },
+  { cod: "MAP", nombre: "Presurometría (MAPA)" },
+  { cod: "ERG", nombre: "Ergometría" },
+  { cod: "ESP", nombre: "Espirometría" },
+  { cod: "LAB", nombre: "Laboratorio" },
+  { cod: "RX", nombre: "Radiología" },
+  { cod: "INF", nombre: "Otro informe" },
+  { cod: "DOC", nombre: "Documentación (orden, carnet)" },
+];
+const EXT_OK = { "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png" };
 
 // Cache en memoria con invalidación por mtime (igual patrón que los otros stores
 // de NS): el archivo puede ser grande y se lee en cada request.
@@ -33,6 +57,7 @@ function emptyStore() {
     pacientes: [],
     turnos: [],
     evoluciones: [],
+    estudios: [],
     cierres: [],
     presupuestos: [],
     seqPresup: 0,
@@ -322,6 +347,101 @@ async function handleLab(ctx) {
     }
   }
 
+  // -- Estudios del paciente: /pacientes/:id/estudios --
+  // Un estudio es una ficha de la historia clinica: fecha, tipo, profesional, el
+  // texto del informe y (opcional) el archivo. El archivo se sube aparte, porque va
+  // como multipart y no entra en el JSON.
+  if (recurso === "pacientes" && seg[2] === "estudios") {
+    if (!store.estudios) store.estudios = [];
+    const pacId = idPath;
+    if (method === "GET") {
+      const items = store.estudios.filter((x) => x.pacienteId === pacId)
+        .sort((a, b) => String(b.fecha + b.creadoEl).localeCompare(String(a.fecha + a.creadoEl)));
+      return json(res, 200, { items, tipos: TIPOS_ESTUDIO }), true;
+    }
+    if (method === "POST") {
+      const body = await readBody(req);
+      if (!(store.pacientes || []).some((x) => x.id === pacId)) {
+        return json(res, 404, { error: "Ese paciente no existe." }), true;
+      }
+      const cod = clean(body.tipo).toUpperCase();
+      const tipo = TIPOS_ESTUDIO.find((t) => t.cod === cod) || TIPOS_ESTUDIO[0];
+      const est = {
+        id: uid(), pacienteId: pacId,
+        turnoId: clean(body.turnoId),
+        fecha: clean(body.fecha) || nowIso().slice(0, 10),
+        tipo: tipo.cod, tipoNombre: tipo.nombre,
+        profesionalId: clean(body.profesionalId),
+        especialidadId: clean(body.especialidadId),
+        practica: clean(body.practica),
+        texto: clean(body.texto),
+        archivo: null,
+        creadoEl: nowIso(), creadoPor: me.username,
+      };
+      store.estudios.push(est); saveStore(dataDir, store);
+      return json(res, 200, { item: est }), true;
+    }
+  }
+
+  // -- El archivo de un estudio: /estudios/:id/archivo --
+  if (recurso === "estudios" && seg[2] === "archivo") {
+    const est = (store.estudios || []).find((x) => x.id === idPath);
+    if (!est) return json(res, 404, { error: "Ese estudio no existe." }), true;
+    if (method === "POST") {
+      try {
+        const raw = await ctx.readBuffer(req);
+        const mp = ctx.extractMultipart(raw, req.headers["content-type"]);
+        const mime = clean(mp.file.contentType || "").toLowerCase().split(";")[0];
+        const ext = EXT_OK[mime] || path.extname(mp.file.filename || "").toLowerCase();
+        if (![".pdf", ".jpg", ".jpeg", ".png"].includes(ext)) {
+          return json(res, 400, { error: "El estudio se adjunta como PDF o imagen." }), true;
+        }
+        const dir = estudiosDir(dataDir);
+        fs.mkdirSync(dir, { recursive: true });
+        const guardadoComo = est.id + ext;
+        fs.writeFileSync(path.join(dir, guardadoComo), mp.file.data);
+        est.archivo = {
+          nombre: clean(mp.file.filename) || ("estudio" + ext),
+          mime: mime || "application/pdf",
+          tamano: mp.file.data.length,
+          guardadoComo,
+          subidoEl: nowIso(), subidoPor: me.username,
+        };
+        saveStore(dataDir, store);
+        return json(res, 200, { item: est }), true;
+      } catch (error) {
+        return json(res, 400, { error: error.message || "No se pudo subir el archivo." }), true;
+      }
+    }
+    if (method === "GET") {
+      if (!est.archivo) return json(res, 404, { error: "Ese estudio no tiene archivo." }), true;
+      const file = path.join(estudiosDir(dataDir), est.archivo.guardadoComo);
+      if (!fs.existsSync(file)) return json(res, 404, { error: "El archivo no está en el servidor." }), true;
+      const buf = fs.readFileSync(file);
+      res.writeHead(200, {
+        "content-type": est.archivo.mime || "application/pdf",
+        "content-length": buf.length,
+        // inline: se abre en el visor, que es como se mira un informe.
+        "content-disposition": 'inline; filename="' + String(est.archivo.nombre).replace(/[^\x20-\x7E]/g, "_") + '"',
+        "cache-control": "no-store",
+      });
+      res.end(buf);
+      return true;
+    }
+  }
+
+  // -- Borrar un estudio (se lleva su archivo) --
+  if (recurso === "estudios" && idPath && !seg[2] && method === "DELETE") {
+    const est = (store.estudios || []).find((x) => x.id === idPath);
+    if (!est) return json(res, 404, { error: "Ese estudio no existe." }), true;
+    if (est.archivo) {
+      try { fs.unlinkSync(path.join(estudiosDir(dataDir), est.archivo.guardadoComo)); } catch { /* ya no estaba */ }
+    }
+    store.estudios = store.estudios.filter((x) => x.id !== idPath);
+    saveStore(dataDir, store);
+    return json(res, 200, { ok: true }), true;
+  }
+
   // -- Pacientes: detectar duplicados y unificar --
   if (recurso === "pacientes" && idPath === "duplicados" && method === "GET") {
     const pacientes = store.pacientes || [];
@@ -341,12 +461,15 @@ async function handleLab(ctx) {
     const fusionar = (Array.isArray(body.fusionar) ? body.fusionar : []).map(clean).filter((x) => x && x !== mantener);
     if (!mantener || !fusionar.length) return json(res, 400, { error: "Elegí a quién mantener y cuáles fusionar." }), true;
     const set = new Set(fusionar);
-    let turnosMov = 0, evolMov = 0;
+    let turnosMov = 0, evolMov = 0, estMov = 0;
     (store.turnos || []).forEach((t) => { if (set.has(t.pacienteId)) { t.pacienteId = mantener; turnosMov++; } });
     (store.evoluciones || []).forEach((e) => { if (set.has(e.pacienteId)) { e.pacienteId = mantener; evolMov++; } });
+    // Los estudios (con su archivo) van con la historia clinica: si no, el informe
+    // queda colgado de una ficha que dejo de existir.
+    (store.estudios || []).forEach((x) => { if (set.has(x.pacienteId)) { x.pacienteId = mantener; estMov++; } });
     store.pacientes = (store.pacientes || []).filter((p) => !set.has(p.id));
     saveStore(dataDir, store);
-    return json(res, 200, { ok: true, fusionados: fusionar.length, turnosMovidos: turnosMov, evolucionesMovidas: evolMov }), true;
+    return json(res, 200, { ok: true, fusionados: fusionar.length, turnosMovidos: turnosMov, evolucionesMovidas: evolMov, estudios: estMov }), true;
   }
 
   // -- Pacientes --

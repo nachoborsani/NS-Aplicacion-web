@@ -6275,7 +6275,8 @@ const server = http.createServer(async (req, res) => {
   // ---- Laboratorio: sistema de gestión para centros médicos (en desarrollo) ----
   // Módulo aislado (solo admin). Ver web/lab_server.js.
   if (p.startsWith("/api/lab/")) {
-    if (await handleLab({ req, res, method: req.method, p, url, me: getSessionUser(req), json, readBody, dataDir })) return;
+    if (await handleLab({ req, res, method: req.method, p, url, me: getSessionUser(req), json, readBody, dataDir,
+                          readBuffer, extractMultipart })) return;
   }
 
   // ---- Worker externo: autenticación por token, sin cookie de navegador ----

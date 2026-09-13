@@ -642,31 +642,91 @@
       : '<div class="lab-muted">Este paciente no tiene turnos.</div>';
   }
 
-  // Historia clínica: evoluciones del paciente (timeline + alta).
+  // Historia clinica: una sola linea de tiempo con las evoluciones Y los estudios.
+  // El estudio es la ficha que usan los centros de verdad —fecha, tipo, profesional
+  // y el PDF del informe colgado— y es lo que hace que la HC sirva para algo mas que
+  // leer: de ahi sale el informe que se presenta.
+  var LAB_TIPOS = [];
   async function hcModal(p) {
     if (!p) return;
     var m = modal("Historia clínica · " + [p.apellido, p.nombre].filter(Boolean).join(", "), { ancho: "ancho" });
     var profOpts = '<option value="">— Profesional —</option>' + LAB.cat.profesionales.map(function (o) { return '<option value="' + o.id + '">' + esc(o.nombre) + "</option>"; }).join("");
     m.body.innerHTML =
-      '<div class="lab-hc-new"><div class="lab-grid3">' +
+      '<div class="lab-hc-tabs">' +
+        '<button class="lab-hc-tab on" data-t="evolucion" type="button">Evolución</button>' +
+        '<button class="lab-hc-tab" data-t="estudio" type="button">Estudio con informe</button>' +
+      "</div>" +
+      '<div class="lab-hc-new" id="hc-form-evolucion"><div class="lab-grid3">' +
         '<label>Fecha<input class="lab-in" type="date" id="hc-fecha" value="' + hoyISO() + '"></label>' +
         '<label>Profesional<select class="lab-in" id="hc-prof">' + profOpts + "</select></label>" +
         '<label>Motivo<input class="lab-in" id="hc-motivo" placeholder="Consulta, control…"></label>' +
       "</div>" +
       '<label>Evolución<textarea class="lab-in" id="hc-texto" rows="3" placeholder="Escribí la evolución del paciente…"></textarea></label>' +
       '<div style="text-align:right"><button class="lab-btn primary" id="hc-add">Agregar evolución</button></div></div>' +
-      '<div class="lab-sec-tit">Evoluciones</div><div id="hc-list"><div class="lab-muted">Cargando…</div></div>';
+      '<div class="lab-hc-new" id="hc-form-estudio" style="display:none"><div class="lab-grid3">' +
+        '<label>Fecha<input class="lab-in" type="date" id="es-fecha" value="' + hoyISO() + '"></label>' +
+        '<label>Tipo<select class="lab-in" id="es-tipo"></select></label>' +
+        '<label>Profesional<select class="lab-in" id="es-prof">' + profOpts + "</select></label>" +
+      "</div>" +
+      '<label>Informe<textarea class="lab-in" id="es-texto" rows="3" placeholder="El texto del informe (se puede dejar vacío si adjuntás el PDF)…"></textarea></label>' +
+      '<label>Archivo (PDF o imagen)<input class="lab-in" type="file" id="es-file" accept=".pdf,.jpg,.jpeg,.png"></label>' +
+      '<div style="text-align:right"><button class="lab-btn primary" id="es-add">Guardar estudio</button></div></div>' +
+      '<div class="lab-sec-tit">Historia</div><div id="hc-list"><div class="lab-muted">Cargando…</div></div>';
+
+    m.body.querySelectorAll(".lab-hc-tab").forEach(function (b) {
+      b.onclick = function () {
+        m.body.querySelectorAll(".lab-hc-tab").forEach(function (x) { x.classList.toggle("on", x === b); });
+        m.body.querySelector("#hc-form-evolucion").style.display = b.dataset.t === "evolucion" ? "" : "none";
+        m.body.querySelector("#hc-form-estudio").style.display = b.dataset.t === "estudio" ? "" : "none";
+      };
+    });
+
+    function fechaAr(f) { return String(f || "").split("-").reverse().join("/"); }
+    function pesoKb(n) { return n ? Math.max(1, Math.round(n / 1024)) + " kB" : ""; }
+
     async function load() {
-      var r = await api("/api/lab/pacientes/" + p.id + "/evoluciones");
-      var items = (r.data && r.data.items) || [];
       var box = m.body.querySelector("#hc-list");
-      box.innerHTML = items.length ? items.map(function (ev) {
-        return '<div class="lab-hc-item"><div class="lab-hc-meta"><b>' + esc((ev.fecha || "").split("-").reverse().join("/")) + "</b>" +
-          (ev.profesionalId ? " · " + esc(nombreProf(ev.profesionalId)) : "") + (ev.motivo ? " · " + esc(ev.motivo) : "") +
-          ' <span class="lab-muted">(' + esc(ev.creadoPor || "") + ")</span></div>" +
-          '<div class="lab-hc-txt">' + esc(ev.texto).replace(/\n/g, "<br>") + "</div></div>";
-      }).join("") : '<div class="lab-muted">Sin evoluciones todavía.</div>';
+      var re = await api("/api/lab/pacientes/" + p.id + "/evoluciones");
+      var rs = await api("/api/lab/pacientes/" + p.id + "/estudios");
+      if (rs.ok && rs.data && rs.data.tipos && !LAB_TIPOS.length) {
+        LAB_TIPOS = rs.data.tipos;
+        var sel = m.body.querySelector("#es-tipo");
+        if (sel) sel.innerHTML = LAB_TIPOS.map(function (t) { return '<option value="' + t.cod + '">' + esc(t.nombre) + "</option>"; }).join("");
+      }
+      var filas = []
+        .concat(((re.data && re.data.items) || []).map(function (x) { return { k: "ev", x: x }; }))
+        .concat(((rs.data && rs.data.items) || []).map(function (x) { return { k: "es", x: x }; }));
+      filas.sort(function (a, b) {
+        return String((b.x.fecha || "") + (b.x.creadoEl || "")).localeCompare(String((a.x.fecha || "") + (a.x.creadoEl || "")));
+      });
+      if (!filas.length) { box.innerHTML = '<div class="lab-muted">Sin evoluciones ni estudios todavía.</div>'; return; }
+      box.innerHTML = filas.map(function (f) {
+        var x = f.x;
+        if (f.k === "ev") {
+          return '<div class="lab-hc-item"><div class="lab-hc-meta"><b>' + esc(fechaAr(x.fecha)) + "</b>" +
+            (x.profesionalId ? " · " + esc(nombreProf(x.profesionalId)) : "") + (x.motivo ? " · " + esc(x.motivo) : "") +
+            ' <span class="lab-muted">(' + esc(x.creadoPor || "") + ")</span></div>" +
+            '<div class="lab-hc-txt">' + esc(x.texto).replace(/\n/g, "<br>") + "</div></div>";
+        }
+        var arch = x.archivo
+          ? '<a class="lab-hc-arch" href="/api/lab/estudios/' + x.id + '/archivo" target="_blank" rel="noopener">📎 ' + esc(x.archivo.nombre) + ' <span class="lab-muted">' + pesoKb(x.archivo.tamano) + "</span></a>"
+          : '<span class="lab-muted">sin archivo adjunto</span>';
+        return '<div class="lab-hc-item es"><div class="lab-hc-meta"><span class="lab-hc-tipo">' + esc(x.tipo) + "</span> <b>" + esc(fechaAr(x.fecha)) + "</b>" +
+          " · " + esc(x.tipoNombre || "") + (x.profesionalId ? " · " + esc(nombreProf(x.profesionalId)) : "") +
+          ' <button class="lab-btn xs ghost danger" data-del="' + x.id + '" type="button" style="float:right">Borrar</button></div>' +
+          (x.texto ? '<div class="lab-hc-txt">' + esc(x.texto).replace(/\n/g, "<br>") + "</div>" : "") +
+          '<div class="lab-hc-archline">' + arch + "</div></div>";
+      }).join("");
+      box.querySelectorAll("[data-del]").forEach(function (b) {
+        b.onclick = async function () {
+          if (!confirm("¿Borrar este estudio y su archivo?")) return;
+          var r = await req("DELETE", "/api/lab/estudios/" + b.dataset.del);
+          if (!r.ok) { toast((r.data && r.data.error) || "No se pudo borrar.", true); return; }
+          toast("Estudio borrado ✓"); load();
+        };
+      });
     }
+
     m.body.querySelector("#hc-add").onclick = async function () {
       var texto = m.body.querySelector("#hc-texto").value.trim();
       if (!texto) { toast("Escribí la evolución.", true); return; }
@@ -677,6 +737,30 @@
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
       m.body.querySelector("#hc-texto").value = ""; m.body.querySelector("#hc-motivo").value = "";
       toast("Evolución agregada ✓"); load();
+    };
+
+    m.body.querySelector("#es-add").onclick = async function () {
+      var file = m.body.querySelector("#es-file").files[0];
+      var texto = m.body.querySelector("#es-texto").value.trim();
+      if (!file && !texto) { toast("Adjuntá el archivo o escribí el informe.", true); return; }
+      var r = await api("/api/lab/pacientes/" + p.id + "/estudios", {
+        fecha: m.body.querySelector("#es-fecha").value,
+        tipo: m.body.querySelector("#es-tipo").value,
+        profesionalId: m.body.querySelector("#es-prof").value,
+        texto: texto,
+      });
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
+      if (file) {
+        // El archivo va aparte: multipart, no entra en el JSON del estudio.
+        var fd = new FormData(); fd.append("file", file);
+        var sube = await fetch("/api/lab/estudios/" + r.data.item.id + "/archivo", { method: "POST", body: fd });
+        if (!sube.ok) {
+          var d = await sube.json().catch(function () { return {}; });
+          toast(d.error || "El estudio se guardó pero el archivo no subió.", true);
+        }
+      }
+      m.body.querySelector("#es-texto").value = ""; m.body.querySelector("#es-file").value = "";
+      toast("Estudio guardado ✓"); load();
     };
     load();
   }
@@ -1001,6 +1085,14 @@
       ".lab-toast.err{background:#b91c1c}",
       ".lab-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end}",
       ".lab-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)}",
+      ".lab-hc-tabs{display:flex;gap:6px;margin-bottom:10px}",
+      ".lab-hc-tab{background:transparent;border:1px solid var(--border);color:var(--text-2);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}",
+      ".lab-hc-tab.on{background:var(--accent,#2dd4bf);color:#04201c;border-color:transparent}",
+      ".lab-hc-item.es{border-left:3px solid var(--accent,#2dd4bf);padding-left:9px}",
+      ".lab-hc-tipo{display:inline-block;background:var(--accent,#2dd4bf);color:#04201c;font-size:10px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.03em}",
+      ".lab-hc-archline{margin-top:5px}",
+      ".lab-hc-arch{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:4px 9px}",
+      ".lab-hc-arch:hover{background:rgba(45,212,191,.10)}",
       ".lab-sec-tit{font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px}",
       ".lab-cal-card{max-width:340px}",
       ".lab-cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
