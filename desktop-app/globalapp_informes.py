@@ -334,7 +334,7 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 nom = re.sub(r"[^A-Za-z0-9 ._-]", "", _norm(nombre))[:40].strip() or "paciente"
                 filename = f"{nom} - {tipo} - {fecha}.pdf"
                 try:
-                    web.subir_informe(slug, filename, pdf)
+                    web.subir_informe(slug, filename, pdf, origen="globalapp")
                     bajados += 1
                     log(f"  [{i}] {nombre} · {tipo} · {fecha} -> subido")
                 except Exception as exc:  # noqa: BLE001

@@ -12115,6 +12115,8 @@ function cabRecibido(it){
   // Tres origenes distintos y no da lo mismo cual: el que hicimos nosotros desde
   // Informes no es "subido a mano" —no lo subio nadie, lo genero el sistema—.
   var generadoAca = it.origen === 'generado';
+  // Los que trae el bot del sistema del centro tampoco son "a mano".
+  var deGlobalApp = it.origen === 'globalapp';
   var iso = String((porMail ? (it.fechaHora || it.fecha) : it.storedAt) || '');
   if (!iso) return { txt: '—', title: '' };
   var p = iso.slice(0,10).split('-');
@@ -12136,8 +12138,9 @@ function cabRecibido(it){
   }
   return {
     txt: dia, hora: hora,
-    title: (porMail ? 'Llegó por mail el ' : (generadoAca ? 'Lo generamos nosotros el ' : 'Subido a mano el ')) + dia + (hora ? ' a las ' + hora : ''),
-    aMano: !porMail && !generadoAca,
+    title: (porMail ? 'Llegó por mail el ' : (generadoAca ? 'Lo generamos nosotros el ' : (deGlobalApp ? 'Traído del sistema del centro el ' : 'Subido a mano el '))) + dia + (hora ? ' a las ' + hora : ''),
+    aMano: !porMail && !generadoAca && !deGlobalApp,
+    delCentro: deGlobalApp,
     generado: generadoAca,
   };
 }
@@ -12325,7 +12328,7 @@ function renderCabinaRows(slug, items){
       + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
       + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
         + (rec.hora ? '<div class="cab-sub">'+esc(rec.hora)+'</div>' : '')
-        + (rec.aMano ? '<div class="cab-sub">a mano</div>' : (rec.generado ? '<div class="cab-sub">lo hicimos nosotros</div>' : '')) + '</td>'
+        + (rec.aMano ? '<div class="cab-sub">a mano</div>' : (rec.generado ? '<div class="cab-sub">lo hicimos nosotros</div>' : (rec.delCentro ? '<div class="cab-sub">del sistema del centro</div>' : ''))) + '</td>'
       + '<td class="cab-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
       + '<td class="cab-actions" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'

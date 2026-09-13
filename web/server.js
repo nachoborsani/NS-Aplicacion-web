@@ -10754,7 +10754,12 @@ const server = http.createServer(async (req, res) => {
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
         fs.writeFileSync(path.join(destDir, stored), f.data);
-        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, "upload");
+        // De donde vino: "upload" es una persona subiendolo desde la pantalla y
+        // "globalapp" el bot que los trae del sistema del centro. Se distinguen
+        // para que la columna Recibido no diga "a mano" sobre 900 archivos que
+        // no subio nadie.
+        const origenSubida = String(url.searchParams.get("origen") || "").trim() === "globalapp" ? "globalapp" : "upload";
+        const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, origenSubida);
         store[slug].items.unshift(rec);
         nuevos.push(rec);
       }

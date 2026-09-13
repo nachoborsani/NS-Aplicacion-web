@@ -455,7 +455,7 @@ class NSWebClient:
         filas = resumen.get("missingInformeRows") or []
         return [f for f in filas if isinstance(f, dict)]
 
-    def subir_informe(self, slug: str, filename: str, contenido: bytes) -> dict:
+    def subir_informe(self, slug: str, filename: str, contenido: bytes, origen: str = "") -> dict:
         """Deja un informe en la cabina de Informes recibidos del cliente.
 
         Es la misma puerta que usa el boton "Subir informes" de la pantalla: la web
@@ -475,6 +475,9 @@ class NSWebClient:
         cuerpo = pre + bytes(contenido) + post
 
         path = f"/api/clientes/{urllib.parse.quote(slug)}/informes/upload"
+        # `origen` distingue lo que trae un bot de lo que sube una persona.
+        if origen:
+            path += "?origen=" + urllib.parse.quote(origen)
         parsed = urllib.parse.urlsplit(self.base_url)
         is_https = parsed.scheme == "https"
         host = parsed.hostname or "localhost"
