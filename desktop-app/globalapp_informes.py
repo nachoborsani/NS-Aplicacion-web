@@ -116,25 +116,40 @@ class GlobalApp:
         self._login()
 
     def _login(self) -> None:
+        """La pantalla de entrada es Vue: usuario (tipo email), clave y el boton
+        Ingresar. Se apunta a esos tres y no al primer input que aparezca — la
+        pagina tiene otros campos de clave escondidos y el primer intento le
+        escribia al que no era."""
         page = self.page
-        # El formulario es el de la pantalla de entrada; si ya hay sesión (cookie
-        # guardada) no aparece y se sigue de largo.
         try:
-            page.wait_for_selector("input[type=password]", timeout=12000)
-        except Exception:  # noqa: BLE001 - ya estaba adentro
+            page.wait_for_selector("input[type=email]", timeout=15000)
+        except Exception:  # noqa: BLE001 - no hay formulario: ya estaba adentro
             self.log("[GA] Sesion ya abierta.")
             return
-        campos = page.query_selector_all("input")
-        usuario = next((c for c in campos if (c.get_attribute("type") or "text") not in ("password", "hidden", "checkbox")), None)
-        clave = next((c for c in campos if c.get_attribute("type") == "password"), None)
-        if not usuario or not clave:
-            raise RuntimeError("No encontre los campos de la pantalla de entrada.")
-        usuario.fill(self.cfg["usuario"])
+        page.fill("input[type=email]", self.cfg["usuario"])
+        clave = page.query_selector("input[type=password]:visible") or page.query_selector("input[type=password]")
+        if not clave:
+            raise RuntimeError("No encontre el campo de la clave.")
         clave.fill(self.cfg["clave"])
-        clave.press("Enter")
-        page.wait_for_selector("input[type=password]", state="detached", timeout=ESPERA_LOGIN_MS)
+        boton = None
+        for b in page.query_selector_all("button"):
+            texto = (b.inner_text() or "").strip().lower()
+            if texto.startswith("ingres") or texto.startswith("entrar"):
+                boton = b
+                break
+        (boton or clave).click() if boton else clave.press("Enter")
+        # Adentro cuando aparece el menu lateral. Esperar a que DESAPAREZCA el
+        # campo no servia: la pantalla lo conserva escondido.
+        try:
+            page.wait_for_selector("a[href='/pacientes'], a[href='/turnos']", timeout=ESPERA_LOGIN_MS)
+        except Exception as exc:  # noqa: BLE001
+            if page.query_selector("input[type=email]"):
+                raise RuntimeError(
+                    "No pude entrar: revisa usuario y clave en globalapp.json "
+                    "(o la pantalla pidio un codigo de verificacion)."
+                ) from exc
+            raise
         self.log("[GA] Sesion iniciada.")
-
     def cerrar(self) -> None:
         for cerrar in (getattr(self._browser, "close", None), getattr(self._pw, "stop", None)):
             try:
