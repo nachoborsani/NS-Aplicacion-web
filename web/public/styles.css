@@ -807,6 +807,14 @@
   .nom-status b,.nom-status span,#nomStatusText{display:block}
   #nomStatusText{min-width:0}
   .nom-status span,.nom-muted{color:var(--text-2);font-size:11.5px;line-height:1.3}
+  /* Nomencladores: la cabecera va en UN renglon (12/09/2026). Lo que hay cargado a
+     la izquierda y el boton a la derecha; el mes se pregunta al apretarlo. Se pisa solo
+     este id y no .nom-status, que lo comparten otras seis pantallas. */
+  #nomStatus{padding:9px 14px;gap:12px}
+  #nomStatus #nomStatusText{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px}
+  #nomStatus #nomStatusText b{display:inline;font-size:13.5px}
+  #nomStatus .nom-head-meta{display:inline;color:var(--text-2);font-size:11.5px}
+  #nomStatus .nom-upload .btn{gap:7px;white-space:nowrap}
   .ome-topbar{justify-content:flex-start;padding:8px 12px;margin-bottom:8px}
   .ome-topbar .nom-upload{display:grid;grid-template-columns:240px minmax(300px,1fr);gap:10px;width:100%;align-items:end}
   .ome-topbar .nom-upload .field{min-width:0!important;margin:0}

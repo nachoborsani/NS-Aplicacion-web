@@ -9875,10 +9875,24 @@ function setReportUploading(on, text){
   var t = document.getElementById('clientReportUploadingText');
   if (t && text) t.textContent = text;
 }
-function setDefaultUploadPeriod(){
-  var el = document.getElementById('nomUploadPeriod');
-  if (!el) return;
-  el.value = '';
+// Mes elegido al apretar "Subir nomenclador". Vacio = se toma el que dice el Excel.
+var NOM_UPLOAD_PERIOD = '';
+function setDefaultUploadPeriod(){ NOM_UPLOAD_PERIOD = ''; }
+// Subir uno nuevo: primero se pregunta el mes, despues se abre el explorador. Antes el
+// mes era un campo fijo en la cabecera, que quedaba ocupando lugar todo el tiempo para
+// algo que se usa una vez por mes (12/09/2026).
+async function subirNomenclador(){
+  var mes = await nsPrompt('Mes del nomenclador', {
+    titulo: 'Subir nomenclador',
+    inputType: 'month',
+    okLabel: 'Elegir Excel',
+    cuerpoHtml: '<p style="margin:0 0 6px">¿De qué mes es el Excel que vas a subir?</p>'
+      + '<p class="nom-muted" style="margin:0">Si lo dejás vacío se toma el mes que dice el archivo.</p>'
+  });
+  if (mes === null) return;   // cancelo
+  NOM_UPLOAD_PERIOD = mes || '';
+  var input = document.getElementById('nomFile');
+  if (input){ input.value = ''; input.click(); }
 }
 // ===== Calculadora de proyecciones (pestaña de Nomencladores) =====
 var CALC = { data:null, items:[], saved:[], loaded:false, wired:false };
@@ -10118,14 +10132,20 @@ async function loadNomencladorSummary(period){
   if (previousPeriod && NOM_ACTIVE_PERIOD && previousPeriod !== NOM_ACTIVE_PERIOD) NOM_SELECTED_MODULES = [];
   fillPeriodSelect(res.data.nomencladores || [], NOM_ACTIVE_PERIOD);
   if (!NOM_READY){
-    st.innerHTML = '<b>Sin nomenclador cargado</b><span>Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span>';
+    st.innerHTML = '<b>Sin nomenclador cargado</b><span class="nom-head-meta">Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span>';
     document.getElementById('nomBody').innerHTML = '<tr><td colspan="6" class="muted-cell">No hay datos cargados.</td></tr>';
     document.getElementById('nomResultMeta').textContent = 'Todavía no hay búsqueda.';
     return;
   }
   var d = res.data;
-  st.innerHTML = '<b>' + esc(d.label || d.activePeriod) + ' - ' + esc(d.filename) + '</b><span>' + esc(d.vigencia || d.sheetName || 'Nomenclador') + ' - ' + esc(String(d.rowCount)) + ' prestaciones - cargado ' + esc(dateFmt(d.uploadedAt)) + '</span>'
-    + '<span class="nom-cols">Valor: ' + esc(d.columns.total) + '</span>';
+  var meta = [esc(d.filename)];
+  if (d.rowCount) meta.push(esc(String(d.rowCount)) + ' prestaciones');
+  var vig = String(d.vigencia || d.sheetName || '').replace(/^NOMENCLADOR\s+/i, '');
+  if (vig) meta.push(esc(vig.toLowerCase()));
+  if (d.columns && d.columns.total) meta.push('valor: ' + esc(d.columns.total));
+  meta.push('cargado ' + esc(dateFmt(d.uploadedAt)));
+  st.innerHTML = '<b>' + esc(d.label || d.activePeriod) + '</b>'
+    + '<span class="nom-head-meta">' + meta.join(' · ') + '</span>';
   loadNomencladorIncrease(NOM_ACTIVE_PERIOD);
   renderModuleOptions(d.filters.modules);
   fillSelect('nomScope', d.filters.scopes);
@@ -10157,7 +10177,7 @@ async function uploadNomenclador(files){
   if (!files || !files[0]) return;
   var st = document.getElementById('nomStatusText');
   var input = document.getElementById('nomFile');
-  var period = document.getElementById('nomUploadPeriod').value;
+  var period = NOM_UPLOAD_PERIOD;
   st.innerHTML = '<b>Procesando Excel...</b><span>Esto puede tardar unos segundos. Si no elegiste mes, se detecta desde el archivo.</span>';
   var fd = new FormData();
   if (period) fd.append('period', period);

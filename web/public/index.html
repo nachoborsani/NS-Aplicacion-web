@@ -985,18 +985,18 @@
 
         <!-- NOMENCLADORES -->
         <section id="view-nomencladores" style="display:none">
+          <!-- Cabecera en una sola linea: que nomenclador esta cargado y el boton para
+               subir otro. El mes ya no vive aca (12/09/2026): lo pregunta el boton, que
+               es cuando hace falta. Antes ocupaba el ancho entero para algo que se toca
+               una vez por mes. -->
           <div class="nom-status card" id="nomStatus">
-            <div id="nomStatusText"><b>Sin nomenclador cargado</b><span>Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span></div>
+            <div id="nomStatusText"><b>Sin nomenclador cargado</b><span class="nom-head-meta">Subí un Excel .xls o .xlsx para habilitar la búsqueda.</span></div>
             <div class="nom-upload">
-              <label class="month-field">
-                <span>Mes opcional</span>
-                <input class="inp" id="nomUploadPeriod" type="month">
-              </label>
-              <label class="btn btn-primary file-btn">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Adjuntar Excel
-                <input id="nomFile" type="file" accept=".xls,.xlsx,.xlsm" onchange="uploadNomenclador(this.files)">
-              </label>
+              <button class="btn btn-primary btn-sm" type="button" onclick="subirNomenclador()">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M12 3v12M7 8l5-5 5 5M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Subir nomenclador
+              </button>
+              <input id="nomFile" type="file" accept=".xls,.xlsx,.xlsm" style="display:none" onchange="uploadNomenclador(this.files)">
             </div>
           </div>
 
