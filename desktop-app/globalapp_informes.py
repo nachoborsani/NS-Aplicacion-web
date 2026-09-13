@@ -224,7 +224,10 @@ class GlobalApp:
         })
         from urllib.parse import quote
         data = self._api(f"/api/pacientes/get-all-pacientes?pageSize=50&page=1&filters={quote(filtros)}")
-        filas = (data or {}).get("rows") or (data or {}).get("data") or []
+        # La respuesta viene envuelta dos veces: {pacientes: {count, rows}}.
+        caja = (data or {}).get("pacientes") or data or {}
+        filas = caja.get("rows") if isinstance(caja, dict) else (caja if isinstance(caja, list) else [])
+        filas = filas or []
         if not filas:
             return None
         benef_d = _digitos(benef)
