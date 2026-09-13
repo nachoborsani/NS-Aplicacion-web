@@ -94,3 +94,6 @@ web/ocr_data/spa.traineddata
 
 # estado runtime del contador de turnos de activación
 desktop-app/activacion_slots.json
+
+# Config de Global App (usuario y clave del centro): NO va en el repo.
+desktop-app/globalapp.json

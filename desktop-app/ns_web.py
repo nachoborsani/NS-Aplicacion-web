@@ -427,6 +427,79 @@ class NSWebClient:
             "POST", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/estado", body=body,
         )
 
+    @classmethod
+    def desde_config(cls) -> "NSWebClient":
+        """Cliente ya logueado con lo que hay en ns_conexion.json. Es lo que hacen
+        a mano todos los scripts del server; se pone acá una sola vez."""
+        cfg = load_config()
+        cli = cls(cfg.get("base_url") or DEFAULT_BASE_URL)
+        cli.login(cfg.get("username", ""), cfg.get("password", ""))
+        return cli
+
+    def informes_faltantes(self, slug: str) -> list[dict]:
+        """Las prestaciones del mes que estan validadas y esperan el informe.
+
+        Es la misma lista que muestra el panel "Faltan informes" del Dashboard:
+        nombre, beneficio, practica, turno y OME de cada una.
+        """
+        r = self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/bandeja/resumen")
+        resumen = ((r or {}).get("resumen") or {})
+        filas = resumen.get("missingInformeRows") or []
+        return [f for f in filas if isinstance(f, dict)]
+
+    def subir_informe(self, slug: str, filename: str, contenido: bytes) -> dict:
+        """Deja un informe en la cabina de Informes recibidos del cliente.
+
+        Es la misma puerta que usa el boton "Subir informes" de la pantalla: la web
+        lo lee, le saca paciente y practica y lo cruza contra la bandeja. Por eso el
+        bot no tiene que saber nada de matcheo: sube el PDF y listo.
+        """
+        import uuid
+
+        boundary = "----nsform" + uuid.uuid4().hex
+        seguro = str(filename or "informe.pdf").replace('"', "'")
+        pre = (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{seguro}"\r\n'
+            "Content-Type: application/pdf\r\n\r\n"
+        ).encode("utf-8")
+        post = f"\r\n--{boundary}--\r\n".encode("utf-8")
+        cuerpo = pre + bytes(contenido) + post
+
+        path = f"/api/clientes/{urllib.parse.quote(slug)}/informes/upload"
+        parsed = urllib.parse.urlsplit(self.base_url)
+        is_https = parsed.scheme == "https"
+        host = parsed.hostname or "localhost"
+        port = parsed.port or (443 if is_https else 80)
+        headers = {"Accept": "application/json",
+                   "Content-Type": f"multipart/form-data; boundary={boundary}"}
+        if self._cookie:
+            headers["Cookie"] = self._cookie
+        last_err = None
+        for _ in range(3):
+            conn = None
+            try:
+                cls_conn = http.client.HTTPSConnection if is_https else http.client.HTTPConnection
+                conn = cls_conn(host, port, timeout=max(self.timeout, 120))
+                conn.request("POST", path, body=cuerpo, headers=headers)
+                resp = conn.getresponse()
+                text = resp.read().decode("utf-8") or "{}"
+                if resp.status >= 400:
+                    raise NSWebError(f"HTTP {resp.status}: {text[:200]}")
+                return json.loads(text)
+            except NSWebError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - corte pasajero: se reintenta
+                last_err = exc
+                time.sleep(2)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+        raise NSWebError(f"No pude subir el informe: {last_err}")
+
     def report_refresco_paso(self, paso: str) -> None:
         """Avisa a la web por donde va la corrida de bandejas (informativo).
 
