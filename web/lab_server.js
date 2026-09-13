@@ -100,6 +100,51 @@ function saveStore(dataDir, store) {
   try { _cacheMtime = fs.statSync(storeFile(dataDir)).mtimeMs; _cache = store; } catch { _cacheMtime = -1; }
 }
 
+// Roles del Laboratorio y que toca cada uno. Un centro son tres personas distintas
+// y hasta ahora entraba solo el admin de NS, asi que no se le podia dar a nadie.
+//
+//   recepcion       — la agenda y el dia: da turnos, cobra. No ve la estadistica ni
+//                     toca los valores de las obras sociales.
+//   profesional     — SU agenda y la historia clinica. Nada de plata.
+//   administracion  — todo lo anterior + estadistica, cierre de caja y catalogos.
+//   admin           — ademas, los usuarios.
+//
+// El rol vive en el usuario de NS (campo `lab`), asi hay UNA sola puerta de entrada
+// y no dos padrones de usuarios que se desincronizan.
+const LAB_PERMISOS = {
+  recepcion: ["agenda", "pacientes", "hc", "caja"],
+  profesional: ["agenda", "pacientes", "hc"],
+  administracion: ["agenda", "pacientes", "hc", "caja", "cierre", "estadistica", "config"],
+  admin: ["agenda", "pacientes", "hc", "caja", "cierre", "estadistica", "config", "usuarios"],
+};
+// Que permiso pide cada recurso de la API.
+const LAB_RECURSO_PERMISO = {
+  turnos: "agenda",
+  pacientes: "pacientes",
+  estudios: "hc",
+  caja: "caja",
+  estadistica: "estadistica",
+  presupuestos: "caja",
+  practicas: "config",
+  especialidades: "config",
+  consultorios: "config",
+  obrasSociales: "config",
+  profesionales: "config",
+  usuarios: "usuarios",
+};
+function labRolDe(me) {
+  if (!me) return null;
+  // El admin de NS entra a todo: es el dueno del sistema, no un usuario del centro.
+  if (me.role === "admin") return "admin";
+  const rol = me.lab && typeof me.lab === "object" ? String(me.lab.rol || "") : "";
+  return LAB_PERMISOS[rol] ? rol : null;
+}
+function labPuede(me, permiso) {
+  const rol = labRolDe(me);
+  if (!rol) return false;
+  return LAB_PERMISOS[rol].includes(permiso);
+}
+
 // Colecciones simples con CRUD genérico (las que son catálogo plano).
 const COLECCIONES = {
   especialidades: { campos: ["nombre", "activo"] },
@@ -227,12 +272,20 @@ function sanitizeTurno(body, previo, store) {
 async function handleLab(ctx) {
   const { req, res, method, p, url, me, json, readBody, dataDir } = ctx;
   if (!me) { json(res, 401, { error: "no-auth" }); return true; }
-  if (me.role !== "admin") { json(res, 403, { error: "El Laboratorio es solo para administradores." }); return true; }
+  const labRol = labRolDe(me);
+  if (!labRol) { json(res, 403, { error: "Tu usuario no tiene acceso al sistema del centro." }); return true; }
 
   const seg = p.slice("/api/lab/".length).split("/").filter(Boolean); // ["turnos", "<id>"]
   const recurso = seg[0] || "";
   const idPath = seg[1] || "";
   const store = loadStore(dataDir);
+
+  // Cada recurso pide su permiso. El cierre de caja pide uno propio: la
+  // recepcionista cobra todo el dia pero el arqueo no lo cierra ella.
+  const permisoPedido = (recurso === "caja" && idPath === "cierre") ? "cierre" : LAB_RECURSO_PERMISO[recurso];
+  if (permisoPedido && !labPuede(me, permisoPedido)) {
+    return json(res, 403, { error: "Tu usuario no tiene permiso para esta parte del sistema." }), true;
+  }
 
   // -- Bootstrap: todo lo que la UI necesita para arrancar --
   if (recurso === "bootstrap" && method === "GET") {
@@ -242,8 +295,43 @@ async function handleLab(ctx) {
       consultorios: store.consultorios,
       obrasSociales: store.obrasSociales,
       practicas: store.practicas || [],
+      // Con esto el front arma el menu: no se muestra lo que despues va a dar 403.
+      rol: labRol, permisos: LAB_PERMISOS[labRol] || [],
+      profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;
+  }
+
+  // -- Usuarios del centro: a quien de NS se le da acceso y con que rol --
+  // No hay padron propio: se le pone el rol al usuario de NS que ya existe. Un solo
+  // login, un solo lugar donde dar de baja a alguien.
+  if (recurso === "usuarios") {
+    if (!ctx.loadUsers || !ctx.saveUsers) return json(res, 500, { error: "No puedo leer los usuarios." }), true;
+    const users = ctx.loadUsers() || [];
+    if (method === "GET") {
+      const items = users.filter((u) => u.active !== false).map((u) => ({
+        username: u.username, nombre: u.name || u.username, rolNs: u.role,
+        rol: u.role === "admin" ? "admin" : ((u.lab && u.lab.rol) || ""),
+        profesionalId: (u.lab && u.lab.profesionalId) || "",
+        esAdminNs: u.role === "admin",
+      }));
+      return json(res, 200, { items, roles: Object.keys(LAB_PERMISOS), permisos: LAB_PERMISOS }), true;
+    }
+    if (method === "POST") {
+      const body = await readBody(req);
+      const uname = clean(body.username).toLowerCase();
+      const rol = clean(body.rol);
+      const u = users.find((x) => String(x.username).toLowerCase() === uname);
+      if (!u) return json(res, 404, { error: "Ese usuario no existe en NS." }), true;
+      if (u.role === "admin") return json(res, 400, { error: "Un administrador de NS ya entra a todo; no hace falta darle rol." }), true;
+      if (rol && !LAB_PERMISOS[rol]) return json(res, 400, { error: "Ese rol no existe." }), true;
+      // Sin rol = se le saca el acceso. Se borra el campo entero para no dejar
+      // basura que despues confunda al leer el usuario.
+      if (!rol) delete u.lab;
+      else u.lab = { rol, profesionalId: clean(body.profesionalId) };
+      ctx.saveUsers(users);
+      return json(res, 200, { ok: true, username: u.username, rol: rol || "" }), true;
+    }
   }
 
   // -- Practicas del centro, con su valor por obra social --
@@ -623,8 +711,10 @@ async function handleLab(ctx) {
     }
     // GET ?profesionalId=&fecha=  -> agenda del profesional ese día (con slots)
     if (method === "GET" && !idPath) {
-      const profId = clean(url.searchParams.get("profesionalId"));
+      let profId = clean(url.searchParams.get("profesionalId"));
       const fecha = clean(url.searchParams.get("fecha"));
+      // Un profesional ve SU agenda y nada mas, aunque pida otra por la URL.
+      if (labRol === "profesional" && me.lab && me.lab.profesionalId) profId = me.lab.profesionalId;
       if (!profId || !fecha) return json(res, 400, { error: "Falta profesionalId y fecha." }), true;
       const prof = store.profesionales.find((x) => x.id === profId);
       if (!prof) return json(res, 404, { error: "Profesional no encontrado." }), true;

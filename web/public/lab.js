@@ -13,6 +13,7 @@
     booted: false,
     modulo: "agenda",
     cat: { especialidades: [], profesionales: [], consultorios: [], obrasSociales: [], practicas: [] },
+    rol: "", permisos: [], profesionalId: "",
     ag: { especialidadId: "", profesionalId: "", fecha: "" },
   };
   var DOW = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -87,19 +88,25 @@
   // arriba (agenda y pacientes), la plata en el medio, y los catalogos —que se
   // cargan una vez y no se miran mas— al final. En la tira horizontal los ocho
   // botones pesaban igual y no se encontraba nada.
+  // El cuarto dato de cada modulo es el permiso que pide: el menu se arma con lo que
+  // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
-    ["Atención", [["agenda", "📅", "Agenda"], ["pacientes", "👤", "Pacientes"]]],
-    ["Administración", [["caja", "💵", "Caja"], ["estadistica", "📊", "Estadística"]]],
-    ["Configuración", [["profesionales", "🩺", "Profesionales"], ["practicas", "🧾", "Prácticas"],
-      ["especialidades", "🏷️", "Especialidades"],
-      ["consultorios", "🚪", "Consultorios"], ["obrasSociales", "🩹", "Obras Sociales"]]],
+    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
+    ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
+    ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
+      ["especialidades", "🏷️", "Especialidades", "config"],
+      ["consultorios", "🚪", "Consultorios", "config"], ["obrasSociales", "🩹", "Obras Sociales", "config"],
+      ["usuarios", "👥", "Usuarios", "usuarios"]]],
   ];
+  function labPuede(permiso) { return !permiso || (LAB.permisos || []).indexOf(permiso) >= 0; }
   function shell() {
     var wrap = e("div", { class: "lab-wrap" });
     var nav = e("div", { class: "lab-nav" });
     LAB_MENU.forEach(function (grupo) {
+      var visibles = grupo[1].filter(function (m) { return labPuede(m[3]); });
+      if (!visibles.length) return;   // un grupo entero sin permiso no deja el titulo solo
       nav.appendChild(e("div", { class: "lab-nav-grupo" }, esc(grupo[0])));
-      grupo[1].forEach(function (m) {
+      visibles.forEach(function (m) {
         var b = e("button", { class: "lab-tab", "data-mod": m[0], type: "button" },
           '<span class="lab-tab-ic">' + m[1] + '</span><span>' + esc(m[2]) + '</span>');
         b.onclick = function () { labGo(m[0]); };
@@ -119,6 +126,9 @@
       LAB.cat.consultorios = r.data.consultorios || [];
       LAB.cat.obrasSociales = r.data.obrasSociales || [];
       LAB.cat.practicas = r.data.practicas || [];
+      LAB.rol = r.data.rol || "";
+      LAB.permisos = r.data.permisos || [];
+      LAB.profesionalId = r.data.profesionalId || "";
     }
   }
 
@@ -134,6 +144,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
     else if (mod === "consultorios") viewCatalogo(c, "consultorios", "Consultorios");
@@ -551,6 +562,63 @@
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
     };
+  }
+
+  /* ============================ USUARIOS ================================ */
+  // A quien del centro se le da acceso y con que rol. No hay padron propio: se le
+  // pone el rol al usuario de NS que ya existe, asi hay un solo login y un solo
+  // lugar donde darle de baja a alguien.
+  var LAB_ROL_LABEL = {
+    recepcion: "Recepción — agenda, pacientes y cobro del día",
+    profesional: "Profesional — su agenda y la historia clínica",
+    administracion: "Administración — todo, menos los usuarios",
+    admin: "Administrador",
+  };
+  async function viewUsuarios(c) {
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var r = await api("/api/lab/usuarios");
+    if (!r.ok) {
+      c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>";
+      return;
+    }
+    var items = (r.data && r.data.items) || [];
+    var roles = ["recepcion", "profesional", "administracion"];
+    var profOpts = function (sel) {
+      return '<option value="">— sin asignar —</option>' + (LAB.cat.profesionales || []).map(function (o) {
+        return '<option value="' + o.id + '"' + (o.id === sel ? " selected" : "") + ">" + esc(o.nombre) + "</option>";
+      }).join("");
+    };
+    var rows = items.map(function (u) {
+      if (u.esAdminNs) {
+        return '<tr><td><b>' + esc(u.nombre) + '</b> <span class="lab-muted">' + esc(u.username) + "</span></td>" +
+          '<td colspan="3" class="lab-muted">Administrador de NS: entra a todo el sistema.</td></tr>';
+      }
+      var sel = roles.map(function (x) {
+        return '<option value="' + x + '"' + (x === u.rol ? " selected" : "") + ">" + esc(LAB_ROL_LABEL[x]) + "</option>";
+      }).join("");
+      return '<tr data-u="' + esc(u.username) + '"><td><b>' + esc(u.nombre) + '</b> <span class="lab-muted">' + esc(u.username) + "</span></td>" +
+        '<td><select class="lab-in us-rol"><option value="">— sin acceso —</option>' + sel + "</select></td>" +
+        '<td><select class="lab-in us-prof"' + (u.rol === "profesional" ? "" : " disabled") + ">" + profOpts(u.profesionalId) + "</select></td>" +
+        '<td style="width:110px"><button class="lab-btn xs us-save">Guardar</button></td></tr>';
+    }).join("");
+    c.innerHTML = '<div class="lab-card">' +
+      '<div class="lab-list-head"><h3>Usuarios del centro</h3></div>' +
+      '<div class="lab-muted" style="margin-bottom:10px">El acceso se le da a un usuario que ya existe en NS. Sin rol, no entra al sistema del centro. ' +
+      'El profesional además necesita estar atado a su ficha para que vea su agenda.</div>' +
+      '<table class="lab-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Es el profesional</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="4" class="lab-muted">No hay usuarios.</td></tr>') + "</tbody></table></div>";
+    c.querySelectorAll("tr[data-u]").forEach(function (tr) {
+      var selRol = tr.querySelector(".us-rol"), selProf = tr.querySelector(".us-prof");
+      selRol.onchange = function () { selProf.disabled = selRol.value !== "profesional"; };
+      tr.querySelector(".us-save").onclick = async function () {
+        var rr = await api("/api/lab/usuarios", {
+          username: tr.getAttribute("data-u"), rol: selRol.value,
+          profesionalId: selRol.value === "profesional" ? selProf.value : "",
+        });
+        if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+        toast(selRol.value ? "Acceso guardado ✓" : "Acceso quitado ✓");
+      };
+    });
   }
 
   /* ===================== OBRAS SOCIALES + SUS VALORES ==================== */
