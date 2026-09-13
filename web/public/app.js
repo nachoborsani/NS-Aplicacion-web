@@ -8722,30 +8722,56 @@ async function loadConexiones(){
       if (r.ok) CONEXIONES_ESTADO[c.slug] = r.data || {};
     }catch(e){}
   }));
-  var conectados = clientes.filter(function(c){ var e = CONEXIONES_ESTADO[c.slug] || {}; return e.gaUser && e.hasPassword; });
+  // Solo los centros que TIENEN la conexion cargada. Listar los diez con un boton
+  // 'Conectar' da a entender que todos usan el sistema, y hoy Global App es solo de
+  // Baimed. Para sumar otro esta el boton de abajo, que pregunta cual.
+  var conectados = clientes.filter(function(c){ var e = CONEXIONES_ESTADO[c.slug] || {}; return e.gaUser || e.hasPassword; });
   var h = '';
   h += '<div class="general-debitos-meta">' + CONEXIONES_SISTEMAS.length + ' sistema · '
      + conectados.length + ' centro' + (conectados.length === 1 ? '' : 's') + ' conectado' + (conectados.length === 1 ? '' : 's') + '</div>';
   CONEXIONES_SISTEMAS.forEach(function(sis){
     h += '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:10px">'
       + '<div style="font-weight:800">' + esc(sis.nombre) + '</div>'
-      + '<div class="nom-muted" style="margin:2px 0 10px">' + esc(sis.que) + '</div>'
-      + '<div style="display:flex;flex-direction:column;gap:6px">';
-    clientes.forEach(function(c){
-      var e = CONEXIONES_ESTADO[c.slug] || {};
-      var listo = !!(e.gaUser && e.hasPassword);
-      h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'
-        + '<span style="flex:1;min-width:0">' + esc(c.name || c.slug)
-        + (listo ? '<div class="nom-muted" style="font-size:11.5px">' + esc(e.gaUser) + '</div>' : '') + '</span>'
-        + '<span style="flex:none;font-size:12px;color:' + (listo ? '#16a34a' : 'var(--text-2)') + ';font-weight:' + (listo ? '800' : '400') + '">'
-        + (listo ? 'Conectado' : 'Sin conectar') + '</span>'
-        + '<button class="btn btn-ghost btn-sm" type="button" onclick="conexionEditar(\'' + esc(c.slug) + '\')">'
-        + (listo ? 'Editar' : 'Conectar') + '</button>'
-        + '</div>';
-    });
-    h += '</div></div>';
+      + '<div class="nom-muted" style="margin:2px 0 10px">' + esc(sis.que) + '</div>';
+    if (!conectados.length){
+      h += '<div class="nom-muted">Todavía no hay ningún centro conectado.</div>';
+    } else {
+      h += '<div style="display:flex;flex-direction:column;gap:6px">';
+      conectados.forEach(function(c){
+        var e = CONEXIONES_ESTADO[c.slug] || {};
+        var listo = !!(e.gaUser && e.hasPassword);
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'
+          + '<span style="flex:1;min-width:0">' + esc(c.name || c.slug)
+          + '<div class="nom-muted" style="font-size:11.5px">' + esc(e.gaUser || 'sin usuario') + '</div></span>'
+          + '<span style="flex:none;font-size:12px;color:' + (listo ? '#16a34a' : '#d97706') + ';font-weight:800">'
+          + (listo ? 'Conectado' : 'Falta la clave') + '</span>'
+          + '<button class="btn btn-ghost btn-sm" type="button" data-slug="' + esc(c.slug) + '" onclick="conexionEditar(this.dataset.slug)">Editar</button>'
+          + '</div>';
+      });
+      h += '</div>';
+    }
+    h += '<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" type="button" onclick="conexionAgregar()">+ Conectar un centro</button></div>';
+    h += '</div>';
   });
   box.innerHTML = h;
+}
+
+// Sumar un centro: se elige de los que todavia no tienen la conexion cargada.
+async function conexionAgregar(){
+  var libres = (CLIENTS || []).filter(function(c){
+    var e = CONEXIONES_ESTADO[c.slug] || {};
+    return c && c.slug && !e.gaUser && !e.hasPassword;
+  });
+  if (!libres.length){ nsAlert('Todos los centros ya tienen la conexión cargada.', { titulo:'Conexiones' }); return; }
+  var opciones = libres.map(function(c){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border);cursor:pointer">'
+      + '<input type="radio" name="cxCentro" value="' + esc(c.slug) + '" style="width:auto" onchange="window.__cxElegido=this.value"> '
+      + esc(c.name || c.slug) + '</label>';
+  }).join('');
+  window.__cxElegido = '';
+  var ok = await nsConfirm('', { titulo:'¿Qué centro?', cuerpoHtml:'<div style="max-height:46vh;overflow:auto">' + opciones + '</div>', okLabel:'Seguir' });
+  if (!ok || !window.__cxElegido) return;
+  conexionEditar(window.__cxElegido);
 }
 
 // Alta/edición del acceso de un centro. La clave vacía = se deja la que estaba,
