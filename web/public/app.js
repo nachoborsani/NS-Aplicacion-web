@@ -10841,7 +10841,6 @@ function renderPadronRows(slug, data){
   }
   if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
   var esAdmin = ME && ME.role === 'admin';
-  var porPaciente = cabContarPorPaciente(items);
   body.innerHTML = items.map(function(it){
     var acciones = '';
     if (esAdmin) {
@@ -12256,7 +12255,13 @@ async function refreshCabina(){
     CAB_ITEMS = d.items || [];
     cabMostrarUltimaImport(d.lastMailImportAt);
     aplicarFiltroCabina();
-  } catch(e){ if(meta) meta.textContent = 'Error de red.'; }
+  } catch(e){
+    // Ojo: este catch tambien agarra un error de la propia pantalla al dibujar la
+    // lista, y decir "Error de red" manda a buscar el problema donde no esta
+    // (paso el 13/09/2026 con una variable que quedo en la funcion equivocada).
+    console.error('[cabina] no se pudo mostrar la lista:', e);
+    if (meta) meta.textContent = (e && e.message) ? ('No se pudo mostrar la lista: ' + e.message) : 'Error de red.';
+  }
 }
 // Muestra cuándo fue la última vez que se trajo del mail para este cliente.
 function cabMostrarUltimaImport(iso){
@@ -12570,6 +12575,7 @@ var CAB_VISIBLES = [];
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
   if (!items.length){ body.innerHTML = '<tr><td colspan="10" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
+  var porPaciente = cabContarPorPaciente(items);
   body.innerHTML = items.map(function(it){
     var omesArr = (it.resuelto && (it.resuelto.omes || (it.resuelto.ome ? [it.resuelto.ome] : []))) || (it.match && it.match.ome ? [it.match.ome] : []);
     // Si está "Falta validar", en la columna OME mostramos SOLO la(s) que falta
