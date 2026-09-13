@@ -57,6 +57,7 @@ function emptyStore() {
     pacientes: [],
     turnos: [],
     practicas: [],
+    config: {},
     evoluciones: [],
     estudios: [],
     cierres: [],
@@ -121,6 +122,8 @@ const LAB_PERMISOS = {
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
   sala: "agenda",
+  recordatorios: "agenda",
+  config: "config",
   pacientes: "pacientes",
   estudios: "hc",
   caja: "caja",
@@ -144,6 +147,27 @@ function labPuede(me, permiso) {
   const rol = labRolDe(me);
   if (!rol) return false;
   return LAB_PERMISOS[rol].includes(permiso);
+}
+
+// El texto del recordatorio. Las llaves se reemplazan con los datos del turno; el
+// centro lo puede cambiar entero desde la pantalla.
+const PLANTILLA_DEFAULT =
+  "Hola {paciente}, le recordamos su turno el {fecha} a las {hora} con {profesional}. " +
+  "Si no puede venir, avisenos asi se lo damos a otra persona. Gracias.";
+function armarRecordatorio(plantilla, t, prof, config) {
+  const f = String(t.fecha || "").split("-");
+  const partes = {
+    "{paciente}": String(t.pacienteNombre || "").split(",")[0].trim() || "paciente",
+    "{fecha}": f.length === 3 ? f[2] + "/" + f[1] : (t.fecha || ""),
+    "{hora}": t.hora || "",
+    "{profesional}": prof.nombre || "",
+    "{practica}": t.practicaNombre || "",
+    "{centro}": config.centroNombre || "",
+    "{direccion}": config.centroDireccion || "",
+  };
+  let out = String(plantilla || PLANTILLA_DEFAULT);
+  Object.keys(partes).forEach((k) => { out = out.split(k).join(partes[k]); });
+  return out.replace(/\s{2,}/g, " ").trim();
 }
 
 // Colecciones simples con CRUD genérico (las que son catálogo plano).
@@ -239,6 +263,8 @@ function sanitizeTurno(body, previo, store) {
   t.celular = body.celular !== undefined ? clean(body.celular) : (t.celular || "");
   t.obraSocial = body.obraSocial !== undefined ? clean(body.obraSocial) : (t.obraSocial || "");
   t.nroAfiliado = body.nroAfiliado !== undefined ? clean(body.nroAfiliado) : (t.nroAfiliado || "");
+  t.avisadoEl = body.avisadoEl !== undefined ? clean(body.avisadoEl) : (t.avisadoEl || "");
+  t.avisadoPor = body.avisadoPor !== undefined ? clean(body.avisadoPor) : (t.avisadoPor || "");
   t.practicaId = body.practicaId !== undefined ? clean(body.practicaId) : (t.practicaId || "");
   // El nombre se copia al turno a proposito: si despues renombran o borran la
   // practica, el turno viejo tiene que seguir diciendo que se hizo.
@@ -301,6 +327,61 @@ async function handleLab(ctx) {
       profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;
+  }
+
+  // -- Config del centro (nombre y texto del recordatorio) --
+  if (recurso === "config") {
+    if (!store.config) store.config = {};
+    if (method === "GET") return json(res, 200, { config: Object.assign({ plantillaRecordatorio: PLANTILLA_DEFAULT }, store.config) }), true;
+    if (method === "POST") {
+      const body = await readBody(req);
+      if (body.centroNombre !== undefined) store.config.centroNombre = clean(body.centroNombre);
+      if (body.centroDireccion !== undefined) store.config.centroDireccion = clean(body.centroDireccion);
+      if (body.plantillaRecordatorio !== undefined) store.config.plantillaRecordatorio = clean(body.plantillaRecordatorio) || PLANTILLA_DEFAULT;
+      saveStore(dataDir, store);
+      return json(res, 200, { config: store.config }), true;
+    }
+  }
+
+  // -- Recordatorios: a quien hay que avisarle el turno de un dia --
+  // No manda nada por su cuenta: arma el mensaje y deja el link para mandarlo desde
+  // el WhatsApp del centro. Contratar un envio automatico es plata y una cuenta
+  // aprobada; esto anda hoy y hace lo que de verdad cuesta: saber a quien, con que
+  // texto y no repetirle al que ya se le aviso.
+  if (recurso === "recordatorios" && method === "GET") {
+    const fecha = clean(url.searchParams.get("fecha")) || nowIso().slice(0, 10);
+    const plantilla = (store.config && store.config.plantillaRecordatorio) || PLANTILLA_DEFAULT;
+    const items = (store.turnos || [])
+      .filter((t) => t.fecha === fecha && t.estado === "dado")
+      .sort((a, b) => String(a.hora).localeCompare(String(b.hora)))
+      .map((t) => {
+        const prof = (store.profesionales || []).find((x) => x.id === t.profesionalId) || {};
+        const tel = soloDigitos(t.celular);
+        return {
+          id: t.id, hora: t.hora, paciente: t.pacienteNombre, celular: t.celular,
+          telefonoOk: tel.length >= 8,
+          profesional: prof.nombre || "",
+          avisadoEl: t.avisadoEl || "", avisadoPor: t.avisadoPor || "",
+          mensaje: armarRecordatorio(plantilla, t, prof, store.config || {}),
+          // wa.me quiere el numero con pais y sin nada mas. Argentina: 54.
+          whatsapp: tel ? "https://wa.me/" + (tel.startsWith("54") ? tel : "54" + tel.replace(/^0+/, "")) : "",
+        };
+      });
+    return json(res, 200, {
+      fecha, items, plantilla,
+      totales: { turnos: items.length, avisados: items.filter((x) => x.avisadoEl).length,
+                 sinTelefono: items.filter((x) => !x.telefonoOk).length },
+    }), true;
+  }
+  // Marcar (o desmarcar) que ya se le aviso.
+  if (recurso === "turnos" && seg[2] === "aviso" && method === "POST") {
+    const t = (store.turnos || []).find((x) => x.id === idPath);
+    if (!t) return json(res, 404, { error: "Turno no encontrado." }), true;
+    const body = await readBody(req);
+    if (body.avisado === false) { t.avisadoEl = ""; t.avisadoPor = ""; }
+    else { t.avisadoEl = nowIso(); t.avisadoPor = me.username; }
+    saveStore(dataDir, store);
+    return json(res, 200, { item: t }), true;
   }
 
   // -- Sala de espera: el dia entero, todos los profesionales de una --

@@ -95,7 +95,7 @@
   // El cuarto dato de cada modulo es el permiso que pide: el menu se arma con lo que
   // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
-    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
+    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
     ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
@@ -148,6 +148,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "recordatorios") viewRecordatorios(c);
     else if (mod === "sala") viewSala(c);
     else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
@@ -566,6 +567,98 @@
       var rr = await req("DELETE", "/api/lab/turnos/" + id);
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
+    };
+  }
+
+  /* ========================= RECORDATORIOS ============================== */
+  // A quien hay que avisarle el turno, con el mensaje ya escrito. El envio NO es
+  // automatico a proposito: mandar por WhatsApp de verdad pide una cuenta de empresa
+  // aprobada y se paga por mensaje. Esto anda hoy y hace lo que de verdad cuesta:
+  // saber a quien, con que texto, y no repetirle al que ya se le aviso.
+  function manana() {
+    var d = new Date(); d.setDate(d.getDate() + 1);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  async function viewRecordatorios(c) {
+    if (!LAB.recFecha) LAB.recFecha = manana();
+    async function pintar() {
+      c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+      var r = await api("/api/lab/recordatorios?fecha=" + encodeURIComponent(LAB.recFecha));
+      if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+      var d = r.data || {}, t = d.totales || {};
+      var filas = (d.items || []).map(function (x) {
+        var acc = x.avisadoEl
+          ? '<span class="lab-rec-ok">avisado</span> <button class="lab-btn xs ghost" data-des="' + x.id + '" type="button">deshacer</button>'
+          : (x.whatsapp
+              ? '<a class="lab-btn xs primary" href="' + x.whatsapp + "?text=" + encodeURIComponent(x.mensaje) + '" target="_blank" rel="noopener" data-av="' + x.id + '">WhatsApp</a>'
+              : '<span class="lab-muted">sin celular</span>')
+            + ' <button class="lab-btn xs" data-mark="' + x.id + '" type="button">Marcar avisado</button>';
+        return "<tr" + (x.avisadoEl ? ' class="lab-rec-hecho"' : "") + "><td><b>" + esc(x.hora) + "</b></td>" +
+          "<td>" + esc(x.paciente || "—") + '<div class="lab-muted">' + esc(x.profesional || "") + "</div></td>" +
+          "<td>" + (x.telefonoOk ? esc(x.celular) : '<span class="lab-muted">' + esc(x.celular || "—") + "</span>") + "</td>" +
+          '<td class="lab-rec-msg">' + esc(x.mensaje) + "</td>" +
+          '<td style="white-space:nowrap;text-align:right">' + acc + "</td></tr>";
+      }).join("");
+      c.innerHTML = '<div class="lab-card">' +
+        '<div class="lab-list-head"><h3>Recordatorios</h3>' +
+          '<div class="lab-inline"><input class="lab-in" type="date" id="rec-fecha" value="' + esc(LAB.recFecha) + '">' +
+          '<button class="lab-btn" id="rec-manana" type="button">Mañana</button>' +
+          (labPuede("config") ? '<button class="lab-btn" id="rec-texto" type="button">Texto del mensaje</button>' : "") + "</div></div>" +
+        '<div class="lab-muted" style="margin-bottom:10px">Los turnos del día que todavía no se atendieron. ' +
+        "El mensaje se abre en tu WhatsApp con el texto puesto; al volver, marcalo como avisado.</div>" +
+        '<div class="lab-sala-kpis">' +
+          '<div class="lab-sala-kpi"><b>' + (t.turnos || 0) + "</b><span>por avisar</span></div>" +
+          '<div class="lab-sala-kpi verde"><b>' + (t.avisados || 0) + "</b><span>avisados</span></div>" +
+          '<div class="lab-sala-kpi roja"><b>' + (t.sinTelefono || 0) + "</b><span>sin celular</span></div>" +
+        "</div>" +
+        (filas ? '<table class="lab-table"><thead><tr><th>Hora</th><th>Paciente</th><th>Celular</th><th>Mensaje</th><th></th></tr></thead><tbody>' + filas + "</tbody></table>"
+               : '<div class="lab-muted" style="padding:14px">No hay turnos para avisar ese día.</div>') +
+        "</div>";
+      c.querySelector("#rec-fecha").onchange = function () { LAB.recFecha = this.value; pintar(); };
+      c.querySelector("#rec-manana").onclick = function () { LAB.recFecha = manana(); pintar(); };
+      var bt = c.querySelector("#rec-texto");
+      if (bt) bt.onclick = function () { textoRecordatorioModal(d.plantilla, pintar); };
+      async function marcar(id, avisado) {
+        var rr = await api("/api/lab/turnos/" + id + "/aviso", { avisado: avisado });
+        if (!rr.ok) { toast("No se pudo marcar.", true); return; }
+        pintar();
+      }
+      c.querySelectorAll("[data-mark]").forEach(function (b) { b.onclick = function () { marcar(b.dataset.mark, true); }; });
+      c.querySelectorAll("[data-des]").forEach(function (b) { b.onclick = function () { marcar(b.dataset.des, false); }; });
+      // Abrir el WhatsApp ya cuenta como aviso: si no, hay que acordarse de marcarlo
+      // y a la segunda vuelta nadie lo hace.
+      c.querySelectorAll("[data-av]").forEach(function (a) {
+        a.onclick = function () { setTimeout(function () { marcar(a.dataset.av, true); }, 400); };
+      });
+    }
+    await pintar();
+  }
+  function textoRecordatorioModal(plantilla, luego) {
+    var m = modal("Texto del recordatorio", { ancho: "ancho" });
+    m.body.innerHTML =
+      '<div class="lab-form">' +
+      '<div class="lab-muted" style="margin-bottom:8px">Lo que va entre llaves se reemplaza con los datos del turno: ' +
+      "<b>{paciente}</b>, <b>{fecha}</b>, <b>{hora}</b>, <b>{profesional}</b>, <b>{practica}</b>, <b>{centro}</b>, <b>{direccion}</b>.</div>" +
+      '<label>Mensaje<textarea class="lab-in" id="rt-txt" rows="4">' + esc(plantilla || "") + "</textarea></label>" +
+      '<div class="lab-grid2">' +
+        '<label>Nombre del centro<input class="lab-in" id="rt-centro" placeholder="Como lo firma el mensaje"></label>' +
+        '<label>Dirección<input class="lab-in" id="rt-dir" placeholder="Opcional"></label>' +
+      "</div>" +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="rt-cancel">Cancelar</button><button class="lab-btn primary" id="rt-ok">Guardar</button></div></div>';
+    api("/api/lab/config").then(function (r) {
+      var cfg = (r.data && r.data.config) || {};
+      m.body.querySelector("#rt-centro").value = cfg.centroNombre || "";
+      m.body.querySelector("#rt-dir").value = cfg.centroDireccion || "";
+    });
+    m.body.querySelector("#rt-cancel").onclick = labClose;
+    m.body.querySelector("#rt-ok").onclick = async function () {
+      var rr = await api("/api/lab/config", {
+        plantillaRecordatorio: m.body.querySelector("#rt-txt").value,
+        centroNombre: m.body.querySelector("#rt-centro").value,
+        centroDireccion: m.body.querySelector("#rt-dir").value,
+      });
+      if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+      labClose(); toast("Texto guardado ✓"); if (luego) luego();
     };
   }
 
@@ -1478,7 +1571,9 @@
     if (document.getElementById("lab-styles")) return;
     var css = document.createElement("style"); css.id = "lab-styles";
     css.textContent = [
-      ".lab-wrap{display:grid;grid-template-columns:212px minmax(0,1fr);gap:18px;max-width:1340px;margin:0 auto;align-items:start}",
+      // Pegado a la izquierda, no centrado: con el menu de NS al costado, centrar
+      // dejaba un hueco muerto entre los dos menus y el sistema parecia flotando.
+      ".lab-wrap{display:grid;grid-template-columns:212px minmax(0,1fr);gap:18px;margin:0;align-items:start}",
       ".lab-nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card,#fff)}",
       ".lab-nav-grupo{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);padding:0 8px;margin:12px 0 4px}",
       ".lab-nav-grupo:first-child{margin-top:2px}",
@@ -1541,6 +1636,9 @@
       ".lab-toast.err{background:#b91c1c}",
       ".lab-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end}",
       ".lab-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)}",
+      ".lab-rec-msg{font-size:12px;color:var(--text-2);max-width:420px}",
+      ".lab-rec-hecho{opacity:.55}",
+      ".lab-rec-ok{color:#15803d;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
       ".lab-sala-kpi b{display:block;font-size:20px;line-height:1.1}",
