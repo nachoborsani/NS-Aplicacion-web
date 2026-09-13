@@ -12340,6 +12340,11 @@ function ensureOrlSeed() {
       // otorrino cargado ahi.
       { id: "arana-coello-jacinto", nombre: "Dr. Jacinto Arana Coello", matricula: "M.N. 63.422 · M.P. 52.746",
         modelos: ["orl-cerumen", "orl-quimico", "orl-combinado", "orl-videorino"], clientes: ["st-ignacio"] },
+      // Cardiologo del mismo centro. Datos del pie de un ecodoppler de vasos del
+      // cuello suyo (Bissio, 03/08/2026). Solo ese estudio por ahora: es el unico
+      // que se lo vio firmar, y el centro tiene 10 de esos esperando informe.
+      { id: "ramirez-walter", nombre: "Dr. Walter Ramirez", matricula: "M.N. 119.078 · M.P. 33.293",
+        modelos: ["eco-doppler-cuello"], clientes: ["st-ignacio"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
