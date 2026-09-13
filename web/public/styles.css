@@ -2329,6 +2329,12 @@
   .cab-cand-main b{font-size:12.5px;word-break:break-word}
   .cab-cand-ck{width:17px;height:17px;flex:0 0 auto;cursor:pointer;accent-color:var(--brand,#0aa)}
   .cab-selbar{display:flex;justify-content:flex-end;margin-top:9px}
+  /* Aviso de debito en la cabina: lo que se esta por subir se pisa con otra practica
+     del mismo dia y PAMI va a debitar una. No bloquea, avisa. */
+  .cab-debito{margin-top:10px;border:1px solid #f0b429;background:rgba(240,180,41,.10);border-radius:10px;padding:9px 11px}
+  .cab-debito-head{font-weight:800;font-size:12.5px;color:#a16207;margin-bottom:5px}
+  .cab-debito-item{font-size:12px;line-height:1.45}
+  .cab-debito-item + .cab-debito-item{margin-top:5px;padding-top:5px;border-top:1px dashed rgba(161,98,7,.35)}
   .btn-sm{padding:5px 12px;font-size:12px}
   .cab-manual{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--border);padding-top:12px}
   /* En pantallas medianas la columna fija le comería demasiado al visor. */

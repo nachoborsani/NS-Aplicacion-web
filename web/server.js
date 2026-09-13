@@ -3546,6 +3546,99 @@ function applyAutomaticExclusionDebits(rows) {
   aplicar(periodGroups, reglas.filter((r) => r.alcance === "periodo"));
   return rows || [];
 }
+
+// ===== Aviso de débito ANTES de subir un informe =====
+// Las mismas reglas del panel Débitos, pero mirando para adelante. En la cabina el
+// operador está por pegar un informe contra una o varias prácticas del afiliado; si
+// dos de esas se pisan —o una se pisa con otra que el afiliado ya tiene ese día—
+// PAMI va a debitar una. Eso hay que decirlo ANTES de subir, no descubrirlo en el
+// reporte de fin de mes: el informe se hace igual, pero al menos se sabe que esa
+// práctica no se cobra.
+// items: [{ ome, practica ("180106 - ECOGRAFIA MAMARIA BILATERAL"), turno, elegido }]
+function diaDeTurno(turno) {
+  const d = parseDateTime(turno, { preferDayMonth: true });
+  if (!d) return String(turno || "").slice(0, 10);
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function chequearDebitoDeSubida(items) {
+  const reglas = loadDebitoReglas().filter((r) => r && r.activa);
+  if (!reglas.length) return [];
+  const filas = (Array.isArray(items) ? items : []).map((it) => {
+    const practica = String((it && it.practica) || "").trim();
+    const m = practica.match(/(\d{4,6})/);
+    const fila = {
+      ome: cleanIdentifier(it && it.ome),
+      practica,
+      practiceCode: cleanIdentifier((it && it.codigo) || (m ? m[1] : "")),
+      practiceDescription: practica.replace(/^\s*\d{4,6}\s*[-–]?\s*/, "").trim(),
+      dia: diaDeTurno(it && it.turno),
+      elegido: !!(it && it.elegido),
+    };
+    fila.codigos = expandedPamiExclusionCodes(fila);
+    return fila;
+  }).filter((f) => f.practiceCode);
+  if (filas.length < 2) return [];
+  const avisos = [];
+  const evaluar = (grupo, reglasSet) => {
+    for (const regla of reglasSet) {
+      const cuando = regla.alcance === "periodo" ? "en el mes" : "el mismo día";
+      if (regla.tipo === "inclusion") {
+        const dc = cleanIdentifier(regla.debita);
+        const grandes = (regla.conCodigos || []).map((c) => cleanIdentifier(c));
+        const debitadas = grupo.filter((f) => f.codigos.includes(dc));
+        const conLaGrande = grupo.filter((f) => f.codigos.some((c) => grandes.includes(c)));
+        if (!debitadas.length || !conLaGrande.length) continue;
+        // Solo interesa si lo que se está por subir es parte del cruce. Si las dos
+        // ya están y ninguna se toca, el aviso no viene al caso.
+        if (!debitadas.some((f) => f.elegido) && !conLaGrande.some((f) => f.elegido)) continue;
+        for (const chica of debitadas) {
+          if (conLaGrande.every((g) => g.ome && g.ome === chica.ome)) continue;
+          avisos.push({
+            tipo: "total",
+            ome: chica.ome,
+            elegida: !!chica.elegido,
+            practica: chica.practica,
+            contra: conLaGrande[0].practica,
+            texto: `${regla.debitaNombre || chica.practica} no se cobra: ${cuando} está ${regla.conNombre || conLaGrande[0].practica}. PAMI la debita entera.`,
+            nota: regla.nota || "",
+          });
+        }
+      } else {
+        const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
+        const enJuego = grupo.filter((f) => f.codigos.some((c) => cods.includes(c)));
+        const distintos = new Set(enJuego.flatMap((f) => f.codigos.filter((c) => cods.includes(c))));
+        if (distintos.size < 2 || enJuego.length < 2) continue;
+        if (!enJuego.some((f) => f.elegido)) continue;
+        const objetivo = enJuego.find((f) => f.elegido) || enJuego[0];
+        avisos.push({
+          tipo: "pay40",
+          ome: objetivo.ome,
+          elegida: true,
+          practica: enJuego.map((f) => f.practica).join(" + "),
+          contra: "",
+          texto: `${regla.codigosNombre || "Estos dos estudios"} ${cuando}: PAMI paga uno entero y el otro al 40%.`,
+          nota: regla.nota || "",
+        });
+      }
+    }
+  };
+  const porDia = new Map();
+  for (const f of filas) {
+    const k = f.dia || "sin-fecha";
+    if (!porDia.has(k)) porDia.set(k, []);
+    porDia.get(k).push(f);
+  }
+  for (const grupo of porDia.values()) evaluar(grupo, reglas.filter((r) => r.alcance !== "periodo"));
+  evaluar(filas, reglas.filter((r) => r.alcance === "periodo"));
+  const vistos = new Set();
+  return avisos.filter((a) => {
+    const k = `${a.tipo}|${a.ome}|${a.texto}`;
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+}
 function getRowValue(row, aliases) {
   for (const [key, value] of Object.entries(row || {})) {
     const normalized = normalizeText(key);
@@ -11784,6 +11877,15 @@ const server = http.createServer(async (req, res) => {
     const me = getSessionUser(req);
     if (!me) return json(res, 401, { error: "no-auth" });
     return json(res, 200, loadDebitoStore());
+  }
+  // Aviso previo: "si subo esto, ¿se cobra?". Lo usa la cabina de informes cuando se
+  // tilda más de una práctica del mismo afiliado. Solo lee reglas, no guarda nada.
+  if (p === "/api/debitos/chequeo" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const body = await readBody(req);
+    const items = (body && Array.isArray(body.items)) ? body.items.slice(0, 40) : [];
+    return json(res, 200, { avisos: chequearDebitoDeSubida(items) });
   }
   if (p === "/api/debito-reglas" && req.method === "PUT") {
     const me = getSessionUser(req);

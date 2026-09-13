@@ -12779,6 +12779,7 @@ function abrirInforme(id){
           + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
           + '</div>';
       }).join('')
+      + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>';
     actualizarSelOmes();
   }
@@ -12786,7 +12787,12 @@ function abrirInforme(id){
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); var t=document.getElementById('cabTexto'); if(t){ t.textContent=''; t.style.display='none'; } CAB_ITEM=null; }
-function usarCandidato(ome, beneficio){ if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; } document.getElementById('cabOmeManual').value = ome; resolverInformeManual(beneficio||''); }
+async function usarCandidato(ome, beneficio){
+  if (!ome){ document.getElementById('cabModalErr').textContent='Ese candidato no tiene OME.'; return; }
+  if (!await confirmarSiHayDebito([ome])) return;
+  document.getElementById('cabOmeManual').value = ome;
+  resolverInformeManual(beneficio||'');
+}
 // Muestra/oculta la barra "Usar los N tildados" según cuántos candidatos se marcaron.
 function actualizarSelOmes(){
   var cks = document.querySelectorAll('.cab-cand-ck:checked');
@@ -12794,6 +12800,64 @@ function actualizarSelOmes(){
   if (!bar) return;
   var n = document.getElementById('cabSelN'); if (n) n.textContent = cks.length;
   bar.style.display = cks.length ? '' : 'none';
+  var omes = []; cks.forEach(function(c){ omes.push(c.value); });
+  mostrarAvisoDebito(omes);
+}
+// ===== Débitos: avisar ANTES de subir =====
+// Dos prácticas del mismo afiliado el mismo día se pisan y PAMI debita una (la
+// prostática contra la vesical, la renal contra la abdominal, el par arterial +
+// venoso al 40%). El informe se hace igual, pero hay que saber que esa práctica no
+// se va a cobrar antes de subirla, no en el reporte de fin de mes. Las reglas son
+// las del panel Débitos y las evalúa el server: acá no hay una segunda copia.
+var CAB_DEBITO_AVISOS = [], CAB_DEBITO_T = null;
+async function pedirAvisosDebito(omesElegidas){
+  if (!CAB_ITEM) return [];
+  var cands = (CAB_ITEM.match && CAB_ITEM.match.candidatos) || [];
+  if (cands.length < 2) return [];
+  var elegidas = omesElegidas || [];
+  var items = cands.map(function(c){
+    return { ome: c.ome || '', practica: c.practica || '', turno: c.turno || '',
+             elegido: elegidas.indexOf(c.ome) >= 0 };
+  });
+  try {
+    var r = await fetch('/api/debitos/chequeo', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ items: items }) });
+    if (!r.ok) return [];
+    var d = await r.json();
+    return (d && d.avisos) || [];
+  } catch(e){ return []; }   // un aviso que falla no puede trabar la subida
+}
+function textoAvisoDebito(avisos){
+  return avisos.map(function(a){
+    var etiqueta = a.tipo === 'pay40' ? 'Se cobra al 40%' : 'No se cobra';
+    return '<div class="cab-debito-item"><b>' + esc(etiqueta) + '</b> · ' + esc(a.texto)
+      + (a.ome ? ' <span class="cab-sub">OME ' + esc(a.ome) + '</span>' : '') + '</div>';
+  }).join('');
+}
+function mostrarAvisoDebito(omes){
+  var box = document.getElementById('cabDebitoAviso');
+  if (!box) return;
+  clearTimeout(CAB_DEBITO_T);
+  CAB_DEBITO_T = setTimeout(async function(){
+    var avisos = await pedirAvisosDebito(omes);
+    CAB_DEBITO_AVISOS = avisos;
+    var b = document.getElementById('cabDebitoAviso');
+    if (!b) return;
+    if (!avisos.length){ b.style.display = 'none'; b.innerHTML = ''; return; }
+    b.style.display = '';
+    b.innerHTML = '<div class="cab-debito-head">⚠ Ojo con el débito</div>' + textoAvisoDebito(avisos);
+  }, 200);
+}
+// Se llama justo antes de pegar el informe. Devuelve false si el operador se
+// arrepiente. Lo que NO hace es bloquear: el débito es una proyección y el centro
+// puede querer subirlo igual (queda el informe hecho y la práctica presentada).
+async function confirmarSiHayDebito(omes){
+  var avisos = await pedirAvisosDebito(omes);
+  if (!avisos.length) return true;
+  var html = '<p style="margin:0 0 8px">Si subís esto, PAMI va a debitar:</p>'
+    + '<div class="cab-debito">' + textoAvisoDebito(avisos) + '</div>'
+    + '<p class="nom-muted" style="margin:8px 0 0">El informe se sube igual si querés; es para que sepas que esa práctica no se cobra.</p>';
+  return await nsConfirm('', { titulo: 'Esta práctica viene con débito', cuerpoHtml: html, okLabel: 'Subir igual', cancelLabel: 'Mejor no' });
 }
 // Resuelve el informe contra VARIAS OMEs de una (el archivo se sube a cada una).
 async function usarSeleccionados(){
@@ -12803,6 +12867,7 @@ async function usarSeleccionados(){
   var omes = [], benef = '';
   cks.forEach(function(c){ omes.push(c.value); if(!benef) benef = c.getAttribute('data-benef')||''; });
   benef = benef || (CAB_ITEM.extract && CAB_ITEM.extract.beneficio) || '';
+  if (!await confirmarSiHayDebito(omes)) return;
   var slug = document.getElementById('cabCliente').value;
   var err = document.getElementById('cabModalErr');
   var r = await fetch('/api/clientes/'+slug+'/informes/'+CAB_ITEM.id+'/resolver', {
