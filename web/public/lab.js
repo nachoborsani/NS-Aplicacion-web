@@ -287,6 +287,36 @@
     });
   }
 
+  // Opciones de practica para el turno. Vacio = no se eligio ninguna y el importe
+  // queda a mano, que es como venia funcionando.
+  function opcionesPracticas(sel) {
+    return '<option value="">— Sin práctica —</option>' + (LAB.cat.practicas || [])
+      .filter(function (x) { return x.activo !== false; })
+      .map(function (x) {
+        return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + ">" + esc(x.nombre) + "</option>";
+      }).join("");
+  }
+  // Al elegir practica u obra social, el importe sale del valor cargado. Si esa obra
+  // social todavia no tiene valor para esa practica NO se pone cero: se deja lo que
+  // haya y se avisa, porque un cero cobrado es peor que un campo vacio.
+  function aplicarValorPractica(cont, idPractica, idOS, idImporte) {
+    var selP = cont.querySelector(idPractica), selO = cont.querySelector(idOS), inp = cont.querySelector(idImporte);
+    if (!selP || !inp) return;
+    function recalcular(porMano) {
+      var pracId = selP.value;
+      if (!pracId) return;
+      var os = selO ? selO.value : "";
+      var v = valorPractica(pracId, os);
+      if (v) { inp.value = v; return; }
+      var pr = (LAB.cat.practicas || []).find(function (x) { return x.id === pracId; });
+      if (porMano) {
+        toast((os || "Esa obra social") + " todavía no tiene valor cargado para " + ((pr && pr.nombre) || "esa práctica") + ".", true);
+      }
+    }
+    selP.onchange = function () { recalcular(true); };
+    if (selO) selO.addEventListener("change", function () { recalcular(true); });
+  }
+
   // Reservar turno en un horario (o sobreturno si hora vacía).
   function bookModal(hora) {
     var m = modal("Dar turno · " + (hora || "sobreturno"));
@@ -304,12 +334,14 @@
           '<label>N° afiliado<input class="lab-in" id="bk-afil"></label>' +
           '<label>Celular<input class="lab-in" id="bk-cel"></label>' +
           '<label>' + (hora ? "Horario" : "Horario (sobreturno)") + '<input class="lab-in" id="bk-hora" value="' + esc(hora) + '" placeholder="HH:MM"></label>' +
+          '<label>Práctica<select class="lab-in" id="bk-prac">' + opcionesPracticas("") + "</select></label>" +
           '<label>Importe consulta<input class="lab-in" id="bk-importe" type="number" min="0" step="100" value="' + valorDef + '" placeholder="0"></label>' +
         "</div>" +
         '<label>Motivo<input class="lab-in" id="bk-motivo" placeholder="Consulta, control, estudio…"></label>' +
       "</div>" +
       '<div class="lab-modal-actions"><button class="lab-btn ghost" id="bk-cancel">Cancelar</button><button class="lab-btn primary" id="bk-ok">Dar turno</button></div>';
     var selPacId = "";
+    aplicarValorPractica(m.body, "#bk-prac", "#bk-os", "#bk-importe");
     var buscar = m.body.querySelector("#bk-buscar");
     var res = m.body.querySelector("#bk-res");
     var timer = null;
@@ -334,6 +366,9 @@
             m.body.querySelector("#bk-cel").value = p.celular || "";
             res.innerHTML = "";
             buscar.value = [p.apellido, p.nombre].filter(Boolean).join(", ");
+            // El paciente trae SU obra social: si ya habia una practica elegida, el
+            // importe tiene que recalcularse con el valor de esa obra social.
+            m.body.querySelector("#bk-os").dispatchEvent(new Event("change"));
           };
         });
       }, 250);
@@ -350,6 +385,8 @@
         documento: m.body.querySelector("#bk-doc").value, obraSocial: m.body.querySelector("#bk-os").value,
         nroAfiliado: m.body.querySelector("#bk-afil").value, celular: m.body.querySelector("#bk-cel").value,
         motivo: m.body.querySelector("#bk-motivo").value, importe: m.body.querySelector("#bk-importe").value, permitirSobreturno: !hora,
+        practicaId: m.body.querySelector("#bk-prac").value,
+        practicaNombre: (m.body.querySelector("#bk-prac").selectedOptions[0] || {}).text || "",
       };
       var r = await api("/api/lab/turnos", payload);
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo dar el turno.", true); this.disabled = false; return; }
@@ -425,7 +462,7 @@
     m.body.innerHTML =
       '<div class="lab-turno-det">' +
         "<div><b>" + esc(t.hora) + "</b> · " + esc(t.pacienteNombre || "—") + "</div>" +
-        '<div class="lab-muted">' + [esc(t.documento), esc(t.obraSocial), esc(t.motivo)].filter(Boolean).join(" · ") + "</div>" +
+        '<div class="lab-muted">' + [esc(t.documento), esc(t.obraSocial), esc(t.practicaNombre), esc(t.motivo)].filter(Boolean).join(" · ") + "</div>" +
       "</div>" +
       '<div class="lab-sec-tit">Estado</div>' +
       '<div class="lab-estados">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
@@ -438,6 +475,8 @@
         }).join("") + '</select></label>' +
       '<div class="lab-muted" id="tn-prac-aviso" style="margin:-4px 0 8px"></div>' +
       '<div class="lab-grid3">' +
+        '<label>Práctica<select class="lab-in" id="tn-prac">' + opcionesPracticas(t.practicaId || "") + "</select></label>" +
+        '<label>Obra social<input class="lab-in" id="tn-os" value="' + esc(t.obraSocial || "") + '" readonly></label>' +
         '<label>Importe<input class="lab-in" id="tn-imp" type="number" min="0" step="100" value="' + (t.importe || 0) + '"></label>' +
         '<label>Seña<input class="lab-in" id="tn-sena" type="number" min="0" step="100" value="' + (t.sena || 0) + '"></label>' +
         '<label>Insumos<input class="lab-in" id="tn-ins" type="number" min="0" step="100" value="' + (t.insumos || 0) + '"></label>' +
@@ -465,6 +504,7 @@
       if (b) b.onclick = function () { estudioDeTurno(t, function () { turnoModal(id); }); };
     }
     estudiosDelTurno();
+    aplicarValorPractica(m.body, "#tn-prac", "#tn-os", "#tn-imp");
     m.body.querySelectorAll(".lab-est-btn").forEach(function (b) {
       b.onclick = async function () {
         var est = b.getAttribute("data-est");
@@ -497,6 +537,8 @@
         importe: m.body.querySelector("#tn-imp").value, sena: m.body.querySelector("#tn-sena").value,
         insumos: m.body.querySelector("#tn-ins").value, medioPago: m.body.querySelector("#tn-medio").value,
         pagado: m.body.querySelector("#tn-pag").checked,
+        practicaId: m.body.querySelector("#tn-prac").value,
+        practicaNombre: (m.body.querySelector("#tn-prac").selectedOptions[0] || {}).text || "",
         practicaId: selPrac.value,
         practicaNombre: selPrac.value ? (selPrac.options[selPrac.selectedIndex] || {}).text : "",
       });
