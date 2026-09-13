@@ -484,7 +484,7 @@ class NSWebClient:
         if self._cookie:
             headers["Cookie"] = self._cookie
         last_err = None
-        for _ in range(3):
+        for _ in range(4):
             conn = None
             try:
                 cls_conn = http.client.HTTPSConnection if is_https else http.client.HTTPConnection
@@ -498,8 +498,12 @@ class NSWebClient:
             except NSWebError:
                 raise
             except Exception as exc:  # noqa: BLE001 - corte pasajero: se reintenta
+                # Subir un informe dispara la lectura del PDF (texto u OCR) del
+                # lado de la web, y con un archivo pesado Railway a veces corta
+                # con 502 antes de que termine. Se espera cada vez mas: dos
+                # segundos no alcanzaban.
                 last_err = exc
-                time.sleep(2)
+                time.sleep(5 * (_ + 1))
             finally:
                 if conn is not None:
                     try:

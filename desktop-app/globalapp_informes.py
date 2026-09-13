@@ -280,7 +280,7 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     ga = GlobalApp(cfg, log=log, headless=headless)
     ga.abrir()
     cache_pacientes: dict[str, dict | None] = {}
-    bajados, sin_paciente, sin_ficha, fallados = 0, 0, 0, 0
+    bajados, sin_paciente, sin_ficha, sin_archivo, fallados = 0, 0, 0, 0, 0
     try:
         for i, fila in enumerate(pendientes, start=1):
             if solo and bajados >= solo:
@@ -320,8 +320,15 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 try:
                     pdf = ga.archivo(str(reg.get("_id")))
                 except Exception as exc:  # noqa: BLE001
-                    log(f"  [{i}] {nombre}: no pude bajar el archivo ({exc})")
-                    fallados += 1
+                    # Una ficha SIN archivo adjunto contesta 500. No es un error
+                    # nuestro: el estudio esta cargado pero el informe no se subio
+                    # todavia del lado del centro. Se cuenta aparte para no
+                    # mezclarlo con las fallas de verdad.
+                    if "500" in str(exc):
+                        sin_archivo += 1
+                    else:
+                        log(f"  [{i}] {nombre}: no pude bajar el archivo ({exc})")
+                        fallados += 1
                     continue
                 tipo = str(reg.get("tipo") or "INF").strip()
                 nom = re.sub(r"[^A-Za-z0-9 ._-]", "", _norm(nombre))[:40].strip() or "paciente"
@@ -338,11 +345,13 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
 
     resumen = {
         "pendientes": len(pendientes), "bajados": bajados,
-        "sin_paciente": sin_paciente, "sin_ficha": sin_ficha, "fallados": fallados,
+        "sin_paciente": sin_paciente, "sin_ficha": sin_ficha,
+        "sin_archivo": sin_archivo, "fallados": fallados,
     }
     log(
         f"Listo: {bajados} informes subidos a la cabina · {sin_paciente} sin paciente en Global App"
-        f" · {sin_ficha} sin ficha ese dia · {fallados} con error."
+        f" · {sin_ficha} sin ficha ese dia · {sin_archivo} con la ficha cargada pero sin informe"
+        f" · {fallados} con error."
     )
     return resumen
 
