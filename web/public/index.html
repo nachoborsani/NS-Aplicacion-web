@@ -145,7 +145,7 @@
           <div class="who"><div class="nm" id="sideName">—</div><div class="rl" id="sideRole">—</div></div>
         </div>
         <div class="side-config">
-          <a id="navGeneral" class="ns-only" onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>General</a>
+          <a id="navGeneral" class="ns-only" onclick="go('soon',this)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-2.9 1.16 2 2 0 11-4 0 1.65 1.65 0 00-2.72-1.16 2 2 0 11-2.83-2.83A1.65 1.65 0 004.6 15a2 2 0 110-4 1.65 1.65 0 001.4-2.7 2 2 0 112.83-2.83A1.65 1.65 0 0011 6.7a2 2 0 114 0 1.65 1.65 0 002.4 1.7 2 2 0 112.83 2.83A1.65 1.65 0 0019.4 15z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Configuración</a>
           <a id="verComoLink" onclick="abrirVerComo()" style="display:none"><svg viewBox="0 0 24 24" fill="none"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>Ver como…</a>
         </div><!-- Cambiar contraseña y Cerrar sesión se movieron al menú del avatar (arriba a la derecha) -->
       </div>
@@ -1788,6 +1788,18 @@
               <button class="btn btn-primary" type="button" onclick="openDebitoReglasModal()">Administrar reglas</button>
             </div>
             <div id="generalDebitosResumen"><div class="nom-muted">Cargando…</div></div>
+          </div>
+          <!-- Conexiones con sistemas de los centros. Hoy Global App (de donde el
+               bot baja los informes); la tabla esta pensada para que sumar otro
+               sistema sea una fila mas, no una pantalla nueva. -->
+          <div class="card general-card" style="margin-top:14px">
+            <div class="general-card-head">
+              <div>
+                <h3>🔌 Conexiones</h3>
+                <span class="nom-muted">Accesos a los sistemas de los centros. Con esto el server entra solo a buscar los informes, sin que nadie los baje a mano.</span>
+              </div>
+            </div>
+            <div id="conexionesBody"><div class="nom-muted">Cargando…</div></div>
           </div>
         </section>
       </div>

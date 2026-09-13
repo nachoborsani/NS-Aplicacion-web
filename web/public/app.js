@@ -150,7 +150,7 @@ function go(v, el){
   if (v === 'padron') loadPadronView();
   if (v === 'cabina') loadCabinaView();
   if (v === 'liberarcupo') loadLiberarCupoView();
-  if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); }
+  if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); loadConexiones(); }
   if (v === 'facturas') loadFacturas();
   if (v === 'cruzas') loadCruzasClientes();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -8667,6 +8667,92 @@ function resetPamiApplyBtn(){
 // ===== Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno) =====
 var DEBITO_REGLAS = [];
 var UMBRAL_PAGA_PCT = 60;   // % que paga PAMI en "valorización parcial por umbrales" (configurable)
+// ===== Conexiones: accesos a los sistemas de los centros =====
+// Hoy hay una sola, Global App (de donde el bot baja los informes de Baimed).
+// La lista se arma recorriendo los clientes, así sumar otro centro no pide tocar
+// nada: aparece solo con el botón para cargarle el acceso.
+var CONEXIONES_SISTEMAS = [
+  {
+    key: 'globalapp',
+    nombre: 'Global App',
+    que: 'De ahí el server baja los informes de los estudios y los deja en Informes recibidos.',
+    urlDefault: 'https://gm.globalapp.ar',
+    apiDefault: 'https://gmed.api.globalapp.ar',
+  },
+];
+var CONEXIONES_ESTADO = {};
+
+async function loadConexiones(){
+  var box = document.getElementById('conexionesBody');
+  if (!box) return;
+  box.innerHTML = '<div class="nom-muted">Cargando…</div>';
+  var clientes = (CLIENTS || []).filter(function(c){ return c && c.slug; });
+  CONEXIONES_ESTADO = {};
+  // Se pregunta por cada cliente: la respuesta dice el usuario y SI tiene clave,
+  // nunca la clave (esa solo viaja al worker, por otra puerta).
+  await Promise.all(clientes.map(async function(c){
+    try{
+      var r = await api('/api/clientes/' + encodeURIComponent(c.slug) + '/globalapp');
+      if (r.ok) CONEXIONES_ESTADO[c.slug] = r.data || {};
+    }catch(e){}
+  }));
+  var conectados = clientes.filter(function(c){ var e = CONEXIONES_ESTADO[c.slug] || {}; return e.gaUser && e.hasPassword; });
+  var h = '';
+  h += '<div class="general-debitos-meta">' + CONEXIONES_SISTEMAS.length + ' sistema · '
+     + conectados.length + ' centro' + (conectados.length === 1 ? '' : 's') + ' conectado' + (conectados.length === 1 ? '' : 's') + '</div>';
+  CONEXIONES_SISTEMAS.forEach(function(sis){
+    h += '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-top:10px">'
+      + '<div style="font-weight:800">' + esc(sis.nombre) + '</div>'
+      + '<div class="nom-muted" style="margin:2px 0 10px">' + esc(sis.que) + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:6px">';
+    clientes.forEach(function(c){
+      var e = CONEXIONES_ESTADO[c.slug] || {};
+      var listo = !!(e.gaUser && e.hasPassword);
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)">'
+        + '<span style="flex:1;min-width:0">' + esc(c.name || c.slug)
+        + (listo ? '<div class="nom-muted" style="font-size:11.5px">' + esc(e.gaUser) + '</div>' : '') + '</span>'
+        + '<span style="flex:none;font-size:12px;color:' + (listo ? '#16a34a' : 'var(--text-2)') + ';font-weight:' + (listo ? '800' : '400') + '">'
+        + (listo ? 'Conectado' : 'Sin conectar') + '</span>'
+        + '<button class="btn btn-ghost btn-sm" type="button" onclick="conexionEditar(\'' + esc(c.slug) + '\')">'
+        + (listo ? 'Editar' : 'Conectar') + '</button>'
+        + '</div>';
+    });
+    h += '</div></div>';
+  });
+  box.innerHTML = h;
+}
+
+// Alta/edición del acceso de un centro. La clave vacía = se deja la que estaba,
+// mismo criterio que el acceso PAMI: así se corrige el usuario sin volver a
+// tipear la contraseña.
+async function conexionEditar(slug){
+  var c = (CLIENTS || []).filter(function(x){ return x.slug === slug; })[0] || {};
+  var e = CONEXIONES_ESTADO[slug] || {};
+  var sis = CONEXIONES_SISTEMAS[0];
+  var campo = function(id, label, valor, tipo){
+    return '<label class="field" style="margin-bottom:8px"><span>' + esc(label) + '</span>'
+      + '<input class="inp" id="' + id + '" type="' + (tipo || 'text') + '" value="' + esc(valor || '') + '"></label>';
+  };
+  var html = '<p style="margin:0 0 10px">Acceso de <b>' + esc(c.name || slug) + '</b> a ' + esc(sis.nombre) + '.</p>'
+    + campo('cxUser', 'Usuario', e.gaUser || '')
+    + campo('cxPass', e.hasPassword ? 'Clave (vacío = dejar la que está)' : 'Clave', '', 'password')
+    + campo('cxIdCliente', 'N° de cliente en ' + sis.nombre, e.gaIdCliente || '')
+    + campo('cxUrl', 'Dirección', e.gaUrl || sis.urlDefault)
+    + campo('cxApi', 'Dirección de la API', e.gaApi || sis.apiDefault);
+  var ok = await nsConfirm('', { titulo: 'Conectar con ' + sis.nombre, cuerpoHtml: html, okLabel: 'Guardar' });
+  if (!ok) return;
+  var body = {
+    gaUser: (document.getElementById('cxUser') || {}).value || '',
+    gaPassword: (document.getElementById('cxPass') || {}).value || '',
+    gaIdCliente: (document.getElementById('cxIdCliente') || {}).value || 0,
+    gaUrl: (document.getElementById('cxUrl') || {}).value || '',
+    gaApi: (document.getElementById('cxApi') || {}).value || '',
+  };
+  var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/globalapp', body);
+  if (!r.ok){ nsAlert((r.data && r.data.error) || 'No se pudo guardar.', { titulo: 'Conexiones' }); return; }
+  await loadConexiones();
+}
+
 // Lee la config de débitos (reglas + % umbrales) del server, cacheando el %.
 async function fetchDebitoConfig(){
   var r = await api('/api/debito-reglas');
