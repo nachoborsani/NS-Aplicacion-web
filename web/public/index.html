@@ -945,7 +945,18 @@
               </section>
 
               <section id="client-section-honorarios" class="client-section" style="display:none">
-                <div class="client-card">
+                <!-- Dueño de clínica: cartel "en desarrollo" en vez de los datos reales
+                     (mismo patrón visual que colabPaneles). Admin ve todo lo de abajo
+                     tal cual siempre - ver renderHonorariosEnDesarrollo() en app.js. -->
+                <div id="honEnDesarrollo" style="display:none">
+                  <section class="card ini-card">
+                    <div class="ini-head">
+                      <span class="ini-ic">🚧</span>
+                      <div><h2>En desarrollo</h2><div class="ini-meta">Esta pantalla se va a ir completando</div></div>
+                    </div>
+                  </section>
+                </div>
+                <div id="honContenido" class="client-card">
                   <div class="client-card-head">
                     <h3>Honorarios y ganancia real</h3>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
