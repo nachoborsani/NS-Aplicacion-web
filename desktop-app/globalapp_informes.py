@@ -281,6 +281,13 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     ga.abrir()
     cache_pacientes: dict[str, dict | None] = {}
     bajados, sin_paciente, sin_ficha, sin_archivo, fallados = 0, 0, 0, 0, 0
+    # Fichas ya subidas en esta corrida. Un paciente con cuatro practicas
+    # pendientes el mismo dia entra cuatro veces al bucle y encuentra la MISMA
+    # ficha, asi que sin esto el mismo PDF se subia cuatro veces (175 repetidos
+    # de 456 en la corrida del 12/09/2026). Con uno alcanza: en la cabina un
+    # informe se puede tildar contra varias OMEs.
+    fichas_subidas: set[str] = set()
+    repetidos = 0
     try:
         for i, fila in enumerate(pendientes, start=1):
             if solo and bajados >= solo:
@@ -317,8 +324,12 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 sin_ficha += 1
                 continue
             for reg in deldia:
+                ficha_id = str(reg.get("_id") or "")
+                if ficha_id and ficha_id in fichas_subidas:
+                    repetidos += 1
+                    continue
                 try:
-                    pdf = ga.archivo(str(reg.get("_id")))
+                    pdf = ga.archivo(ficha_id)
                 except Exception as exc:  # noqa: BLE001
                     # Una ficha SIN archivo adjunto contesta 500. No es un error
                     # nuestro: el estudio esta cargado pero el informe no se subio
@@ -335,6 +346,8 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 filename = f"{nom} - {tipo} - {fecha}.pdf"
                 try:
                     web.subir_informe(slug, filename, pdf, origen="globalapp")
+                    if ficha_id:
+                        fichas_subidas.add(ficha_id)
                     bajados += 1
                     log(f"  [{i}] {nombre} · {tipo} · {fecha} -> subido")
                 except Exception as exc:  # noqa: BLE001
@@ -346,12 +359,13 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     resumen = {
         "pendientes": len(pendientes), "bajados": bajados,
         "sin_paciente": sin_paciente, "sin_ficha": sin_ficha,
-        "sin_archivo": sin_archivo, "fallados": fallados,
+        "sin_archivo": sin_archivo, "fallados": fallados, "repetidos": repetidos,
     }
     log(
         f"Listo: {bajados} informes subidos a la cabina · {sin_paciente} sin paciente en Global App"
         f" · {sin_ficha} sin ficha ese dia · {sin_archivo} con la ficha cargada pero sin informe"
-        f" · {fallados} con error."
+        f" · {fallados} con error"
+        f" · {repetidos} fichas que ya habian entrado."
     )
     return resumen
 
