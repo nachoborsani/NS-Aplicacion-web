@@ -65,6 +65,17 @@ CONFIG = AQUI / "globalapp.json"
 # Tope de seguridad: si algo sale mal, que no se cuelgue una hora.
 ESPERA_LOGIN_MS = 45000
 PAUSA_ENTRE_PACIENTES_S = 0.4
+# Tipos de ficha de la historia clinica que NO son el informe de un estudio. El
+# resto (EC ecografia, EDC/EDV/EDA/EVC ecodopplers, HOL holter, MAP presurometria,
+# INF, IMG...) si lo son.
+#   AR = adjunto suelto del paciente. En Baimed son SIEMPRE la credencial de PAMI:
+#        60 de 60 en la corrida del 12/09/2026, todas del mismo tamano (~55,9 kB) y
+#        ninguna con una practica adentro. Subirlas ensucia la cabina — caen en
+#        "Revisar nombre" y hay que descartarlas a mano, una por una.
+#   HC = nota de historia clinica (seguimiento). NUNCA trae PDF: pedir el archivo
+#        contesta 500 (23 de 23 probadas), asi que ademas inflaba el contador de
+#        "ficha cargada pero sin informe" con algo que no es un informe que falte.
+TIPOS_QUE_NO_SON_INFORME = {"AR", "HC"}
 
 
 def _norm(texto: str) -> str:
@@ -288,6 +299,7 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     # informe se puede tildar contra varias OMEs.
     fichas_subidas: set[str] = set()
     repetidos = 0
+    no_informes = 0
     try:
         for i, fila in enumerate(pendientes, start=1):
             if solo and bajados >= solo:
@@ -324,6 +336,9 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 sin_ficha += 1
                 continue
             for reg in deldia:
+                if str(reg.get("tipo") or "").strip().upper() in TIPOS_QUE_NO_SON_INFORME:
+                    no_informes += 1
+                    continue
                 ficha_id = str(reg.get("_id") or "")
                 if ficha_id and ficha_id in fichas_subidas:
                     repetidos += 1
@@ -360,12 +375,14 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
         "pendientes": len(pendientes), "bajados": bajados,
         "sin_paciente": sin_paciente, "sin_ficha": sin_ficha,
         "sin_archivo": sin_archivo, "fallados": fallados, "repetidos": repetidos,
+        "no_informes": no_informes,
     }
     log(
         f"Listo: {bajados} informes subidos a la cabina · {sin_paciente} sin paciente en Global App"
         f" · {sin_ficha} sin ficha ese dia · {sin_archivo} con la ficha cargada pero sin informe"
         f" · {fallados} con error"
-        f" · {repetidos} fichas que ya habian entrado."
+        f" · {repetidos} fichas que ya habian entrado"
+        f" · {no_informes} que no son informes (credencial / nota de historia clinica)."
     )
     return resumen
 
