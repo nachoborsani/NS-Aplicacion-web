@@ -1561,7 +1561,7 @@
 
         <div class="scrim" id="cabinaScrim" onclick="cerrarCabinaModal()"></div>
         <div class="modal cab-modal" id="cabinaModal" role="dialog" aria-modal="true">
-          <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>
+          <div class="modal-head"><h3 id="cabModalTitle">Informe</h3><div class="cab-modal-nav"><button class="rowbtn" type="button" id="cabModalAnt" title="Anterior" onclick="cabNavegar(-1)">&#8249;</button><span id="cabModalPos"></span><button class="rowbtn" type="button" id="cabModalSig" title="Siguiente" onclick="cabNavegar(1)">&#8250;</button></div><button class="x" onclick="cerrarCabinaModal()" aria-label="Cerrar">&times;</button></div>
           <div class="modal-body cab-modal-body">
             <div class="cab-modal-file"><iframe id="cabFrame" title="Informe original"></iframe><div id="cabTexto" class="cab-doc-texto" style="display:none"></div></div>
             <div class="cab-modal-side">

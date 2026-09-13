@@ -2288,6 +2288,21 @@
   .cab-obs{max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);font-size:12.5px}
   .cab-ocr{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#7a5cff 16%,var(--surface));color:#5a3ec8;vertical-align:middle}
   .cab-actions{white-space:nowrap;text-align:right}
+  /* La practica se partia en tres renglones y estiraba la fila entera, mientras
+     "Asunto del mail" se llevaba 220px casi siempre vacios (13/09/2026). */
+  .cab-practica{min-width:190px}
+  .cab-asunto{max-width:150px}
+  /* Mientras se sube a PAMI: la fila atenuada y sin invitar a que la toquen. */
+  .cab-row-subiendo{opacity:.65;pointer-events:none}
+  .cab-badge.subiendo{background:color-mix(in srgb,var(--info,#2563eb) 14%,var(--surface));color:var(--info,#2563eb);border-color:color-mix(in srgb,var(--info,#2563eb) 40%,var(--border))}
+  /* Anterior / siguiente en la ficha del informe. */
+  .cab-modal-nav{display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:8px}
+  .cab-modal-nav #cabModalPos{font-size:12px;color:var(--text-2);min-width:62px;text-align:center}
+  .cab-modal-nav .rowbtn[disabled]{opacity:.35;cursor:default}
+  /* El estado va ARRIBA del boton, no al costado: al lado empujaba el nombre de la
+     practica y hacia tarjetas de cuatro renglones. */
+  .cab-cand-acc{display:flex;flex-direction:column;align-items:stretch;gap:5px;flex:0 0 auto;text-align:center}
+  .cab-cand-acc .cab-badge{margin:0}
   .cab-actions .rowbtn{margin-left:2px}
   /* Encabezado compacto de Informes recibidos: una sola barra */
   .cab-head{display:flex;flex-direction:column;gap:10px;padding:12px 14px}

@@ -11526,7 +11526,8 @@ async function subirInformeUno(id){
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
     var d=await r.json();
     if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
-    seguirTarea(d.task.id,'subir-informes');
+    marcarSubiendo([id], true);
+    seguirTarea(d.task.id,'subir-informes',[id]);
   }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 async function tareaCabina(tipo){
@@ -11539,7 +11540,8 @@ async function tareaCabina(tipo){
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:tipo,clientSlug:slug,payload:{informeIds:ids}})});
     var d=await r.json();
     if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
-    seguirTarea(d.task.id, tipo);
+    if (tipo === 'subir-informes') marcarSubiendo(ids, true);
+    seguirTarea(d.task.id, tipo, ids);
   }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 // Limpiar (borrar del sistema) los informes YA TRANSMITIDOS hasta una fecha, para
@@ -11568,7 +11570,7 @@ async function limpiarTransmitidos(){
     nsAlert('Listo: se borraron ' + (d.borrados||0) + ' informe(s) ya transmitidos.');
   }catch(e){ cabEstado('',''); nsAlert('Error de red al limpiar.'); }
 }
-function seguirTarea(id, tipo){
+function seguirTarea(id, tipo, ids){
   var accion=(tipo==='subir-informes')?'Subiendo a PAMI':(tipo==='crear-informe-cabecera'?'Creando informe en PAMI':'Auditando en PAMI');
   var vueltas=0;
   var timer=setInterval(async function(){
@@ -11581,6 +11583,7 @@ function seguirTarea(id, tipo){
       if(t.status==='running'){ cabEstado(accion+'…','working'); return; }
       clearInterval(timer);
       cabEstado('','');
+      if (ids && ids.length) (ids || []).forEach(function(x){ delete CAB_SUBIENDO[x]; });
       if(t.status==='done'){
         mostrarResultadoTarea(tipo, t);
         await refreshCabina();
@@ -12394,6 +12397,7 @@ function aplicarFiltroCabina(){
     if (!cabMatchBusca(it)) return false;                 // no matchea el buscador
     return true;
   });
+  CAB_VISIBLES = filtrados;
   renderCabinaRows(slug, filtrados);
   var meta = document.getElementById('cabResultMeta');
   if (meta) {
@@ -12483,6 +12487,16 @@ function cabFechasOme(it, omes){
   return (ft ? '<div class="cab-sub">turno ' + esc(ft) + '</div>' : '')
        + (fv ? '<div class="cab-sub">validada ' + esc(fv) + '</div>' : '');
 }
+// Los que estan subiendo a PAMI en este momento. La fila queda atenuada y con el
+// cartel "Subiendo a PAMI", asi no se la vuelve a tocar ni se duda de si se apreto:
+// la tarea tarda y antes la fila seguia igual que el resto.
+var CAB_SUBIENDO = {};
+function marcarSubiendo(ids, prendido){
+  (ids || []).forEach(function(id){ if (prendido) CAB_SUBIENDO[id] = true; else delete CAB_SUBIENDO[id]; });
+  aplicarFiltroCabina();
+}
+// Lo que se esta viendo, en orden: lo usan las flechas de anterior/siguiente.
+var CAB_VISIBLES = [];
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
   if (!items.length){ body.innerHTML = '<tr><td colspan="10" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
@@ -12498,6 +12512,8 @@ function renderCabinaRows(slug, items){
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     var asunto = it.asunto ? esc(it.asunto) : '—';
     var rec = cabRecibido(it);
+    // La fecha del estudio que se leyo DENTRO del informe (distinta de cuando llego).
+    var fEstudio = soloFecha((it.extract && it.extract.fecha) || '');
     // Por qué está así: el motivo que se dejó al desestimar o la nota del
     // reclamo. Viendo 23 desestimados sin esto, no hay forma de saber por qué
     // lo está cada uno sin abrirlos de a uno.
@@ -12513,12 +12529,14 @@ function renderCabinaRows(slug, items){
         + (it.reclamado.at ? ' · ' + iniFmtHora(it.reclamado.at) : '')
         + (it.reclamado.nota ? ' — ' + it.reclamado.nota : '');
     }
-    return '<tr class="cab-row" onclick="abrirInforme(\''+esc(it.id)+'\')">'
+    var subiendo = !!CAB_SUBIENDO[it.id];
+    return '<tr class="cab-row' + (subiendo ? ' cab-row-subiendo' : '') + '" onclick="abrirInforme(\''+esc(it.id)+'\')">'
       + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
       + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
-      + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
-      + '<td>'+cabBadge(it)+'</td>'
+      + '<td class="cab-practica">'+esc((it.extract&&it.extract.practica)||'—')
+        + '<div class="cab-sub">'+(fEstudio ? 'fecha '+esc(fEstudio) : 'no se pudo leer la fecha')+'</div></td>'
+      + '<td>'+(subiendo ? '<span class="cab-badge subiendo">Subiendo a PAMI…</span>' : cabBadge(it))+'</td>'
       + '<td class="cab-obs" title="'+esc(obsTit)+'">'+(obs ? esc(obs) : '—')+'</td>'
       + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'+cabFechasOme(it, omesArr)):'—')+'</td>'
       + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
@@ -12575,7 +12593,8 @@ async function cabSubirSeleccionados(){
     var r = await fetch('/api/admin/worker/tasks', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ type:'subir-informes', clientSlug: slug, payload:{ informeIds: ids } }) });
     var d = await r.json();
     if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
-    seguirTarea(d.task.id, 'subir-informes');
+    marcarSubiendo(ids, true);
+    seguirTarea(d.task.id, 'subir-informes', ids);
   }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
 }
 // ===== Motivo al desestimar (modal + motivos configurables) =====
@@ -12827,15 +12846,39 @@ function abrirInforme(id){
           + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
           + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div>'
           + '<div class="cab-sub">turno '+esc(soloFecha(c.turno)||'—')+(soloFecha(c.fValidacion)?(' · validada '+esc(soloFecha(c.fValidacion))):'')+'</div></div>'
-          + estado
-          + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
+          + '<div class="cab-cand-acc">' + estado
+          + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button></div>'
           + '</div>';
       }).join('')
       + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>';
     actualizarSelOmes();
   }
+  cabActualizarPosicion();
   showModal('cabinaModal', 'cabinaScrim');
+}
+// Anterior / siguiente sin cerrar la ficha: se recorre lo que se esta viendo, en
+// el mismo orden de la tabla. Revisar de a uno obligaba a cerrar y volver a entrar.
+function cabNavegar(paso){
+  if (!CAB_ITEM) return;
+  var lista = CAB_VISIBLES || [];
+  var i = -1;
+  for (var k = 0; k < lista.length; k++) if (lista[k].id === CAB_ITEM.id) { i = k; break; }
+  if (i < 0) return;
+  var j = i + paso;
+  if (j < 0 || j >= lista.length) return;
+  abrirInforme(lista[j].id);
+}
+function cabActualizarPosicion(){
+  var el = document.getElementById('cabModalPos');
+  if (!el) return;
+  var lista = CAB_VISIBLES || [];
+  var i = -1;
+  for (var k = 0; k < lista.length; k++) if (CAB_ITEM && lista[k].id === CAB_ITEM.id) { i = k; break; }
+  el.textContent = i >= 0 ? ((i + 1) + ' de ' + lista.length) : '';
+  var ant = document.getElementById('cabModalAnt'), sig = document.getElementById('cabModalSig');
+  if (ant) ant.disabled = i <= 0;
+  if (sig) sig.disabled = i < 0 || i >= lista.length - 1;
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); var t=document.getElementById('cabTexto'); if(t){ t.textContent=''; t.style.display='none'; } CAB_ITEM=null; }
