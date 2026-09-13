@@ -11090,6 +11090,11 @@ const server = http.createServer(async (req, res) => {
           // prefijos de fecha en el archivo, etc.). Antes solo se completaba si estaba
           // vacío, y un nombre mal leído ("23JUL") quedaba pegado para siempre.
           if (d.nombre) it.extract.nombre = d.nombre;
+          // El DNI tambien se relee, y se BORRA si ahora no se lee ninguno: un DNI
+          // mal leido quedaba pegado para siempre y re-analizar no lo arreglaba (el
+          // telefono del centro que entraba como documento, 13/09/2026). El
+          // beneficio NO se toca: ese lo puede haber cargado a mano el operador.
+          it.extract.dni = d.dni || "";
           // La cobertura que declara el propio informe. Si no es PAMI,
           // el matcher ni lo busca en el padron.
           it.extract.obraSocial = d.obraSocial || "";
