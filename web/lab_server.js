@@ -120,6 +120,7 @@ const LAB_PERMISOS = {
 // Que permiso pide cada recurso de la API.
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
+  sala: "agenda",
   pacientes: "pacientes",
   estudios: "hc",
   caja: "caja",
@@ -299,6 +300,38 @@ async function handleLab(ctx) {
       rol: labRol, permisos: LAB_PERMISOS[labRol] || [],
       profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
+    }), true;
+  }
+
+  // -- Sala de espera: el dia entero, todos los profesionales de una --
+  // La agenda es de a un profesional; la recepcion necesita ver el centro completo
+  // para saber a quien le toca y quien esta esperando hace rato.
+  if (recurso === "sala" && method === "GET") {
+    const fecha = clean(url.searchParams.get("fecha")) || nowIso().slice(0, 10);
+    const delDia = (store.turnos || []).filter((t) => t.fecha === fecha && t.estado !== "cancelado");
+    // El profesional ve SU columna, igual que en la agenda.
+    const soloMio = labRol === "profesional" && me.lab && me.lab.profesionalId ? me.lab.profesionalId : "";
+    const profs = (store.profesionales || [])
+      .filter((pr) => !soloMio || pr.id === soloMio)
+      .map((pr) => {
+        const suyos = delDia.filter((t) => t.profesionalId === pr.id)
+          .sort((a, b) => String(a.hora).localeCompare(String(b.hora)));
+        return {
+          id: pr.id, nombre: pr.nombre,
+          especialidad: (store.especialidades.find((e2) => e2.id === pr.especialidadId) || {}).nombre || "",
+          consultorio: (store.consultorios.find((c2) => c2.id === pr.consultorioId) || {}).nombre || "",
+          turnos: suyos,
+        };
+      })
+      .filter((pr) => pr.turnos.length);
+    const cuenta = (est) => delDia.filter((t) => t.estado === est).length;
+    return json(res, 200, {
+      fecha,
+      profesionales: profs,
+      totales: {
+        turnos: delDia.length, esperando: cuenta("esperando"), atendidos: cuenta("atendido"),
+        ausentes: cuenta("ausente") + cuenta("ausente_aviso"), porVenir: cuenta("dado"),
+      },
     }), true;
   }
 

@@ -91,7 +91,7 @@
   // El cuarto dato de cada modulo es el permiso que pide: el menu se arma con lo que
   // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
-    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
+    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
     ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
@@ -144,6 +144,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "sala") viewSala(c);
     else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
@@ -562,6 +563,91 @@
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
     };
+  }
+
+  /* ========================== SALA DE ESPERA ============================ */
+  // El dia entero, todos los profesionales al lado del otro. Es la pantalla que la
+  // recepcion tiene abierta todo el tiempo: quien llego, a quien le toca y quien
+  // esta esperando hace rato. Se refresca sola.
+  var SALA_TIMER = null;
+  function salaHoraMin(h) {
+    var m = String(h || "").match(/^(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+  }
+  async function viewSala(c) {
+    clearInterval(SALA_TIMER);
+    if (!LAB.salaFecha) LAB.salaFecha = hoyISO();
+    async function pintar() {
+      var r = await api("/api/lab/sala?fecha=" + encodeURIComponent(LAB.salaFecha));
+      if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+      var d = r.data || {};
+      var t = d.totales || {};
+      var ahora = new Date();
+      var minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+      var esHoy = LAB.salaFecha === hoyISO();
+      var cols = (d.profesionales || []).map(function (pr) {
+        var filas = pr.turnos.map(function (tu) {
+          var est = ESTADOS[tu.estado] || ESTADOS.dado;
+          // Cuanto hace que espera: el dato que la recepcion no tiene en ningun lado
+          // y es el que genera el reclamo en el mostrador.
+          var espera = "";
+          if (esHoy && tu.estado === "esperando") {
+            var m0 = salaHoraMin(tu.hora);
+            if (m0 !== null && minAhora > m0) espera = '<span class="lab-sala-espera">+' + (minAhora - m0) + " min</span>";
+          }
+          return '<button class="lab-sala-turno" type="button" data-id="' + tu.id + '" style="--c:' + est.color + '">' +
+            '<span class="lab-sala-hora">' + esc(tu.hora) + "</span>" +
+            '<span class="lab-sala-pac">' + esc(tu.pacienteNombre || "—") +
+            (tu.practicaNombre ? '<span class="lab-sala-sub">' + esc(tu.practicaNombre) + "</span>" : "") + "</span>" +
+            '<span class="lab-sala-est">' + esc(est.label) + espera + "</span></button>";
+        }).join("");
+        return '<div class="lab-sala-col"><div class="lab-sala-cab"><b>' + esc(pr.nombre) + "</b>" +
+          '<div class="lab-muted">' + esc([pr.especialidad, pr.consultorio].filter(Boolean).join(" · ")) + "</div></div>" +
+          filas + "</div>";
+      }).join("");
+      c.innerHTML =
+        '<div class="lab-card">' +
+          '<div class="lab-list-head"><h3>Sala de espera</h3>' +
+            '<div class="lab-inline"><input class="lab-in" type="date" id="sala-fecha" value="' + esc(LAB.salaFecha) + '">' +
+            '<button class="lab-btn" id="sala-hoy" type="button">Hoy</button></div></div>' +
+          '<div class="lab-sala-kpis">' +
+            '<div class="lab-sala-kpi"><b>' + (t.turnos || 0) + "</b><span>turnos</span></div>" +
+            '<div class="lab-sala-kpi amar"><b>' + (t.esperando || 0) + "</b><span>esperando</span></div>" +
+            '<div class="lab-sala-kpi verde"><b>' + (t.atendidos || 0) + "</b><span>atendidos</span></div>" +
+            '<div class="lab-sala-kpi roja"><b>' + (t.ausentes || 0) + "</b><span>ausentes</span></div>" +
+            '<div class="lab-sala-kpi"><b>' + (t.porVenir || 0) + "</b><span>por venir</span></div>" +
+          "</div>" +
+          (cols ? '<div class="lab-sala-grid">' + cols + "</div>"
+                : '<div class="lab-muted" style="padding:14px">No hay turnos ese día.</div>') +
+        "</div>";
+      c.querySelector("#sala-fecha").onchange = function () { LAB.salaFecha = this.value; pintar(); };
+      c.querySelector("#sala-hoy").onclick = function () { LAB.salaFecha = hoyISO(); pintar(); };
+      // Un clic sobre el turno cambia el estado sin salir de la pantalla: es lo que
+      // se hace cien veces por dia.
+      c.querySelectorAll(".lab-sala-turno").forEach(function (b) {
+        b.onclick = function () { salaEstadoModal(b.getAttribute("data-id"), pintar); };
+      });
+    }
+    await pintar();
+    // En vivo: la recepcion la deja abierta y el estado lo cambia otro.
+    SALA_TIMER = setInterval(function () {
+      if (LAB.modulo !== "sala") { clearInterval(SALA_TIMER); return; }
+      pintar();
+    }, 30000);
+  }
+  function salaEstadoModal(id, luego) {
+    var m = modal("Estado del turno");
+    m.body.innerHTML = '<div class="lab-estados">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
+      return '<button class="lab-est-btn" data-est="' + k + '" style="--c:' + ESTADOS[k].color + '">' + esc(ESTADOS[k].label) + "</button>";
+    }).join("") + "</div>";
+    m.body.querySelectorAll(".lab-est-btn").forEach(function (b) {
+      b.onclick = async function () {
+        var rr = await req("PUT", "/api/lab/turnos/" + id, { estado: b.getAttribute("data-est") });
+        if (!rr.ok) { toast("No se pudo cambiar el estado.", true); return; }
+        labClose(); toast("Estado: " + ESTADOS[b.getAttribute("data-est")].label);
+        if (luego) luego();
+      };
+    });
   }
 
   /* ============================ USUARIOS ================================ */
@@ -1451,6 +1537,21 @@
       ".lab-toast.err{background:#b91c1c}",
       ".lab-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;align-items:end}",
       ".lab-chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text)}",
+      ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
+      ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
+      ".lab-sala-kpi b{display:block;font-size:20px;line-height:1.1}",
+      ".lab-sala-kpi span{font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em}",
+      ".lab-sala-kpi.amar b{color:#b45309}.lab-sala-kpi.verde b{color:#15803d}.lab-sala-kpi.roja b{color:#b91c1c}",
+      ".lab-sala-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;align-items:start}",
+      ".lab-sala-col{border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card,#fff)}",
+      ".lab-sala-cab{padding:4px 6px 8px;border-bottom:1px solid var(--border);margin-bottom:6px}",
+      ".lab-sala-turno{display:grid;grid-template-columns:46px 1fr auto;gap:8px;align-items:center;width:100%;text-align:left;background:transparent;border:0;border-left:3px solid var(--c);border-radius:8px;padding:6px 8px;margin-bottom:3px;cursor:pointer;color:var(--text)}",
+      ".lab-sala-turno:hover{background:rgba(45,212,191,.10)}",
+      ".lab-sala-hora{font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums}",
+      ".lab-sala-pac{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".lab-sala-sub{display:block;font-size:11px;color:var(--text-2)}",
+      ".lab-sala-est{font-size:10.5px;font-weight:800;color:var(--c);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}",
+      ".lab-sala-espera{display:block;color:#b45309;font-weight:800}",
       ".lab-hc-tabs{display:flex;gap:6px;margin-bottom:10px}",
       ".lab-hc-tab{background:transparent;border:1px solid var(--border);color:var(--text-2);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}",
       ".lab-hc-tab.on{background:var(--accent,#2dd4bf);color:#04201c;border-color:transparent}",
