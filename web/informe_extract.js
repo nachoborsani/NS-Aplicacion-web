@@ -200,7 +200,7 @@ function obraSocialDe(texto) {
     let v = m[1].trim().replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
     v = v.split(/\s{2,}|\b(?:dni|documento|edad|fecha|peso|talla|afiliad[oa])\b\s*:?/i)[0]
          .trim().replace(/^[.:\-\s]+|[.:\-\s]+$/g, "");
-    if (v) return v;
+    if (v && !esCoberturaVacia(v)) return v;
   }
   // Segunda pasada: a veces no dice "obra social" sino que nombra la
   // prepaga al lado del afiliado.
@@ -267,9 +267,23 @@ function obraSocialDe(texto) {
 // "seguí tratandolo como PAMI". Es a proposito. Esconder un informe
 // porque no se le pudo leer la cobertura seria peor que mostrarlo de
 // mas: lo primero lo hace desaparecer sin que nadie se entere.
+// Lo que el formulario escribe cuando el campo quedo VACIO. No es una obra social:
+// es que no la declara. El MAPA de Baimed pone "Obra Social: No especificado" en
+// todos sus informes, y eso hacia que 9 presurometrias de PAMI quedaran marcadas
+// como "No es de PAMI" y fuera de la cola (13/09/2026).
+function esCoberturaVacia(valor) {
+  const k = norm(valor).toLowerCase().replace(/[.\-_/]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!k) return true;
+  return [
+    "no especificado", "no especificada", "sin especificar", "no consigna",
+    "no informa", "no declara", "ninguna", "ninguno", "sin datos", "s d", "n a",
+    "na", "sd", "x", "guion",
+  ].includes(k);
+}
 function noEsPamiPorObraSocial(obraSocial) {
   const k = norm(obraSocial).toLowerCase();
-  return !!(k && !k.includes("pami"));
+  if (!k || esCoberturaVacia(obraSocial)) return false;
+  return !k.includes("pami");
 }
 
 // Extrae {dni, beneficio, nombre, nombreKey} del texto + nombre de archivo.
@@ -371,4 +385,4 @@ async function procesar(filePath, nombreArchivo) {
 }
 
 module.exports = { extraerTexto, extraerDatos, procesar, practicasDe, esFactura,
-                   obraSocialDe, noEsPamiPorObraSocial };
+                   obraSocialDe, noEsPamiPorObraSocial, esCoberturaVacia };
