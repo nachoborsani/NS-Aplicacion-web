@@ -2354,7 +2354,11 @@
   .cab-cand-ck{width:17px;height:17px;flex:0 0 auto;cursor:pointer;accent-color:var(--brand,#0aa)}
   /* Va ARRIBA de la lista y fina: es una confirmacion de lo que ya tildaste, no
      un boton grande que compita con las tarjetas de abajo. */
-  .cab-selbar{display:flex;justify-content:flex-end;margin:6px 0 2px}
+  /* Titulo y boton en el MISMO renglon: el titulo ocupa dos lineas y al lado del
+     boton quedaba un hueco vacio a la izquierda (13/09/2026). */
+  .cab-cand-head{display:flex;align-items:flex-start;gap:10px}
+  .cab-cand-head .cab-cand-title{flex:1;min-width:0;margin:0}
+  .cab-selbar{display:flex;justify-content:flex-end;flex:0 0 auto;margin:0}
   .cab-selbar .btn{padding:4px 12px;font-size:12.5px;font-weight:700;border-radius:8px}
   /* Aviso de debito en la cabina: lo que se esta por subir se pisa con otra practica
      del mismo dia y PAMI va a debitar una. No bloquea, avisa. */

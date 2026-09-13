@@ -11586,6 +11586,7 @@ function seguirTarea(id, tipo, ids){
       clearInterval(timer);
       cabEstado('','');
       if (ids && ids.length) (ids || []).forEach(function(x){ delete CAB_SUBIENDO[x]; });
+      if (CAB_ITEM) cabRenderAcciones(CAB_ITEM);
       if(t.status==='done'){
         mostrarResultadoTarea(tipo, t);
         await refreshCabina();
@@ -12840,8 +12841,10 @@ function abrirInforme(id){
         return c && !c.transmitida;
       });
     }
-    cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
+    cont.innerHTML = '<div class="cab-cand-head">'
+      + '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>'
+      + '</div>'
       + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
       + cands.map(function(c){
         var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
@@ -12890,6 +12893,11 @@ function cabRenderAcciones(it){
   var caja = document.getElementById('cabAcciones');
   if (!caja) return;
   var e = cabEstadoDe(it);
+  if (CAB_SUBIENDO[it.id]){
+    caja.innerHTML = '<button class="btn btn-primary btn-sm" type="button" disabled>Subiendo a PAMI\u2026</button>'
+      + '<span class="cab-sub">Se avisa cuando termina.</span>';
+    return;
+  }
   var puedeSubir = ['ok', 'resuelto', 'falta_validar'].indexOf(e) >= 0;
   var des = !!it.desestimado;
   caja.innerHTML =
@@ -12905,7 +12913,9 @@ function cabRenderAcciones(it){
 async function cabAccion(que){
   if (!CAB_ITEM) return;
   var id = CAB_ITEM.id, des = !!CAB_ITEM.desestimado;
-  if (que === 'subir'){ if (await subirInformeUno(id)) cerrarCabinaModal(); return; }
+  // Subir NO cierra la ficha: la tarea tarda y el operador se queda mirando el
+  // informe, o pasa al siguiente con la flecha. Cerrar era perder el lugar.
+  if (que === 'subir'){ if (await subirInformeUno(id)) cabRenderAcciones(CAB_ITEM); return; }
   if (que === 'desestimar'){ if (await toggleDesestimar(id, des)) cerrarCabinaModal(); return; }
   if (que === 'borrar'){ if (await borrarInforme(id)) cerrarCabinaModal(); return; }
 }
