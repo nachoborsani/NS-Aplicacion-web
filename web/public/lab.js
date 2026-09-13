@@ -83,16 +83,28 @@
     labGo(LAB.modulo || "agenda");
   };
 
+  // El menu va al costado y agrupado por lo que se hace con cada cosa: el dia a dia
+  // arriba (agenda y pacientes), la plata en el medio, y los catalogos —que se
+  // cargan una vez y no se miran mas— al final. En la tira horizontal los ocho
+  // botones pesaban igual y no se encontraba nada.
+  var LAB_MENU = [
+    ["Atención", [["agenda", "📅", "Agenda"], ["pacientes", "👤", "Pacientes"]]],
+    ["Administración", [["caja", "💵", "Caja"], ["estadistica", "📊", "Estadística"]]],
+    ["Configuración", [["profesionales", "🩺", "Profesionales"], ["especialidades", "🏷️", "Especialidades"],
+      ["consultorios", "🚪", "Consultorios"], ["obrasSociales", "🩹", "Obras Sociales"]]],
+  ];
   function shell() {
     var wrap = e("div", { class: "lab-wrap" });
     var nav = e("div", { class: "lab-nav" });
-    [["agenda", "📅 Agenda"], ["caja", "💵 Caja"], ["estadistica", "📊 Estadística"], ["pacientes", "👤 Pacientes"], ["profesionales", "🩺 Profesionales"],
-     ["especialidades", "🏷️ Especialidades"], ["consultorios", "🚪 Consultorios"], ["obrasSociales", "🩹 Obras Sociales"]]
-      .forEach(function (m) {
-        var b = e("button", { class: "lab-tab", "data-mod": m[0] }, m[1]);
+    LAB_MENU.forEach(function (grupo) {
+      nav.appendChild(e("div", { class: "lab-nav-grupo" }, esc(grupo[0])));
+      grupo[1].forEach(function (m) {
+        var b = e("button", { class: "lab-tab", "data-mod": m[0], type: "button" },
+          '<span class="lab-tab-ic">' + m[1] + '</span><span>' + esc(m[2]) + '</span>');
         b.onclick = function () { labGo(m[0]); };
         nav.appendChild(b);
       });
+    });
     wrap.appendChild(nav);
     wrap.appendChild(e("div", { class: "lab-content", id: "lab-content" }));
     return wrap;
@@ -926,10 +938,15 @@
     if (document.getElementById("lab-styles")) return;
     var css = document.createElement("style"); css.id = "lab-styles";
     css.textContent = [
-      ".lab-wrap{max-width:1200px;margin:0 auto}",
-      ".lab-nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:10px}",
-      ".lab-tab{background:transparent;border:1px solid var(--border);color:var(--text-2);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600}",
-      ".lab-tab.on{background:var(--accent,#2dd4bf);color:#04201c;border-color:transparent}",
+      ".lab-wrap{display:grid;grid-template-columns:212px minmax(0,1fr);gap:18px;max-width:1340px;margin:0 auto;align-items:start}",
+      ".lab-nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card,#fff)}",
+      ".lab-nav-grupo{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);padding:0 8px;margin:12px 0 4px}",
+      ".lab-nav-grupo:first-child{margin-top:2px}",
+      ".lab-tab{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;color:var(--text-2);padding:8px 10px;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:600}",
+      ".lab-tab:hover{background:rgba(45,212,191,.10);color:var(--text)}",
+      ".lab-tab.on{background:var(--accent,#2dd4bf);color:#04201c}",
+      ".lab-tab-ic{width:18px;text-align:center;flex:0 0 auto}",
+      "@media(max-width:900px){.lab-wrap{grid-template-columns:1fr}.lab-nav{position:static;flex-direction:row;flex-wrap:wrap;align-items:center}.lab-nav-grupo{width:100%;margin:6px 0 2px}}",
       ".lab-card{background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}",
       ".lab-muted{color:var(--text-2,#64748b)}",
       ".lab-in{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#fff);color:var(--text);font-size:14px}",
