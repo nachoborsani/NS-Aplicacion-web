@@ -748,14 +748,14 @@
   }
 
   /* ============================ USUARIOS ================================ */
-  // A quien del centro se le da acceso y con que rol. No hay padron propio: se le
-  // pone el rol al usuario de NS que ya existe, asi hay un solo login y un solo
-  // lugar donde darle de baja a alguien.
-  var LAB_ROL_LABEL = {
-    recepcion: "Recepción — agenda, pacientes y cobro del día",
-    profesional: "Profesional — su agenda y la historia clínica",
-    administracion: "Administración — todo, menos los usuarios",
-    admin: "Administrador",
+  // Quien del centro entra y a que. El puesto tilda un conjunto de permisos y despues
+  // el centro agrega o saca lo que quiera: cada centro se organiza distinto y un rol
+  // cerrado obliga a inventar puestos que no existen.
+  var LAB_PUESTOS = {
+    recepcionista: "Recepcionista",
+    cajero: "Cajero",
+    profesional: "Profesional",
+    coordinador: "Coordinador",
   };
   async function viewUsuarios(c) {
     c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
@@ -765,41 +765,58 @@
       return;
     }
     var items = (r.data && r.data.items) || [];
-    var roles = ["recepcion", "profesional", "administracion"];
-    var profOpts = function (sel) {
-      return '<option value="">— sin asignar —</option>' + (LAB.cat.profesionales || []).map(function (o) {
-        return '<option value="' + o.id + '"' + (o.id === sel ? " selected" : "") + ">" + esc(o.nombre) + "</option>";
-      }).join("");
-    };
-    var rows = items.map(function (u) {
+    var catalogo = (r.data && r.data.catalogo) || [];
+    var plantillas = (r.data && r.data.plantillas) || {};
+    var filas = items.map(function (u) {
       if (u.esAdminNs) {
         return '<tr><td><b>' + esc(u.nombre) + '</b> <span class="lab-muted">' + esc(u.username) + "</span></td>" +
-          '<td colspan="3" class="lab-muted">Administrador de NS: entra a todo el sistema.</td></tr>';
+          '<td colspan="2" class="lab-muted">Administrador de NS: entra a todo el sistema.</td></tr>';
       }
-      var sel = roles.map(function (x) {
-        return '<option value="' + x + '"' + (x === u.rol ? " selected" : "") + ">" + esc(LAB_ROL_LABEL[x]) + "</option>";
+      var puestos = Object.keys(LAB_PUESTOS).map(function (k) {
+        return '<option value="' + k + '"' + (k === u.rol ? " selected" : "") + ">" + esc(LAB_PUESTOS[k]) + "</option>";
       }).join("");
-      return '<tr data-u="' + esc(u.username) + '"><td><b>' + esc(u.nombre) + '</b> <span class="lab-muted">' + esc(u.username) + "</span></td>" +
-        '<td><select class="lab-in us-rol"><option value="">— sin acceso —</option>' + sel + "</select></td>" +
-        '<td><select class="lab-in us-prof"' + (u.rol === "profesional" ? "" : " disabled") + ">" + profOpts(u.profesionalId) + "</select></td>" +
-        '<td style="width:110px"><button class="lab-btn xs us-save">Guardar</button></td></tr>';
+      var tildes = catalogo.map(function (pm) {
+        var on = (u.permisos || []).indexOf(pm.cod) >= 0;
+        return '<label class="lab-perm"><input type="checkbox" data-perm="' + pm.cod + '"' + (on ? " checked" : "") + "> " + esc(pm.label) + "</label>";
+      }).join("");
+      return '<tr data-u="' + esc(u.username) + '"><td style="vertical-align:top"><b>' + esc(u.nombre) + "</b>" +
+          '<div class="lab-muted">' + esc(u.username) + "</div>" +
+          '<div style="margin-top:8px"><select class="lab-in us-rol"><option value="">— sin acceso —</option>' + puestos + "</select></div>" +
+          '<div style="margin-top:6px" class="us-profwrap' + (u.rol === "profesional" ? "" : " oculto") + '">' +
+            '<select class="lab-in us-prof"><option value="">— es el profesional… —</option>' +
+            (LAB.cat.profesionales || []).map(function (o) {
+              return '<option value="' + o.id + '"' + (o.id === u.profesionalId ? " selected" : "") + ">" + esc(o.nombre) + "</option>";
+            }).join("") + "</select></div>" +
+        "</td>" +
+        '<td><div class="lab-perms">' + tildes + "</div></td>" +
+        '<td style="width:110px;vertical-align:top"><button class="lab-btn xs us-save">Guardar</button></td></tr>';
     }).join("");
     c.innerHTML = '<div class="lab-card">' +
       '<div class="lab-list-head"><h3>Usuarios del centro</h3></div>' +
-      '<div class="lab-muted" style="margin-bottom:10px">El acceso se le da a un usuario que ya existe en NS. Sin rol, no entra al sistema del centro. ' +
-      'El profesional además necesita estar atado a su ficha para que vea su agenda.</div>' +
-      '<table class="lab-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Es el profesional</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="4" class="lab-muted">No hay usuarios.</td></tr>') + "</tbody></table></div>";
+      '<div class="lab-muted" style="margin-bottom:10px">El puesto tilda lo que suele hacer cada uno; después agregá o sacá lo que quieras. ' +
+      "Sin ningún permiso tildado, la persona no entra al sistema.</div>" +
+      '<table class="lab-table"><thead><tr><th style="width:250px">Usuario y puesto</th><th>Qué puede hacer</th><th></th></tr></thead><tbody>' +
+      (filas || '<tr><td colspan="3" class="lab-muted">No hay usuarios para dar de alta.</td></tr>') + "</tbody></table></div>";
     c.querySelectorAll("tr[data-u]").forEach(function (tr) {
-      var selRol = tr.querySelector(".us-rol"), selProf = tr.querySelector(".us-prof");
-      selRol.onchange = function () { selProf.disabled = selRol.value !== "profesional"; };
+      var selRol = tr.querySelector(".us-rol");
+      var wrapProf = tr.querySelector(".us-profwrap");
+      var tildes = tr.querySelectorAll("[data-perm]");
+      selRol.onchange = function () {
+        wrapProf.classList.toggle("oculto", selRol.value !== "profesional");
+        // El puesto RE-tilda los permisos: es el punto de partida. Si despues el
+        // centro los toca, lo que vale es lo que quedo tildado.
+        var base = plantillas[selRol.value] || [];
+        tildes.forEach(function (i) { i.checked = base.indexOf(i.getAttribute("data-perm")) >= 0; });
+      };
       tr.querySelector(".us-save").onclick = async function () {
+        var permisos = [];
+        tildes.forEach(function (i) { if (i.checked) permisos.push(i.getAttribute("data-perm")); });
         var rr = await api("/api/lab/usuarios", {
-          username: tr.getAttribute("data-u"), rol: selRol.value,
-          profesionalId: selRol.value === "profesional" ? selProf.value : "",
+          username: tr.getAttribute("data-u"), rol: selRol.value, permisos: permisos,
+          profesionalId: selRol.value === "profesional" ? tr.querySelector(".us-prof").value : "",
         });
         if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
-        toast(selRol.value ? "Acceso guardado ✓" : "Acceso quitado ✓");
+        toast(permisos.length ? "Permisos guardados ✓" : "Acceso quitado ✓");
       };
     });
   }
@@ -1639,6 +1656,9 @@
       ".lab-rec-msg{font-size:12px;color:var(--text-2);max-width:420px}",
       ".lab-rec-hecho{opacity:.55}",
       ".lab-rec-ok{color:#15803d;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}",
+      ".lab-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}",
+      ".lab-perm{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);padding:2px 0}",
+      ".oculto{display:none}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
       ".lab-sala-kpi b{display:block;font-size:20px;line-height:1.1}",

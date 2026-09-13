@@ -101,28 +101,35 @@ function saveStore(dataDir, store) {
   try { _cacheMtime = fs.statSync(storeFile(dataDir)).mtimeMs; _cache = store; } catch { _cacheMtime = -1; }
 }
 
-// Roles del Laboratorio y que toca cada uno. Un centro son tres personas distintas
-// y hasta ahora entraba solo el admin de NS, asi que no se le podia dar a nadie.
-//
-//   recepcion       — la agenda y el dia: da turnos, cobra. No ve la estadistica ni
-//                     toca los valores de las obras sociales.
-//   profesional     — SU agenda y la historia clinica. Nada de plata.
-//   administracion  — todo lo anterior + estadistica, cierre de caja y catalogos.
-//   admin           — ademas, los usuarios.
-//
-// El rol vive en el usuario de NS (campo `lab`), asi hay UNA sola puerta de entrada
-// y no dos padrones de usuarios que se desincronizan.
-const LAB_PERMISOS = {
-  recepcion: ["agenda", "pacientes", "hc", "caja"],
-  profesional: ["agenda", "pacientes", "hc"],
-  administracion: ["agenda", "pacientes", "hc", "caja", "cierre", "estadistica", "config"],
-  admin: ["agenda", "pacientes", "hc", "caja", "cierre", "estadistica", "config", "usuarios"],
+// Permisos del sistema de turnos, de a uno. El centro habilita los que quiera para
+// cada persona: las plantillas de abajo son un punto de partida, no una jaula.
+const LAB_PERMISOS_CAT = [
+  { cod: "agenda", label: "Agenda y turnos" },
+  { cod: "sala", label: "Sala de espera" },
+  { cod: "recordatorios", label: "Recordatorios" },
+  { cod: "pacientes", label: "Pacientes" },
+  { cod: "hc", label: "Historia clínica" },
+  { cod: "caja", label: "Caja: cobrar" },
+  { cod: "cierre", label: "Caja: cerrar el día" },
+  { cod: "estadistica", label: "Estadística" },
+  { cod: "config", label: "Configuración (profesionales, prácticas, valores)" },
+  { cod: "usuarios", label: "Usuarios y permisos" },
+];
+const LAB_TODOS = LAB_PERMISOS_CAT.map((x) => x.cod);
+// Los puestos que de verdad existen en un centro. Al elegir uno se tildan sus
+// permisos, y despues se agrega o saca lo que haga falta.
+const LAB_PLANTILLAS = {
+  recepcionista: ["agenda", "sala", "recordatorios", "pacientes"],
+  cajero: ["agenda", "pacientes", "caja"],
+  profesional: ["agenda", "sala", "pacientes", "hc"],
+  coordinador: ["agenda", "sala", "recordatorios", "pacientes", "hc", "caja", "cierre", "estadistica", "config"],
+  admin: LAB_TODOS.slice(),
 };
 // Que permiso pide cada recurso de la API.
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
-  sala: "agenda",
-  recordatorios: "agenda",
+  sala: "sala",
+  recordatorios: "recordatorios",
   config: "config",
   pacientes: "pacientes",
   estudios: "hc",
@@ -136,38 +143,26 @@ const LAB_RECURSO_PERMISO = {
   profesionales: "config",
   usuarios: "usuarios",
 };
+// Las cuentas que SON un centro (el cliente de NS) no son personas que atienden: no
+// tienen nada que hacer en la lista de usuarios del sistema de turnos.
+const LAB_ROLES_NS_FUERA = new Set(["clinica", "demo"]);
+function labPermisosDe(me) {
+  if (!me) return [];
+  // El admin de NS entra a todo: es el dueno del sistema, no un usuario del centro.
+  if (me.role === "admin") return LAB_TODOS.slice();
+  const lab = me.lab && typeof me.lab === "object" ? me.lab : null;
+  if (!lab) return [];
+  // Manda la lista de permisos; la plantilla es solo con que arranco.
+  if (Array.isArray(lab.permisos)) return lab.permisos.filter((x) => LAB_TODOS.includes(x));
+  return (LAB_PLANTILLAS[lab.rol] || []).slice();
+}
 function labRolDe(me) {
   if (!me) return null;
-  // El admin de NS entra a todo: es el dueno del sistema, no un usuario del centro.
   if (me.role === "admin") return "admin";
-  const rol = me.lab && typeof me.lab === "object" ? String(me.lab.rol || "") : "";
-  return LAB_PERMISOS[rol] ? rol : null;
+  return labPermisosDe(me).length ? ((me.lab && me.lab.rol) || "personalizado") : null;
 }
 function labPuede(me, permiso) {
-  const rol = labRolDe(me);
-  if (!rol) return false;
-  return LAB_PERMISOS[rol].includes(permiso);
-}
-
-// El texto del recordatorio. Las llaves se reemplazan con los datos del turno; el
-// centro lo puede cambiar entero desde la pantalla.
-const PLANTILLA_DEFAULT =
-  "Hola {paciente}, le recordamos su turno el {fecha} a las {hora} con {profesional}. " +
-  "Si no puede venir, avisenos asi se lo damos a otra persona. Gracias.";
-function armarRecordatorio(plantilla, t, prof, config) {
-  const f = String(t.fecha || "").split("-");
-  const partes = {
-    "{paciente}": String(t.pacienteNombre || "").split(",")[0].trim() || "paciente",
-    "{fecha}": f.length === 3 ? f[2] + "/" + f[1] : (t.fecha || ""),
-    "{hora}": t.hora || "",
-    "{profesional}": prof.nombre || "",
-    "{practica}": t.practicaNombre || "",
-    "{centro}": config.centroNombre || "",
-    "{direccion}": config.centroDireccion || "",
-  };
-  let out = String(plantilla || PLANTILLA_DEFAULT);
-  Object.keys(partes).forEach((k) => { out = out.split(k).join(partes[k]); });
-  return out.replace(/\s{2,}/g, " ").trim();
+  return labPermisosDe(me).includes(permiso);
 }
 
 // Colecciones simples con CRUD genérico (las que son catálogo plano).
@@ -323,7 +318,7 @@ async function handleLab(ctx) {
       obrasSociales: store.obrasSociales,
       practicas: store.practicas || [],
       // Con esto el front arma el menu: no se muestra lo que despues va a dar 403.
-      rol: labRol, permisos: LAB_PERMISOS[labRol] || [],
+      rol: labRol, permisos: labPermisosDe(me),
       profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;
@@ -423,13 +418,20 @@ async function handleLab(ctx) {
     if (!ctx.loadUsers || !ctx.saveUsers) return json(res, 500, { error: "No puedo leer los usuarios." }), true;
     const users = ctx.loadUsers() || [];
     if (method === "GET") {
-      const items = users.filter((u) => u.active !== false).map((u) => ({
-        username: u.username, nombre: u.name || u.username, rolNs: u.role,
-        rol: u.role === "admin" ? "admin" : ((u.lab && u.lab.rol) || ""),
-        profesionalId: (u.lab && u.lab.profesionalId) || "",
-        esAdminNs: u.role === "admin",
-      }));
-      return json(res, 200, { items, roles: Object.keys(LAB_PERMISOS), permisos: LAB_PERMISOS }), true;
+      const items = users
+        .filter((u) => u.active !== false && !LAB_ROLES_NS_FUERA.has(u.role))
+        .map((u) => ({
+          username: u.username, nombre: u.name || u.username, rolNs: u.role,
+          rol: u.role === "admin" ? "admin" : ((u.lab && u.lab.rol) || ""),
+          permisos: u.role === "admin" ? LAB_TODOS.slice() : labPermisosDe(u),
+          profesionalId: (u.lab && u.lab.profesionalId) || "",
+          esAdminNs: u.role === "admin",
+        }));
+      return json(res, 200, {
+        items,
+        catalogo: LAB_PERMISOS_CAT,
+        plantillas: LAB_PLANTILLAS,
+      }), true;
     }
     if (method === "POST") {
       const body = await readBody(req);
@@ -438,13 +440,18 @@ async function handleLab(ctx) {
       const u = users.find((x) => String(x.username).toLowerCase() === uname);
       if (!u) return json(res, 404, { error: "Ese usuario no existe en NS." }), true;
       if (u.role === "admin") return json(res, 400, { error: "Un administrador de NS ya entra a todo; no hace falta darle rol." }), true;
-      if (rol && !LAB_PERMISOS[rol]) return json(res, 400, { error: "Ese rol no existe." }), true;
-      // Sin rol = se le saca el acceso. Se borra el campo entero para no dejar
+      if (rol && rol !== "personalizado" && !LAB_PLANTILLAS[rol]) return json(res, 400, { error: "Ese puesto no existe." }), true;
+      // Lo que manda es la lista de permisos. Si no viene, se toman los de la
+      // plantilla del puesto elegido.
+      const permisos = Array.isArray(body.permisos)
+        ? body.permisos.map(clean).filter((x) => LAB_TODOS.includes(x))
+        : (LAB_PLANTILLAS[rol] || []).slice();
+      // Sin permisos = se le saca el acceso. Se borra el campo entero para no dejar
       // basura que despues confunda al leer el usuario.
-      if (!rol) delete u.lab;
-      else u.lab = { rol, profesionalId: clean(body.profesionalId) };
+      if (!permisos.length) delete u.lab;
+      else u.lab = { rol: rol || "personalizado", permisos, profesionalId: clean(body.profesionalId) };
       ctx.saveUsers(users);
-      return json(res, 200, { ok: true, username: u.username, rol: rol || "" }), true;
+      return json(res, 200, { ok: true, username: u.username, rol: (u.lab && u.lab.rol) || "", permisos: (u.lab && u.lab.permisos) || [] }), true;
     }
   }
 
