@@ -151,7 +151,7 @@ function go(v, el){
   if (v === 'padron') loadPadronView();
   if (v === 'cabina') loadCabinaView();
   if (v === 'liberarcupo') loadLiberarCupoView();
-  if (v === 'soon'){ renderUsers(); loadGeneralDebitos(); loadConexiones(); }
+  if (v === 'soon'){ renderUsers(); cfgPestana(cfgPestanaGuardada()); }
   if (v === 'facturas') loadFacturas();
   if (v === 'cruzas') loadCruzasClientes();
   document.querySelectorAll('.nav a, .side-config a, .nav-parent, .client-nav-item').forEach(function(a){ a.classList.remove('active'); });
@@ -8670,6 +8670,29 @@ function resetPamiApplyBtn(){
 // ===== Panel Débitos: reglas de cruce (dos estudios el mismo día → PAMI debita uno) =====
 var DEBITO_REGLAS = [];
 var UMBRAL_PAGA_PCT = 60;   // % que paga PAMI en "valorización parcial por umbrales" (configurable)
+// ===== Pestañas de Configuracion =====
+// Usuarios / Debitos / Conexiones. Se guarda cual quedo abierta en este
+// navegador: quien entra a Configuracion suele volver a lo mismo.
+var CFG_PESTANAS = ['usuarios', 'debitos', 'conexiones'];
+function cfgPestanaGuardada(){
+  try { var v = localStorage.getItem('ns-cfg-pestana'); if (CFG_PESTANAS.indexOf(v) >= 0) return v; } catch(e){}
+  return 'usuarios';
+}
+function cfgPestana(cual){
+  if (CFG_PESTANAS.indexOf(cual) < 0) cual = 'usuarios';
+  try { localStorage.setItem('ns-cfg-pestana', cual); } catch(e){}
+  CFG_PESTANAS.forEach(function(k){
+    var panel = document.getElementById('cfgPanel' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (panel) panel.style.display = (k === cual) ? '' : 'none';
+    var tab = document.getElementById('cfgTab' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (tab) tab.classList.toggle('active', k === cual);
+  });
+  // Se carga al entrar a la pestaña y no todo junto al abrir la pantalla:
+  // Conexiones pregunta por cada cliente y no tiene sentido hacerlo si no se mira.
+  if (cual === 'debitos') loadGeneralDebitos();
+  if (cual === 'conexiones') loadConexiones();
+}
+
 // ===== Conexiones: accesos a los sistemas de los centros =====
 // Hoy hay una sola, Global App (de donde el bot baja los informes de Baimed).
 // La lista se arma recorriendo los clientes, así sumar otro centro no pide tocar

@@ -1761,6 +1761,14 @@
           </div>
         </section>
         <section id="view-soon" style="display:none">
+          <!-- Las tres partes de Configuracion van en pestañas: se usan de a una,
+               y apiladas obligaban a bajar media pantalla para llegar a la ultima. -->
+          <div class="client-tabs" style="margin-bottom:14px">
+            <button id="cfgTabUsuarios" type="button" class="active" onclick="cfgPestana('usuarios')">👥 Usuarios</button>
+            <button id="cfgTabDebitos" type="button" onclick="cfgPestana('debitos')">⚖️ Débitos automáticos</button>
+            <button id="cfgTabConexiones" type="button" onclick="cfgPestana('conexiones')">🔌 Conexiones</button>
+          </div>
+          <div id="cfgPanelUsuarios">
           <div class="card general-card">
             <div class="general-card-head">
               <div>
@@ -1779,7 +1787,9 @@
               </table>
             </div>
           </div>
-          <div class="card general-card" style="margin-top:14px">
+          </div>
+          <div id="cfgPanelDebitos" style="display:none">
+          <div class="card general-card">
             <div class="general-card-head">
               <div>
                 <h3>⚖️ Débitos automáticos</h3>
@@ -1789,10 +1799,12 @@
             </div>
             <div id="generalDebitosResumen"><div class="nom-muted">Cargando…</div></div>
           </div>
+          </div>
+          <div id="cfgPanelConexiones" style="display:none">
           <!-- Conexiones con sistemas de los centros. Hoy Global App (de donde el
                bot baja los informes); la tabla esta pensada para que sumar otro
                sistema sea una fila mas, no una pantalla nueva. -->
-          <div class="card general-card" style="margin-top:14px">
+          <div class="card general-card">
             <div class="general-card-head">
               <div>
                 <h3>🔌 Conexiones</h3>
@@ -1800,6 +1812,7 @@
               </div>
             </div>
             <div id="conexionesBody"><div class="nom-muted">Cargando…</div></div>
+          </div>
           </div>
         </section>
       </div>
