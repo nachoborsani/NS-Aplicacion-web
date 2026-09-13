@@ -12640,6 +12640,68 @@ function ensureVesicoprostaticaSeed() {
 }
 ensureVesicoprostaticaSeed();
 
+// Los medicos de imagenes de Baimed, puestos al dia con lo que firman DE VERDAD.
+// Salio de contar 164 informes que bajo el bot de Global App (09/2026): Basich y
+// Maya firman y no estaban dadas de alta, y a Pittorino/Huarita el alta anterior
+// les habia dejado solo las seis ecografias de la vesicoprostatica, asi que no
+// podian firmar una mamaria, una tiroides ni un ecodoppler.
+//
+//   Pittorino  75 informes: abdominal, renal, gineco, partes blandas,
+//                           vesicoprostatica, vasos de cuello, MMII
+//   Basich     29 informes: gineco, renal, venoso MMII, tiroides, abdominal
+//   Ruano      39 informes: ecocardiograma (ya lo tenia) + vasos de cuello
+//   Huarita    14 informes: vasos de cuello, vesicoprostatica, MMII, tiroides
+//   Maya        7 informes: vasos de cuello
+//
+// La firma NO va en el repo (es publico): queda el nombre del archivo y se sube
+// desde la pantalla. Una sola vez, por flag.
+function ensureMedicosBaimedAlDia() {
+  try {
+    const cfg = loadInformesConfig();
+    if (cfg._baimedMedicos0926) return;
+    if (!Array.isArray(cfg.medicos)) cfg.medicos = [];
+    const IMAGENES = [
+      "eco-abdominal", "eco-renal", "eco-vesical", "eco-vesical-residuo", "eco-prostatica",
+      "eco-vesicoprostatica", "eco-partes-blandas-general", "eco-musculo", "eco-tiroides",
+      "eco-mamaria", "eco-ginecologica-tv", "eco-doppler-cuello", "eco-doppler-tiroides",
+      "eco-doppler-arterial-mmii", "eco-doppler-venoso-mmii",
+      "eco-doppler-arterial-mmss", "eco-doppler-venoso-mmss", "eco-doppler-aorta-abdominal",
+    ];
+    const altas = [
+      { id: "patricia-basich", nombre: "Med. Patricia Basich", matricula: "MN 167979", modelos: IMAGENES.slice() },
+      { id: "mariana-maya", nombre: "Dra. Mariana Maya", matricula: "MN 184946", modelos: ["eco-doppler-cuello"] },
+    ];
+    for (const m of altas) {
+      if (cfg.medicos.some((x) => x.id === m.id)) continue;
+      cfg.medicos.push({ id: m.id, nombre: m.nombre, firma: "firma-" + m.id + ".png",
+                         matricula: m.matricula, modelos: m.modelos, clientes: ["dbaime"] });
+      console.log("[baimed-medicos-0926] alta de " + m.nombre + " (firma pendiente de subir).");
+    }
+    // A los que ya estaban: sumarles lo que firman y no tenian habilitado. Se SUMA,
+    // no se pisa: si alguien les saco una practica a mano, no se la devolvemos.
+    const sumar = {
+      "raul-pittorino": IMAGENES,
+      "alvaro-huarita": IMAGENES,
+      "dr-ruano-martin": ["eco-doppler-cuello"],
+    };
+    for (const [id, modelos] of Object.entries(sumar)) {
+      const med = cfg.medicos.find((x) => x.id === id);
+      if (!med) continue;
+      const tiene = new Set(Array.isArray(med.modelos) ? med.modelos : []);
+      const antes = tiene.size;
+      modelos.forEach((k) => tiene.add(k));
+      if (tiene.size !== antes) {
+        med.modelos = [...tiene];
+        console.log("[baimed-medicos-0926] " + med.nombre + ": " + (tiene.size - antes) + " practicas nuevas habilitadas.");
+      }
+      if (!med.firma) med.firma = "firma-" + med.id + ".png";
+    }
+    cfg._baimedMedicos0926 = true;
+    saveInformesConfig(cfg);
+  } catch (e) { console.log("[baimed-medicos-0926] omitido:", e && e.message); }
+}
+ensureMedicosBaimedAlDia();
+
 // Rellena el nombre corto en presets ya existentes (configs previas al cambio).
 function ensureNombresPresets() {
   try {
