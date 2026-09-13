@@ -12138,7 +12138,7 @@ function ensureModelosUnificados() {
       // Logo sacado de un informe de ECG suyo (Cardozo, ago/2026). El banner es
       // apaisado (936x279): a 150 px de ancho el alto queda en 45, parecido al de
       // los otros membretes. Direccion y telefono todavia no los tenemos.
-      "st-ignacio": { logo: "gjs_logo.png", logoW: 150 },
+      "st-ignacio": { logo: "gjs_logo.png", logoW: 150, direccion: "Paraguay 2559 - San Justo", telefono: "11 5796-8036 / 11 4048-8789" },
     };
     const clients = loadClientsStore();
     let cambioClientes = false;
@@ -12335,6 +12335,11 @@ function ensureOrlSeed() {
       // todavia no se sabe quien los firma.
       { id: "cameselle-mario", nombre: "Dr. Mario Cameselle", matricula: "M.P. 29982 · M.N. 70413",
         modelos: ["consulta-570129", "ergo"], clientes: ["st-ignacio"] },
+      // Otorrino del mismo centro. Datos del sello de una orden suya (Sanchez
+      // Celia, 07/08/2026). Le van las cuatro practicas ORL: es el unico
+      // otorrino cargado ahi.
+      { id: "arana-coello-jacinto", nombre: "Dr. Jacinto Arana Coello", matricula: "M.N. 63.422 · M.P. 52.746",
+        modelos: ["orl-cerumen", "orl-quimico", "orl-combinado", "orl-videorino"], clientes: ["st-ignacio"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
