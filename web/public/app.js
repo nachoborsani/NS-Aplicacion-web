@@ -4250,7 +4250,7 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'dashboard') loadClientDashboard();
   if (CLIENT_SECTION === 'general') renderClientGeneral();
   if (CLIENT_SECTION === 'medicos') loadClientMedicos();
-  if (CLIENT_SECTION === 'honorarios') loadClientHonorarios();
+  if (CLIENT_SECTION === 'honorarios') { if (ME && ME.role === 'clinica') renderHonorariosEnDesarrollo(); else { restaurarHonorariosContenido(); loadClientHonorarios(); } }
   if (CLIENT_SECTION === 'osdop') renderOsdop();
   if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
   if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentro();
@@ -4706,6 +4706,19 @@ async function saveClientPami(){
   msg.textContent = 'Acceso PAMI guardado.';
 }
 
+// Honorarios para el rol clínica: por ahora solo cartel "en desarrollo", sin
+// tocar nada de lo que ve el admin. Puramente visual - no cambia permisos,
+// capacidades ni el endpoint.
+function renderHonorariosEnDesarrollo(){
+  var dev = document.getElementById('honEnDesarrollo'); if (dev) dev.style.display = '';
+  var cont = document.getElementById('honContenido'); if (cont) cont.style.display = 'none';
+}
+// Por si en la misma sesión se pasa de ver como clínica a admin (u otro rol)
+// sin recargar la página - deja el contenido real visible de nuevo.
+function restaurarHonorariosContenido(){
+  var dev = document.getElementById('honEnDesarrollo'); if (dev) dev.style.display = 'none';
+  var cont = document.getElementById('honContenido'); if (cont) cont.style.display = '';
+}
 // ===== Usuarios médicos del consultorio (solo admin) =====
 // ===== Honorarios y ganancia real (admin + clínica del centro) =====
 var HON = { periodo: '', codigos: [], config: {}, reportes: [], reporteId: '', fuente: '', reporteNombre: '' };
