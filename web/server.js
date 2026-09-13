@@ -604,7 +604,10 @@ function matchearInforme(slug, extract) {
     // Cuando el informe cubre varias prácticas, las OMEs de todas (ver elegirPracticas).
     omes: Array.isArray(m.omes) ? m.omes : [],
     prestaciones: (m.prestaciones || []).map(cabinaLib.candidatoLiviano),
-    candidatos: (m.candidatos || []).slice(0, 8).map(cabinaLib.candidatoLiviano),
+    // 20 y no 8: un paciente con once practicas en el mes se comia al bueno. El
+    // matcher siempre vio la lista completa; el recorte era solo para la pantalla,
+    // pero ahi es donde el operador tiene que encontrar la OME que corresponde.
+    candidatos: (m.candidatos || []).slice(0, 20).map(cabinaLib.candidatoLiviano),
     sugerencias,
     // Para que la cabina pueda decir POR QUE no lo busco.
     obraSocial: m.obraSocial || extract.obraSocial || "",

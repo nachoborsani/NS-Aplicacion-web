@@ -112,6 +112,13 @@ const _EQUIV_PRACTICA = {
   "ARTERIAL DE MIEMBROS SUPERIORES": [/VASCULAR\s+PERIFERIC/],
   "VENOSO DE MIEMBROS INFERIORES": [/VASCULAR\s+PERIFERIC/],
   "VENOSO DE MIEMBROS SUPERIORES": [/VASCULAR\s+PERIFERIC/],
+  // Partes blandas y musculoesqueletica son el MISMO codigo (186001): cada centro
+  // la escribe como quiere y PAMI la lista de las dos formas. Sin esto, un informe
+  // de partes blandas no reconocia su propia OME y quedaba en "revisar cual
+  // practica" con ocho candidatos que no tenian nada que ver (13/09/2026).
+  "PARTES BLANDAS": [/MUSCULOESQUELET/, /\b186001\b/],
+  MUSCULOESQUELETICA: [/PARTES\s+BLANDAS/, /\b186001\b/],
+  MUSCULOESQUEL: [/PARTES\s+BLANDAS/, /MUSCULOESQUELET/, /\b186001\b/],
 };
 
 // ¿La práctica de un turno candidato es compatible con la del informe? Se usa para
@@ -323,7 +330,16 @@ function matchInforme(informe, bandeja, padronCliente) {
       // Si TODAS las prácticas del paciente en el período ya están transmitidas,
       // no hay nada para subir sea cual sea la que corresponde: aunque no se pueda
       // elegir cuál (o sean prácticas distintas), el resultado es "ya transmitido".
-      const todosTransmitidos = delPaciente.every((p) => p.transmitida);
+      // "Ya transmitido" = no queda ninguna OME donde subir este informe. Ademas del
+      // caso obvio (todas transmitidas), cuenta el caso en que lo que queda sin
+      // transmitir no puede recibirlo: o no esta validada, o es de otra practica.
+      // Sin esto, una consulta vieja sin validar dejaba el informe en "revisar cual
+      // practica" aunque las tres OMEs de ese estudio ya estuvieran transmitidas
+      // (Kehiayan, tapon de cerumen, 13/09/2026).
+      const hayDondeSubir = delPaciente.some(
+        (p) => !p.transmitida && p.validada && practicaCompatible(informe.practicaHint, p.practica));
+      const todosTransmitidos = delPaciente.every((p) => p.transmitida)
+        || (delPaciente.some((p) => p.transmitida) && !hayDondeSubir);
       // Primero: ¿el informe nombra VARIAS prácticas y cada una tiene su OME?
       const hints = Array.isArray(informe.practicaHints) ? informe.practicaHints : [];
       if (hints.length > 1) {
