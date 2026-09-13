@@ -436,6 +436,14 @@ class NSWebClient:
         cli.login(cfg.get("username", ""), cfg.get("password", ""))
         return cli
 
+    def client_globalapp(self, slug: str) -> dict:
+        """Acceso a Global App del cliente (usuario + clave desencriptada).
+
+        Vive en la web, al lado del de PAMI, para que se cargue y se corrija desde
+        la ficha del cliente y no haya que tocar un archivo en el server.
+        """
+        return self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/globalapp/credenciales")
+
     def informes_faltantes(self, slug: str) -> list[dict]:
         """Las prestaciones del mes que estan validadas y esperan el informe.
 

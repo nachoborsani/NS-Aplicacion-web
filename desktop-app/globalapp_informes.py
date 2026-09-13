@@ -79,19 +79,48 @@ def _digitos(v) -> str:
     return "".join(c for c in str(v or "") if c.isdigit())
 
 
-def cargar_config() -> dict:
-    if not CONFIG.exists():
-        raise SystemExit(
-            "Falta globalapp.json al lado de este archivo (url, usuario, clave, "
-            "idcliente, slug_ns). No va en el repo: se copia a mano en el server."
-        )
-    cfg = json.loads(CONFIG.read_text("utf-8"))
-    for clave in ("url", "usuario", "clave", "idcliente", "slug_ns"):
-        if not cfg.get(clave):
-            raise SystemExit(f"globalapp.json: falta '{clave}'.")
-    cfg.setdefault("api", "https://gmed.api.globalapp.ar")
-    return cfg
+def cargar_config(web=None, slug: str = "") -> dict:
+    """De donde salen los datos de acceso, en este orden:
 
+    1. La WEB, en la ficha del cliente (Acceso a Global App). Es el lugar bueno:
+       se carga y se corrige desde la pantalla, queda encriptado y viaja con el
+       cliente.
+    2. globalapp.json al lado de este archivo, como respaldo para probar a mano o
+       si la web no esta disponible.
+    """
+    cfg = {}
+    if CONFIG.exists():
+        try:
+            cfg = json.loads(CONFIG.read_text("utf-8")) or {}
+        except Exception:  # noqa: BLE001 - un json roto no puede tumbar la corrida
+            cfg = {}
+    slug = slug or cfg.get("slug_ns") or "dbaime"
+    if web is not None:
+        try:
+            dela_web = web.client_globalapp(slug) or {}
+            if dela_web.get("gaUser") and dela_web.get("gaPassword"):
+                cfg = {
+                    "url": dela_web.get("gaUrl") or cfg.get("url") or "https://gm.globalapp.ar",
+                    "api": dela_web.get("gaApi") or cfg.get("api") or "https://gmed.api.globalapp.ar",
+                    "usuario": dela_web["gaUser"],
+                    "clave": dela_web["gaPassword"],
+                    "idcliente": int(dela_web.get("gaIdCliente") or cfg.get("idcliente") or 0),
+                    "slug_ns": slug,
+                    "origen": "web",
+                }
+        except Exception:  # noqa: BLE001 - sin la web, queda lo del archivo
+            pass
+    cfg.setdefault("origen", "archivo")
+    cfg.setdefault("url", "https://gm.globalapp.ar")
+    cfg.setdefault("api", "https://gmed.api.globalapp.ar")
+    cfg.setdefault("slug_ns", slug)
+    faltan = [k for k in ("usuario", "clave", "idcliente") if not cfg.get(k)]
+    if faltan:
+        raise SystemExit(
+            "Falta el acceso a Global App (" + ", ".join(faltan) + "). Se carga en la "
+            "ficha del cliente, en Acceso a Global App."
+        )
+    return cfg
 
 class GlobalApp:
     """La sesión abierta en el navegador. Todas las llamadas salen de adentro de
@@ -235,10 +264,10 @@ def _fecha_de_turno(turno: str) -> str:
 
 
 def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> dict:
-    cfg = cargar_config()
-    slug = slug or cfg["slug_ns"]
-
     web = ns_web.NSWebClient.desde_config()
+    cfg = cargar_config(web, slug)
+    slug = slug or cfg["slug_ns"]
+    log(f"Acceso a Global App tomado de {cfg['origen']}.")
     pendientes = web.informes_faltantes(slug)
     if not pendientes:
         log("No hay informes pendientes en la bandeja; nada que bajar.")

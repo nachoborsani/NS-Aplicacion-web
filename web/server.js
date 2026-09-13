@@ -8282,6 +8282,52 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { pamiUser: cred.pamiUser || "", pamiPassword: decryptSecret(cred.pamiPassEnc) });
   }
 
+  // Acceso a Global App del cliente (el sistema de gestion del propio centro, de
+  // donde el bot baja los informes). Se guarda al lado del de PAMI y con el mismo
+  // trato: la clave encriptada, y solo el admin la puede leer desencriptada.
+  const clientGaCredMatch = p.match(/^\/api\/clientes\/([^/]+)\/globalapp\/credenciales$/);
+  if (clientGaCredMatch && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (me.role !== "admin") return json(res, 403, { error: "forbidden" });
+    const slug = decodeURIComponent(clientGaCredMatch[1]);
+    const cred = loadClientCreds()[slug] || {};
+    return json(res, 200, {
+      gaUser: cred.gaUser || "", gaPassword: decryptSecret(cred.gaPassEnc),
+      gaUrl: cred.gaUrl || "", gaApi: cred.gaApi || "", gaIdCliente: cred.gaIdCliente || 0,
+    });
+  }
+
+  const clientGaMatch = p.match(/^\/api\/clientes\/([^/]+)\/globalapp$/);
+  if (clientGaMatch && (req.method === "GET" || req.method === "POST")) {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const okRol = (req.method === "GET") ? esOperativo(me) : (me.role === "admin");
+    if (!okRol) return json(res, 403, { error: "Solo un administrador puede cambiar el acceso." });
+    const slug = decodeURIComponent(clientGaMatch[1]);
+    if (!loadClientsStore().find((item) => item.slug === slug)) return json(res, 404, { error: "Cliente no encontrado." });
+    const store = loadClientCreds();
+    if (req.method === "GET") {
+      const cred = store[slug] || {};
+      return json(res, 200, {
+        gaUser: cred.gaUser || "", hasPassword: !!cred.gaPassEnc,
+        gaUrl: cred.gaUrl || "", gaApi: cred.gaApi || "", gaIdCliente: cred.gaIdCliente || 0,
+      });
+    }
+    const body = await readBody(req);
+    const cred = store[slug] || {};
+    cred.gaUser = String(body.gaUser || "").trim();
+    cred.gaUrl = String(body.gaUrl || "").trim();
+    cred.gaApi = String(body.gaApi || "").trim();
+    cred.gaIdCliente = Number(body.gaIdCliente || 0) || 0;
+    // Vacio = se deja la que estaba, igual que en PAMI: asi se puede corregir el
+    // usuario sin tener que volver a tipear la clave.
+    if (typeof body.gaPassword === "string" && body.gaPassword.length) cred.gaPassEnc = encryptSecret(body.gaPassword);
+    store[slug] = cred;
+    saveClientCreds(store);
+    return json(res, 200, { ok: true, gaUser: cred.gaUser, hasPassword: !!cred.gaPassEnc });
+  }
+
   const clientPamiMatch = p.match(/^\/api\/clientes\/([^/]+)\/pami$/);
   if (clientPamiMatch && (req.method === "GET" || req.method === "POST")) {
     const me = getSessionUser(req);
