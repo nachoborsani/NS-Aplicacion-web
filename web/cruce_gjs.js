@@ -40,6 +40,22 @@ const XLSX = require("xlsx");
 
 function soloDigitos(v) { return String(v == null ? "" : v).replace(/\D+/g, ""); }
 
+// Algunos exports de AgendaPro guardan la fecha como celda de fecha nativa de
+// Excel (no como texto): XLSX la lee como un NÚMERO de serie (ej. 46266), no
+// como "01/09/2026". Eso hacía que el "Turno" del PDF/Excel de la cruza
+// mostrara un número sin sentido en vez de la fecha. Se detecta y convierte;
+// si no es un serial de fecha válido, se deja el valor tal cual (limpiar()).
+function formatearFechaCelda(v) {
+  if (typeof v === "number" && v > 0) {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d && d.y) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${pad(d.d)}/${pad(d.m)}/${d.y}`;
+    }
+  }
+  return limpiar(v);
+}
+
 // Algunos exports de AgendaPro guardan el nombre con la codificación corrida:
 // los bytes UTF-8 de una tilde se vuelven a interpretar como Windows-1252 antes
 // de re-guardarlos como UTF-8 ("RAMÓN" -> "RAMÃ“N"). Esto rompe el matcheo por
@@ -326,7 +342,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
     if (coseguro > 0) { excluidosParticular++; continue; }
     cons.push({
       beneficio, dni: soloDigitos(celda(r, col.documento)), nombre: limpiar(celda(r, col.nombre)),
-      fecha: limpiar(celda(r, col.fecha)), hora: limpiar(celda(r, col.hora)), especialidad, especialidadDisplay,
+      fecha: formatearFechaCelda(celda(r, col.fecha)), hora: limpiar(celda(r, col.hora)), especialidad, especialidadDisplay,
       practica: claveComp(celda(r, col.practica)), profesional: claveComp(celda(r, col.profesional)),
     });
   }
