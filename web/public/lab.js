@@ -103,22 +103,34 @@
       ["usuarios", "👥", "Usuarios", "usuarios"]]],
   ];
   function labPuede(permiso) { return !permiso || (LAB.permisos || []).indexOf(permiso) >= 0; }
-  function shell() {
-    var wrap = e("div", { class: "lab-wrap" });
-    var nav = e("div", { class: "lab-nav" });
+  // El menu del sistema va en la barra azul de NS, al lado de "Inicio". Antes vivia
+  // en una tarjeta blanca al costado y quedaban dos menus, uno arriba del otro.
+  function pintarNavLateral() {
+    var nav = document.querySelector(".sidebar .nav");
+    if (!nav) return;
+    nav.querySelectorAll(".lab-only").forEach(function (x) { x.remove(); });
     LAB_MENU.forEach(function (grupo) {
       var visibles = grupo[1].filter(function (m) { return labPuede(m[3]); });
       if (!visibles.length) return;   // un grupo entero sin permiso no deja el titulo solo
-      nav.appendChild(e("div", { class: "lab-nav-grupo" }, esc(grupo[0])));
+      nav.appendChild(e("div", { class: "nav-section lab-only" }, esc(grupo[0])));
       visibles.forEach(function (m) {
-        var b = e("button", { class: "lab-tab", "data-mod": m[0], type: "button" },
-          '<span class="lab-tab-ic">' + m[1] + '</span><span>' + esc(m[2]) + '</span>');
-        b.onclick = function () { labGo(m[0]); };
-        nav.appendChild(b);
+        var a = e("a", { class: "lab-only lab-navlink", "data-mod": m[0] },
+          '<span class="lab-tab-ic">' + m[1] + "</span>" + esc(m[2]));
+        a.onclick = function () { labGo(m[0]); };
+        nav.appendChild(a);
       });
     });
-    wrap.appendChild(nav);
+    marcarNavActivo();
+  }
+  function marcarNavActivo() {
+    document.querySelectorAll(".sidebar .nav .lab-navlink").forEach(function (a) {
+      a.classList.toggle("active", a.getAttribute("data-mod") === LAB.modulo);
+    });
+  }
+  function shell() {
+    var wrap = e("div", { class: "lab-wrap" });
     wrap.appendChild(e("div", { class: "lab-content", id: "lab-content" }));
+    pintarNavLateral();
     return wrap;
   }
 
@@ -138,9 +150,7 @@
 
   function labGo(mod) {
     LAB.modulo = mod;
-    document.querySelectorAll(".lab-tab").forEach(function (b) {
-      b.classList.toggle("on", b.getAttribute("data-mod") === mod);
-    });
+    marcarNavActivo();
     var c = document.getElementById("lab-content");
     if (!c) return;
     if (mod === "agenda") viewAgenda(c);
@@ -1590,7 +1600,7 @@
     css.textContent = [
       // Pegado a la izquierda, no centrado: con el menu de NS al costado, centrar
       // dejaba un hueco muerto entre los dos menus y el sistema parecia flotando.
-      ".lab-wrap{display:grid;grid-template-columns:212px minmax(0,1fr);gap:18px;margin:0;align-items:start}",
+      ".lab-wrap{display:block;margin:0}",
       ".lab-nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card,#fff)}",
       ".lab-nav-grupo{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);padding:0 8px;margin:12px 0 4px}",
       ".lab-nav-grupo:first-child{margin-top:2px}",
@@ -1656,6 +1666,8 @@
       ".lab-rec-msg{font-size:12px;color:var(--text-2);max-width:420px}",
       ".lab-rec-hecho{opacity:.55}",
       ".lab-rec-ok{color:#15803d;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}",
+      ".lab-navlink{cursor:pointer}",
+      ".lab-navlink .lab-tab-ic{width:18px;display:inline-flex;justify-content:center;font-size:14px;flex:0 0 auto}",
       ".lab-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}",
       ".lab-perm{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);padding:2px 0}",
       ".oculto{display:none}",
