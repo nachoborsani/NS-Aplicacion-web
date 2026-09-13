@@ -101,7 +101,8 @@ function go(v, el){
   // vez de saltar directo al centro.
   if (ME && ME.role === 'clinica' && v !== 'dash' && NS_ONLY_VIEWS.indexOf(v) >= 0
       && !(v === 'informes' && clinicaTieneCap('omes'))
-      && !(v === 'liberarcupo' && clinicaTieneCap('liberarcupo'))){
+      && !(v === 'liberarcupo' && clinicaTieneCap('liberarcupo'))
+      && !(v === 'nomencladores' && clinicaTieneCap('nomencladores'))){
     if (ME.centro){ go('clientes'); selectClientWhenReady(ME.centro, 'mescurso'); }
     return;
   }
@@ -3759,11 +3760,13 @@ function renderClientList(){
       { label: 'Usuarios del centro',  section: 'usuarioscli',  cap: 'usuarios' },
       { label: 'Honorarios',           section: 'honorarios',   cap: 'honorarios' },
       { label: 'Datos del centro',     section: 'basica',       cap: 'datos' },
+      { label: 'Nomencladores',        view: 'nomencladores',   cap: 'nomencladores' },
     ].filter(function(s){ return clinicaTieneCap(s.cap); });
-    // ¿Estamos parados en una vista aparte (Crear informes / Liberar cupo) y no
-    // en una sección del centro? Sirve para el resaltado del ítem activo.
+    // ¿Estamos parados en una vista aparte (Crear informes / Liberar cupo /
+    // Nomencladores) y no en una sección del centro? Sirve para el resaltado
+    // del ítem activo.
     var vistaActiva = function(v){ var el = document.getElementById('view-' + v); return !!(el && el.style.display === 'block'); };
-    var enVistaAparte = vistaActiva('informes') || vistaActiva('liberarcupo');
+    var enVistaAparte = vistaActiva('informes') || vistaActiva('liberarcupo') || vistaActiva('nomencladores');
     cons.innerHTML = SECC_CLINICA.map(function(s){
       var active = s.view
         ? (vistaActiva(s.view) ? ' active' : '')
