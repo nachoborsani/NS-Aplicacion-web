@@ -12353,6 +12353,10 @@ function ensureOrlSeed() {
       // informe, ampliado: en el PDF entra a 118x75 y no se lee.
       { id: "tabbakh-fadel", nombre: "Dr. Fadel Tabbakh", matricula: "M.N. 168.274 · M.P. 234.550",
         modelos: ["mapa", "holter"], clientes: ["st-ignacio"] },
+      // Cirujano cardiovascular del mismo centro: hace los tratamientos
+      // esclerosantes de varices (Villaverde, 12/08/2026).
+      { id: "schmukler-edgardo", nombre: "Dr. Edgardo Schmukler", matricula: "M.N. 110.919 · M.P. 229.575",
+        modelos: ["esclerosante"], clientes: ["st-ignacio"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
