@@ -213,7 +213,7 @@ const HERMANO_REGION = { "180610": "180611", "180611": "180610", "180606": "1806
 // OME (por eso no es AUSENTE ni ERROR_REGION, que son rojo): es una
 // incongruencia a revisar a mano (gris).
 const HERMANO_INCONGRUENTE = { "570120": "570121", "570121": "570120" }; // MAPA <-> Holter
-const SEVERIDAD = { INCONGRUENCIA: 6, ERROR_REGION: 5, AUSENTE: 4, FALTA_INFORME: 3, PENDIENTE: 2, OK: 1 };
+const SEVERIDAD = { INCONGRUENCIA: 6, ERROR_REGION: 5, NO_VALIDADA: 4, AUSENTE: 4, FALTA_INFORME: 3, PENDIENTE: 2, OK: 1 };
 function peor(a, b) { return SEVERIDAD[a] >= SEVERIDAD[b] ? a : b; }
 
 function readRows(buffer) {
@@ -251,7 +251,11 @@ function estadoCodigo(rowsBand, codigo) {
   if (filas.length) {
     if (filas.some((b) => b.trasmitida === "S" && b.validada === "S")) return { estado: "OK" };
     if (filas.some((b) => b.trasmitida === "N" && b.validada === "S")) return { estado: "FALTA_INFORME" };
-    return { estado: "PENDIENTE" };
+    // Presente en la bandeja pero sin validar: en la práctica es tan inútil
+    // como no tener OME (no se puede facturar), así que pesa como ROJO, no
+    // como un "en trámite normal" - decisión explícita del usuario (caso
+    // real Benitez Liliana Marcela, 12/09/2026).
+    return { estado: "NO_VALIDADA" };
   }
   const hermano = HERMANO_REGION[codigo];
   if (hermano && rowsBand.some((b) => b.codigo === hermano)) return { estado: "ERROR_REGION", hermano };
@@ -471,6 +475,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       const textos = {
         OK: "OK",
         PENDIENTE: "presente pero no transmitida/validada",
+        NO_VALIDADA: "presente en bandeja pero SIN VALIDAR (no sirve para facturar todavía)",
         FALTA_INFORME: "falta informe (validada, pendiente de transmitir)",
         ERROR_REGION: "posible error de región" + (notas.length ? " - " + notas.join("; ") : ""),
         INCONGRUENCIA: "posible código equivocado" + (notas.length ? " - " + notas.join("; ") : ""),
@@ -482,7 +487,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       const descripcionItem = `${codigoPrincipal} - ${e.nombre}`;
       if (estadoItem === "FALTA_INFORME") {
         faltaInforme.push({ beneficio, nombre: info.nombre, practica: descripcionItem, turno: e.turno || "", valor: valores.get(codigoPrincipal) || 0 });
-      } else if (estadoItem === "AUSENTE" || estadoItem === "ERROR_REGION") {
+      } else if (estadoItem === "AUSENTE" || estadoItem === "ERROR_REGION" || estadoItem === "NO_VALIDADA") {
         faltaOmeAuto.push({ turno: e.turno || "", especialidad: e.especialidadDisplay || "", nombre: info.nombre, beneficio, obs: "Sin ome", valor: valores.get(codigoPrincipal) || 0 });
       }
       // INCONGRUENCIA no va a "faltaOmeAuto": SÍ hay una OME (solo que con el
@@ -496,7 +501,7 @@ function calcularCruce({ agendaBuffer, bandejaBuffer, bandejaRows, valorPorCodig
       color = "GRIS";
       detalle.unshift(`⚠ Nombre${matchPorNombre.aproximado ? " (por similitud)" : ""} encontrado en la bandeja con MÁS DE UN beneficio distinto - no se pudo elegir cuál es, revisar a mano.`);
     } else {
-      color = { OK: "VERDE", PENDIENTE: "AMARILLO", FALTA_INFORME: "NARANJA", AUSENTE: "ROJO", ERROR_REGION: "ROJO", INCONGRUENCIA: "GRIS" }[peorEstado];
+      color = { OK: "VERDE", PENDIENTE: "AMARILLO", FALTA_INFORME: "NARANJA", AUSENTE: "ROJO", ERROR_REGION: "ROJO", NO_VALIDADA: "ROJO", INCONGRUENCIA: "GRIS" }[peorEstado];
       if (matchPorNombre && matchPorNombre.aproximado) {
         detalle.unshift(`ℹ Nombre distinto pero similar (${Math.round(matchPorNombre.promedio * 100)}% de coincidencia: agenda "${info.nombre}" vs bandeja "${matchPorNombre.nombreBandeja}") y beneficio no coincide (agenda ${beneficio} / bandeja ${matchPorNombre.beneficioBandeja}).`);
       } else if (matchPorNombre) {
