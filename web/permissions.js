@@ -143,8 +143,16 @@ function aplicarGateDeRol(req, meGate, p) {
     // liquidación en PDF, que se pide por POST). Y exportar PDF (lectura).
     else if (!esGet && suCentro && /\/honorarios(\/liquidacion)?$/.test(p)) permitido = true;
     else if (p === "/api/mescurso/export") permitido = true;
-    // Nomenclador: es data de REFERENCIA (no de un centro), solo lectura.
-    else if (esGet && (p === "/api/nomencladores/search" || p === "/api/nomencladores/export")) permitido = true;
+    // Nomenclador: es data de REFERENCIA (no de un centro), solo lectura. Van
+    // las 5 lecturas que arma la pantalla: el resumen (lista de períodos +
+    // filtros, que es LO PRIMERO que pide al abrir), la búsqueda, el export,
+    // la calculadora y el banner de aumento vs el mes anterior. Escribir
+    // (subir/activar/borrar un nomenclador) nunca: eso sigue siendo de NS.
+    else if (esGet && (p === "/api/nomencladores"
+                    || p === "/api/nomencladores/search"
+                    || p === "/api/nomencladores/export"
+                    || p === "/api/nomencladores/calc-data"
+                    || p === "/api/nomencladores/comparar")) permitido = true;
     // Credencial provisoria de PAMI (mismo permiso que su empleado operador_clinica).
     else if (req.method === "POST" && p === "/api/credencial-provisoria") permitido = true;
     // Crear informes: config + generar/lote, sin generar-y-subir (subir a PAMI
@@ -170,6 +178,7 @@ function aplicarGateDeRol(req, meGate, p) {
       : /\/honorarios(\/liquidacion)?$/.test(p) ? "honorarios"
       : /\/liberar-cupo(\/|$)/.test(p) ? "liberarcupo"
       : /^\/api\/clientes\/[^/]+\/usuarios(\/|$)/.test(p) ? "usuarios"
+      : /^\/api\/nomencladores(\/|$)/.test(p) ? "nomencladores"
       : null;
     if (permitido && capReq && !clinicaTieneCap(meGate, capReq)) {
       return { status: 403, body: { error: "Tu centro no tiene habilitada esa herramienta. Pedísela a NS." } };
