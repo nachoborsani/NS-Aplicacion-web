@@ -12,7 +12,7 @@
   var LAB = {
     booted: false,
     modulo: "agenda",
-    cat: { especialidades: [], profesionales: [], consultorios: [], obrasSociales: [] },
+    cat: { especialidades: [], profesionales: [], consultorios: [], obrasSociales: [], practicas: [] },
     ag: { especialidadId: "", profesionalId: "", fecha: "" },
   };
   var DOW = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -90,7 +90,8 @@
   var LAB_MENU = [
     ["Atención", [["agenda", "📅", "Agenda"], ["pacientes", "👤", "Pacientes"]]],
     ["Administración", [["caja", "💵", "Caja"], ["estadistica", "📊", "Estadística"]]],
-    ["Configuración", [["profesionales", "🩺", "Profesionales"], ["especialidades", "🏷️", "Especialidades"],
+    ["Configuración", [["profesionales", "🩺", "Profesionales"], ["practicas", "🧾", "Prácticas"],
+      ["especialidades", "🏷️", "Especialidades"],
       ["consultorios", "🚪", "Consultorios"], ["obrasSociales", "🩹", "Obras Sociales"]]],
   ];
   function shell() {
@@ -117,6 +118,7 @@
       LAB.cat.profesionales = r.data.profesionales || [];
       LAB.cat.consultorios = r.data.consultorios || [];
       LAB.cat.obrasSociales = r.data.obrasSociales || [];
+      LAB.cat.practicas = r.data.practicas || [];
     }
   }
 
@@ -132,6 +134,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
     else if (mod === "consultorios") viewCatalogo(c, "consultorios", "Consultorios");
     else if (mod === "obrasSociales") viewCatalogo(c, "obrasSociales", "Obras Sociales");
@@ -429,6 +432,11 @@
         return '<button class="lab-est-btn' + (t.estado === k ? " on" : "") + '" data-est="' + k + '" style="--c:' + ESTADOS[k].color + '">' + esc(ESTADOS[k].label) + "</button>";
       }).join("") + "</div>" +
       '<div class="lab-sec-tit">Cobro</div>' +
+      '<label>Práctica<select class="lab-in" id="tn-prac"><option value="">— sin práctica —</option>' +
+        (LAB.cat.practicas || []).map(function (pr) {
+          return '<option value="' + pr.id + '"' + (pr.id === t.practicaId ? " selected" : "") + ">" + esc(pr.nombre) + "</option>";
+        }).join("") + '</select></label>' +
+      '<div class="lab-muted" id="tn-prac-aviso" style="margin:-4px 0 8px"></div>' +
       '<div class="lab-grid3">' +
         '<label>Importe<input class="lab-in" id="tn-imp" type="number" min="0" step="100" value="' + (t.importe || 0) + '"></label>' +
         '<label>Seña<input class="lab-in" id="tn-sena" type="number" min="0" step="100" value="' + (t.sena || 0) + '"></label>' +
@@ -466,11 +474,31 @@
         b.classList.add("on"); t.estado = est; toast("Estado: " + ESTADOS[est].label); agLoad();
       };
     });
+    // Elegir la practica completa el importe con lo que paga la obra social del
+    // paciente. Si esa obra social todavia no tiene valor cargado, se dice — poner
+    // $0 seria peor: alguien lo cobra asi y nadie se entera.
+    var selPrac = m.body.querySelector("#tn-prac");
+    var avisoPrac = m.body.querySelector("#tn-prac-aviso");
+    function pintarAvisoPractica(autocompletar) {
+      var pid = selPrac.value;
+      if (!pid) { avisoPrac.textContent = ""; return; }
+      var v = valorPractica(pid, t.obraSocial);
+      if (v) {
+        avisoPrac.textContent = (t.obraSocial || "Particular") + " paga " + fmt$(v) + " por esta práctica.";
+        if (autocompletar) m.body.querySelector("#tn-imp").value = v;
+      } else {
+        avisoPrac.textContent = "Todavía no hay valor cargado de " + (t.obraSocial || "esa obra social") + " para esta práctica: poné el importe a mano.";
+      }
+    }
+    selPrac.onchange = function () { pintarAvisoPractica(true); };
+    pintarAvisoPractica(false);
     m.body.querySelector("#tn-guardar").onclick = async function () {
       var rr = await req("PUT", "/api/lab/turnos/" + id, {
         importe: m.body.querySelector("#tn-imp").value, sena: m.body.querySelector("#tn-sena").value,
         insumos: m.body.querySelector("#tn-ins").value, medioPago: m.body.querySelector("#tn-medio").value,
         pagado: m.body.querySelector("#tn-pag").checked,
+        practicaId: selPrac.value,
+        practicaNombre: selPrac.value ? (selPrac.options[selPrac.selectedIndex] || {}).text : "",
       });
       if (!rr.ok) { toast("No se pudo guardar.", true); return; }
       labClose(); toast("Cobro guardado ✓"); agLoad();
@@ -481,6 +509,105 @@
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
     };
+  }
+
+  /* ========================== PRACTICAS ================================= */
+  // Las practicas del centro y lo que paga CADA obra social. El valor puede estar
+  // vacio: recien se cargan los que se van sabiendo, y el turno tiene que poder
+  // decir "todavia no hay valor" en vez de poner cero.
+  async function viewPracticas(c) {
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var r = await api("/api/lab/practicas");
+    LAB.cat.practicas = (r.data && r.data.items) || [];
+    var oss = (LAB.cat.obrasSociales || []).filter(function (o) { return o.activo !== false; });
+    var head = '<div class="lab-list-head"><h3>Prácticas</h3><button class="lab-btn primary" id="lab-prac-new">+ Nueva práctica</button></div>';
+    if (!oss.length) {
+      c.innerHTML = '<div class="lab-card">' + head + '<div class="lab-muted">Cargá primero las obras sociales: el valor de cada práctica se carga por obra social.</div></div>';
+      c.querySelector("#lab-prac-new").onclick = function () { labGo("obrasSociales"); };
+      return;
+    }
+    var cols = oss.map(function (o) { return "<th>" + esc(o.nombre) + "</th>"; }).join("");
+    var rows = LAB.cat.practicas.map(function (pr) {
+      var vals = oss.map(function (o) {
+        var v = (pr.valores || {})[o.id];
+        return "<td>" + (v ? fmt$(v) : '<span class="lab-muted">sin valor</span>') + "</td>";
+      }).join("");
+      return '<tr data-id="' + pr.id + '"><td><b>' + esc(pr.nombre) + "</b>" +
+        (pr.codigo ? ' <span class="lab-muted">' + esc(pr.codigo) + "</span>" : "") + "</td>" +
+        "<td>" + esc(nombreEsp(pr.especialidadId)) + "</td>" + vals +
+        '<td style="text-align:right"><button class="lab-btn xs" data-ed="1">Editar</button> ' +
+        '<button class="lab-btn xs ghost danger" data-del="1">Borrar</button></td></tr>';
+    }).join("");
+    c.innerHTML = '<div class="lab-card">' + head +
+      '<div style="overflow-x:auto"><table class="lab-table"><thead><tr><th>Práctica</th><th>Especialidad</th>' + cols + "<th></th></tr></thead>" +
+      "<tbody>" + (rows || '<tr><td colspan="' + (oss.length + 3) + '" class="lab-muted">Todavía no hay prácticas cargadas.</td></tr>') + "</tbody></table></div></div>";
+    c.querySelector("#lab-prac-new").onclick = function () { pracForm(null); };
+    c.querySelectorAll("[data-ed]").forEach(function (b) {
+      b.onclick = function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        pracForm(LAB.cat.practicas.find(function (x) { return x.id === id; }));
+      };
+    });
+    c.querySelectorAll("[data-del]").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("¿Borrar esta práctica? Los turnos que ya la usaron la siguen mostrando.")) return;
+        var rr = await req("DELETE", "/api/lab/practicas/" + b.closest("tr").getAttribute("data-id"));
+        if (!rr.ok) { toast("No se pudo borrar.", true); return; }
+        toast("Práctica borrada ✓"); viewPracticas(c);
+      };
+    });
+  }
+  function pracForm(pr) {
+    pr = pr || {};
+    var m = modal(pr.id ? "Editar práctica" : "Nueva práctica", { ancho: "ancho" });
+    var oss = (LAB.cat.obrasSociales || []).filter(function (o) { return o.activo !== false; });
+    var espOpts = '<option value="">— Especialidad —</option>' + LAB.cat.especialidades.map(function (o) {
+      return '<option value="' + o.id + '"' + (o.id === pr.especialidadId ? " selected" : "") + ">" + esc(o.nombre) + "</option>";
+    }).join("");
+    m.body.innerHTML =
+      '<div class="lab-form"><div class="lab-grid3">' +
+        '<label>Nombre<input class="lab-in" id="pr-nom" value="' + esc(pr.nombre || "") + '" placeholder="Consulta, ecografía…"></label>' +
+        '<label>Código<input class="lab-in" id="pr-cod" value="' + esc(pr.codigo || "") + '" placeholder="interno o de nomenclador"></label>' +
+        "<label>Especialidad<select class=\"lab-in\" id=\"pr-esp\">" + espOpts + "</select></label>" +
+      "</div>" +
+      '<div class="lab-sec-tit">Valor por obra social</div>' +
+      '<div class="lab-muted" style="margin-bottom:8px">Dejá vacío el que no sepas todavía: el turno va a avisar que falta el valor en vez de poner $0.</div>' +
+      '<div class="lab-grid3" id="pr-vals">' + oss.map(function (o) {
+        var v = (pr.valores || {})[o.id];
+        return "<label>" + esc(o.nombre) + '<input class="lab-in" type="number" min="0" step="100" data-os="' + o.id + '" value="' + (v || "") + '" placeholder="sin valor"></label>';
+      }).join("") + "</div>" +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="pr-cancel">Cancelar</button><button class="lab-btn primary" id="pr-ok">Guardar</button></div></div>';
+    m.body.querySelector("#pr-cancel").onclick = labClose;
+    m.body.querySelector("#pr-ok").onclick = async function () {
+      var valores = {};
+      m.body.querySelectorAll("#pr-vals input").forEach(function (i) {
+        if (String(i.value).trim() !== "") valores[i.getAttribute("data-os")] = i.value;
+      });
+      var datos = {
+        nombre: m.body.querySelector("#pr-nom").value,
+        codigo: m.body.querySelector("#pr-cod").value,
+        especialidadId: m.body.querySelector("#pr-esp").value,
+        valores: valores,
+      };
+      var rr = pr.id ? await req("PUT", "/api/lab/practicas/" + pr.id, datos) : await api("/api/lab/practicas", datos);
+      if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+      labClose(); toast("Práctica guardada ✓");
+      var c = document.getElementById("lab-content");
+      if (LAB.modulo === "practicas" && c) viewPracticas(c);
+    };
+  }
+  // Que paga esta obra social por esta practica. La ficha del paciente guarda el
+  // NOMBRE de la obra social y el catalogo tiene el id, asi que se resuelve por
+  // nombre. Devuelve null cuando no hay valor cargado, que no es lo mismo que cero.
+  function valorPractica(practicaId, nombreOS) {
+    var pr = (LAB.cat.practicas || []).find(function (x) { return x.id === practicaId; });
+    if (!pr) return null;
+    var os = (LAB.cat.obrasSociales || []).find(function (o) {
+      return String(o.nombre || "").trim().toUpperCase() === String(nombreOS || "").trim().toUpperCase();
+    });
+    if (!os) return null;
+    var v = (pr.valores || {})[os.id];
+    return v ? v : null;
   }
 
   /* ========================== PROFESIONALES ============================= */

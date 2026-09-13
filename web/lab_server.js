@@ -56,6 +56,7 @@ function emptyStore() {
     obrasSociales: [],
     pacientes: [],
     turnos: [],
+    practicas: [],
     evoluciones: [],
     estudios: [],
     cierres: [],
@@ -192,6 +193,10 @@ function sanitizeTurno(body, previo, store) {
   t.celular = body.celular !== undefined ? clean(body.celular) : (t.celular || "");
   t.obraSocial = body.obraSocial !== undefined ? clean(body.obraSocial) : (t.obraSocial || "");
   t.nroAfiliado = body.nroAfiliado !== undefined ? clean(body.nroAfiliado) : (t.nroAfiliado || "");
+  t.practicaId = body.practicaId !== undefined ? clean(body.practicaId) : (t.practicaId || "");
+  // El nombre se copia al turno a proposito: si despues renombran o borran la
+  // practica, el turno viejo tiene que seguir diciendo que se hizo.
+  t.practicaNombre = body.practicaNombre !== undefined ? clean(body.practicaNombre) : (t.practicaNombre || "");
   t.motivo = body.motivo !== undefined ? clean(body.motivo) : (t.motivo || "");
   t.observaciones = body.observaciones !== undefined ? clean(body.observaciones) : (t.observaciones || "");
   t.estado = ESTADOS_TURNO.includes(body.estado) ? body.estado : (t.estado || "dado");
@@ -236,8 +241,50 @@ async function handleLab(ctx) {
       profesionales: store.profesionales,
       consultorios: store.consultorios,
       obrasSociales: store.obrasSociales,
+      practicas: store.practicas || [],
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;
+  }
+
+  // -- Practicas del centro, con su valor por obra social --
+  // Va aparte del CRUD generico porque `valores` no es un campo de texto: es un mapa
+  // { idObraSocial: importe } y hay que validarlo contra el catalogo.
+  if (recurso === "practicas") {
+    const lista = store.practicas || (store.practicas = []);
+    if (method === "GET") return json(res, 200, { items: lista, obrasSociales: store.obrasSociales || [] }), true;
+    if (method === "POST" || (method === "PUT" && idPath)) {
+      const body = await readBody(req);
+      const previo = method === "PUT" ? lista.find((x) => x.id === idPath) : null;
+      if (method === "PUT" && !previo) return json(res, 404, { error: "Esa práctica no existe." }), true;
+      const item = Object.assign({ id: uid(), valores: {} }, previo || {});
+      if (body.nombre !== undefined) item.nombre = clean(body.nombre);
+      if (body.codigo !== undefined) item.codigo = clean(body.codigo);
+      if (body.especialidadId !== undefined) item.especialidadId = clean(body.especialidadId);
+      item.activo = body.activo === undefined ? (previo ? previo.activo !== false : true) : !!body.activo;
+      if (!item.nombre) return json(res, 400, { error: "Ponele un nombre a la práctica." }), true;
+      // Ojo con el vacio: una obra social SIN valor cargado no es lo mismo que una en
+      // cero. Solo se guarda lo que tiene importe, asi el turno puede decir "todavia
+      // no hay valor para IOMA" en vez de poner $0 y que alguien lo cobre asi.
+      if (body.valores && typeof body.valores === "object") {
+        const vals = {};
+        Object.keys(body.valores).forEach((k) => {
+          if (!(store.obrasSociales || []).some((o) => o.id === k)) return;
+          const crudo = body.valores[k];
+          if (crudo === "" || crudo === null || crudo === undefined) return;
+          const n = money(crudo);
+          if (n > 0) vals[k] = n;
+        });
+        item.valores = vals;
+      }
+      if (previo) Object.assign(previo, item); else lista.unshift(item);
+      saveStore(dataDir, store);
+      return json(res, 200, { item }), true;
+    }
+    if (method === "DELETE" && idPath) {
+      store.practicas = lista.filter((x) => x.id !== idPath);
+      saveStore(dataDir, store);
+      return json(res, 200, { ok: true }), true;
+    }
   }
 
   // -- Colecciones catálogo (especialidades, consultorios, obrasSociales) --
