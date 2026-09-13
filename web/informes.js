@@ -283,11 +283,26 @@ const ECOCARDIO_CAMPOS = [
   { key: "funcionSistolicaVI", label: "Función sistólica VI", default: "Conservada" },
   { key: "motilidadParietal", label: "Motilidad parietal", default: "Conservada" },
   { key: "espesorParietal", label: "Espesor parietal", default: "Conservado" },
-  { key: "diametroAI", label: "Diámetro AI (mm)", default: "34" },
-  { key: "diametroAD", label: "Diámetro AD (mm)", default: "32" },
-  { key: "diametroVD", label: "Diámetro VD (mm)", default: "24" },
+  // Sin valor por defecto: el formulario del centro no los lista y solo salen
+  // impresos si alguien los carga a mano.
+  { key: "diametroAI", label: "Diámetro AI (mm)", default: "" },
+  { key: "diametroAD", label: "Diámetro AD (mm)", default: "" },
+  { key: "diametroVD", label: "Diámetro VD (mm)", default: "" },
   { key: "morfologiaValvular", label: "Morfología valvular", default: "Normal" },
   { key: "diagnostico", label: "Diagnóstico", default: "", wide: true },
+  // Conclusiones: en el formulario del centro son una tabla aparte, con el mismo
+  // renglon repetido en cualitativo. Van con su propia clave para no pisar las
+  // medidas en mm de arriba.
+  { key: "concDiamDiastolico", label: "Conclusión · diámetro diastólico VI", default: "NORMAL" },
+  { key: "concDiametroAI", label: "Conclusión · diámetro AI", default: "NORMAL" },
+  { key: "concDiametroAD", label: "Conclusión · diámetro AD", default: "NORMAL" },
+  { key: "concDiametroVD", label: "Conclusión · diámetro VD", default: "NORMAL" },
+  // Doppler color: el bloque de abajo del formulario.
+  { key: "dopplerMitral", label: "Doppler · válvula mitral", default: "VELOCIDADES Y GRADIENTES EN LÍMITES NORMALES.", wide: true },
+  { key: "dopplerTracto", label: "Doppler · tracto de salida del VI", default: "VELOCIDADES Y GRADIENTES EN LÍMITES NORMALES.", wide: true },
+  { key: "dopplerAortico", label: "Doppler · plano valvular aórtico", default: "VELOCIDADES Y GRADIENTES EN LÍMITES NORMALES.", wide: true },
+  { key: "dopplerPulmonar", label: "Doppler · plano valvular pulmonar", default: "VELOCIDADES Y GRADIENTES EN LÍMITES NORMALES.", wide: true },
+  { key: "dopplerTricuspideo", label: "Doppler · plano valvular tricuspídeo", default: "VELOCIDADES Y GRADIENTES EN LÍMITES NORMALES.", wide: true },
 ];
 // Campos de la Espirometría computarizada (curva flujo-volumen, pre y post
 // broncodilatador). Extraídos de estudios reales de CIMA (equipo Minispir II /
@@ -922,6 +937,10 @@ const MODELOS = {
     estudio: "ECOCARDIOGRAMA DOPPLER COLOR",
     estudioArchivo: "Ecocardiograma",
     tecnicosTitulo: "DATOS TÉCNICOS DEL ECOCARDIOGRAMA",
+    // Layout propio, calcado del formulario que usa el centro. El titulo que va
+    // impreso es el de ellos; `estudio` se sigue usando para el nombre del archivo.
+    tipo: "ecocardio",
+    tituloFormulario: "ECODOPPLER CARDIACO COLOR",
     campos: ECOCARDIO_CAMPOS,
     textoDefault: "ECOCARDIOGRAMA DOPPLER COLOR: CAVIDADES DE DIMENSIONES CONSERVADAS. FUNCIÓN SISTÓLICA DEL VENTRÍCULO IZQUIERDO CONSERVADA. NO SE OBSERVARON IMÁGENES COMPATIBLES CON VEGETACIONES. PERICARDIO LIBRE. MORFOLOGÍA VALVULAR NORMAL. ESTUDIO TÉCNICAMENTE SATISFACTORIO.",
   },
@@ -1081,6 +1100,7 @@ async function buildInformePdf(modeloKey, input) {
   if (modelo.tipo === "ergo") return buildErgoPdf(modelo, input || {});
   if (modelo.tipo === "flujo") return buildFlujoPdf(modelo, input || {});
   if (modelo.tipo === "urodinamia") return buildUrodinamiaPdf(modelo, input || {});
+  if (modelo.tipo === "ecocardio") return buildEcocardioPdf(modelo, input || {});
   const p = (input && input.paciente) || {};
   const texto = ((input && input.textoInforme) || "").trim() || modelo.textoDefault;
   // El solicitante ya no es un default fijo por modelo: server.js lo completa
@@ -2206,6 +2226,176 @@ async function buildMapaPdf(modelo, input) {
   const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
   if (firmaBuf) { try { const img = await doc.embedPng(firmaBuf); const { w: fw, h: fh } = encajarImagen(img, 140, 50); page.drawImage(img, { x: W - M - fw - 20, y: concBottom + 8, width: fw, height: fh }); } catch {} }
   else { page.drawLine({ start: { x: W - M - 170, y: concBottom + 18 }, end: { x: W - M - 20, y: concBottom + 18 }, thickness: 0.7, color: line }); center("Firma y sello", W - M - 170, W - M - 20, concBottom + 6, { size: 8, color: soft }); }
+
+  return await doc.save();
+}
+
+// ---- Builder propio del Ecodoppler cardíaco color ----
+// Replica el formulario que usa el propio centro —tres bloques: medidas con sus
+// valores de referencia, conclusiones y doppler color— en vez del layout de texto
+// corrido que compartían todos los estudios. Hecho mirando tres informes reales de
+// Grupo Justo (Viale 05/08/2026, Belos y Pugliese 12/08/2026).
+async function buildEcocardioPdf(modelo, input) {
+  const { PDFDocument, StandardFonts, rgb } = require("./vendor/pdf-lib.min.js");
+  const p = input.paciente || {};
+  const val = input.valores || {};
+  const v = (k) => String(val[k] == null ? "" : val[k]).trim();
+  const firmaArchivo = input.firmaArchivo || "";
+  const observaciones = (input.textoInforme || "").trim();
+
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([595.28, 841.89]);
+  const W = 595.28, H = 841.89, M = 40;
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0.12, 0.12, 0.12), line = rgb(0.35, 0.35, 0.35), soft = rgb(0.4, 0.4, 0.4);
+
+  const T = (t, x, y2, o) => { o = o || {}; page.drawText(String(t == null ? "" : t), { x, y: y2, size: o.size || 9, font: o.bold ? bold : font, color: o.color || ink }); };
+  const ws = (t, f, s) => f.widthOfTextAtSize(String(t == null ? "" : t), s);
+  const center = (t, x1, x2, y2, o) => { o = o || {}; const f = o.bold ? bold : font, s = o.size || 9; T(t, x1 + (x2 - x1 - ws(t, f, s)) / 2, y2, o); };
+  const rect = (x, topY, w, h) => page.drawRectangle({ x, y: topY - h, width: w, height: h, borderColor: line, borderWidth: 0.8 });
+  const hline = (y2) => page.drawLine({ start: { x: M, y: y2 }, end: { x: W - M, y: y2 }, thickness: 0.5, color: line });
+  const wrap = (text, f, s, maxW) => { const palabras = String(text || "").split(/\s+/).filter(Boolean); const L = []; let c = ""; for (const pal of palabras) { const t = c ? c + " " + pal : pal; if (ws(t, f, s) > maxW && c) { L.push(c); c = pal; } else c = t; } if (c) L.push(c); return L; };
+
+  let y = H - M;
+  // El formulario del centro no trae logo, pero el nuestro sí: es lo que dice de
+  // dónde salió el informe.
+  const logoBuf = readAsset(modelo.logo || (input && input.logoName));
+  if (logoBuf) {
+    try {
+      const logo = await doc.embedPng(logoBuf);
+      const enc = encajarImagen(logo, (input && input.logoW) || 120, 50);
+      page.drawImage(logo, { x: (W - enc.w) / 2, y: y - enc.h, width: enc.w, height: enc.h });
+      y -= enc.h + 8;
+    } catch (e) { /* sin logo */ }
+  }
+  center(modelo.servicio || "SERVICIO DE CARDIOLOGÍA", M, W - M, y - 14, { bold: true, size: 14 });
+  center(modelo.tituloFormulario || modelo.estudio || "ECODOPPLER CARDIACO COLOR", M, W - M, y - 30, { bold: true, size: 14 });
+  y -= 44;
+
+  // ---- Paciente: dos filas, con edad y fecha a la derecha ----
+  const corteDatos = M + (W - 2 * M) * 0.64;
+  {
+    const filaH = 15;
+    rect(M, y, W - 2 * M, filaH * 2);
+    page.drawLine({ start: { x: M, y: y - filaH }, end: { x: W - M, y: y - filaH }, thickness: 0.8, color: line });
+    page.drawLine({ start: { x: corteDatos, y }, end: { x: corteDatos, y: y - filaH * 2 }, thickness: 0.8, color: line });
+    T("Apellido y Nombre:", M + 5, y - 11, { bold: true, size: 8.5 });
+    T(p.nombre || "—", M + 100, y - 11, { size: 8.5 });
+    T("Edad:", corteDatos + 5, y - 11, { bold: true, size: 8.5 });
+    T(v("edad"), corteDatos + 40, y - 11, { size: 8.5 });
+    T("Diagnóstico:", M + 5, y - 11 - filaH, { bold: true, size: 8.5 });
+    T(v("diagnostico"), M + 100, y - 11 - filaH, { size: 8.5 });
+    T("Fecha:", corteDatos + 5, y - 11 - filaH, { bold: true, size: 8.5 });
+    T(p.fecha || "—", corteDatos + 40, y - 11 - filaH, { size: 8.5 });
+    y -= filaH * 2 + 10;
+  }
+
+  // ---- Medidas con su columna de valores de referencia ----
+  const MEDIDAS = [
+    ["Raíz de aorta:", "raizAorta", "mm", "Hasta 40 mm", true],
+    ["Apertura:", "apertura", "", "", true],
+    ["Aurícula izquierda:", "auriculaIzq", "mm", "Hasta 40 mm", true],
+    ["Diámetro diastólico del VI:", "diamDiastolicoVI", "mm", "Hasta 54 mm", true],
+    ["Diámetro sistólico del VI:", "diamSistolicoVI", "mm", "Variable", true],
+    ["Fracción de acortamiento:", "fraccionAcortamiento", "%", "> 28% e/27-45 %", true],
+    ["Fracción de eyección:", "fraccionEyeccion", "%", "Mayor o igual a 55 %", true],
+    ["Septum interventricular:", "septumIV", "mm", "Hasta 11 mm", true],
+    ["Pared posterior:", "paredPosterior", "mm", "Hasta 11 mm", true],
+    ["Pericardio:", "pericardio", "", "", true],
+    // Estas el centro no las lista, pero si alguien las carga no se pueden perder.
+    ["Diámetro de AI:", "diametroAI", "mm", "", false],
+    ["Diámetro de AD:", "diametroAD", "mm", "", false],
+    ["Diámetro del VD:", "diametroVD", "mm", "", false],
+  ];
+  {
+    const filas = MEDIDAS.filter((f) => f[4] || v(f[1]));
+    const filaH = 14, refX = M + (W - 2 * M) * 0.70, valX = M + (W - 2 * M) * 0.45;
+    const alto = filaH * (filas.length + 1);
+    rect(M, y, W - 2 * M, alto);
+    page.drawLine({ start: { x: refX, y }, end: { x: refX, y: y - alto }, thickness: 0.8, color: line });
+    center("Valores de referencia", refX, W - M, y - 10, { size: 8, bold: true });
+    let fy = y - filaH;
+    for (const fila of filas) {
+      hline(fy);
+      T(fila[0], M + 5, fy - 10, { size: 8.5 });
+      const valor = v(fila[1]);
+      if (valor) {
+        T(valor, valX, fy - 10, { size: 8.5 });
+        if (fila[2]) T(fila[2], valX + 42, fy - 10, { size: 8.5, color: soft });
+      }
+      if (fila[3]) center(fila[3], refX, W - M, fy - 10, { size: 8 });
+      fy -= filaH;
+    }
+    y -= alto + 12;
+  }
+
+  // ---- Conclusiones y Doppler color: los dos con el mismo formato ----
+  const bloque = (titulo, items) => {
+    const vivos = items.filter((it) => v(it[1]));
+    if (!vivos.length) return;
+    T(titulo, M, y - 10, { bold: true, size: 11 });
+    y -= 16;
+    const filaH = 15, corte = M + (W - 2 * M) * 0.33, alto = filaH * vivos.length;
+    rect(M, y, W - 2 * M, alto);
+    page.drawLine({ start: { x: corte, y }, end: { x: corte, y: y - alto }, thickness: 0.8, color: line });
+    let fy = y;
+    for (const it of vivos) {
+      if (fy !== y) hline(fy);
+      T(it[0], M + 5, fy - 11, { size: 8.5 });
+      T(v(it[1]), corte + 6, fy - 11, { size: 8.5 });
+      fy -= filaH;
+    }
+    y -= alto + 12;
+  };
+  bloque("CONCLUSIONES", [
+    ["Diámetro diastólico del VI:", "concDiamDiastolico"],
+    ["Función sistólica del VI:", "funcionSistolicaVI"],
+    ["Espesor parietal:", "espesorParietal"],
+    ["Motilidad parietal:", "motilidadParietal"],
+    ["Diámetro de AI:", "concDiametroAI"],
+    ["Diámetro de AD:", "concDiametroAD"],
+    ["Diámetro del VD:", "concDiametroVD"],
+    ["Morfología valvular:", "morfologiaValvular"],
+    ["Pericardio:", "pericardio"],
+  ]);
+  bloque("DOPPLER COLOR", [
+    ["Plano de la válvula mitral:", "dopplerMitral"],
+    ["Tracto de salida del VI:", "dopplerTracto"],
+    ["Plano valvular aórtico:", "dopplerAortico"],
+    ["Plano valvular pulmonar:", "dopplerPulmonar"],
+    ["Plano valvular tricuspídeo:", "dopplerTricuspideo"],
+  ]);
+
+  // El formulario del centro no tiene texto libre, pero el generador siempre lo
+  // ofrece: si alguien escribió algo, va acá y no se pierde.
+  if (observaciones) {
+    T("OBSERVACIONES", M, y - 10, { bold: true, size: 10 });
+    y -= 24;
+    for (const ln of observaciones.split(/\n/)) {
+      for (const parte of wrap(ln, font, 9, W - 2 * M)) { T(parte, M, y, { size: 9 }); y -= 12; }
+    }
+    y -= 6;
+  }
+
+  // ---- Firma ----
+  // La imagen se dibuja hacia ARRIBA desde su base, asi que hay que bajarla su
+  // propio alto: si no, el sello se monta sobre la ultima tabla.
+  const firmaBuf = firmaArchivo ? readAsset(firmaArchivo) : null;
+  let firmaY = Math.max(70, y - 20);
+  if (firmaBuf) {
+    try {
+      const img = await doc.embedPng(firmaBuf);
+      const enc = encajarImagen(img, 150, 62);
+      firmaY = Math.max(70, y - 12 - enc.h);
+      page.drawImage(img, { x: W - M - enc.w - 30, y: firmaY, width: enc.w, height: enc.h });
+    } catch (e) { /* un PNG ilegible no puede tumbar el informe */ }
+  } else {
+    page.drawLine({ start: { x: W - M - 180, y: firmaY + 12 }, end: { x: W - M - 20, y: firmaY + 12 }, thickness: 0.7, color: line });
+    center("Firma y sello", W - M - 180, W - M - 20, firmaY, { size: 8, color: soft });
+  }
+  const pie = [input.clienteDireccion, input.clienteTelefono].filter(Boolean).join(" · ");
+  if (pie) center(pie, M, W - M, 40, { size: 8, color: soft });
 
   return await doc.save();
 }
