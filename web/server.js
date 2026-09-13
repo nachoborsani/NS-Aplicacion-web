@@ -2932,7 +2932,11 @@ function publicUser(u) {
            // Campo aparte de `modulos` (que es del operador_clinica y es plano)
            // a propósito: así conviven sin migrar nada ni volverse ambiguos.
            modulosCliente: modulosClienteDeUsuario(u),
-           capacidades: u.role === "clinica" ? capacidadesClinica(u) : [], mustChange: !!u.mustChange };
+           capacidades: u.role === "clinica" ? capacidadesClinica(u) : [], mustChange: !!u.mustChange,
+           // Rol en el sistema del centro (Laboratorio). Va al front para saber si
+           // mostrarle la puerta de entrada; los permisos de verdad los hace valer
+           // el backend en cada ruta.
+           lab: u.lab && u.lab.rol ? { rol: u.lab.rol, profesionalId: u.lab.profesionalId || "" } : null };
 }
 // Saneado del mapa por cliente: solo slugs que existen, solo módulos del
 // catálogo, y solo para el rol que lo usa. Devuelve {} si no hay nada — el

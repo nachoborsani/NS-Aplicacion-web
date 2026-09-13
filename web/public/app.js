@@ -88,6 +88,9 @@ function togglePagosGroup(el){
 // informes/liberar cupo) - a diferencia del resto de los roles, esto es por
 // usuario, no por rol (ver server.js, publicUser/OPERADOR_CLINICA_MODULOS).
 function opClinicaModulos(){ return (ME && ME.role === 'operador_clinica' && Array.isArray(ME.modulos)) ? ME.modulos : []; }
+// El lapiz de la barra: entra al sistema del centro o vuelve a NS, segun donde
+// estes. Antes solo iba, y para salir habia que buscar otra cosa.
+function toggleLab(){ go(document.body.classList.contains('lab-mode') ? 'dash' : 'lab'); }
 function go(v, el){
   // Credencial provisoria se fusionó dentro de Afiliados (Padrón). Cualquier link viejo
   // a 'credencial' abre Afiliados.
@@ -129,7 +132,7 @@ function go(v, el){
   // Nomencladores: por ahora un operador no lo necesita.
   if (v === 'nomencladores' && ME && ME.role === 'operador'){ go('dash'); return; }
   // Laboratorio (sistema paralelo en desarrollo): solo admin por ahora.
-  if (v === 'lab' && !(ME && ME.role === 'admin')){ go('dash'); return; }
+  if (v === 'lab' && !(ME && (ME.role === 'admin' || (ME.lab && ME.lab.rol)))){ go('dash'); return; }
   // Configuración general: un operador con clientes restringidos no debe entrar
   // (usuarios, débitos, etc.) - un operador sin restringir sí, como siempre.
   if (v === 'soon' && tieneClientesRestringidos(ME)){ go('dash'); return; }
@@ -141,6 +144,8 @@ function go(v, el){
   document.body.classList.toggle('dash-view', v === 'dash');
   // Laboratorio: menú mínimo (logo + Inicio + pie), se esconde el resto del nav.
   document.body.classList.toggle('lab-mode', v === 'lab');
+  var lb = document.getElementById('labBtn');
+  if (lb) lb.title = v === 'lab' ? 'Volver a NS' : 'Ir al sistema del centro';
   if (v === 'lab' && window.labInit) window.labInit();
   if (v === 'clientes'){ expandSidebar(); loadClients(); }
   if (v === 'dash'){ updateDashClientsTile(); cargarInicio(true); }
@@ -13350,7 +13355,10 @@ function aplicarUsuario(u){
   ME = u;
   // Administración (Facturas/Gastos) es solo para admin.
   var gp = document.getElementById('navGroupPagos'); if (gp) gp.style.display = (u.role === 'admin') ? '' : 'none';
-  var lb = document.getElementById('labBtn'); if (lb) lb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Laboratorio (martillo), solo admin
+  // El lapiz lo ve el admin de NS y tambien el del centro con rol en el sistema
+  // (recepcion, profesional, administracion): si no, no tiene por donde entrar.
+  var lb = document.getElementById('labBtn');
+  if (lb) lb.style.display = (u.role === 'admin' || (u.lab && u.lab.rol)) ? '' : 'none';
   var sb = document.getElementById('srvBtn'); if (sb) sb.style.display = (u.role === 'admin') ? '' : 'none';   // botón Estado del server, solo admin
   if (u.role === 'admin') { srvRefrescarDot(); if (SRV_DOT_POLL) clearInterval(SRV_DOT_POLL); SRV_DOT_POLL = setInterval(srvRefrescarDot, 60000); }
   // Padrón (Afiliados) e Informes recibidos: admin y operador (los USAN); el usuario

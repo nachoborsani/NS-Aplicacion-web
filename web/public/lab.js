@@ -76,9 +76,13 @@
     var root = document.getElementById("view-lab");
     if (!root) return;
     if (!LAB.booted) {
+      root.innerHTML = '<div class="lab-muted" style="padding:18px">Cargando\u2026</div>';
+      // El bootstrap PRIMERO: de ahi salen los permisos, y el menu se arma con eso.
+      // Al reves —que es como estaba— el menu se dibujaba con la lista de permisos
+      // todavia vacia y no quedaba ningun boton: la pantalla salia sin costado.
+      await cargarBootstrap();
       root.innerHTML = "";
       root.appendChild(shell());
-      await cargarBootstrap();
       LAB.booted = true;
     }
     labGo(LAB.modulo || "agenda");
