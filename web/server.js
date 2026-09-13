@@ -12334,7 +12334,7 @@ function ensureOrlSeed() {
       // Solo esos dos estudios: Holter, presurometria y los ecodoppler del centro
       // todavia no se sabe quien los firma.
       { id: "cameselle-mario", nombre: "Dr. Mario Cameselle", matricula: "M.P. 29982 · M.N. 70413",
-        modelos: ["consulta-570129", "ergo"], clientes: ["st-ignacio"] },
+        modelos: ["consulta-570129", "ergo", "ecocardiograma"], clientes: ["st-ignacio"] },
       // Otorrino del mismo centro. Datos del sello de una orden suya (Sanchez
       // Celia, 07/08/2026). Le van las cuatro practicas ORL: es el unico
       // otorrino cargado ahi.
