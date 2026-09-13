@@ -249,6 +249,47 @@ async function handleLab(ctx) {
   // -- Practicas del centro, con su valor por obra social --
   // Va aparte del CRUD generico porque `valores` no es un campo de texto: es un mapa
   // { idObraSocial: importe } y hay que validarlo contra el catalogo.
+  // -- Valores de UNA obra social para TODAS las practicas --
+  // La obra social manda su lista de precios entera; cargarla practica por practica
+  // es inusable. Tambien aplica el aumento anual en %, que es como llegan despues.
+  if (recurso === "practicas" && idPath === "valores" && method === "POST") {
+    const body = await readBody(req);
+    const osId = clean(body.obraSocialId);
+    if (!(store.obrasSociales || []).some((o) => o.id === osId)) {
+      return json(res, 400, { error: "Elegí una obra social." }), true;
+    }
+    const lista = store.practicas || (store.practicas = []);
+    let cargados = 0, borrados = 0;
+    const pct = parseFloat(body.aumentoPct);
+    if (!isNaN(pct) && pct !== 0) {
+      // Aumento: SOLO sobre lo que ya tiene valor. Una practica sin valor no se
+      // inventa con el aumento.
+      lista.forEach((pr) => {
+        const v = (pr.valores || {})[osId];
+        if (!v) return;
+        pr.valores[osId] = money(v * (1 + pct / 100));
+        cargados++;
+      });
+    } else {
+      const valores = (body.valores && typeof body.valores === "object") ? body.valores : {};
+      Object.keys(valores).forEach((pracId) => {
+        const pr = lista.find((x) => x.id === pracId);
+        if (!pr) return;
+        if (!pr.valores) pr.valores = {};
+        const crudo = valores[pracId];
+        if (crudo === "" || crudo === null || crudo === undefined) {
+          if (pr.valores[osId] !== undefined) { delete pr.valores[osId]; borrados++; }
+          return;
+        }
+        const n = money(crudo);
+        if (n > 0) { pr.valores[osId] = n; cargados++; }
+        else if (pr.valores[osId] !== undefined) { delete pr.valores[osId]; borrados++; }
+      });
+    }
+    saveStore(dataDir, store);
+    return json(res, 200, { ok: true, cargados, borrados, items: lista }), true;
+  }
+
   if (recurso === "practicas") {
     const lista = store.practicas || (store.practicas = []);
     if (method === "GET") return json(res, 200, { items: lista, obrasSociales: store.obrasSociales || [] }), true;

@@ -137,7 +137,7 @@
     else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
     else if (mod === "consultorios") viewCatalogo(c, "consultorios", "Consultorios");
-    else if (mod === "obrasSociales") viewCatalogo(c, "obrasSociales", "Obras Sociales");
+    else if (mod === "obrasSociales") viewObrasSociales(c);
   }
   window.labGo = labGo;
 
@@ -508,6 +508,72 @@
       var rr = await req("DELETE", "/api/lab/turnos/" + id);
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
+    };
+  }
+
+  /* ===================== OBRAS SOCIALES + SUS VALORES ==================== */
+  // El catalogo de siempre, mas el boton que hacia falta: cargar los valores de esa
+  // obra social para todas las practicas de una sola vez. Asi llegan —la obra social
+  // manda su lista entera— y asi se actualizan, con un aumento en %.
+  async function viewObrasSociales(c) {
+    await viewCatalogo(c, "obrasSociales", "Obras Sociales");
+    var tabla = c.querySelector(".lab-table tbody");
+    if (!tabla) return;
+    tabla.querySelectorAll("tr[data-id]").forEach(function (tr) {
+      var celda = tr.lastElementChild;
+      if (!celda) return;
+      var b = document.createElement("button");
+      b.className = "lab-btn xs";
+      b.type = "button";
+      b.textContent = "Valores";
+      b.style.marginRight = "6px";
+      b.onclick = function () {
+        var os = (LAB.cat.obrasSociales || []).find(function (o) { return o.id === tr.getAttribute("data-id"); });
+        if (os) valoresOsModal(os);
+      };
+      celda.insertBefore(b, celda.firstChild);
+    });
+  }
+  async function valoresOsModal(os) {
+    var m = modal("Valores de " + (os.nombre || ""), { ancho: "ancho" });
+    m.body.innerHTML = '<div class="lab-muted">Cargando…</div>';
+    var r = await api("/api/lab/practicas");
+    LAB.cat.practicas = (r.data && r.data.items) || [];
+    if (!LAB.cat.practicas.length) {
+      m.body.innerHTML = '<div class="lab-muted">Todavía no hay prácticas cargadas. Cargalas en Configuración → Prácticas y después volvé a poner los valores.</div>';
+      return;
+    }
+    m.body.innerHTML =
+      '<div class="lab-muted" style="margin-bottom:10px">Lo que paga <b>' + esc(os.nombre) + '</b> por cada práctica. Dejá vacío lo que todavía no sepas.</div>' +
+      '<table class="lab-table"><thead><tr><th>Práctica</th><th style="width:160px">Valor</th></tr></thead><tbody>' +
+      LAB.cat.practicas.map(function (pr) {
+        var v = (pr.valores || {})[os.id];
+        return "<tr><td><b>" + esc(pr.nombre) + "</b>" + (pr.codigo ? ' <span class="lab-muted">' + esc(pr.codigo) + "</span>" : "") + "</td>" +
+          '<td><input class="lab-in" type="number" min="0" step="100" data-prac="' + pr.id + '" value="' + (v || "") + '" placeholder="sin valor"></td></tr>';
+      }).join("") + "</tbody></table>" +
+      '<div class="lab-modal-actions" style="justify-content:space-between">' +
+        '<div class="lab-inline"><input class="lab-in" id="vo-pct" type="number" step="0.5" placeholder="% aumento" style="width:120px">' +
+        '<button class="lab-btn" id="vo-aumentar" type="button">Aplicar aumento</button></div>' +
+        '<div class="lab-inline"><button class="lab-btn" id="vo-cancel" type="button">Cerrar</button>' +
+        '<button class="lab-btn primary" id="vo-ok" type="button">Guardar valores</button></div></div>';
+    m.body.querySelector("#vo-cancel").onclick = labClose;
+    m.body.querySelector("#vo-ok").onclick = async function () {
+      var valores = {};
+      m.body.querySelectorAll("input[data-prac]").forEach(function (i) { valores[i.getAttribute("data-prac")] = i.value; });
+      var rr = await api("/api/lab/practicas/valores", { obraSocialId: os.id, valores: valores });
+      if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+      LAB.cat.practicas = (rr.data && rr.data.items) || LAB.cat.practicas;
+      labClose();
+      toast(rr.data.cargados + " valor(es) guardado(s) ✓");
+    };
+    m.body.querySelector("#vo-aumentar").onclick = async function () {
+      var pct = parseFloat(m.body.querySelector("#vo-pct").value);
+      if (!pct) { toast("Poné el porcentaje del aumento.", true); return; }
+      if (!confirm("¿Aumentar " + pct + "% todos los valores cargados de " + os.nombre + "? Las prácticas sin valor no se tocan.")) return;
+      var rr = await api("/api/lab/practicas/valores", { obraSocialId: os.id, aumentoPct: pct });
+      if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo aplicar.", true); return; }
+      LAB.cat.practicas = (rr.data && rr.data.items) || LAB.cat.practicas;
+      labClose(); toast("Aumento aplicado a " + rr.data.cargados + " práctica(s) ✓");
     };
   }
 
