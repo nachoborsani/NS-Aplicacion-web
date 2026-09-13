@@ -140,7 +140,7 @@ function totalCoincidencias(a, alo, ahi, b, blo, bhi) {
   if (!k) return 0;
   let total = k;
   if (alo < i && blo < j) total += totalCoincidencias(a, alo, i, b, blo, j);
-  if (i + k < ahi && j + k < bhi) total += totalCoincidencias(a, i + k, ahi, j + k, bhi);
+  if (i + k < ahi && j + k < bhi) total += totalCoincidencias(a, i + k, ahi, b, j + k, bhi);
   return total;
 }
 function similitud(a, b) {
