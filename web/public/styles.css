@@ -2301,6 +2301,10 @@
   .cab-modal-nav .rowbtn[disabled]{opacity:.35;cursor:default}
   /* El estado va ARRIBA del boton, no al costado: al lado empujaba el nombre de la
      practica y hacia tarjetas de cuatro renglones. */
+  /* El "ver las de meses anteriores": un renglon de texto, no un boton mas. */
+  .cab-vermas{display:block;width:100%;margin-top:8px;padding:6px 0;background:none;border:0;
+    border-top:1px dashed var(--border);color:var(--text-2);font-size:12px;font-weight:650;cursor:pointer}
+  .cab-vermas:hover{color:var(--text)}
   .cab-cand-acc{display:flex;flex-direction:column;align-items:stretch;gap:5px;flex:0 0 auto;text-align:center}
   .cab-cand-acc .cab-badge{margin:0}
   .cab-actions .rowbtn{margin-left:2px}

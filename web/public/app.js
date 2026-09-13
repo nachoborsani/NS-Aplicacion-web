@@ -12846,22 +12846,67 @@ function abrirInforme(id){
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>'
       + '</div>'
       + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
-      + cands.map(function(c){
-        var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
-        var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
-        return '<div class="cab-cand">'
-          + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
-          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div>'
-          + '<div class="cab-sub">turno '+esc(soloFecha(c.turno)||'—')+(soloFecha(c.fValidacion)?(' · validada '+esc(soloFecha(c.fValidacion))):'')+'</div></div>'
-          + '<div class="cab-cand-acc">' + estado
-          + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button></div>'
-          + '</div>';
-      }).join('');
+      + cabTarjetasCandidatos(cands, yaSel, it);
     actualizarSelOmes();
   }
   cabRenderAcciones(it);
   cabActualizarPosicion();
   showModal('cabinaModal', 'cabinaScrim');
+}
+// Las tarjetas de los candidatos, separando por mes: estamos trabajando el mes en
+// curso y ver cuatro OMEs de julio (ya transmitidas) abajo de la del dia confunde
+// mas de lo que ayuda. Las viejas quedan plegadas detras de un boton, no escondidas:
+// a veces el informe ES de un mes anterior y hay que poder llegar.
+function cabTarjetaCandidato(c, yaSel){
+  var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>'
+    : (c.validada ? '<span class="cab-badge ok">validada</span>' : '<span class="cab-badge warn">sin validar</span>');
+  var ck = (c.ome && yaSel.indexOf(c.ome) >= 0) ? ' checked' : '';
+  return '<div class="cab-cand">'
+    + '<input type="checkbox" class="cab-cand-ck" value="' + esc(c.ome || '') + '" data-benef="' + esc(c.beneficio || '') + '" onchange="actualizarSelOmes()"' + (c.ome ? '' : ' disabled') + ck + '>'
+    + '<div class="cab-cand-main"><b>' + esc(c.practica || '\u2014') + '</b><div class="cab-sub">' + esc(c.nombre || '') + ' \u00b7 benef ' + esc(c.beneficio || '\u2014') + ' \u00b7 OME ' + esc(c.ome || '\u2014') + '</div>'
+    + '<div class="cab-sub">turno ' + esc(soloFecha(c.turno) || '\u2014') + (soloFecha(c.fValidacion) ? (' \u00b7 validada ' + esc(soloFecha(c.fValidacion))) : '') + '</div></div>'
+    + '<div class="cab-cand-acc">' + estado
+    + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\'' + esc(c.ome || '') + '\',\'' + esc(c.beneficio || '') + '\')">Usar</button></div>'
+    + '</div>';
+}
+// mm/aaaa de una fecha dd/mm/aaaa.
+function cabMesDe(f){ var x = soloFecha(f); return x ? x.slice(3) : ''; }
+function cabTarjetasCandidatos(cands, yaSel, it){
+  // El mes de referencia es el del informe; si no se pudo leer la fecha, el mes
+  // mas nuevo que haya entre los candidatos.
+  var mesRef = cabMesDe((it.extract && it.extract.fecha) || '');
+  if (!mesRef){
+    var orden = cands.map(function(c){ return soloFecha(c.turno); }).filter(Boolean).sort(function(a, b){
+      var ka = a.slice(6) + a.slice(3, 5) + a.slice(0, 2), kb = b.slice(6) + b.slice(3, 5) + b.slice(0, 2);
+      return ka < kb ? 1 : (ka > kb ? -1 : 0);
+    });
+    mesRef = orden.length ? orden[0].slice(3) : '';
+  }
+  var delMes = cands, viejos = [];
+  if (mesRef){
+    delMes = []; viejos = [];
+    cands.forEach(function(c){
+      var m = cabMesDe(c.turno);
+      // Sin fecha, o del mes de referencia, o ya tildada: siempre a la vista.
+      if (!m || m === mesRef || (c.ome && yaSel.indexOf(c.ome) >= 0)) delMes.push(c);
+      else viejos.push(c);
+    });
+    if (!delMes.length){ delMes = cands; viejos = []; }
+  }
+  var html = delMes.map(function(c){ return cabTarjetaCandidato(c, yaSel); }).join('');
+  if (viejos.length){
+    var n = viejos.length;
+    var verTxt = 'Ver ' + n + ' OME' + (n === 1 ? '' : 's') + ' de meses anteriores';
+    html += '<button type="button" class="cab-vermas" data-ver="' + esc(verTxt) + '" data-ocultar="Ocultar las de meses anteriores" onclick="cabToggleViejos(this)">' + esc(verTxt) + '</button>'
+      + '<div id="cabCandViejos" hidden>' + viejos.map(function(c){ return cabTarjetaCandidato(c, yaSel); }).join('') + '</div>';
+  }
+  return html;
+}
+function cabToggleViejos(btn){
+  var caja = document.getElementById('cabCandViejos');
+  if (!caja) return;
+  caja.hidden = !caja.hidden;
+  btn.textContent = caja.hidden ? btn.dataset.ver : btn.dataset.ocultar;
 }
 // Anterior / siguiente sin cerrar la ficha: se recorre lo que se esta viendo, en
 // el mismo orden de la tabla. Revisar de a uno obligaba a cerrar y volver a entrar.
