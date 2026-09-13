@@ -1601,14 +1601,6 @@
       // Pegado a la izquierda, no centrado: con el menu de NS al costado, centrar
       // dejaba un hueco muerto entre los dos menus y el sistema parecia flotando.
       ".lab-wrap{display:block;margin:0}",
-      ".lab-nav{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--card,#fff)}",
-      ".lab-nav-grupo{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);padding:0 8px;margin:12px 0 4px}",
-      ".lab-nav-grupo:first-child{margin-top:2px}",
-      ".lab-tab{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:0;color:var(--text-2);padding:8px 10px;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:600}",
-      ".lab-tab:hover{background:rgba(45,212,191,.10);color:var(--text)}",
-      ".lab-tab.on{background:var(--accent,#2dd4bf);color:#04201c}",
-      ".lab-tab-ic{width:18px;text-align:center;flex:0 0 auto}",
-      "@media(max-width:900px){.lab-wrap{grid-template-columns:1fr}.lab-nav{position:static;flex-direction:row;flex-wrap:wrap;align-items:center}.lab-nav-grupo{width:100%;margin:6px 0 2px}}",
       ".lab-card{background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px}",
       ".lab-muted{color:var(--text-2,#64748b)}",
       ".lab-in{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#fff);color:var(--text);font-size:14px}",
