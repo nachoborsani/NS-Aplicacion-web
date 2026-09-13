@@ -12347,6 +12347,11 @@ function ensureOrlSeed() {
       { id: "ramirez-walter", nombre: "Dr. Walter Ramirez", matricula: "M.N. 119.078 · M.P. 33.293",
         modelos: ["eco-doppler-cuello", "eco-doppler-venoso-mmii", "eco-doppler-arterial-mmii"],
         clientes: ["st-ignacio"] },
+      // Firma las presurometrias de 24 hs del centro (Ledesma, 03/08/2026, equipo
+      // con informe propio). Es el renglon mas grande que quedaba sin medico: 29
+      // pendientes. Del informe solo sale la matricula provincial.
+      { id: "tabbakh-fadel", nombre: "Dr. Fadel Tabbakh", matricula: "M.P. 234.550",
+        modelos: ["mapa"], clientes: ["st-ignacio"] },
     ];
     if (Array.isArray(cfg.medicos)) {
       for (const m of orlMedicos) {
