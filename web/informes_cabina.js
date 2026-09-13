@@ -19,7 +19,10 @@ function bandejaParaMatcher(bandejaObj) {
   const findKey = (re) => keys.find((k) => re.test(normTxt(k))) || "";
   const kPrac = findKey(/PRACTICA/), kTrasm = findKey(/TRASMITIDA|TRANSMITIDA/),
         kValid = findKey(/VALIDADA/), kBenef = findKey(/BENEFICIO/), kTurno = findKey(/TURNO/),
-        kNombre = findKey(/APELLIDO/), kOme = findKey(/ORDEN/);
+        kNombre = findKey(/APELLIDO/), kOme = findKey(/ORDEN/),
+        // Ojo: "VALIDADA" es el S/N y "F VALIDACION" es la fecha. Son dos columnas
+        // distintas y la de arriba matchea primero, por eso esta va con su propio regex.
+        kFValid = findKey(/VALIDACION/);
   return rows.map((r) => ({
     nOrden: digs(r[kOme]),
     beneficio: beneficioLimpio(r[kBenef]),
@@ -27,6 +30,7 @@ function bandejaParaMatcher(bandejaObj) {
     practica: String(r[kPrac] || ""),
     turno: String(r[kTurno] || "").trim(),
     validada: String(r[kValid] || "").trim().toUpperCase() === "S",
+    fValidacion: String(r[kFValid] || "").trim(),
     transmitida: String(r[kTrasm] || "").trim().toUpperCase() === "S",
   }));
 }
@@ -53,6 +57,7 @@ function reporteParaMatcher(rows) {
     practica: [r.practiceCode, r.practiceDescription || r.practiceText].filter(Boolean).join(" - ").trim(),
     turno: String(r.appointmentLabel || r.appointmentAt || "").trim(),
     validada: !!r.validated,
+    fValidacion: String(r.validatedLabel || r.validatedAt || "").trim(),
     transmitida: !!r.transmitted,
   }));
 }
@@ -60,7 +65,8 @@ function reporteParaMatcher(rows) {
 // Deja un candidato liviano para el índice (no guardamos toda la fila de la bandeja).
 function candidatoLiviano(p) {
   return { ome: p.nOrden || "", beneficio: p.beneficio || "", nombre: p.nombre || "", practica: p.practica || "",
-           turno: p.turno || "", transmitida: !!p.transmitida, validada: !!p.validada };
+           turno: p.turno || "", fValidacion: p.fValidacion || "",
+           transmitida: !!p.transmitida, validada: !!p.validada };
 }
 
 // Etiqueta legible del estado para la UI (castellano llano).

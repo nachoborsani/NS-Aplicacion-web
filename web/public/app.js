@@ -12458,6 +12458,31 @@ function cabBadge(it){
   var m = CAB_ESTADOS[e] || {t:e,c:'muted'};
   return '<span class="cab-badge '+m.c+'">'+esc(m.t)+'</span>';
 }
+// Fecha sola (sin hora ni el sufijo del turno) de "01/09/2026 - 16:17 - P" o de un ISO.
+function soloFecha(t){
+  var x = String(t || '');
+  var m = x.match(/(\d{2}\/\d{2}\/\d{4})/);
+  if (m) return m[1];
+  m = x.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
+}
+// La fila de la bandeja de esa OME: de ahi salen la fecha del turno (que es la
+// fecha del estudio) y la de validacion. Sin esto hay que abrir el informe o irse
+// a PAMI para saber de cuando es cada OME.
+function cabOmeDeLaBandeja(it, ome){
+  var cands = (it.match && it.match.candidatos) || [];
+  for (var i = 0; i < cands.length; i++) if (String(cands[i].ome) === String(ome)) return cands[i];
+  var p = it.match && it.match.prestacion;
+  return (p && String(p.ome) === String(ome)) ? p : null;
+}
+function cabFechasOme(it, omes){
+  var c = null;
+  for (var i = 0; i < (omes || []).length && !c; i++) c = cabOmeDeLaBandeja(it, omes[i]);
+  if (!c) return '';
+  var ft = soloFecha(c.turno), fv = soloFecha(c.fValidacion);
+  return (ft ? '<div class="cab-sub">turno ' + esc(ft) + '</div>' : '')
+       + (fv ? '<div class="cab-sub">validada ' + esc(fv) + '</div>' : '');
+}
 function renderCabinaRows(slug, items){
   var body = document.getElementById('cabBody'); if (!body) return;
   if (!items.length){ body.innerHTML = '<tr><td colspan="10" class="nom-empty">Todavía no subiste informes para este cliente.</td></tr>'; cabToggleSel(); return; }
@@ -12495,7 +12520,7 @@ function renderCabinaRows(slug, items){
       + '<td>'+esc((it.extract&&it.extract.practica)||'—')+'</td>'
       + '<td>'+cabBadge(it)+'</td>'
       + '<td class="cab-obs" title="'+esc(obsTit)+'">'+(obs ? esc(obs) : '—')+'</td>'
-      + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'):'—')+'</td>'
+      + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'+cabFechasOme(it, omesArr)):'—')+'</td>'
       + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
         + (rec.hora ? '<div class="cab-sub">'+esc(rec.hora)+'</div>' : '')
         + (rec.aMano ? '<div class="cab-sub">a mano</div>' : (rec.generado ? '<div class="cab-sub">lo hicimos nosotros</div>' : (rec.delCentro ? '<div class="cab-sub">del sistema del centro</div>' : ''))) + '</td>'
@@ -12800,7 +12825,8 @@ function abrirInforme(id){
         var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
         return '<div class="cab-cand">'
           + '<input type="checkbox" class="cab-cand-ck" value="'+esc(c.ome||'')+'" data-benef="'+esc(c.beneficio||'')+'" onchange="actualizarSelOmes()"'+(c.ome?'':' disabled')+ck+'>'
-          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div></div>'
+          + '<div class="cab-cand-main"><b>'+esc(c.practica||'—')+'</b><div class="cab-sub">'+esc(c.nombre||'')+' · benef '+esc(c.beneficio||'—')+' · OME '+esc(c.ome||'—')+'</div>'
+          + '<div class="cab-sub">turno '+esc(soloFecha(c.turno)||'—')+(soloFecha(c.fValidacion)?(' · validada '+esc(soloFecha(c.fValidacion))):'')+'</div></div>'
           + estado
           + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button>'
           + '</div>';
