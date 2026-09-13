@@ -10841,6 +10841,7 @@ function renderPadronRows(slug, data){
   }
   if (!items.length){ body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#889;padding:18px">Sin resultados.</td></tr>'; return; }
   var esAdmin = ME && ME.role === 'admin';
+  var porPaciente = cabContarPorPaciente(items);
   body.innerHTML = items.map(function(it){
     var acciones = '';
     if (esAdmin) {
@@ -12400,8 +12401,10 @@ function aplicarFiltroCabina(){
     if (!cabMatchBusca(it)) return false;                 // no matchea el buscador
     return true;
   });
+  filtrados = cabAplicarOrden(filtrados);
   CAB_VISIBLES = filtrados;
   renderCabinaRows(slug, filtrados);
+  cabPintarEncabezados();
   var meta = document.getElementById('cabResultMeta');
   if (meta) {
     var motivos = [];
@@ -12493,6 +12496,70 @@ function cabFechasOme(it, omes){
 // Los que estan subiendo a PAMI en este momento. La fila queda atenuada y con el
 // cartel "Subiendo a PAMI", asi no se la vuelve a tocar ni se duda de si se apreto:
 // la tarea tarda y antes la fila seguia igual que el resto.
+// Orden de la lista. Vacio = como viene del servidor (lo ultimo recibido primero).
+// Se cambia haciendo clic en el encabezado; queda guardado en el navegador porque
+// el que ordena por paciente lo hace toda la sesion.
+var CAB_ORDEN = (function(){
+  try { return JSON.parse(localStorage.getItem('ns-cabina-orden') || 'null') || { campo:'', desc:false }; }
+  catch (e) { return { campo:'', desc:false }; }
+})();
+function cabOrdenar(campo){
+  if (CAB_ORDEN.campo === campo) CAB_ORDEN.desc = !CAB_ORDEN.desc;
+  else { CAB_ORDEN.campo = campo; CAB_ORDEN.desc = false; }
+  try { localStorage.setItem('ns-cabina-orden', JSON.stringify(CAB_ORDEN)); } catch (e) {}
+  aplicarFiltroCabina();
+}
+// Con que texto se ordena cada columna.
+function cabClaveOrden(it, campo){
+  var e = it.extract || {};
+  if (campo === 'paciente') return (e.nombre || '') + ' ' + (e.dni || '');
+  if (campo === 'archivo') return it.filename || '';
+  if (campo === 'practica') return e.practica || '';
+  if (campo === 'estado') return (CAB_ESTADOS[cabEstadoDe(it)] || {}).t || '';
+  if (campo === 'ome') return ((it.match && it.match.ome) || '');
+  if (campo === 'recibido') return cabFecha(it) || '';
+  return '';
+}
+function cabAplicarOrden(lista){
+  if (!CAB_ORDEN.campo) return lista;
+  var campo = CAB_ORDEN.campo, signo = CAB_ORDEN.desc ? -1 : 1;
+  return lista.slice().sort(function(a, b){
+    var ka = String(cabClaveOrden(a, campo)).toLowerCase();
+    var kb = String(cabClaveOrden(b, campo)).toLowerCase();
+    if (ka === kb) return 0;
+    return ka < kb ? -signo : signo;
+  });
+}
+// La flechita en el encabezado de la columna que ordena.
+function cabPintarEncabezados(){
+  var mapa = { paciente:'thCabPaciente', archivo:'thCabArchivo', practica:'thCabPractica',
+               estado:'thCabEstado', ome:'thCabOme', recibido:'thCabRecibido' };
+  for (var campo in mapa){
+    var th = document.getElementById(mapa[campo]);
+    if (!th) continue;
+    var flecha = th.querySelector('.cab-orden-flecha');
+    if (flecha) flecha.textContent = (CAB_ORDEN.campo === campo) ? (CAB_ORDEN.desc ? ' \u25BC' : ' \u25B2') : '';
+    th.classList.toggle('is-orden', CAB_ORDEN.campo === campo);
+  }
+}
+// Cuantos informes hay de cada paciente en lo que se esta viendo. Sirve para
+// marcarlos: un paciente con tres informes puede ser tres estudios distintos, o el
+// mismo subido tres veces.
+function cabContarPorPaciente(lista){
+  var cuenta = {};
+  (lista || []).forEach(function(it){
+    var k = cabClavePaciente(it);
+    if (k) cuenta[k] = (cuenta[k] || 0) + 1;
+  });
+  return cuenta;
+}
+function cabClavePaciente(it){
+  var e = it.extract || {};
+  var dni = String(e.dni || '').replace(/\D+/g, '');
+  if (dni) return 'd' + dni;
+  var nom = String(e.nombre || '').trim().toUpperCase();
+  return nom ? 'n' + nom : '';
+}
 var CAB_SUBIENDO = {};
 function marcarSubiendo(ids, prendido){
   (ids || []).forEach(function(id){ if (prendido) CAB_SUBIENDO[id] = true; else delete CAB_SUBIENDO[id]; });
@@ -12533,10 +12600,12 @@ function renderCabinaRows(slug, items){
         + (it.reclamado.nota ? ' — ' + it.reclamado.nota : '');
     }
     var subiendo = !!CAB_SUBIENDO[it.id];
+    var nRepe = porPaciente[cabClavePaciente(it)] || 0;
+    var repe = nRepe > 1 ? ' <span class="cab-repe" title="Este paciente tiene ' + nRepe + ' informes en la lista">\u00d7' + nRepe + '</span>' : '';
     return '<tr class="cab-row' + (subiendo ? ' cab-row-subiendo' : '') + '" onclick="abrirInforme(\''+esc(it.id)+'\')">'
       + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
       + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
-      + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+'<div class="cab-sub">'+dni+'</div></td>'
+      + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+repe+'<div class="cab-sub">'+dni+'</div></td>'
       + '<td class="cab-practica">'+esc((it.extract&&it.extract.practica)||'—')
         + '<div class="cab-sub">'+(fEstudio ? 'fecha '+esc(fEstudio) : 'no se pudo leer la fecha')+'</div></td>'
       + '<td>'+(subiendo ? '<span class="cab-badge subiendo">Subiendo a PAMI…</span>' : cabBadge(it))+'</td>'

@@ -1281,7 +1281,7 @@
             </div>
             <div class="table-scroll">
               <table class="nom-results-table">
-                <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" id="cabCheckAll" onclick="cabToggleAll(this)" title="Seleccionar todos"></th><th>Archivo</th><th>Paciente</th><th>Práctica</th><th>Estado</th><th>Observación</th><th>OME</th><th>Recibido</th><th>Asunto del mail</th><th></th></tr></thead>
+                <thead><tr><th style="width:34px;text-align:center"><input type="checkbox" id="cabCheckAll" onclick="cabToggleAll(this)" title="Seleccionar todos"></th><th id="thCabArchivo" class="cab-th-orden" title="Ordenar por archivo" onclick="cabOrdenar('archivo')">Archivo<span class="cab-orden-flecha"></span></th><th id="thCabPaciente" class="cab-th-orden" title="Ordenar por paciente" onclick="cabOrdenar('paciente')">Paciente<span class="cab-orden-flecha"></span></th><th id="thCabPractica" class="cab-th-orden" title="Ordenar por práctica" onclick="cabOrdenar('practica')">Práctica<span class="cab-orden-flecha"></span></th><th id="thCabEstado" class="cab-th-orden" title="Ordenar por estado" onclick="cabOrdenar('estado')">Estado<span class="cab-orden-flecha"></span></th><th>Observación</th><th id="thCabOme" class="cab-th-orden" title="Ordenar por ome" onclick="cabOrdenar('ome')">OME<span class="cab-orden-flecha"></span></th><th id="thCabRecibido" class="cab-th-orden" title="Ordenar por recibido" onclick="cabOrdenar('recibido')">Recibido<span class="cab-orden-flecha"></span></th><th>Asunto del mail</th><th></th></tr></thead>
                 <tbody id="cabBody"></tbody>
               </table>
             </div>
