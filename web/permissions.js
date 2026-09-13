@@ -103,10 +103,12 @@ function opClinicaTieneModulo(me, modulo) {
 // Claves = las secciones del menú de la clínica + "omes" (Crear informes y
 // crear/subir informe). DEFAULT cuando el usuario no tiene nada guardado: TODO
 // menos "omes" (un centro nuevo no hace informes/OMEs hasta que NS lo habilite).
-const CLINICA_CAPACIDADES = ["dashboard", "reportes", "omes", "liberarcupo", "credencial", "honorarios", "usuarios", "datos"];
+const CLINICA_CAPACIDADES = ["dashboard", "reportes", "omes", "liberarcupo", "credencial", "honorarios", "usuarios", "datos", "nomencladores"];
 // Default: TODO menos las herramientas de acción que NS habilita a mano por
-// centro ("omes" = crear/subir informes, y "liberarcupo").
-const CLINICA_CAP_DEFAULT = CLINICA_CAPACIDADES.filter((c) => c !== "omes" && c !== "liberarcupo");
+// centro ("omes" = crear/subir informes, y "liberarcupo"), y menos
+// "nomencladores" (12/09/2026: se suma como capacidad nueva, apagada por
+// default - se habilita centro por centro, no se le prende a nadie solo).
+const CLINICA_CAP_DEFAULT = CLINICA_CAPACIDADES.filter((c) => c !== "omes" && c !== "liberarcupo" && c !== "nomencladores");
 function capacidadesClinica(u) {
   if (!u) return [];
   if (Array.isArray(u.capacidades)) return u.capacidades.filter((c) => CLINICA_CAPACIDADES.includes(c));

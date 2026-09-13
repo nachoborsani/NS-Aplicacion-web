@@ -2191,6 +2191,14 @@
   body.role-demo #view-padron .file-btn,
   body.role-demo #view-padron #padStatusText{display:none !important}
 
+  /* Rol clínica en Nomencladores (12/09/2026, capacidad nueva): SOLO puede
+     buscar y bajar Excel/PDF de lo que ya está cargado — nunca subir un
+     nomenclador nuevo ni borrarlo, eso sigue siendo exclusivo de NS. El
+     backend ya lo bloquea (esOperativo); esto es para no mostrar un botón
+     que le tiraría error si lo toca. */
+  body.role-clinica #view-nomencladores .nom-upload,
+  body.role-clinica #view-nomencladores #nomDeleteBtn{display:none !important}
+
   /* ===== Honorarios y ganancia real ===== */
   .hon-totales{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0 14px}
   .hon-tot{flex:1 1 180px;border:1px solid var(--border);border-radius:11px;padding:11px 15px;display:flex;justify-content:space-between;align-items:center;background:var(--surface-2)}
