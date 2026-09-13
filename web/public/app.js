@@ -11449,14 +11449,19 @@ async function loadCabinaView(){
   var sel = document.getElementById('cabCliente');
   if (sel && !sel.options.length){
     var list = await clientesParaSelector('cabina');
-    // Solo los clientes que usan el sistema de informes. Scheffelaar y
-    // Dubesarky (médicos de cabecera) suman OMEs acá también - por ahora se
-    // cargan a mano, más adelante entran solas varias veces por día.
-    // Cuando se sume otro cliente, agregar su slug acá.
-    var CON_INFORMES = ['caballito-pediatrico', 'scheffelaar-mc', 'dubesarky-ezequiel', 'dbaime'];
+    // Solo los centros que de verdad reciben informes por acá. Scheffelaar y
+    // Dubesarky son médicos de cabecera: sus OMEs no llevan informe, así que
+    // estaban en la lista sin nada que hacer (sacados 13/09/2026).
+    // Cuando se sume otro centro, agregar su slug acá.
+    var CON_INFORMES = ['caballito-pediatrico', 'dbaime'];
     list.filter(function(c){ return CON_INFORMES.indexOf(c.slug) >= 0; })
         .forEach(function(c){ var o = document.createElement('option'); o.value = c.slug; o.textContent = c.name || c.slug; sel.appendChild(o); });
+    // Vuelve al último centro que se miró: entrar y tener que elegirlo de nuevo
+    // cada vez es una vuelta al pedo, sobre todo cuando se trabaja uno por día.
+    var ultimo = clienteCabinaGuardado();
+    if (ultimo && [].slice.call(sel.options).some(function(o){ return o.value === ultimo; })) sel.value = ultimo;
   }
+  if (sel && sel.value) guardarClienteCabina(sel.value);
   // Las fechas también filtran qué informes se muestran (no solo la bajada del mail).
   ['cabDesde','cabHasta'].forEach(function(id){
     var el = document.getElementById(id);
@@ -11477,6 +11482,13 @@ function guardarRangoCabina(){
 }
 function rangoCabinaGuardado(){
   try { return JSON.parse(localStorage.getItem('ns-cabina-rango') || 'null'); } catch (e) { return null; }
+}
+// El centro elegido también queda guardado en este navegador, por lo mismo.
+function guardarClienteCabina(slug){
+  try { localStorage.setItem('ns-cabina-cliente', String(slug || '')); } catch (e) {}
+}
+function clienteCabinaGuardado(){
+  try { return localStorage.getItem('ns-cabina-cliente') || ''; } catch (e) { return ''; }
 }
 // Descarga la cabina en Excel o PDF (para compartir con el socio). El endpoint
 // manda el archivo como adjunto; el navegador lo baja con la cookie de sesión.
