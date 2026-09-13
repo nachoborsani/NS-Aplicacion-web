@@ -1610,22 +1610,12 @@ async function cargarPendientesCentroInicio(){
   CENTRO_INI_DATA = res.data || { periodos: [] };
   renderPendientesCentroInicio();
 }
-function renderPendientesCentroInicio(){
-  var cuerpo = document.getElementById('centroIniCuerpo');
-  var meta = document.getElementById('centroIniMeta');
-  var tit = document.getElementById('centroIniTitulo');
-  if (!cuerpo) return;
-  if (tit) tit.textContent = 'Pendientes en ' + ((CENTRO_INI_DATA && CENTRO_INI_DATA.nombre) || 'tu centro');
-  var periodos = (CENTRO_INI_DATA && CENTRO_INI_DATA.periodos) || [];
-  if (!periodos.length){
-    cuerpo.innerHTML = '<p class="nom-muted" style="margin:0;padding:4px 2px">Todavía no hay bandeja cargada para tu centro.</p>';
-    if (meta) meta.textContent = '';
-    return;
-  }
-  var total = 0;
-  periodos.forEach(function(p){ CENTRO_INI_CATS.forEach(function(c){ total += ((p.items[c.key] || {}).n || 0); }); });
-  if (meta) meta.textContent = total ? (total + (total === 1 ? ' cosa para resolver' : ' cosas para resolver')) : 'Sin pendientes 🎉';
-  cuerpo.innerHTML = periodos.map(function(p){
+// Arma el HTML de las tarjetas por período (Septiembre/Agosto, etc.) a partir
+// de CENTRO_INI_DATA.periodos - lo comparten la pantalla de Inicio y la
+// solapa "Pendientes" del menú del centro (mismo dato, misma lógica, dos
+// lugares donde se puede ver - ver renderPendientesCentroInicio/Tab).
+function pendientesCentroPeriodosHtml(periodos){
+  return periodos.map(function(p){
     var filas = CENTRO_INI_CATS.map(function(c){
       var it = p.items[c.key] || { n:0 };
       var hay = (it.n || 0) > 0;
@@ -1641,6 +1631,58 @@ function renderPendientesCentroInicio(){
       + '<div class="mescurso-lines">' + filas + '</div>'
       + '</div>';
   }).join('');
+}
+function pendientesCentroTotal(periodos){
+  var total = 0;
+  periodos.forEach(function(p){ CENTRO_INI_CATS.forEach(function(c){ total += ((p.items[c.key] || {}).n || 0); }); });
+  return total;
+}
+function renderPendientesCentroInicio(){
+  var cuerpo = document.getElementById('centroIniCuerpo');
+  var meta = document.getElementById('centroIniMeta');
+  var tit = document.getElementById('centroIniTitulo');
+  if (!cuerpo) return;
+  if (tit) tit.textContent = 'Pendientes en ' + ((CENTRO_INI_DATA && CENTRO_INI_DATA.nombre) || 'tu centro');
+  var periodos = (CENTRO_INI_DATA && CENTRO_INI_DATA.periodos) || [];
+  if (!periodos.length){
+    cuerpo.innerHTML = '<p class="nom-muted" style="margin:0;padding:4px 2px">Todavía no hay bandeja cargada para tu centro.</p>';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  var total = pendientesCentroTotal(periodos);
+  if (meta) meta.textContent = total ? (total + (total === 1 ? ' cosa para resolver' : ' cosas para resolver')) : 'Sin pendientes 🎉';
+  cuerpo.innerHTML = pendientesCentroPeriodosHtml(periodos);
+}
+// Solapa "Pendientes" del menú del centro (operador_clinica): mismo dato y
+// misma lógica que la pantalla de Inicio (renderPendientesCentroInicio) -
+// antes llamaba a un endpoint distinto y más simple (pendientes-centro, sin
+// detalle) que daba "Sin pendientes" aunque hubiera cosas reales pendientes,
+// porque no traía el desglose por período. Caso real: Flavia (CIMA) y bo.26.
+async function loadClientPendientesCentroTab(){
+  var cuerpo = document.getElementById('centroPendCuerpo');
+  if (!cuerpo || !ACTIVE_CLIENT) return;
+  var tit = document.getElementById('centroPendSaludo');
+  if (tit) tit.textContent = 'Pendientes';
+  cuerpo.innerHTML = '<p class="nom-muted">Cargando…</p>';
+  var slugPend = ACTIVE_CLIENT.slug;
+  var res = await api('/api/clientes/' + encodeURIComponent(slugPend) + '/pendientes-centro/detalle');
+  if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slugPend) return;   // cambió de cliente mientras cargaba
+  var meta = document.getElementById('centroPendMeta');
+  if (!res.ok){
+    cuerpo.innerHTML = '<p class="nom-muted">' + esc((res.data && res.data.error) || 'No se pudo cargar.') + '</p>';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  CENTRO_INI_DATA = res.data || { periodos: [] };
+  var periodos = CENTRO_INI_DATA.periodos || [];
+  if (!periodos.length){
+    cuerpo.innerHTML = '<p class="nom-muted">Todavía no hay bandeja cargada para tu centro.</p>';
+    if (meta) meta.textContent = '';
+    return;
+  }
+  var total = pendientesCentroTotal(periodos);
+  if (meta) meta.textContent = total ? (total + (total === 1 ? ' cosa para resolver' : ' cosas para resolver')) : 'Sin pendientes 🎉';
+  cuerpo.innerHTML = pendientesCentroPeriodosHtml(periodos);
 }
 // Detalle de pacientes de una categoría: reusa el mismo modal que el panel de
 // Pendientes del operador, así hay UNA sola pantalla de "quiénes son".
@@ -4253,7 +4295,7 @@ function setClientSection(section){
   if (CLIENT_SECTION === 'honorarios') { if (ME && ME.role === 'clinica') renderHonorariosEnDesarrollo(); else { restaurarHonorariosContenido(); loadClientHonorarios(); } }
   if (CLIENT_SECTION === 'osdop') renderOsdop();
   if (CLIENT_SECTION === 'plansalud') renderPlanSalud();
-  if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentro();
+  if (CLIENT_SECTION === 'pendientes') loadClientPendientesCentroTab();
   if (CLIENT_SECTION === 'usuarioscli') loadClientUsuarios();
 }
 function clientSectionCrumb(found){
