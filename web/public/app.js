@@ -11520,7 +11520,7 @@ async function subirInformeUno(id){
   var nom=(it&&it.extract&&it.extract.nombre)||'este informe';
   var omesArr=(it&&it.resuelto&&(it.resuelto.omes||(it.resuelto.ome?[it.resuelto.ome]:[])))||(it&&it.match&&it.match.ome?[it.match.ome]:[]);
   var ome=omesArr.join(', ');
-  if(!await nsConfirm('', { titulo:'Subir a PAMI', cuerpoHtml:'<b>'+esc(nom)+'</b>'+(ome?(' · OME '+esc(ome)):'')+'<br><br>Se sube a PAMI. Es real e irreversible.', okLabel:'Subir' })) return;
+  if(!await nsConfirm('', { titulo:'Subir a PAMI', cuerpoHtml:'<b>'+esc(nom)+'</b>'+(ome?(' · OME '+esc(ome)):'')+'<br><br>Se sube a PAMI. Es real e irreversible.', okLabel:'Subir' })) return false;
   cabEstado('Preparando…','working');
   try{
     var r=await fetch('/api/admin/worker/tasks',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'subir-informes',clientSlug:slug,payload:{informeIds:[id]}})});
@@ -11528,7 +11528,9 @@ async function subirInformeUno(id){
     if(!r.ok){ cabEstado('',''); nsAlert(d.error||'No se pudo crear la tarea.'); return; }
     marcarSubiendo([id], true);
     seguirTarea(d.task.id,'subir-informes',[id]);
+    return true;
   }catch(e){ cabEstado('',''); nsAlert('Error de red al crear la tarea.'); }
+  return false;
 }
 async function tareaCabina(tipo){
   var slug=document.getElementById('cabCliente').value; if(!slug){ nsAlert('Elegí un cliente.'); return; }
@@ -12854,6 +12856,7 @@ function abrirInforme(id){
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>';
     actualizarSelOmes();
   }
+  cabRenderAcciones(it);
   cabActualizarPosicion();
   showModal('cabinaModal', 'cabinaScrim');
 }
@@ -12879,6 +12882,32 @@ function cabActualizarPosicion(){
   var ant = document.getElementById('cabModalAnt'), sig = document.getElementById('cabModalSig');
   if (ant) ant.disabled = i <= 0;
   if (sig) sig.disabled = i < 0 || i >= lista.length - 1;
+}
+// Las tres acciones que se deciden MIRANDO el informe (subir, desestimar,
+// borrar), al pie de la ficha. Antes habia que cerrarla y buscar la fila en la
+// tabla para apretar el mismo boton, con el informe ya fuera de la vista.
+function cabRenderAcciones(it){
+  var caja = document.getElementById('cabAcciones');
+  if (!caja) return;
+  var e = cabEstadoDe(it);
+  var puedeSubir = ['ok', 'resuelto', 'falta_validar'].indexOf(e) >= 0;
+  var des = !!it.desestimado;
+  caja.innerHTML =
+      (puedeSubir
+        ? '<button class="btn btn-primary btn-sm" type="button" onclick="cabAccion(\'subir\')">\uD83D\uDCE4 Subir a PAMI</button>'
+        : '<span class="cab-sub">' + (des ? 'Desestimado: no se sube.' : 'Todavía no está listo para subir.') + '</span>')
+    + '<span style="flex:1"></span>'
+    + '<button class="rowbtn" type="button" title="' + (des ? 'Reactivar' : 'Desestimar') + '" onclick="cabAccion(\'desestimar\')">' + (des ? '\u21A9\uFE0F' : '\uD83D\uDEAB') + '</button>'
+    + '<button class="rowbtn danger" type="button" title="Borrar" onclick="cabAccion(\'borrar\')">\uD83D\uDDD1</button>';
+}
+// La ficha se cierra sola solo si la accion se hizo: si cancelaste el cartel,
+// seguis mirando el mismo informe.
+async function cabAccion(que){
+  if (!CAB_ITEM) return;
+  var id = CAB_ITEM.id, des = !!CAB_ITEM.desestimado;
+  if (que === 'subir'){ if (await subirInformeUno(id)) cerrarCabinaModal(); return; }
+  if (que === 'desestimar'){ if (await toggleDesestimar(id, des)) cerrarCabinaModal(); return; }
+  if (que === 'borrar'){ if (await borrarInforme(id)) cerrarCabinaModal(); return; }
 }
 function cabDato(label, val){ return '<div class="cab-dato"><span>'+esc(label)+'</span><b>'+esc(val)+'</b></div>'; }
 function cerrarCabinaModal(){ hideModal('cabinaModal', 'cabinaScrim'); var f=document.getElementById('cabFrame'); if(f) f.removeAttribute('src'); var t=document.getElementById('cabTexto'); if(t){ t.textContent=''; t.style.display='none'; } CAB_ITEM=null; }
@@ -13035,25 +13064,27 @@ async function reanalizarInforme(id){
   if (r.ok) await refreshCabina(); else { var d=await r.json().catch(function(){return{};}); nsAlert(d.error||'No se pudo reanalizar.'); }
 }
 async function borrarInforme(id){
-  if (!await nsConfirm('Se elimina de la lista de informes recibidos. No se puede deshacer.', { titulo:'Borrar informe', okLabel:'Borrar', peligro:true })) return;
+  if (!await nsConfirm('Se elimina de la lista de informes recibidos. No se puede deshacer.', { titulo:'Borrar informe', okLabel:'Borrar', peligro:true })) return false;
   var slug = document.getElementById('cabCliente').value;
   var r = await fetch('/api/clientes/'+slug+'/informes/'+id, { method:'DELETE' });
   if (r.ok) await refreshCabina();
+  return r.ok;   // lo usa la ficha para cerrarse sola solo si se borro
 }
 // Desestimar (dar por cerrado sin subir) / reactivar. `esta`=true si ya está desestimado.
 async function toggleDesestimar(id, esta){
   var motivo = '';
   if (!esta){
     motivo = await pedirMotivoDesest(1);
-    if (motivo === null) return; // canceló
+    if (motivo === null) return false; // canceló
   }
   var slug = document.getElementById('cabCliente').value;
   var payload = esta ? { desestimar: false } : { desestimar: true, motivo: motivo };
   var res = await api('/api/clientes/'+slug+'/informes/'+encodeURIComponent(id)+'/desestimar', payload);
-  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo desestimar.'); return; }
+  if (!res.ok){ nsAlert((res.data && res.data.error) || 'No se pudo desestimar.'); return false; }
   var it = (CAB_ITEMS||[]).find(function(x){ return x.id===id; });
   if (it){ if (res.data.item && res.data.item.desestimado) it.desestimado = res.data.item.desestimado; else delete it.desestimado; }
   aplicarFiltroCabina();
+  return true;
 }
 // Reclamar al centro: el operador no sabe de qué paciente es y lo reclamó para que
 // confirmen. Queda "en gestión" (fuera de revisar), con una nota. Reversible: soltar

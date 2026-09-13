@@ -2336,6 +2336,12 @@
   .cab-modal-file iframe{width:100%;height:100%;min-height:520px;border:0;display:block}
   .cab-doc-texto{height:100%;min-height:520px;max-height:80vh;overflow:auto;padding:20px 22px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.55;color:var(--text-1);background:var(--surface-1)}
   .cab-modal-side{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+  /* Las acciones van ARRIBA de todo y pegadas: es lo primero que se decide
+     mirando el informe, y abajo quedaban tapadas por la lista de candidatos
+     (que puede ser larga) o directamente fuera de la pantalla. */
+  .cab-acciones{position:sticky;top:-16px;z-index:2;display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    margin:-16px -18px 0;padding:11px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .cab-acciones .cab-sub{margin:0}
   .cab-datos-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .cab-dato{display:flex;flex-direction:column;gap:2px;border:1px solid var(--border);border-radius:9px;padding:7px 10px;background:var(--surface-2)}
   .cab-dato span{font-size:10.5px;font-weight:750;text-transform:uppercase;letter-spacing:.03em;color:var(--text-2)}
