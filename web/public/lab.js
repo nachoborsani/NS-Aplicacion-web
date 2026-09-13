@@ -109,6 +109,12 @@
     var nav = document.querySelector(".sidebar .nav");
     if (!nav) return;
     nav.querySelectorAll(".lab-only").forEach(function (x) { x.remove(); });
+    // "Inicio" del sistema de turnos: lleva a la primera pantalla que el usuario
+    // pueda ver, no a NS. Para volver a NS esta el lapiz de la barra de arriba.
+    var inicio = e("a", { class: "lab-only lab-navlink", "data-mod": "__inicio" },
+      '<svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio');
+    inicio.onclick = function () { labGo(primerModulo()); };
+    nav.appendChild(inicio);
     LAB_MENU.forEach(function (grupo) {
       var visibles = grupo[1].filter(function (m) { return labPuede(m[3]); });
       if (!visibles.length) return;   // un grupo entero sin permiso no deja el titulo solo
@@ -121,6 +127,15 @@
       });
     });
     marcarNavActivo();
+  }
+  // La primera pantalla que el usuario tiene permitida: para un recepcionista es la
+  // agenda, para alguien que solo cobra es la caja.
+  function primerModulo() {
+    for (var i = 0; i < LAB_MENU.length; i++) {
+      var m = LAB_MENU[i][1].filter(function (x) { return labPuede(x[3]); })[0];
+      if (m) return m[0];
+    }
+    return "agenda";
   }
   function marcarNavActivo() {
     document.querySelectorAll(".sidebar .nav .lab-navlink").forEach(function (a) {

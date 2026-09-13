@@ -260,7 +260,10 @@
   /* Se esconde TODO lo de NS, no solo lo marcado como ns-only: varios bloques del
      menu (Administracion, por ejemplo) no llevan esa clase y quedaban colados
      entre los modulos del sistema de turnos. */
-  body.lab-mode .nav > *:not(.lab-only):not(:first-child){display:none}
+  /* En el sistema de turnos la barra es TODA suya, incluido su propio "Inicio":
+     el de NS llevaba de vuelta al otro sistema sin querer. La puerta de vuelta
+     es el lapiz de la barra de arriba. */
+  body.lab-mode .nav > *:not(.lab-only){display:none}
   .nav > .lab-only{display:none}
   body.lab-mode .nav > a.lab-only{display:flex}
   body.lab-mode .nav > div.lab-only{display:block}
