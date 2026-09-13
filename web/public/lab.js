@@ -356,6 +356,58 @@
   }
 
   // Detalle de un turno: cambiar estado / editar / cancelar.
+  // Alta de un estudio. Mismo camino desde la historia clinica y desde el turno:
+  // primero la ficha (JSON) y despues el archivo (multipart), que no entra en el JSON.
+  async function guardarEstudio(pacienteId, datos, file) {
+    var r = await api("/api/lab/pacientes/" + pacienteId + "/estudios", datos);
+    if (!r.ok) return { ok: false, error: (r.data && r.data.error) || "No se pudo guardar." };
+    if (file) {
+      var fd = new FormData(); fd.append("file", file);
+      var sube = await fetch("/api/lab/estudios/" + r.data.item.id + "/archivo", { method: "POST", body: fd });
+      if (!sube.ok) {
+        var d = await sube.json().catch(function () { return {}; });
+        return { ok: true, item: r.data.item, aviso: d.error || "El estudio se guardó, pero el archivo no subió." };
+      }
+    }
+    return { ok: true, item: r.data.item };
+  }
+  function opcionesTipos(sel) {
+    return LAB_TIPOS.map(function (t) {
+      return '<option value="' + t.cod + '"' + (t.cod === sel ? " selected" : "") + ">" + esc(t.nombre) + "</option>";
+    }).join("");
+  }
+  // El formulario corto, para cargar el estudio sin salir del turno.
+  async function estudioDeTurno(t, onSaved) {
+    if (!LAB_TIPOS.length) {
+      var rt = await api("/api/lab/pacientes/" + t.pacienteId + "/estudios");
+      LAB_TIPOS = (rt.data && rt.data.tipos) || [];
+    }
+    var m = modal("Cargar estudio · " + (t.pacienteNombre || ""));
+    m.body.innerHTML =
+      '<div class="lab-form"><div class="lab-grid2">' +
+        '<label>Fecha<input class="lab-in" type="date" id="et-fecha" value="' + esc(t.fecha || hoyISO()) + '"></label>' +
+        '<label>Tipo<select class="lab-in" id="et-tipo">' + opcionesTipos("") + "</select></label>" +
+      "</div>" +
+      '<label>Informe<textarea class="lab-in" id="et-texto" rows="4" placeholder="El texto del informe (o dejalo vacío y adjuntá el archivo)…"></textarea></label>' +
+      '<label>Archivo (PDF o imagen)<input class="lab-in" type="file" id="et-file" accept=".pdf,.jpg,.jpeg,.png"></label>' +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="et-cancel">Cancelar</button><button class="lab-btn primary" id="et-ok">Guardar estudio</button></div></div>';
+    m.body.querySelector("#et-cancel").onclick = labClose;
+    m.body.querySelector("#et-ok").onclick = async function () {
+      var file = m.body.querySelector("#et-file").files[0];
+      var texto = m.body.querySelector("#et-texto").value.trim();
+      if (!file && !texto) { toast("Adjuntá el archivo o escribí el informe.", true); return; }
+      var r = await guardarEstudio(t.pacienteId, {
+        fecha: m.body.querySelector("#et-fecha").value,
+        tipo: m.body.querySelector("#et-tipo").value,
+        profesionalId: t.profesionalId || LAB.ag.profesionalId,
+        turnoId: t.id, texto: texto,
+      }, file);
+      if (!r.ok) { toast(r.error, true); return; }
+      labClose();
+      toast(r.aviso || "Estudio cargado \u2713", !!r.aviso);
+      if (onSaved) onSaved();
+    };
+  }
   async function turnoModal(id) {
     var grid = document.getElementById("lab-ag-grid");
     var el = grid && grid.querySelector('.lab-slot[data-id="' + id + '"]');
@@ -384,7 +436,27 @@
         '<label>Medio<select class="lab-in" id="tn-medio"><option value="">—</option>' + ["Efectivo", "Débito", "Crédito", "Transferencia", "Mercado Pago"].map(function (x) { return "<option" + (t.medioPago === x ? " selected" : "") + ">" + x + "</option>"; }).join("") + "</select></label>" +
         '<label class="lab-chk"><input type="checkbox" id="tn-pag"' + (t.pagado ? " checked" : "") + "> Cobrado</label>" +
       "</div>" +
+      '<div class="lab-sec-tit">Historia cl\u00ednica</div><div id="tn-estudios"><div class="lab-muted">Cargando\u2026</div></div>' +
       '<div class="lab-modal-actions"><button class="lab-btn ghost danger" id="tn-cancel">Cancelar turno</button><button class="lab-btn primary" id="tn-guardar">Guardar cobro</button></div>';
+    // Los estudios de ESTE turno, con el boton para cargar uno nuevo. Cargarlo
+    // aca —con el paciente, la fecha y el profesional ya puestos— es lo que hace
+    // que la historia clinica se llene mientras se atiende y no despues.
+    async function estudiosDelTurno() {
+      var box = m.body.querySelector("#tn-estudios");
+      if (!box) return;
+      if (!t.pacienteId) { box.innerHTML = '<div class="lab-muted">Este turno no está atado a una ficha de paciente, así que no se le puede cargar un estudio.</div>'; return; }
+      var r = await api("/api/lab/pacientes/" + t.pacienteId + "/estudios");
+      if (r.ok && r.data && r.data.tipos) LAB_TIPOS = r.data.tipos;
+      var mios = ((r.data && r.data.items) || []).filter(function (x) { return x.turnoId === t.id; });
+      box.innerHTML = (mios.length ? mios.map(function (x) {
+        return '<div class="lab-hc-item es"><div class="lab-hc-meta"><span class="lab-hc-tipo">' + esc(x.tipo) + "</span> " + esc(x.tipoNombre || "") + "</div>" +
+          (x.archivo ? '<div class="lab-hc-archline"><a class="lab-hc-arch" href="/api/lab/estudios/' + x.id + '/archivo" target="_blank" rel="noopener">\ud83d\udcce ' + esc(x.archivo.nombre) + "</a></div>" : "") + "</div>";
+      }).join("") : '<div class="lab-muted">Sin estudios cargados en este turno.</div>')
+        + '<div style="margin-top:8px"><button class="lab-btn" id="tn-estudio-new" type="button">+ Cargar estudio</button></div>';
+      var b = box.querySelector("#tn-estudio-new");
+      if (b) b.onclick = function () { estudioDeTurno(t, function () { turnoModal(id); }); };
+    }
+    estudiosDelTurno();
     m.body.querySelectorAll(".lab-est-btn").forEach(function (b) {
       b.onclick = async function () {
         var est = b.getAttribute("data-est");
@@ -743,24 +815,15 @@
       var file = m.body.querySelector("#es-file").files[0];
       var texto = m.body.querySelector("#es-texto").value.trim();
       if (!file && !texto) { toast("Adjuntá el archivo o escribí el informe.", true); return; }
-      var r = await api("/api/lab/pacientes/" + p.id + "/estudios", {
+      var r = await guardarEstudio(p.id, {
         fecha: m.body.querySelector("#es-fecha").value,
         tipo: m.body.querySelector("#es-tipo").value,
         profesionalId: m.body.querySelector("#es-prof").value,
         texto: texto,
-      });
-      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
-      if (file) {
-        // El archivo va aparte: multipart, no entra en el JSON del estudio.
-        var fd = new FormData(); fd.append("file", file);
-        var sube = await fetch("/api/lab/estudios/" + r.data.item.id + "/archivo", { method: "POST", body: fd });
-        if (!sube.ok) {
-          var d = await sube.json().catch(function () { return {}; });
-          toast(d.error || "El estudio se guardó pero el archivo no subió.", true);
-        }
-      }
+      }, file);
+      if (!r.ok) { toast(r.error, true); return; }
       m.body.querySelector("#es-texto").value = ""; m.body.querySelector("#es-file").value = "";
-      toast("Estudio guardado ✓"); load();
+      toast(r.aviso || "Estudio guardado ✓", !!r.aviso); load();
     };
     load();
   }
