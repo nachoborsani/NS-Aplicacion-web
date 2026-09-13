@@ -12841,6 +12841,8 @@ function abrirInforme(id){
       });
     }
     cont.innerHTML = '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
+      + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>'
+      + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
       + cands.map(function(c){
         var estado = c.transmitida ? '<span class="cab-badge muted">ya transmitido</span>' : (c.validada?'<span class="cab-badge ok">validada</span>':'<span class="cab-badge warn">sin validar</span>');
         var ck = (c.ome && yaSel.indexOf(c.ome)>=0) ? ' checked' : '';
@@ -12851,9 +12853,7 @@ function abrirInforme(id){
           + '<div class="cab-cand-acc">' + estado
           + '<button class="btn btn-ghost btn-sm" onclick="usarCandidato(\''+esc(c.ome||'')+'\',\''+esc(c.beneficio||'')+'\')">Usar</button></div>'
           + '</div>';
-      }).join('')
-      + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
-      + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>';
+      }).join('');
     actualizarSelOmes();
   }
   cabRenderAcciones(it);

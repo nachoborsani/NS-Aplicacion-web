@@ -2352,7 +2352,10 @@
   .cab-cand-main{flex:1;min-width:0}
   .cab-cand-main b{font-size:12.5px;word-break:break-word}
   .cab-cand-ck{width:17px;height:17px;flex:0 0 auto;cursor:pointer;accent-color:var(--brand,#0aa)}
-  .cab-selbar{display:flex;justify-content:flex-end;margin-top:9px}
+  /* Va ARRIBA de la lista y fina: es una confirmacion de lo que ya tildaste, no
+     un boton grande que compita con las tarjetas de abajo. */
+  .cab-selbar{display:flex;justify-content:flex-end;margin:6px 0 2px}
+  .cab-selbar .btn{padding:4px 12px;font-size:12.5px;font-weight:700;border-radius:8px}
   /* Aviso de debito en la cabina: lo que se esta por subir se pisa con otra practica
      del mismo dia y PAMI va a debitar una. No bloquea, avisa. */
   .cab-debito{margin-top:10px;border:1px solid #f0b429;background:rgba(240,180,41,.10);border-radius:10px;padding:9px 11px}
