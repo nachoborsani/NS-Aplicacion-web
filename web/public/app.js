@@ -7163,6 +7163,11 @@ function mesCursoLabelPeriodo(period){
 function mesCursoBotonRefresco(label){
   if (!(ME && (ME.role === 'admin' || ME.role === 'operador'))) return '';
   var texto = label || 'Transmitir y actualizar';
+  // Si se dibuja "Actualizando", asegurarse de que HAY alguien mirando si termino.
+  // Sin esto el cartel se podia quedar puesto para siempre: el refresco terminaba en el
+  // server y la pantalla no se enteraba hasta recargar (paso en Grupo Justo, con el
+  // refresco terminado a las 23:49 y las dos tarjetas en "Actualizando").
+  if (REFRESCO_ACTIVO) arrancarPollRefresco();
   return REFRESCO_ACTIVO
     ? '<button class="btn btn-sm" type="button" disabled title="Se está actualizando" style="margin-left:8px">⏳ Actualizando…</button>'
     : '<button class="btn btn-sm" type="button" onclick="pedirRefrescoBandejas(this)" data-refresh-label="' + esc(texto) + '" title="Transmite lo que está pendiente en PAMI y vuelve a bajar la bandeja" style="margin-left:8px">🔄 ' + esc(texto) + '</button>'
@@ -13343,7 +13348,8 @@ function pintarPlanCabina(){
       if (!card.querySelector('.cab-cand-nota')){
         var n2 = document.createElement('div');
         n2.className = 'cab-cand-nota';
-        n2.innerHTML = '📄 Ya tiene su propio informe: <b>' + esc(d.laTieneOtro) + '</b>';
+        n2.innerHTML = '📄 Ya la tiene otro informe de la bandeja: <b>' + esc(d.laTieneOtro) + '</b>'
+          + '<span class="nom-muted"> (puede llamarse igual que este)</span>';
         (card.querySelector('.cab-cand-main') || card).appendChild(n2);
       }
     } else if (d.conviene && !d.tildada && !d.transmitida && d.valor > 0){
