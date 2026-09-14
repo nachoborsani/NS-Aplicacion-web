@@ -617,6 +617,27 @@ function matchearInforme(slug, extract) {
   };
 }
 // Procesa un informe ya guardado en disco: extrae datos (con OCR si hace falta) y matchea.
+// La huella (sha256) de cada archivo guardado. Es lo que deja no guardar dos veces el
+// MISMO informe: por nombre no alcanza, porque el sistema del centro manda el informe
+// escrito y la hoja de imagenes con el mismo nombre, y son dos documentos distintos.
+// Los informes viejos no la tienen: se completa la primera vez que hace falta.
+// El tope es para no leer 600 archivos de una en el medio de un pedido: se completan
+// de a 200 por vez y en dos o tres pantallas ya estan todas.
+function completarHuellas(store, slug, tope = 200) {
+  const items = (store[slug] && store[slug].items) || [];
+  let n = 0;
+  for (const it of items) {
+    if (n >= tope) break;
+    if (it.hash || !it.stored) continue;
+    try {
+      const buf = fs.readFileSync(path.join(informesDir, slug, it.stored));
+      it.hash = crypto.createHash("sha256").update(buf).digest("hex");
+      it.tam = buf.length;
+      n++;
+    } catch { /* el archivo ya no está: se queda sin huella */ }
+  }
+  return n;
+}
 async function procesarInforme(slug, storedPath, id, stored, filename, origen, fecha, asunto, fechaHora) {
   let extract = { dni: "", beneficio: "", nombre: "", practica: "", ocrUsado: false, necesitaOcr: false };
   let error = null;
@@ -642,17 +663,7 @@ async function traerDelMailInterno(slug, token, desde, hasta) {
   const store = loadInformes();
   if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
   const items = store[slug].items || [];
-  let completados = 0;
-  for (const it of items) {
-    if (it.hash || !it.stored) continue;
-    try {
-      const buf = fs.readFileSync(path.join(informesDir, slug, it.stored));
-      it.hash = crypto.createHash("sha256").update(buf).digest("hex");
-      it.tam = buf.length;
-      completados++;
-    } catch { /* el archivo ya no está: se queda sin hash */ }
-  }
-  if (completados) saveInformes(store);
+  if (completarHuellas(store, slug)) saveInformes(store);
   const porHash = new Set(items.map((x) => x.hash).filter(Boolean));
   const porNombre = new Set(items.map((x) => x.filename + "|" + (x.tam || 0)));
   const soloNombre = new Set(items.filter((x) => !x.hash).map((x) => x.filename));
@@ -10993,10 +11004,19 @@ const server = http.createServer(async (req, res) => {
       if (!mp.files.length) return json(res, 400, { error: "No subiste ningún informe." });
       const store = loadInformes();
       if (!store[slug]) store[slug] = { items: [], updatedAt: "" };
+      // El MISMO archivo no se guarda dos veces. El bot del centro rebaja la ficha en
+      // cada corrida mientras la OME siga figurando sin informe, y asi entraron 245
+      // copias de mas en Baimed. La bajada del mail ya lo controlaba; esta no.
+      if (completarHuellas(store, slug, 5000)) saveInformes(store);
+      const yaEstan = new Map((store[slug].items || []).filter((x) => x.hash).map((x) => [x.hash, x]));
       const destDir = path.join(informesDir, slug);
       fs.mkdirSync(destDir, { recursive: true });
       const nuevos = [];
+      const repetidos = [];
       for (const f of mp.files) {
+        const huella = crypto.createHash("sha256").update(f.data).digest("hex");
+        const previo = yaEstan.get(huella);
+        if (previo) { repetidos.push({ filename: f.filename, id: previo.id }); continue; }
         const ext = path.extname(f.filename).toLowerCase();
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
@@ -11007,12 +11027,15 @@ const server = http.createServer(async (req, res) => {
         // no subio nadie.
         const origenSubida = String(url.searchParams.get("origen") || "").trim() === "globalapp" ? "globalapp" : "upload";
         const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, origenSubida);
+        rec.hash = huella;
+        rec.tam = f.data.length;
         store[slug].items.unshift(rec);
+        yaEstan.set(huella, rec);
         nuevos.push(rec);
       }
       store[slug].updatedAt = new Date().toISOString();
       saveInformes(store);
-      return json(res, 200, { procesados: nuevos.length, items: nuevos });
+      return json(res, 200, { procesados: nuevos.length, repetidos: repetidos.length, repetidosDetalle: repetidos.slice(0, 20), items: nuevos });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudieron procesar los informes." });
     }
@@ -11091,7 +11114,11 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
     const slug = informesList[1];
-    const cli = loadInformes()[slug] || { items: [], updatedAt: "" };
+    const storeInf = loadInformes();
+    // La primera vez despues de este cambio se completan las huellas que faltan; de ahi
+    // en mas el recorrido no hace nada. Tenerlas siempre es lo que deja limpiar copias.
+    if (completarHuellas(storeInf, slug)) saveInformes(storeInf);
+    const cli = storeInf[slug] || { items: [], updatedAt: "" };
     const items = cli.items || [];
     // Contadores por estado para el encabezado.
     const resumen = {};

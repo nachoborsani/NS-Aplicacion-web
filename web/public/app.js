@@ -12842,6 +12842,10 @@ async function uploadInformes(files){
     var r = await fetch('/api/clientes/'+slug+'/informes/upload', { method:'POST', body:fd });
     var d = await r.json();
     if (!r.ok) nsAlert(d.error || 'No se pudieron subir los informes.');
+    // Un archivo identico a uno que ya esta no se guarda de nuevo. Hay que DECIRLO:
+    // si no, el operador sube tres y ve que no aparecio ninguno.
+    else if (d.repetidos) nsAlert(d.repetidos + ' de los ' + files.length + ' ya estaban cargados (el mismo archivo), así que no se duplicaron.'
+      + (d.procesados ? ' Se agregaron ' + d.procesados + '.' : ''), { titulo:'Ya los teníamos' });
   } catch(e){ nsAlert('Error de red al subir.'); }
   document.getElementById('cabFiles').value = '';
   await refreshCabina();
