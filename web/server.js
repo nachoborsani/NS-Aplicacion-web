@@ -11014,6 +11014,13 @@ const server = http.createServer(async (req, res) => {
       const nuevos = [];
       const repetidos = [];
       let huboCambio = false;
+      // De donde vino: "upload" es una persona subiendolo desde la pantalla y
+      // "globalapp" el bot que los trae del sistema del centro. Se distinguen para que
+      // la columna Recibido no diga "a mano" sobre 900 archivos que no subio nadie.
+      const origenSubida = String(url.searchParams.get("origen") || "").trim() === "globalapp" ? "globalapp" : "upload";
+      // De que ficha de la historia clinica del centro salio. Es la memoria del bot:
+      // con esto no vuelve a bajar lo mismo en la corrida siguiente.
+      const fichaGa = String(url.searchParams.get("ficha") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
       for (const f of mp.files) {
         const huella = crypto.createHash("sha256").update(f.data).digest("hex");
         const previo = yaEstan.get(huella);
@@ -11028,14 +11035,6 @@ const server = http.createServer(async (req, res) => {
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
         fs.writeFileSync(path.join(destDir, stored), f.data);
-        // De donde vino: "upload" es una persona subiendolo desde la pantalla y
-        // "globalapp" el bot que los trae del sistema del centro. Se distinguen
-        // para que la columna Recibido no diga "a mano" sobre 900 archivos que
-        // no subio nadie.
-        const origenSubida = String(url.searchParams.get("origen") || "").trim() === "globalapp" ? "globalapp" : "upload";
-        // De que ficha de la historia clinica del centro salio. Es la memoria del bot:
-        // con esto no vuelve a bajar lo mismo en la corrida siguiente.
-        const fichaGa = String(url.searchParams.get("ficha") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
         const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, origenSubida);
         rec.hash = huella;
         rec.tam = f.data.length;
