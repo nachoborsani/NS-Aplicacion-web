@@ -455,7 +455,15 @@
         toast((os || "Esa obra social") + " todavía no tiene valor cargado para " + ((pr && pr.nombre) || "esa práctica") + ".", true);
       }
     }
-    selP.onchange = function () { recalcular(true); };
+    selP.onchange = function () {
+      recalcular(true);
+      // La preparacion se dice EN EL MOSTRADOR, cuando se da el turno. Despues va
+      // tambien en el recordatorio, pero el paciente ya se fue.
+      var pr = (LAB.cat.practicas || []).find(function (x) { return x.id === selP.value; });
+      var caja = cont.querySelector("#prep-aviso");
+      if (caja) caja.innerHTML = (pr && pr.preparacion)
+        ? '<div class="lab-prep">\u26a0\ufe0f <b>Decile al paciente:</b> ' + esc(pr.preparacion) + "</div>" : "";
+    };
     if (selO) selO.addEventListener("change", function () { recalcular(true); });
   }
 
@@ -479,6 +487,7 @@
           '<label>Práctica<select class="lab-in" id="bk-prac">' + opcionesPracticas("") + "</select></label>" +
           '<label>Importe consulta<input class="lab-in" id="bk-importe" type="number" min="0" step="100" value="' + valorDef + '" placeholder="0"></label>' +
         "</div>" +
+        '<div id="prep-aviso"></div>' +
         '<label>Motivo<input class="lab-in" id="bk-motivo" placeholder="Consulta, control, estudio…"></label>' +
       "</div>" +
       '<div class="lab-modal-actions"><button class="lab-btn ghost" id="bk-cancel">Cancelar</button><button class="lab-btn primary" id="bk-ok">Dar turno</button></div>';
@@ -606,6 +615,7 @@
         "<div><b>" + esc(t.hora) + "</b> · " + esc(t.pacienteNombre || "—") + "</div>" +
         '<div class="lab-muted">' + [esc(t.documento), esc(t.obraSocial), esc(t.practicaNombre), esc(t.motivo)].filter(Boolean).join(" · ") + "</div>" +
         (t.online ? '<div class="lab-online-tag">\U0001f310 Lo pidió el paciente por internet</div>' : "") +
+        (t.preparacion ? '<div class="lab-prep">\u26a0\ufe0f <b>Preparación:</b> ' + esc(t.preparacion) + "</div>" : "") +
       "</div>" +
       '<div class="lab-sec-tit">Estado</div>' +
       '<div class="lab-estados">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
@@ -1191,7 +1201,8 @@
         return "<td>" + (v ? fmt$(v) : '<span class="lab-muted">sin valor</span>') + "</td>";
       }).join("");
       return '<tr data-id="' + pr.id + '"><td><b>' + esc(pr.nombre) + "</b>" +
-        (pr.codigo ? ' <span class="lab-muted">' + esc(pr.codigo) + "</span>" : "") + "</td>" +
+        (pr.codigo ? ' <span class="lab-muted">' + esc(pr.codigo) + "</span>" : "") +
+        (pr.preparacion ? '<div class="lab-muted" title="Preparación">\u26a0\ufe0f ' + esc(pr.preparacion) + "</div>" : "") + "</td>" +
         "<td>" + esc(nombreEsp(pr.especialidadId)) + "</td>" + vals +
         '<td style="text-align:right"><button class="lab-btn xs" data-ed="1">Editar</button> ' +
         '<button class="lab-btn xs ghost danger" data-del="1">Borrar</button></td></tr>';
@@ -1228,6 +1239,7 @@
         '<label>Código<input class="lab-in" id="pr-cod" value="' + esc(pr.codigo || "") + '" placeholder="interno o de nomenclador"></label>' +
         "<label>Especialidad<select class=\"lab-in\" id=\"pr-esp\">" + espOpts + "</select></label>" +
       "</div>" +
+      '<label>Preparación <span class="lab-muted">(lo que el paciente tiene que hacer antes)</span><input class="lab-in" id="pr-prep" value="' + esc(pr.preparacion || "") + '" placeholder="Ayuno de 8 horas, venir con vejiga llena…"></label>' +
       '<div class="lab-sec-tit">Valor por obra social</div>' +
       '<div class="lab-muted" style="margin-bottom:8px">Dejá vacío el que no sepas todavía: el turno va a avisar que falta el valor en vez de poner $0.</div>' +
       '<div class="lab-grid3" id="pr-vals">' + oss.map(function (o) {
@@ -1245,6 +1257,7 @@
         nombre: m.body.querySelector("#pr-nom").value,
         codigo: m.body.querySelector("#pr-cod").value,
         especialidadId: m.body.querySelector("#pr-esp").value,
+        preparacion: m.body.querySelector("#pr-prep").value,
         valores: valores,
       };
       var rr = pr.id ? await req("PUT", "/api/lab/practicas/" + pr.id, datos) : await api("/api/lab/practicas", datos);
@@ -2021,6 +2034,7 @@
       ".lab-link{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2,#f1f5f9);border:1px solid var(--border);border-radius:10px;padding:10px 12px}",
       ".lab-link code{font-size:13px;word-break:break-all;flex:1;min-width:200px}",
       ".lab-online-tag{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.15);color:#0369a1;border-radius:6px;padding:2px 8px}",
+      ".lab-prep{background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);border-radius:9px;padding:7px 11px;margin:8px 0;font-size:13px;color:var(--text)}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",

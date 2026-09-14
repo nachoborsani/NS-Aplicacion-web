@@ -210,9 +210,15 @@ function armarRecordatorio(plantilla, t, prof, config) {
     "{practica}": t.practicaNombre || "",
     "{centro}": config.centroNombre || "",
     "{direccion}": config.centroDireccion || "",
+    "{preparacion}": t.preparacion || "",
   };
   let out = String(plantilla || PLANTILLA_DEFAULT);
+  const teniaToken = out.indexOf("{preparacion}") >= 0;
   Object.keys(partes).forEach((k) => { out = out.split(k).join(partes[k]); });
+  // Si el centro no puso {preparacion} en su texto, la preparacion se agrega igual al
+  // final. Depender de que se acuerden de editar la plantilla es perder el estudio:
+  // el paciente viene sin ayuno y hay que reprogramarlo.
+  if (!teniaToken && t.preparacion) out += " IMPORTANTE: " + t.preparacion;
   return out.replace(/\s{2,}/g, " ").trim();
 }
 
@@ -344,6 +350,12 @@ function sanitizeTurno(body, previo, store) {
   // El nombre se copia al turno a proposito: si despues renombran o borran la
   // practica, el turno viejo tiene que seguir diciendo que se hizo.
   t.practicaNombre = body.practicaNombre !== undefined ? clean(body.practicaNombre) : (t.practicaNombre || "");
+  // La preparacion se COPIA al turno: si despues cambia la de la practica, el
+  // turno ya dado tiene que seguir diciendo lo que se le indico al paciente.
+  if (body.practicaId !== undefined && store) {
+    const prac = (store.practicas || []).find((x) => x.id === t.practicaId);
+    t.preparacion = prac ? (prac.preparacion || "") : "";
+  }
   t.motivo = body.motivo !== undefined ? clean(body.motivo) : (t.motivo || "");
   t.observaciones = body.observaciones !== undefined ? clean(body.observaciones) : (t.observaciones || "");
   const estadoAntes = t.estado;
@@ -980,6 +992,9 @@ async function handleLab(ctx) {
       if (body.nombre !== undefined) item.nombre = clean(body.nombre);
       if (body.codigo !== undefined) item.codigo = clean(body.codigo);
       if (body.especialidadId !== undefined) item.especialidadId = clean(body.especialidadId);
+      // Lo que hay que hacer antes del estudio: ayuno, vejiga llena, traer estudios
+      // previos. Viaja al recordatorio, que es cuando de verdad sirve.
+      if (body.preparacion !== undefined) item.preparacion = clean(body.preparacion).slice(0, 400);
       item.activo = body.activo === undefined ? (previo ? previo.activo !== false : true) : !!body.activo;
       if (!item.nombre) return json(res, 400, { error: "Ponele un nombre a la práctica." }), true;
       // Ojo con el vacio: una obra social SIN valor cargado no es lo mismo que una en
