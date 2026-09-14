@@ -11013,10 +11013,17 @@ const server = http.createServer(async (req, res) => {
       fs.mkdirSync(destDir, { recursive: true });
       const nuevos = [];
       const repetidos = [];
+      let huboCambio = false;
       for (const f of mp.files) {
         const huella = crypto.createHash("sha256").update(f.data).digest("hex");
         const previo = yaEstan.get(huella);
-        if (previo) { repetidos.push({ filename: f.filename, id: previo.id }); continue; }
+        if (previo) {
+          // Aunque el archivo se descarte, la ficha se anota igual: es la unica forma
+          // de que el bot aprenda de los informes que ya estaban antes de todo esto.
+          if (fichaGa && previo.fichaGa !== fichaGa) { previo.fichaGa = fichaGa; huboCambio = true; }
+          repetidos.push({ filename: f.filename, id: previo.id });
+          continue;
+        }
         const ext = path.extname(f.filename).toLowerCase();
         const id = crypto.randomBytes(8).toString("hex");
         const stored = id + ext;
@@ -11026,15 +11033,21 @@ const server = http.createServer(async (req, res) => {
         // para que la columna Recibido no diga "a mano" sobre 900 archivos que
         // no subio nadie.
         const origenSubida = String(url.searchParams.get("origen") || "").trim() === "globalapp" ? "globalapp" : "upload";
+        // De que ficha de la historia clinica del centro salio. Es la memoria del bot:
+        // con esto no vuelve a bajar lo mismo en la corrida siguiente.
+        const fichaGa = String(url.searchParams.get("ficha") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
         const rec = await procesarInforme(slug, path.join(destDir, stored), id, stored, f.filename, origenSubida);
         rec.hash = huella;
         rec.tam = f.data.length;
+        if (fichaGa) rec.fichaGa = fichaGa;
         store[slug].items.unshift(rec);
         yaEstan.set(huella, rec);
         nuevos.push(rec);
       }
-      store[slug].updatedAt = new Date().toISOString();
-      saveInformes(store);
+      if (nuevos.length || huboCambio) {
+        store[slug].updatedAt = new Date().toISOString();
+        saveInformes(store);
+      }
       return json(res, 200, { procesados: nuevos.length, repetidos: repetidos.length, repetidosDetalle: repetidos.slice(0, 20), items: nuevos });
     } catch (error) {
       return json(res, 400, { error: error.message || "No se pudieron procesar los informes." });
@@ -11127,6 +11140,20 @@ const server = http.createServer(async (req, res) => {
       resumen[e] = (resumen[e] || 0) + 1;
     }
     return json(res, 200, { total: items.length, updatedAt: cli.updatedAt || "", lastMailImportAt: cli.lastMailImportAt || "", resumen, items });
+  }
+
+  // Las fichas del centro que ya bajamos. El bot las pide al arrancar y se saltea esas:
+  // sin esto vuelve a bajar la misma ficha en cada corrida mientras la OME siga
+  // figurando sin informe en el CUP. Va liviano a proposito (solo los ids).
+  const informeFichas = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/fichas$/);
+  if (informeFichas && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
+    const slug = informeFichas[1];
+    const items = (loadInformes()[slug] || {}).items || [];
+    const fichas = [...new Set(items.map((x) => x.fichaGa).filter(Boolean))];
+    return json(res, 200, { fichas, total: fichas.length });
   }
 
   // OMEs que ya tienen un informe GENERADO desde "Crear y subir" (aunque la

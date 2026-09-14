@@ -455,7 +455,21 @@ class NSWebClient:
         filas = resumen.get("missingInformeRows") or []
         return [f for f in filas if isinstance(f, dict)]
 
-    def subir_informe(self, slug: str, filename: str, contenido: bytes, origen: str = "") -> dict:
+    def fichas_ya_bajadas(self, slug: str) -> set:
+        """Las fichas del sistema del centro que la web ya tiene guardadas.
+
+        Es la memoria del bot entre corridas: vive en la web y no en esta maquina,
+        asi que sobrevive a que se reinstale el server y sirve aunque el bot corra
+        desde otro lado.
+        """
+        try:
+            r = self._request("GET", f"/api/clientes/{urllib.parse.quote(slug)}/informes/fichas")
+            return {str(x) for x in (r.get("fichas") or [])}
+        except Exception:
+            return set()   # sin memoria se baja de mas, que es lo que pasaba antes
+
+    def subir_informe(self, slug: str, filename: str, contenido: bytes, origen: str = "",
+                      ficha_id: str = "") -> dict:
         """Deja un informe en la cabina de Informes recibidos del cliente.
 
         Es la misma puerta que usa el boton "Subir informes" de la pantalla: la web
@@ -475,9 +489,15 @@ class NSWebClient:
         cuerpo = pre + bytes(contenido) + post
 
         path = f"/api/clientes/{urllib.parse.quote(slug)}/informes/upload"
-        # `origen` distingue lo que trae un bot de lo que sube una persona.
+        # `origen` distingue lo que trae un bot de lo que sube una persona; `ficha` es
+        # de que ficha del centro salio, para no volver a bajarla la proxima corrida.
+        params = {}
         if origen:
-            path += "?origen=" + urllib.parse.quote(origen)
+            params["origen"] = origen
+        if ficha_id:
+            params["ficha"] = str(ficha_id)
+        if params:
+            path += "?" + urllib.parse.urlencode(params)
         parsed = urllib.parse.urlsplit(self.base_url)
         is_https = parsed.scheme == "https"
         host = parsed.hostname or "localhost"

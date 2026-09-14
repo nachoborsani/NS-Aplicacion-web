@@ -297,7 +297,13 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     # ficha, asi que sin esto el mismo PDF se subia cuatro veces (175 repetidos
     # de 456 en la corrida del 12/09/2026). Con uno alcanza: en la cabina un
     # informe se puede tildar contra varias OMEs.
-    fichas_subidas: set[str] = set()
+    # Arranca con lo que la web YA tiene: sin esto, la memoria duraba lo que duraba la
+    # corrida y la del dia siguiente volvia a bajar las mismas fichas (PAPASTAMATI se
+    # bajo el 13/09 02:29 y de nuevo el 14/09 00:23, mismo archivo).
+    fichas_subidas: set[str] = web.fichas_ya_bajadas(slug)
+    ya_estaban = len(fichas_subidas)
+    if ya_estaban:
+        log(f"[GA] {ya_estaban} ficha(s) ya bajadas de antes: esas se saltean.")
     repetidos = 0
     no_informes = 0
     try:
@@ -360,11 +366,17 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
                 nom = re.sub(r"[^A-Za-z0-9 ._-]", "", _norm(nombre))[:40].strip() or "paciente"
                 filename = f"{nom} - {tipo} - {fecha}.pdf"
                 try:
-                    web.subir_informe(slug, filename, pdf, origen="globalapp")
+                    r = web.subir_informe(slug, filename, pdf, origen="globalapp", ficha_id=ficha_id)
                     if ficha_id:
                         fichas_subidas.add(ficha_id)
-                    bajados += 1
-                    log(f"  [{i}] {nombre} · {tipo} · {fecha} -> subido")
+                    # La web descarta el archivo si ya tiene uno identico. No es un
+                    # error: es que esta ficha ya estaba y ahora queda anotada.
+                    if r.get("repetidos") and not r.get("procesados"):
+                        repetidos += 1
+                        log(f"  [{i}] {nombre} · {tipo} · {fecha} -> ya lo teniamos")
+                    else:
+                        bajados += 1
+                        log(f"  [{i}] {nombre} · {tipo} · {fecha} -> subido")
                 except Exception as exc:  # noqa: BLE001
                     fallados += 1
                     log(f"  [{i}] {nombre}: bajado pero no pude subirlo ({exc})")
