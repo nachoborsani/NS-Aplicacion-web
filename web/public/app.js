@@ -11653,12 +11653,12 @@ function seguirTarea(id, tipo, ids){
       cabEstado('','');
       if (ids && ids.length) (ids || []).forEach(function(x){ delete CAB_SUBIENDO[x]; });
       if (CAB_ITEM) cabRenderAcciones(CAB_ITEM);
-      if(t.status==='done'){
-        mostrarResultadoTarea(tipo, t);
-        await refreshCabina();
-      } else {
-        mostrarResultadoTarea(tipo, t);
-      }
+      // A la campana, no a una ventana. Subiendo de a 40 informes eso eran 40 ventanas
+      // que hay que cerrar de a una, cada una cortando el trabajo. El detalle completo
+      // sigue estando: se toca el aviso y se abre la misma ventana de siempre.
+      avisarEnCampana(t.status === 'done' && !tareaTuvoProblemas(tipo, t),
+        tituloTarea(tipo), resumenTarea(tipo, t), tipo, t);
+      if (t.status === 'done') await refreshCabina();
     }catch(e){}
   }, 3000);
 }
@@ -11680,6 +11680,36 @@ function cabEstado(texto, tipo){
   var el = document.getElementById('cabTareaEstado'); if (!el) return;
   if (!texto){ el.hidden = true; el.textContent = ''; el.className = 'cab-estado'; return; }
   el.hidden = false; el.textContent = texto; el.className = 'cab-estado' + (tipo ? (' is-' + tipo) : '');
+}
+// El titulo y el resumen de una tarea, en una linea, para el renglon de la campana. La
+// ventana con el detalle completo sigue siendo mostrarResultadoTarea, a un clic.
+function tituloTarea(tipo){
+  if (tipo === 'subir-informes') return 'Subida a PAMI';
+  if (tipo === 'crear-informe-cabecera') return 'Informe de cabecera';
+  return 'Auditoría en PAMI';
+}
+function tareaTuvoProblemas(tipo, t){
+  if (t.status !== 'done') return true;
+  var res = t.result || {};
+  var det = res.detalle || [];
+  if (tipo === 'subir-informes') return (res.subidos || 0) < (res.total || det.length || 0);
+  if (tipo === 'crear-informe-cabecera') return (res.guardados || 0) < (res.total || det.length || 0);
+  return false;   // la auditoria no "falla": informa lo que encontro
+}
+function resumenTarea(tipo, t){
+  if (t.status !== 'done') return t.error || 'Error del worker';
+  var res = t.result || {};
+  var det = res.detalle || [];
+  if (tipo === 'subir-informes'){
+    var subidos = res.subidos || 0, total = res.total || det.length || 0;
+    var falta = total - subidos;
+    return subidos + ' de ' + total + ' transmitido(s)' + (falta > 0 ? ' · ' + falta + ' con problema' : '');
+  }
+  if (tipo === 'crear-informe-cabecera'){
+    var g = res.guardados || 0, tot = res.total || det.length || 0;
+    return g + ' de ' + tot + ' guardado(s)' + (tot - g > 0 ? ' · ' + (tot - g) + ' con problema' : '');
+  }
+  return (res.con_doc || 0) + ' de ' + (res.total || det.length || 0) + ' con documentación cargada';
 }
 // Ventana linda con el resultado de subir/auditar a PAMI (en vez del alert del navegador).
 function mostrarResultadoTarea(tipo, t){
