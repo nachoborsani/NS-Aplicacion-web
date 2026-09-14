@@ -3021,6 +3021,33 @@ function iniPanelesWireDrag(scope){
 // despues de recargar (lo que importa de verdad ya queda marcado en la fila).
 var AVISOS_SESION = [];
 var AVISOS_NO_LEIDOS = 0;
+var AVISOS_CLAVE = 'ns-avisos-campana';
+var AVISOS_HORAS = 24;   // lo de ayer ya no sirve; lo de hace un rato si
+// Quedan guardados EN ESTE NAVEGADOR. Antes vivian solo en memoria y cualquier recarga
+// —o un deploy, que reinicia el server— los borraba: como la campana reemplazo a la
+// ventana que habia que cerrar, perderlos es quedarse sin la confirmacion de que algo
+// se subio. La tarea completa (el detalle renglon por renglon) se guarda tambien; si no
+// entra, se guarda el aviso sin ella y el resumen igual queda.
+function avisosGuardar(){
+  var corte = Date.now() - AVISOS_HORAS * 3600 * 1000;
+  var vivos = AVISOS_SESION.filter(function(a){ return new Date(a.at).getTime() > corte; });
+  try { localStorage.setItem(AVISOS_CLAVE, JSON.stringify({ avisos: vivos, noLeidos: AVISOS_NO_LEIDOS })); }
+  catch (e) {
+    try {
+      localStorage.setItem(AVISOS_CLAVE, JSON.stringify({
+        avisos: vivos.map(function(a){ return Object.assign({}, a, { tarea: null }); }),
+        noLeidos: AVISOS_NO_LEIDOS }));
+    } catch (e2) {}
+  }
+}
+function avisosCargar(){
+  var d = null;
+  try { d = JSON.parse(localStorage.getItem(AVISOS_CLAVE) || 'null'); } catch (e) {}
+  if (!d || !Array.isArray(d.avisos)) return;
+  var corte = Date.now() - AVISOS_HORAS * 3600 * 1000;
+  AVISOS_SESION = d.avisos.filter(function(a){ return a && a.at && new Date(a.at).getTime() > corte; }).slice(0, 40);
+  AVISOS_NO_LEIDOS = Math.min(Number(d.noLeidos) || 0, AVISOS_SESION.length);
+}
 function avisarEnCampana(ok, titulo, detalle, tipo, tarea){
   AVISOS_SESION.unshift({
     id: 'av' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -3029,6 +3056,7 @@ function avisarEnCampana(ok, titulo, detalle, tipo, tarea){
   });
   if (AVISOS_SESION.length > 40) AVISOS_SESION.length = 40;
   AVISOS_NO_LEIDOS++;
+  avisosGuardar();
   iniActualizarBell();
   var dr = document.getElementById('drawer');
   if (dr && dr.classList.contains('show')) iniRenderDrawer();
@@ -3132,6 +3160,7 @@ async function opClinicaRefrescarBell(){
   if (dot) dot.style.display = OPCLI_PEND_TOTAL>0 ? '' : 'none';
 }
 function iniArrancar(){
+  avisosCargar();
   if (ME && ME.role === 'operador_clinica'){
     opClinicaRefrescarBell();
     if (!INICIO.pollTimer) INICIO.pollTimer = setInterval(function(){ if(document.visibilityState!=='hidden') opClinicaRefrescarBell(); }, 60000);
