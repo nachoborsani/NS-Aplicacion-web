@@ -12930,6 +12930,12 @@ function abrirInforme(id){
   var pdfAfuera = /\.pdf$/i.test(it.filename) && navigator.pdfViewerEnabled === false;
   var cajaArch = frame.parentNode;
   if (cajaArch) cajaArch.classList.toggle('cab-file-compacto', pdfAfuera);
+  // Se vacia el visor ANTES de pedir el nuevo. Si no, mientras el archivo nuevo no
+  // llega, la pantalla sigue mostrando el informe ANTERIOR al lado de los datos del
+  // paciente nuevo: paso el 14/09 con la web reiniciandose, con el panel diciendo
+  // CABELLO DIANA y el PDF mostrando a CABANA ROBERTO. Eso se lee como que el informe
+  // es de otro paciente, y peor, invita a subirlo asi.
+  frame.removeAttribute('src');
   if (esPreview && !pdfAfuera){ frame.style.display=''; frame.src = urlArch; cajaTxt.style.display='none'; }
   else if (pdfAfuera){
     frame.style.display='none'; frame.removeAttribute('src');
@@ -13157,6 +13163,36 @@ async function usarCandidato(ome, beneficio){
   document.getElementById('cabOmeManual').value = ome;
   resolverInformeManual(beneficio||'');
 }
+// El dia (dd/mm) de un turno "08/09/2026 12:00" o de una fecha ISO "2026-09-08".
+function cabDiaDe(v){
+  var t = String(v || '').trim();
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (iso) return iso[3] + '/' + iso[2];
+  var dmy = /^(\d{2})\/(\d{2})/.exec(t);
+  return dmy ? dmy[1] + '/' + dmy[2] : '';
+}
+// Aviso en la tarjeta cuando se tilda una OME de OTRO DIA que el del informe. No es un
+// error —el turno puede ser de un estudio reprogramado— pero se ve ANTES de subir:
+// si no, uno presenta como documentacion de una prestacion del 07 un informe que dice
+// que el estudio se hizo el 08, y eso se descubre en la auditoria.
+function cabAvisarOtroDia(){
+  var it = CAB_ITEM; if (!it) return;
+  var diaInf = cabDiaDe((it.extract && it.extract.fecha) || '');
+  var cands = (it.match && it.match.candidatos) || [];
+  document.querySelectorAll('.cab-cand-ck').forEach(function(ck){
+    var card = ck.closest('.cab-cand'); if (!card) return;
+    var viejo = card.querySelector('.cab-cand-otrodia');
+    if (viejo) viejo.remove();
+    if (!ck.checked || !diaInf) return;
+    var c = cands.filter(function(x){ return x.ome === ck.value; })[0];
+    var diaT = cabDiaDe(c && c.turno);
+    if (!diaT || diaT === diaInf) return;
+    var av = document.createElement('div');
+    av.className = 'cab-cand-nota cab-cand-otrodia';
+    av.innerHTML = '\u26a0 Turno del <b>' + esc(diaT) + '</b> y el informe es del <b>' + esc(diaInf) + '</b>';
+    (card.querySelector('.cab-cand-main') || card).appendChild(av);
+  });
+}
 // Muestra/oculta la barra "Usar los N tildados" según cuántos candidatos se marcaron.
 function actualizarSelOmes(){
   var cks = document.querySelectorAll('.cab-cand-ck:checked');
@@ -13165,6 +13201,7 @@ function actualizarSelOmes(){
   var n = document.getElementById('cabSelN'); if (n) n.textContent = cks.length;
   bar.style.display = cks.length ? '' : 'none';
   var omes = []; cks.forEach(function(c){ omes.push(c.value); });
+  cabAvisarOtroDia();
   mostrarAvisoDebito(omes);
   // El plan depende de lo tildado: si el operador cambia la selección, se rehace.
   clearTimeout(CAB_PLAN_T);
