@@ -319,6 +319,7 @@ async function handleLab(ctx) {
       practicas: store.practicas || [],
       // Con esto el front arma el menu: no se muestra lo que despues va a dar 403.
       rol: labRol, permisos: labPermisosDe(me),
+      config: Object.assign({ plantillaRecordatorio: PLANTILLA_DEFAULT }, store.config || {}),
       profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;

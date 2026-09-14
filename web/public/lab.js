@@ -160,6 +160,11 @@
       LAB.rol = r.data.rol || "";
       LAB.permisos = r.data.permisos || [];
       LAB.profesionalId = r.data.profesionalId || "";
+      LAB.config = r.data.config || {};
+      // El sistema se presenta con el nombre del centro. "Laboratorio" es como
+      // lo llamamos nosotros de este lado; el centro no tiene por que verlo.
+      var tit = document.getElementById("pageTitle");
+      if (tit) tit.textContent = LAB.config.centroNombre || "Sistema de turnos";
     }
   }
 
