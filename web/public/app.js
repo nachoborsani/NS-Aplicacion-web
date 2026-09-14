@@ -11499,8 +11499,27 @@ async function loadCabinaView(){
     var el = document.getElementById(id);
     if (el && !el._cabHooked){ el._cabHooked = true; el.addEventListener('change', function(){ guardarRangoCabina(); aplicarFiltroCabina(); }); }
   });
+  fechasCabinaAlAbrir();
   await cargarEstadoMail();
   await refreshCabina();
+}
+// El "Hasta" arranca SIEMPRE en hoy. Antes se guardaba el ultimo que hubieras elegido,
+// y al volver al dia siguiente ese "hasta" viejo escondia los informes que habian
+// llegado hoy: la pantalla decia que no habia nada nuevo cuando si habia. El "Desde"
+// si se mantiene, que es el que se elige a proposito (arranque del mes, por ejemplo).
+// Hoy en la fecha DE ACA. Ojo con toISOString(): es UTC, y despues de las 21 hs de
+// Argentina devuelve el dia de manana.
+function hoyLocalISO(){
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fechasCabinaAlAbrir(){
+  var hoy = hoyLocalISO();
+  var guardado = rangoCabinaGuardado() || {};
+  var de = document.getElementById('cabDesde'), ha = document.getElementById('cabHasta');
+  if (de) de.value = (guardado.desde && guardado.desde <= hoy) ? guardado.desde : hoy;
+  if (ha) ha.value = hoy;
+  guardarRangoCabina();
 }
 // El rango de fechas queda guardado EN ESTE NAVEGADOR: al volver a entrar sigue el
 // último que elegiste, en vez de saltar a hoy y perder el filtro cada vez.
@@ -11583,8 +11602,7 @@ async function tareaCabina(tipo){
 async function limpiarTransmitidos(){
   var slug = document.getElementById('cabCliente').value;
   if (!slug){ nsAlert('Elegí un cliente.'); return; }
-  var hoy = new Date().toISOString().slice(0,10);
-  var hastaDef = (document.getElementById('cabHasta')||{}).value || hoy;
+  var hastaDef = (document.getElementById('cabHasta')||{}).value || hoyLocalISO();
   var hasta = await nsPrompt('Borrar los YA TRANSMITIDOS con fecha hasta (inclusive):', {
     titulo: '🧹 Limpiar transmitidos', inputType: 'date', valor: hastaDef, okLabel: 'Seguir' });
   if (hasta === null || !hasta) return;
@@ -12226,12 +12244,6 @@ async function cargarEstadoMail(){
     if (d && d.conectado){
       if (card) card.style.display = '';
       if (info) info.textContent = 'Casilla: ' + (d.email || 'conectada');
-      // Se mantiene el último rango que usaste; solo si nunca elegiste uno arranca en hoy.
-      var hoy = new Date().toISOString().slice(0,10);
-      var guardado = rangoCabinaGuardado() || {};
-      var de = document.getElementById('cabDesde'), ha = document.getElementById('cabHasta');
-      if (de && !de.value) de.value = guardado.desde || hoy;
-      if (ha && !ha.value) ha.value = guardado.hasta || hoy;
     } else {
       if (card) card.style.display = 'none';
     }
