@@ -5967,10 +5967,6 @@ function accionCrearInforme(panelId){
       btn += '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
       // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
       if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
-      // Abrir las opciones a mano. Cuando hay un solo medico y un solo resultado el
-      // sistema no pregunta —y esta bien que no pregunte—, pero entonces no habia
-      // manera de elegir otro resultado ni de mandarlo SIN firma para firmarlo a mano.
-      btn += ' <button class="btn btn-ghost mc-opciones" type="button" title="Opciones" onclick="opcionesInformeFila(\'' + panelId + '\',' + idx + ',this)">⚙️</button>';
     } else {
       // Decir POR QUÉ no se puede, así el admin sabe qué falta configurar.
       var _m = modeloParaPracticaRow(x.practica);
@@ -6201,27 +6197,11 @@ async function crearYSubirInforme(panelId, idx, btn){
     await nsConfirm('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.', { titulo:'Sin médico para esta práctica', okLabel:'Entendido', cancelLabel:'' });
     return;
   }
-  var visita = faltantesDeVisita(panelId, x);
-  if (op.haceFalta || visita.length > 1){ modalOpcionesInforme(x, m, op, true, btn, visita); return; }
-  var payload = payloadInformeDeFila(x);
-  if (!payload) return;
-  delete payload._modelo;
-  payload.ome = x.ome; payload.practicaTexto = x.practica || '';
-  // Cuando hay una sola opcion de cada cosa no se pregunta nada, asi que este cartel es
-  // el UNICO lugar donde se ve quien firma y con que resultado. Sin eso se sube a PAMI
-  // un informe firmado por alguien sin haberlo visto nunca.
-  var med = (op.medicos || [])[0];
-  var preset = (op.presets || [])[0];
-  if (!await nsConfirm('', { titulo:'Crear y subir a PAMI',
-      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)
-        + '<br>Modelo: '+esc(m.practicaConCodigo || m.label || m.key)
-        + '<br>Firma: <b>'+esc((med && (med.nombre || med.label)) || 'sin firma')+'</b>'
-        + (med && med.matricula ? ' <span class="nom-muted">'+esc(med.matricula)+'</span>' : '')
-        + (med && !med.hasFirma ? ' <span style="color:#b45309">⚠ sin firma cargada</span>' : '')
-        + (preset ? '<br>Resultado: '+esc(preset.nombre || preset.label || preset.id) : '')
-        + '<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
-      okLabel:'Crear y subir' })) return;
-  ejecutarCrearYSubir(payload, x, btn);
+  // La ventana se abre SIEMPRE, aunque haya un solo medico y un solo resultado:
+  // cualquier informe tiene que poder salir sin firma para que lo firme el medico a
+  // mano, y esa opcion vive ahi adentro. Antes, en las practicas con un unico medico,
+  // no habia forma de elegirla.
+  modalOpcionesInforme(x, m, op, true, btn, faltantesDeVisita(panelId, x));
 }
 async function ejecutarCrearYSubir(payload, x, btn){
   var prev = btn ? btn.textContent : '';
@@ -6289,21 +6269,6 @@ function seguirSubidaInforme(taskId, btn){
     }
   }, 5000);
 }
-// Abre la ventana de opciones aunque no haga falta: elegir el resultado, el firmante o
-// mandarlo sin firma. Si la fila tiene OME, la ventana ofrece crear Y subir; si no,
-// solo crear (sin OME no hay a donde subirlo).
-async function opcionesInformeFila(panelId, idx, btn){
-  var x = faltanInformesDe(panelId)[idx];
-  if (!x) return;
-  var m = modeloParaPracticaRow(x.practica);
-  if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return; }
-  var op = opcionesModelo(m);
-  if (!op.medicos.length){ nsAlert('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.'); return; }
-  // El progreso ("En cola", "Subiendo…") se muestra en el boton de Crear y subir, no
-  // en el engranaje: si no, el engranaje se convierte en un cartel y se pierde.
-  var destino = (btn && btn.parentNode && btn.parentNode.querySelector('.mc-crear-subir')) || btn;
-  modalOpcionesInforme(x, m, op, !!x.ome, destino, faltantesDeVisita(panelId, x));
-}
 async function crearInformeDirecto(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
   if (!x) return;
@@ -6311,11 +6276,8 @@ async function crearInformeDirecto(panelId, idx, btn){
   if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return; }
   var op = opcionesModelo(m);
   if (!op.medicos.length){ nsAlert('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.'); return; }
-  if (op.haceFalta){ modalOpcionesInforme(x, m, op, false, btn); return; }
-  var payload = payloadInformeDeFila(x);
-  if (!payload) return;
-  delete payload._modelo;
-  ejecutarCrear(payload, x, btn);
+  // Igual que arriba: la ventana siempre, asi tambien se puede bajar el PDF sin firma.
+  modalOpcionesInforme(x, m, op, false, btn);
 }
 // Genera el PDF y lo descarga (sin subir).
 async function ejecutarCrear(payload, x, btn){
