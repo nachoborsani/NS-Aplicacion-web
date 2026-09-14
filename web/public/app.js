@@ -7923,6 +7923,7 @@ function openClientEditModal(){
   set('clientEditTipo', ACTIVE_CLIENT.tipo === 'med_cabecera' ? 'med_cabecera' : 'consultorio');
   var enAn = document.getElementById('clientEditEnAnalisis'); if (enAn) enAn.checked = !!ACTIVE_CLIENT.enAnalisis;
   var bCup = document.getElementById('clientEditBandejaCup'); if (bCup) bCup.checked = !!ACTIVE_CLIENT.bandejaCup;
+  var bDeb = document.getElementById('clientEditNoSubirDebito'); if (bDeb) bDeb.checked = !!ACTIVE_CLIENT.noSubirDebito100;
   set('clientEditSeccion', ACTIVE_CLIENT.seccion || 'consultorio');
   set('clientEditDireccion', ACTIVE_CLIENT.direccion);
   set('clientEditTelefono', ACTIVE_CLIENT.telefono);
@@ -7975,6 +7976,7 @@ async function saveClientEdit(){
     tipo: (document.getElementById('clientEditTipo') || {}).value || 'consultorio',
     enAnalisis: !!((document.getElementById('clientEditEnAnalisis') || {}).checked),
     bandejaCup: !!((document.getElementById('clientEditBandejaCup') || {}).checked),
+    noSubirDebito100: !!((document.getElementById('clientEditNoSubirDebito') || {}).checked),
     seccion: (document.getElementById('clientEditSeccion') || {}).value || 'consultorio',
     direccion: (document.getElementById('clientEditDireccion') || {}).value || '',
     telefono: (document.getElementById('clientEditTelefono') || {}).value || '',
@@ -12945,9 +12947,11 @@ function abrirInforme(id){
       + '<div class="cab-cand-title">Candidatos en la bandeja <span class="cab-sub" style="font-weight:400">— tildá varios si el informe cubre más de una práctica</span></div>'
       + '<div id="cabSelBar" class="cab-selbar" style="display:none"><button class="btn btn-primary btn-sm" onclick="usarSeleccionados()">Usar los <span id="cabSelN">0</span> tildados</button></div>'
       + '</div>'
+      + '<div id="cabPlan" class="cab-plan" style="display:none"></div>'
       + '<div id="cabDebitoAviso" class="cab-debito" style="display:none"></div>'
       + cabTarjetasCandidatos(cands, yaSel, it);
     actualizarSelOmes();
+    pedirPlanCabina();
   }
   cabRenderAcciones(it);
   cabActualizarPosicion();
@@ -13081,6 +13085,114 @@ function actualizarSelOmes(){
   bar.style.display = cks.length ? '' : 'none';
   var omes = []; cks.forEach(function(c){ omes.push(c.value); });
   mostrarAvisoDebito(omes);
+  // El plan depende de lo tildado: si el operador cambia la selección, se rehace.
+  clearTimeout(CAB_PLAN_T);
+  CAB_PLAN_T = setTimeout(pedirPlanCabina, 250);
+}
+var CAB_PLAN_T = null;
+// ===== Qué conviene subir =====
+// Avisar "esto se debita" no alcanza cuando el informe cubre varias prácticas que se
+// pisan: hay que decir CUÁL combinación deja más plata. El cálculo lo hace el server
+// (reglas de débito + valores del nomenclador); acá solo se muestra.
+// Lo que se tilda solo es únicamente lo que SACA: sumar una práctica la decide una
+// persona, que es la única que sabe si el informe la describe.
+var CAB_PLAN = null;
+function cabClienteActual(){
+  var slug = (document.getElementById('cabCliente') || {}).value || '';
+  return (CLIENTS || []).filter(function(c){ return c.slug === slug; })[0] || null;
+}
+async function pedirPlanCabina(){
+  CAB_PLAN = null;
+  var it = CAB_ITEM; if (!it) return;
+  var cands = (it.match && it.match.candidatos) || [];
+  if (cands.length < 2) return;
+  var tildadas = {};
+  document.querySelectorAll('.cab-cand-ck:checked').forEach(function(c){ tildadas[c.value] = 1; });
+  var items = cands.slice(0, 12).map(function(c){
+    return { ome: c.ome || '', practica: c.practica || '', turno: c.turno || '',
+             tildada: !!tildadas[c.ome], transmitida: !!c.transmitida };
+  });
+  try {
+    var r = await fetch('/api/debitos/plan', { method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ items: items }) });
+    if (!r.ok) return;
+    var d = await r.json();
+    CAB_PLAN = (d && d.plan) || null;
+  } catch(e){ return; }   // el plan es una ayuda: si falla, la pantalla sigue igual
+  pintarPlanCabina();
+}
+function cabTarjetaDe(ome){
+  var ck = document.querySelector('.cab-cand-ck[value="' + (ome || '').replace(/"/g, '') + '"]');
+  return ck ? ck.closest('.cab-cand') : null;
+}
+function pintarPlanCabina(){
+  var box = document.getElementById('cabPlan');
+  var plan = CAB_PLAN;
+  if (!box || !plan) return;
+  // Sin nomenclador cargado no hay plata que comparar y la sugerencia sería a ciegas.
+  // El cartel mira TODAS las que no se cobran, no solo las tildadas: si el centro
+  // tiene el destildado automatico, la lista de "descartar" queda vacia en la segunda
+  // vuelta y el operador se quedaba sin la explicacion de por que no va.
+  var noSeCobran = (plan.detalle || []).filter(function(d){
+    return d.debito === 'total' && !d.conviene && !d.transmitida;
+  });
+  var hayQueDecir = noSeCobran.length || plan.sumar.length;
+  document.querySelectorAll('.cab-cand').forEach(function(c){ c.classList.remove('cab-cand-no', 'cab-cand-si'); });
+  (plan.detalle || []).forEach(function(d){
+    var card = cabTarjetaDe(d.ome);
+    if (!card) return;
+    if (d.debito === 'total' && !d.conviene){
+      card.classList.add('cab-cand-no');
+      if (!card.querySelector('.cab-cand-nota')){
+        var nota = document.createElement('div');
+        nota.className = 'cab-cand-nota';
+        nota.innerHTML = '🚫 ' + esc(d.motivo)
+          + ' <button class="btn btn-ghost btn-sm" type="button" onclick="desestimarOmeDebito(\'' + esc(d.ome) + '\')">Desestimar</button>';
+        (card.querySelector('.cab-cand-main') || card).appendChild(nota);
+      }
+      // El centro que pidió no subir lo que no se cobra: se destilda solo.
+      var cli = cabClienteActual();
+      if (cli && cli.noSubirDebito100){
+        var ck = document.querySelector('.cab-cand-ck[value="' + d.ome.replace(/"/g, '') + '"]');
+        if (ck && ck.checked){ ck.checked = false; actualizarSelOmes(); }
+      }
+    } else if (d.conviene && !d.tildada && !d.transmitida && d.valor > 0){
+      card.classList.add('cab-cand-si');
+    }
+  });
+  if (!hayQueDecir){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  var partes = [];
+  if (plan.sumar.length) partes.push('<div class="cab-plan-item">➕ <b>Sumá</b> ' +
+    plan.sumar.map(function(d){ var $v = d.valor ? moneyFmt(d.valor) : ''; return esc(d.practica) + ($v ? ' (' + $v + ')' : ''); }).join(', ') +
+    ' <span class="nom-muted">si el informe la cubre.</span></div>');
+  if (noSeCobran.length) partes.push('<div class="cab-plan-item">🚫 <b>No subas</b> ' +
+    noSeCobran.map(function(d){ return esc(d.practica); }).join(', ') + ': no se cobra.</div>');
+  box.style.display = '';
+  var $tot = plan.hayPlata ? moneyFmt(plan.total) : '';
+  box.innerHTML = '<div class="cab-plan-head">Lo que más conviene acá' + ($tot ? ' — ' + $tot : '') + '</div>'
+    + partes.join('');
+}
+// Marcar una OME como "no se genera informe" desde la propia cabina, con el motivo
+// que da la regla. Es el mismo desestimar del tablero de faltantes.
+async function desestimarOmeDebito(ome){
+  var plan = CAB_PLAN;
+  var d = ((plan && plan.detalle) || []).filter(function(x){ return x.ome === ome; })[0] || {};
+  var slug = (document.getElementById('cabCliente') || {}).value || '';
+  var omeDig = String(ome || '').replace(/\D/g, '');
+  if (!slug || !omeDig) return;
+  if (!await nsConfirm(d.motivo || 'PAMI la debita entera.',
+      { titulo: 'No generar informe para esta OME', okLabel: 'Desestimar' })) return;
+  var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes/' + omeDig + '/desestimar',
+    { motivo: (d.motivo || 'Va a débito 100%').slice(0, 200) });
+  if (!r.ok){ nsAlert((r.data && r.data.error) || 'No se pudo desestimar.'); return; }
+  var ck = document.querySelector('.cab-cand-ck[value="' + String(ome).replace(/"/g, '') + '"]');
+  if (ck){ ck.checked = false; actualizarSelOmes(); }
+  var card = cabTarjetaDe(ome);
+  if (card){
+    card.classList.add('cab-cand-fuera');
+    var nota = card.querySelector('.cab-cand-nota');
+    if (nota) nota.innerHTML = '🚫 Desestimada: no se genera informe para esta OME.';
+  }
 }
 // ===== Débitos: avisar ANTES de subir =====
 // Dos prácticas del mismo afiliado el mismo día se pisan y PAMI debita una (la

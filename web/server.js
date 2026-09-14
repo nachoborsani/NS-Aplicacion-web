@@ -3194,6 +3194,10 @@ function normalizeClient(client, fallback) {
     logoW: Number(client.logoW || base.logoW || 0) || 0,
     direccion: String(client.direccion || base.direccion || "").trim(),
     telefono: String(client.telefono || base.telefono || "").trim(),
+    // El centro no quiere que se suba un informe a una OME que PAMI va a debitar
+    // entera (Baimed lo pide: es trabajo que no se cobra). Con esto prendido, la
+    // cabina destilda sola esas OMEs y ofrece desestimarlas.
+    noSubirDebito100: !!(client.noSubirDebito100 !== undefined ? client.noSubirDebito100 : base.noSubirDebito100),
   };
 }
 function loadClientsStore() {
@@ -3571,6 +3575,118 @@ function diaDeTurno(turno) {
   if (!d) return String(turno || "").slice(0, 10);
   const p2 = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+// Qué conviene subir de todas las OMEs que el mismo afiliado tiene ese día.
+// No alcanza con avisar "esto se debita": si el informe cubre tres prácticas y dos
+// se pisan, hay que decir CUÁL par deja más plata. Se prueban todas las
+// combinaciones (son pocas) y gana la que más paga; a igual plata, la que sube
+// menos OMEs — una práctica que paga 0 no se sube.
+function planDeSubida(items, periodoPedido) {
+  const reglas = loadDebitoReglas().filter((r) => r && r.activa);
+  const filas = (Array.isArray(items) ? items : []).slice(0, 12).map((it) => {
+    const practica = String((it && it.practica) || "").trim();
+    const m = practica.match(/(\d{4,6})/);
+    const fila = {
+      ome: cleanIdentifier(it && it.ome),
+      practica,
+      practiceCode: cleanIdentifier((it && it.codigo) || (m ? m[1] : "")),
+      practiceDescription: practica.replace(/^\s*\d{4,6}\s*[-–]?\s*/, "").trim(),
+      dia: diaDeTurno(it && it.turno),
+      tildada: !!(it && it.tildada),
+      transmitida: !!(it && it.transmitida),
+    };
+    fila.codigos = expandedPamiExclusionCodes(fila);
+    return fila;
+  }).filter((f) => f.practiceCode && f.ome);
+  if (filas.length < 2) return null;
+
+  // El día con más candidatos es el del informe: los de otros días no se cruzan.
+  const porDia = new Map();
+  for (const f of filas) porDia.set(f.dia, [...(porDia.get(f.dia) || []), f]);
+  let dia = "", grupo = [];
+  for (const [d, g] of porDia) if (g.length > grupo.length) { dia = d; grupo = g; }
+  if (grupo.length < 2) return null;
+
+  // Los valores salen del nomenclador del mes del turno; si no está cargado, se
+  // devuelve el plan igual pero sin plata (el orden de las reglas no cambia).
+  const periodo = String(periodoPedido || "").slice(0, 7) || String(dia || "").slice(0, 7);
+  const valores = nomencladorValorPorCodigo(periodo);
+  const valorDe = (f) => {
+    for (const c of f.codigos) if (valores.has(c)) return valores.get(c);
+    return 0;
+  };
+  const conValor = grupo.map((f) => ({ ...f, valor: valorDe(f) }));
+  const hayPlata = conValor.some((f) => f.valor > 0);
+
+  // Lo que PAMI paga por un subconjunto, aplicando las reglas de cruce.
+  const paga = (sub) => {
+    let total = sub.reduce((a, f) => a + f.valor, 0);
+    const motivos = new Map();
+    for (const regla of reglas) {
+      if (regla.tipo === "inclusion") {
+        const dc = cleanIdentifier(regla.debita);
+        const grandes = (regla.conCodigos || []).map((c) => cleanIdentifier(c));
+        const chicas = sub.filter((f) => f.codigos.includes(dc));
+        const conLaGrande = sub.filter((f) => f.codigos.some((c) => grandes.includes(c)));
+        for (const chica of chicas) {
+          const otra = conLaGrande.find((g) => g.ome !== chica.ome);
+          if (!otra) continue;
+          total -= chica.valor;
+          motivos.set(chica.ome, { tipo: "total", contra: otra.practica, regla,
+            texto: (regla.debitaNombre || chica.practica) + " no se cobra: el mismo día está " +
+                   (regla.conNombre || otra.practica) + ". PAMI la debita entera." });
+        }
+      } else {
+        const cods = (regla.codigos || []).map((c) => cleanIdentifier(c));
+        const enJuego = sub.filter((f) => f.codigos.some((c) => cods.includes(c)));
+        const distintos = new Set(enJuego.flatMap((f) => f.codigos.filter((c) => cods.includes(c))));
+        if (distintos.size < 2 || enJuego.length < 2) continue;
+        // PAMI paga una entera y la otra al 40%. Se descuenta sobre la más barata:
+        // es la que deja el total más alto, y el par se sube igual (40% > 0).
+        const barata = enJuego.slice().sort((a, b) => a.valor - b.valor)[0];
+        total -= barata.valor * 0.6;
+        motivos.set(barata.ome, { tipo: "pay40", contra: "", regla,
+          texto: (regla.codigosNombre || "Estos dos estudios") + " el mismo día: PAMI paga uno entero y el otro al 40%." });
+      }
+    }
+    return { total: money(total), motivos };
+  };
+
+  // Todas las combinaciones. Con 12 candidatos son 4.096 — nada.
+  let mejor = null;
+  for (let mask = 1; mask < (1 << conValor.length); mask++) {
+    const sub = conValor.filter((_, i) => mask & (1 << i));
+    const r = paga(sub);
+    const mejorQue = !mejor || r.total > mejor.total + 0.005 ||
+      (Math.abs(r.total - mejor.total) < 0.005 && sub.length < mejor.sub.length);
+    if (mejorQue) mejor = { total: r.total, sub, motivos: r.motivos };
+  }
+  // Por qué queda afuera cada una: el motivo sale de evaluarlas TODAS juntas.
+  const todos = paga(conValor).motivos;
+  const enMejor = new Set(mejor.sub.map((f) => f.ome));
+  const detalle = conValor.map((f) => ({
+    ome: f.ome,
+    practica: f.practica,
+    valor: f.valor,
+    tildada: f.tildada,
+    transmitida: f.transmitida,
+    conviene: enMejor.has(f.ome),
+    debito: todos.get(f.ome) ? todos.get(f.ome).tipo : "",
+    motivo: todos.get(f.ome) ? todos.get(f.ome).texto : "",
+  }));
+  return {
+    dia,
+    periodo,
+    hayPlata,
+    total: mejor.total,
+    sugeridas: mejor.sub.map((f) => f.ome),
+    // Las que el operador tildó pero no convienen: son las que hay que desestimar.
+    descartar: detalle.filter((d) => d.tildada && !d.conviene),
+    // Las que convienen y todavía no están tildadas ni transmitidas. NO se tildan
+    // solas: solo una persona sabe si el informe describe esa práctica.
+    sumar: detalle.filter((d) => !d.tildada && !d.transmitida && d.conviene && d.valor > 0),
+    detalle,
+  };
 }
 function chequearDebitoDeSubida(items) {
   const reglas = loadDebitoReglas().filter((r) => r && r.activa);
@@ -8258,6 +8374,7 @@ const server = http.createServer(async (req, res) => {
       // El logo (archivo) se sube aparte; acá solo se preserva lo que ya tenía.
       logo: clients[idx].logo,
       logoW: body.logoW !== undefined ? Number(body.logoW) || 0 : clients[idx].logoW,
+      noSubirDebito100: body.noSubirDebito100 !== undefined ? !!body.noSubirDebito100 : clients[idx].noSubirDebito100,
     });
     saveClientsStore(clients);
     return json(res, 200, { client: clients[idx], clients });
@@ -11925,6 +12042,14 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     const items = (body && Array.isArray(body.items)) ? body.items.slice(0, 40) : [];
     return json(res, 200, { avisos: chequearDebitoDeSubida(items) });
+  }
+  // Qué conviene subir de este informe (y qué desestimar porque no se cobra).
+  if (p === "/api/debitos/plan" && req.method === "POST") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    const body = await readBody(req);
+    const items = (body && Array.isArray(body.items)) ? body.items.slice(0, 12) : [];
+    return json(res, 200, { plan: planDeSubida(items, body && body.periodo) });
   }
   if (p === "/api/debito-reglas" && req.method === "PUT") {
     const me = getSessionUser(req);

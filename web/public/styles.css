@@ -2384,6 +2384,15 @@
   .cab-selbar .btn{padding:4px 12px;font-size:12.5px;font-weight:700;border-radius:8px}
   /* Aviso de debito en la cabina: lo que se esta por subir se pisa con otra practica
      del mismo dia y PAMI va a debitar una. No bloquea, avisa. */
+  .cab-plan{margin-top:10px;border:1px solid var(--turq,#0aa);background:rgba(10,170,170,.08);border-radius:10px;padding:9px 11px}
+  .cab-plan-head{font-weight:800;font-size:12.5px;color:var(--turq,#0aa);margin-bottom:5px}
+  .cab-plan-item{font-size:12px;line-height:1.45}
+  .cab-plan-item + .cab-plan-item{margin-top:4px}
+  /* La que no se cobra queda apagada; la que conviene sumar, resaltada. */
+  .cab-cand-no{opacity:.72;border-style:dashed}
+  .cab-cand-si{border-color:var(--turq,#0aa);box-shadow:inset 3px 0 0 var(--turq,#0aa)}
+  .cab-cand-fuera{opacity:.5}
+  .cab-cand-nota{font-size:11.5px;line-height:1.45;color:var(--text-2);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .cab-debito{margin-top:10px;border:1px solid #f0b429;background:rgba(240,180,41,.10);border-radius:10px;padding:9px 11px}
   .cab-debito-head{font-weight:800;font-size:12.5px;color:#a16207;margin-bottom:5px}
   .cab-debito-item{font-size:12px;line-height:1.45}
