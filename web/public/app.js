@@ -6226,27 +6226,48 @@ async function ejecutarCrearYSubir(payload, x, btn){
     if (btn){ btn.disabled = false; btn.textContent = prev; }
   }
 }
+// Vuelve a preguntar qué OMEs ya tienen informe hecho y redibuja la lista. Es lo que
+// deja la fila contando la verdad y no el último texto que le escribimos al botón.
+async function refrescarFaltantesGenerados(){
+  var slug = ACTIVE_CLIENT && ACTIVE_CLIENT.slug;
+  if (!slug) return;
+  var r = await api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas');
+  if (r && r.ok && r.data) ((r.data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
+  redibujarPanelFaltantesAbierto();
+}
 // Sigue el estado de la subida (la corre el worker de la app) y va actualizando
 // el botón: En cola → Subiendo… → Subido ✓ (o el motivo si falla). Polea cada 5s.
+// Cuando termina NO se queda con el botón parcheado: redibuja la fila entera, que es
+// lo único que sobrevive a que el panel se vuelva a dibujar por otro lado. Antes la
+// fila podía quedar en "⏳ En cola" para siempre aunque el worker ya la hubiera subido
+// —pasó con RODRIGUEZ en Caballito, subida OK a las 15:13 y el botón seguía en cola—.
 function seguirSubidaInforme(taskId, btn){
-  var intentos = 0;
+  var intentos = 0, perdidas = 0;
+  var vivo = function(){ return btn && btn.isConnected; };
   var timer = setInterval(async function(){
     intentos++;
-    if (intentos > 48){ clearInterval(timer); if (btn) btn.title = 'Sigue en proceso; revisá en Informes recibidos.'; return; }
+    // Cuatro minutos esperando: se deja de mirar, pero igual se redibuja con lo que
+    // haya, que es mejor que dejar un "en cola" eterno.
+    if (intentos > 48){ clearInterval(timer); refrescarFaltantesGenerados(); return; }
     var r = await api('/api/admin/worker/tasks');
-    if (!r.ok || !r.data) return;
+    // La lista de tareas es solo de admin y está recortada a las últimas: si no se
+    // puede leer, o la tarea ya no figura, no se espera para siempre.
+    if (!r.ok || !r.data){ if (++perdidas > 3){ clearInterval(timer); refrescarFaltantesGenerados(); } return; }
     var t = (r.data.tasks || []).find(function(x){ return x.id === taskId; });
-    if (!t) return;
-    if (t.status === 'pending'){ btn.textContent = '⏳ En cola'; return; }
-    if (t.status === 'running'){ btn.textContent = '⏳ Subiendo…'; return; }
+    if (!t){ if (++perdidas > 3){ clearInterval(timer); refrescarFaltantesGenerados(); } return; }
+    perdidas = 0;
+    if (t.status === 'pending'){ if (vivo()) btn.textContent = '⏳ En cola'; return; }
+    if (t.status === 'running'){ if (vivo()) btn.textContent = '⏳ Subiendo…'; return; }
     if (t.status === 'done' || t.status === 'error'){
       clearInterval(timer);
       var det = (t.result && t.result.detalle && t.result.detalle[0]) || null;
       var subido = t.result && Number(t.result.subidos) > 0;
       if (subido){
-        btn.textContent = '✅ Subido'; btn.disabled = true;
-        btn.title = 'Subido y transmitido a PAMI'; btn.style.color = '#16a34a';
-      } else {
+        // Quedó arriba: la fila se redibuja y muestra "✅ Generado" como cualquier otra.
+        refrescarFaltantesGenerados();
+      } else if (vivo()){
+        // No subió: el botón queda con el motivo y habilitado para reintentar. Acá NO
+        // se redibuja, que borraría el motivo de la pantalla.
         btn.textContent = '✗ No subió'; btn.disabled = false;
         btn.title = (det && det.motivo) || t.error || 'No se pudo subir'; btn.style.color = '#dc2626';
       }
