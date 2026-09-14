@@ -12871,10 +12871,9 @@ function abrirInforme(id){
   if (esPreview && !pdfAfuera){ frame.style.display=''; frame.src = urlArch; cajaTxt.style.display='none'; }
   else if (pdfAfuera){
     frame.style.display='none'; frame.removeAttribute('src');
-    cajaTxt.style.display=''; cajaTxt.className = 'cab-doc-texto cab-doc-abrir';
-    cajaTxt.innerHTML = '<div class="cab-doc-abrir-nm">📄 ' + esc(it.filename) + '</div>'
-      + '<a class="btn btn-primary" target="_blank" rel="noopener" href="' + esc(urlArch) + '">Abrir el informe</a>'
-      + '<div class="nom-muted">Tu navegador no muestra PDFs dentro de la página. Se abre aparte y con la flecha de atrás volvés acá.</div>';
+    cajaTxt.style.display=''; cajaTxt.className = 'cab-doc-texto cab-doc-pags';
+    cajaTxt.innerHTML = '<div class="cab-doc-cargando">Dibujando el informe…</div>';
+    mostrarPaginas(slug, id, it, cajaTxt, urlArch);
   }
   else {
     frame.style.display='none'; frame.removeAttribute('src');
@@ -13287,6 +13286,30 @@ async function usarSeleccionados(){
   if (!r.ok){ err.textContent = d.error || 'No se pudo confirmar.'; return; }
   cerrarCabinaModal();
   await refreshCabina();
+}
+// El informe dibujado pagina por pagina. Lo dibuja el server con mupdf (el mismo que
+// usa el OCR), asi que en el celular se ve igual que en la compu en vez de mandarte a
+// otra pestana. Si algo falla queda el boton de abrirlo aparte, que siempre anda.
+async function mostrarPaginas(slug, id, it, caja, urlArch){
+  var reqId = id;
+  var botonSuelto = '<div class="cab-doc-abrir">'
+    + '<div class="cab-doc-abrir-nm">📄 ' + esc(it.filename) + '</div>'
+    + '<a class="btn btn-primary" target="_blank" rel="noopener" href="' + esc(urlArch) + '">Abrir el informe</a></div>';
+  var n = 0;
+  try {
+    var r = await fetch('/api/clientes/'+slug+'/informes/'+id+'/paginas');
+    var d = await r.json();
+    n = (d && d.paginas) || 0;
+  } catch(e){ n = 0; }
+  if (!CAB_ITEM || CAB_ITEM.id !== reqId) return;   // cambió de informe mientras cargaba
+  if (!n){ caja.className = 'cab-doc-texto cab-doc-abrir'; caja.innerHTML = botonSuelto; return; }
+  var html = '';
+  for (var i = 0; i < Math.min(n, 20); i++){
+    html += '<img class="cab-pag" loading="lazy" alt="Página ' + (i+1) + ' de ' + n + '"'
+      + ' src="/api/clientes/'+slug+'/informes/'+id+'/pagina/'+i+'.jpg">';
+  }
+  caja.innerHTML = html
+    + '<a class="cab-doc-link" target="_blank" rel="noopener" href="' + esc(urlArch) + '">Abrir el PDF original</a>';
 }
 // Buscar en el padrón del cliente desde la propia ficha del informe: se escribe
 // apellido, DNI o beneficio y se elige. Usa el mismo camino que una sugerencia

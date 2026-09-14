@@ -2418,6 +2418,11 @@
   /* Cuando el PDF se abre aparte (Chrome de Android), la caja del archivo no tiene
      que seguir ocupando media pantalla: se achica al botón. */
   .cab-modal-file.cab-file-compacto{min-height:0}
+  .cab-doc-pags{display:flex;flex-direction:column;gap:10px;padding:10px;background:var(--surface-2);
+    min-height:0;height:auto;max-height:70vh;overflow:auto;white-space:normal}
+  .cab-pag{width:100%;display:block;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .cab-doc-cargando{padding:26px 0;text-align:center;color:var(--text-2);font-size:12.5px}
+  .cab-doc-link{display:block;text-align:center;font-size:12.5px;color:var(--turq);padding:4px 0 2px}
   .cab-doc-abrir{display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:11px;text-align:center;min-height:0;height:auto;white-space:normal;padding:22px 18px}
   .cab-doc-abrir .btn{text-decoration:none}

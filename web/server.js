@@ -515,6 +515,9 @@ function saveFaltantesDesest(o) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(faltantesDesestFile, JSON.stringify(o, null, 2));
 }
+// Paginas de PDF ya dibujadas (clave slug/id/pagina -> PNG). En memoria a proposito:
+// se rehacen solas despues de un deploy y no dejan archivos sueltos en el volumen.
+const paginasCache = new Map();
 function loadInformes() {
   try { const j = JSON.parse(fs.readFileSync(informesIndexFile, "utf8")); return (j && typeof j === "object") ? j : {}; }
   catch { return {}; }
@@ -11149,6 +11152,58 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Servir el archivo original de un informe (para verlo en la cabina).
+  // El PDF dibujado como imagen, pagina por pagina. Chrome de Android no muestra PDFs
+  // adentro de la pagina, asi que desde el celular el informe se veia en otra pestana o
+  // no se veia. Dibujarlo del lado del server lo deja igual que en la compu.
+  // Las paginas dibujadas quedan en memoria (son pocas y se piden de a una).
+  const informePags = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/paginas$/);
+  if (informePags && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id] = informePags;
+    const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const file = path.join(informesDir, slug, it.stored);
+    if (!fs.existsSync(file)) return json(res, 404, { error: "Archivo no encontrado." });
+    if (it.ext !== ".pdf") return json(res, 200, { paginas: 0 });
+    try {
+      const ocr = require("./ocr");
+      return json(res, 200, { paginas: await ocr.pdfCantPaginas(file) });
+    } catch (e) {
+      // Si mupdf no esta, no se rompe nada: el front vuelve al boton de abrirlo aparte.
+      return json(res, 200, { paginas: 0, error: String((e && e.message) || e).slice(0, 120) });
+    }
+  }
+  const informePag = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/pagina\/(\d+)\.jpg$/);
+  if (informePag && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un administrador." });
+    const [, slug, id, nPag] = informePag;
+    const idx = Math.min(Number(nPag) || 0, 60);
+    const it = ((loadInformes()[slug] || {}).items || []).find((x) => x.id === id);
+    if (!it) return json(res, 404, { error: "Informe no encontrado." });
+    const file = path.join(informesDir, slug, it.stored);
+    if (!fs.existsSync(file)) return json(res, 404, { error: "Archivo no encontrado." });
+    const clave = slug + "/" + id + "/" + idx;
+    let img = paginasCache.get(clave);
+    if (!img) {
+      try {
+        const ocr = require("./ocr");
+        img = await ocr.pdfPaginaImagen(file, idx);
+      } catch (e) {
+        return json(res, 500, { error: "No se pudo dibujar la página." });
+      }
+      if (!img) return json(res, 404, { error: "Esa página no existe." });
+      paginasCache.set(clave, img);
+      // 24 paginas alcanzan para el informe que se esta mirando y el anterior.
+      if (paginasCache.size > 24) paginasCache.delete(paginasCache.keys().next().value);
+    }
+    res.writeHead(200, { "content-type": "image/jpeg", "content-length": img.length, "cache-control": "no-store" });
+    return res.end(img);
+  }
+
   const informeArch = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/([a-f0-9]+)\/archivo$/);
   if (informeArch && req.method === "GET") {
     const me = getSessionUser(req);

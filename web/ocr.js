@@ -48,6 +48,35 @@ async function pdfAImagenes(filePath, { scale = 2.0, maxPag = 3 } = {}) {
   return out;
 }
 
+// Cuántas páginas tiene el PDF (para mostrarlo página por página en el celular).
+async function pdfCantPaginas(filePath) {
+  const m = await mupdf();
+  const doc = m.Document.openDocument(new Uint8Array(fs.readFileSync(filePath)), "application/pdf");
+  const n = doc.countPages();
+  if (doc.destroy) doc.destroy();
+  return n;
+}
+
+// UNA página del PDF como JPEG. Es lo mismo que hace pdfAImagenes para el OCR, pero de
+// a una: el celular pide la que está mirando y no espera a que se dibujen todas.
+// JPEG y no PNG porque esto viaja al teléfono: una página escaneada pesa 92 KB en JPEG
+// y 500 KB en PNG, y se ve igual.
+async function pdfPaginaImagen(filePath, indice, { scale = 1.6, calidad = 78 } = {}) {
+  const m = await mupdf();
+  const doc = m.Document.openDocument(new Uint8Array(fs.readFileSync(filePath)), "application/pdf");
+  try {
+    if (indice < 0 || indice >= doc.countPages()) return null;
+    const page = doc.loadPage(indice);
+    const pix = page.toPixmap(m.Matrix.scale(scale, scale), m.ColorSpace.DeviceRGB, false, true);
+    const img = Buffer.from(pix.asJPEG(calidad, false));
+    if (pix.destroy) pix.destroy();
+    if (page.destroy) page.destroy();
+    return img;
+  } finally {
+    if (doc.destroy) doc.destroy();
+  }
+}
+
 async function ocrBuffer(pngBuffer) {
   const w = await worker();
   const { data } = await w.recognize(pngBuffer);
@@ -67,4 +96,4 @@ async function cerrar() {
   if (_worker) { await _worker.terminate(); _worker = null; }
 }
 
-module.exports = { ocrArchivo, pdfAImagenes, ocrBuffer, cerrar };
+module.exports = { ocrArchivo, pdfAImagenes, pdfCantPaginas, pdfPaginaImagen, ocrBuffer, cerrar };
