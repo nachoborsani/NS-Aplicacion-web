@@ -2314,7 +2314,11 @@
      quedaba cortado: decia "archivo u OM" y la E de OME no entraba. */
   .cab-buscador{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-2);flex:1 1 280px;max-width:460px;min-width:0}
   .cab-buscador input{border:none;background:transparent;padding:2px 0;font-size:12.5px;min-width:250px;width:100%;color:var(--text)}
-  .cab-buscador input:focus{outline:none}
+  /* El campo de adentro no lleva el anillo de color de los .inp: no tiene borde
+     propio, asi que el anillo quedaba flotando encima de la caja y se veia como un
+     globo. La marca de foco va en la caja, que es lo que se ve como un solo control. */
+  .cab-buscador input:focus{outline:none;box-shadow:none;border-color:transparent}
+  .cab-buscador:focus-within{border-color:var(--turq)}
   .cab-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:750;padding:3px 9px;border-radius:999px;white-space:nowrap}
   /* Estado de la tarea (subiendo/auditando): chip notable, texto en llano. */
   .cab-estado{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;padding:6px 14px;border-radius:999px;white-space:nowrap}
