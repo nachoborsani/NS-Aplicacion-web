@@ -128,7 +128,7 @@
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
       ["consultorios", "🚪", "Consultorios", "config"], ["obrasSociales", "🩹", "Obras Sociales", "config"],
-      ["online", "🌐", "Turnos online", "config"], ["usuarios", "👥", "Usuarios", "usuarios"]]],
+      ["online", "🌐", "Turnos online", "config"], ["usuarios", "👥", "Usuarios", "usuarios"], ["registro", "📜", "Registro", "usuarios"]]],
   ];
   function labPuede(permiso) { return !permiso || (LAB.permisos || []).indexOf(permiso) >= 0; }
   // El menu del sistema va en la barra azul de NS, al lado de "Inicio". Antes vivia
@@ -229,6 +229,7 @@
     else if (mod === "inicio") viewInicio(c);
     else if (mod === "sala") viewSala(c);
     else if (mod === "online") viewOnline(c);
+    else if (mod === "registro") viewRegistro(c);
     else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
@@ -1238,6 +1239,46 @@
       navigator.clipboard.writeText(link).then(function () { toast("Link copiado ✓"); },
         function () { toast("Copialo a mano.", true); });
     };
+  }
+
+  /* ============================ REGISTRO ================================ */
+  // Quien hizo que y cuando. Se anotan las cosas que alguien puede preguntar despues
+  // ("quien borro este turno?"), no cada clic: un registro que anota todo no lo lee
+  // nadie.
+  async function viewRegistro(c) {
+    if (!LAB.regFiltro) LAB.regFiltro = { usuario: "", q: "" };
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var qs = "?usuario=" + encodeURIComponent(LAB.regFiltro.usuario) + "&q=" + encodeURIComponent(LAB.regFiltro.q);
+    var r = await api("/api/lab/registro" + qs);
+    if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+    var items = r.data.items || [];
+    function cuando(iso) {
+      var d = new Date(iso);
+      if (isNaN(d)) return iso || "";
+      return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" +
+        d.getFullYear() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+    c.innerHTML = '<div class="lab-card">' +
+      '<div class="lab-list-head"><h3>Registro del sistema</h3>' +
+        '<div class="lab-inline">' +
+          '<select class="lab-in" id="reg-user"><option value="">Todos</option>' +
+          (r.data.usuarios || []).map(function (u) {
+            return '<option value="' + esc(u) + '"' + (u === LAB.regFiltro.usuario ? " selected" : "") + ">" + esc(u) + "</option>";
+          }).join("") + "</select>" +
+          '<input class="lab-in" id="reg-q" placeholder="Buscar…" value="' + esc(LAB.regFiltro.q) + '">' +
+        "</div></div>" +
+      '<div class="lab-muted" style="margin-bottom:10px">Últimos ' + items.length + " movimiento(s) de " + (r.data.total || 0) + " guardados.</div>" +
+      (items.length
+        ? '<table class="lab-table"><thead><tr><th style="width:140px">Cuándo</th><th style="width:110px">Quién</th><th style="width:170px">Qué</th><th>Detalle</th></tr></thead><tbody>' +
+          items.map(function (x) {
+            return "<tr><td>" + esc(cuando(x.at)) + "</td><td>" + esc(x.usuario || "") + "</td>" +
+              "<td><b>" + esc(x.accion || "") + '</b></td><td class="lab-muted">' + esc(x.detalle || "") + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="lab-muted" style="padding:14px">No hay movimientos con ese filtro.</div>') +
+      "</div>";
+    c.querySelector("#reg-user").onchange = function () { LAB.regFiltro.usuario = this.value; viewRegistro(c); };
+    var q = c.querySelector("#reg-q");
+    q.onkeydown = function (ev) { if (ev.key === "Enter") { LAB.regFiltro.q = q.value.trim(); viewRegistro(c); } };
   }
 
   /* ============================ USUARIOS ================================ */

@@ -83,6 +83,7 @@ function emptyStore() {
     practicas: [],
     bloqueos: [],
     movimientos: [],
+    registro: [],
     config: {},
     evoluciones: [],
     estudios: [],
@@ -159,6 +160,7 @@ const LAB_RECURSO_PERMISO = {
   bloqueos: "agenda",
   reprogramar: "agenda",
   liquidacion: "liquidacion",
+  registro: "usuarios",
   inicio: "agenda",
   movimientos: "caja",
   sala: "sala",
@@ -246,6 +248,20 @@ function sanitizeGenerico(campos, body, previo) {
 // --- Profesionales ----------------------------------------------------------
 // horarios: bloques de atención por día de semana (0=Dom..6=Sáb). De cada bloque
 // se generan los turnos: desde/hasta + duración en minutos.
+// Registro del sistema: queda anotado quien toco que. Se guardan las cosas que
+// alguien puede preguntar despues ("quien borro este turno?"), no cada clic: un
+// registro que anota todo no lo lee nadie.
+const REGISTRO_TOPE = 3000;
+function anotar(store, me, accion, detalle) {
+  if (!store.registro) store.registro = [];
+  store.registro.push({
+    id: uid(), at: nowIso(), usuario: (me && me.username) || "sistema",
+    accion, detalle: String(detalle || "").slice(0, 200),
+  });
+  // Se queda con los ultimos: es para mirar lo reciente, no un archivo historico.
+  if (store.registro.length > REGISTRO_TOPE) store.registro = store.registro.slice(-REGISTRO_TOPE);
+}
+
 function sanitizeProfesional(body, previo) {
   const p = Object.assign({}, previo || {});
   p.nombre = body.nombre !== undefined ? clean(body.nombre) : (p.nombre || "");
@@ -893,6 +909,26 @@ async function handleLab(ctx) {
     return json(res, 200, { periodo, profesional: prof.nombre, contrato: prof.contrato || null, items: suyos }), true;
   }
 
+  // -- Registro del sistema --
+  if (recurso === "registro" && method === "GET") {
+    const desde = clean(url.searchParams.get("desde"));
+    const hasta = clean(url.searchParams.get("hasta"));
+    const usuario = clean(url.searchParams.get("usuario")).toLowerCase();
+    const q = clean(url.searchParams.get("q")).toLowerCase();
+    const items = (store.registro || [])
+      .filter((x) => {
+        const dia = String(x.at || "").slice(0, 10);
+        if (desde && dia < desde) return false;
+        if (hasta && dia > hasta) return false;
+        if (usuario && String(x.usuario || "").toLowerCase() !== usuario) return false;
+        if (q && (String(x.accion) + " " + String(x.detalle)).toLowerCase().indexOf(q) < 0) return false;
+        return true;
+      })
+      .slice(-500).reverse();
+    const usuarios = [...new Set((store.registro || []).map((x) => x.usuario))].sort();
+    return json(res, 200, { items, usuarios, total: (store.registro || []).length }), true;
+  }
+
   // -- Transferir agenda: los turnos de uno pasan a otro --
   // Cubre el caso de siempre: el profesional no viene y otro lo reemplaza. Los
   // pacientes conservan SU horario, que es lo que ya tienen anotado.
@@ -925,7 +961,10 @@ async function handleLab(ctx) {
       t.avisadoEl = ""; t.avisadoPor = "";
       movidos.push(t.id);
     });
-    if (movidos.length) saveStore(dataDir, centro, store);
+    if (movidos.length) {
+      anotar(store, me, "Agenda transferida", `${movidos.length} turno(s) de ${de.nombre} a ${a.nombre} (${desde} al ${hasta})`);
+      saveStore(dataDir, centro, store);
+    }
     return json(res, 200, {
       movidos: movidos.length, chocaron,
       // Si el que recibe no atiende esos dias, los turnos quedan igual pero fuera de
@@ -987,6 +1026,7 @@ async function handleLab(ctx) {
       x.fecha === fecha && x.hora === hora && x.estado !== "cancelado");
     if (ocupado) return json(res, 409, { error: "Ya hay un turno en ese horario." }), true;
     // De donde venia, para poder decirselo al paciente y para saber que se movio.
+    anotar(store, me, "Turno movido", `${t.pacienteNombre || ""} · de ${t.fecha} ${t.hora} a ${fecha} ${hora}`);
     t.reprogramadoDe = { fecha: t.fecha, hora: t.hora, profesionalId: t.profesionalId, el: nowIso(), por: me.username };
     t.fecha = fecha; t.hora = hora; t.profesionalId = profId;
     t.estado = "dado";
@@ -1032,6 +1072,7 @@ async function handleLab(ctx) {
       const chocan = (store.turnos || []).filter((t) => t.estado !== "cancelado" &&
         t.fecha >= desde && t.fecha <= hasta && (!b.profesionalId || t.profesionalId === b.profesionalId));
       chocan.forEach((t) => { t.aReprogramar = true; t.motivoReprogramar = b.motivo || "El profesional no atiende ese día"; });
+      anotar(store, me, "Agenda anulada", `${b.profesionalId ? (store.profesionales.find((x) => x.id === b.profesionalId) || {}).nombre : "todo el centro"} · ${desde} al ${hasta}${b.motivo ? " · " + b.motivo : ""}`);
       saveStore(dataDir, centro, store);
       return json(res, 200, { item: b, turnosEnElRango: chocan.length }), true;
     }
@@ -1113,6 +1154,9 @@ async function handleLab(ctx) {
       // basura que despues confunda al leer el usuario.
       if (!permisos.length) delete u.lab;
       else u.lab = { rol: rol || "personalizado", permisos, profesionalId: clean(body.profesionalId) };
+      anotar(store, me, "Permisos cambiados",
+        `${u.name || u.username}: ${permisos.length ? permisos.join(", ") : "sin acceso"}`);
+      saveStore(dataDir, centro, store);
       ctx.saveUsers(users);
       return json(res, 200, { ok: true, username: u.username, rol: (u.lab && u.lab.rol) || "", permisos: (u.lab && u.lab.permisos) || [] }), true;
     }
@@ -1255,10 +1299,17 @@ async function handleLab(ctx) {
     if (method === "POST") {
       if (existente) return json(res, 409, { error: "La caja de ese día ya está cerrada." }), true;
       const cierre = { id: uid(), fecha, totales: calcular(), cerradoPor: me.username, cerradoEl: nowIso() };
-      cierres.unshift(cierre); saveStore(dataDir, centro, store);
+      cierres.unshift(cierre);
+      anotar(store, me, "Caja cerrada", `${fecha} · ${cierre.totales.cobrado}`);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { cierre }), true;
     }
-    if (method === "DELETE") { store.cierres = cierres.filter((c) => c.fecha !== fecha); saveStore(dataDir, centro, store); return json(res, 200, { ok: true }), true; }
+    if (method === "DELETE") {
+      anotar(store, me, "Caja reabierta", fecha);
+      store.cierres = cierres.filter((c) => c.fecha !== fecha);
+      saveStore(dataDir, centro, store);
+      return json(res, 200, { ok: true }), true;
+    }
   }
 
   // -- Profesionales --
@@ -1430,6 +1481,7 @@ async function handleLab(ctx) {
     // Los estudios (con su archivo) van con la historia clinica: si no, el informe
     // queda colgado de una ficha que dejo de existir.
     (store.estudios || []).forEach((x) => { if (set.has(x.pacienteId)) { x.pacienteId = mantener; estMov++; } });
+    anotar(store, me, "Pacientes unificados", `${fusionar.length} ficha(s) fusionada(s)`);
     store.pacientes = (store.pacientes || []).filter((p) => !set.has(p.id));
     saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true, fusionados: fusionar.length, turnosMovidos: turnosMov, evolucionesMovidas: evolMov, estudios: estMov }), true;
@@ -1471,6 +1523,8 @@ async function handleLab(ctx) {
     }
     if (method === "DELETE" && idPath) {
       const turnosFuturos = (store.turnos || []).filter((t) => t.pacienteId === idPath && t.estado !== "cancelado" && t.fecha >= nowIso().slice(0, 10)).length;
+      const borrado = lista.find((x) => x.id === idPath);
+      anotar(store, me, "Paciente eliminado", borrado ? `${borrado.apellido || ""} ${borrado.nombre || ""} ${borrado.documento || ""}`.trim() : idPath);
       store.pacientes = lista.filter((x) => x.id !== idPath);
       // La historia clínica del paciente se va con él; los turnos conservan el nombre.
       store.evoluciones = (store.evoluciones || []).filter((e) => e.pacienteId !== idPath);
@@ -1521,7 +1575,9 @@ async function handleLab(ctx) {
       const ocupado = lista.find((x) => x.profesionalId === t.profesionalId && x.fecha === t.fecha && x.hora === t.hora && x.estado !== "cancelado");
       if (ocupado && !body.permitirSobreturno) return json(res, 409, { error: "Ya hay un turno en ese horario." }), true;
       t.id = uid(); t.creadoEl = nowIso(); t.creadoPor = me.username;
-      lista.push(t); saveStore(dataDir, centro, store);
+      lista.push(t);
+      anotar(store, me, "Turno dado", `${t.pacienteNombre || "sin nombre"} · ${t.fecha} ${t.hora}`);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item: t }), true;
     }
     if (method === "PUT" && idPath) {
@@ -1533,7 +1589,13 @@ async function handleLab(ctx) {
       return json(res, 200, { item: lista[idx] }), true;
     }
     if (method === "DELETE" && idPath) {
-      store.turnos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store);
+      // Se anota ANTES de sacarlo (despues ya no hay de donde leer el nombre) y antes
+      // de guardar, o la anotacion no llega al archivo.
+      const cancelado = lista.find((x) => x.id === idPath);
+      anotar(store, me, "Turno cancelado",
+        cancelado ? `${cancelado.pacienteNombre || "sin nombre"} · ${cancelado.fecha} ${cancelado.hora}` : idPath);
+      store.turnos = lista.filter((x) => x.id !== idPath);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true }), true;
     }
   }
