@@ -7426,12 +7426,15 @@ function medCabEstadoMes(d){
   return 'vacio';
 }
 // Este tablero lo usan DOS clases de cliente: el médico de cabecera de verdad
-// (tipo = med_cabecera) y un consultorio de pago fijo con bandeja del CUP
-// (bandejaCup, ej. Caballito). Los textos no pueden decir "médico de cabecera"
-// en el segundo caso - es un consultorio.
+// (tipo = med_cabecera), que es capitado y no tiene nada que valorizar, y un
+// consultorio al que se le eligió este tablero para trabajar la bandeja del CUP
+// (bandejaCup, ej. Caballito). Los textos no pueden decir "médico de cabecera" en
+// el segundo caso —es un consultorio— ni dar a entender que no se valoriza: ese
+// consultorio factura por práctica como todos, lo que no tiene importes es ESTE
+// tablero.
 function medCabEsMedicoDeCabecera(){ return !!(ACTIVE_CLIENT && ACTIVE_CLIENT.tipo === 'med_cabecera'); }
 function medCabTituloTablero(){ return medCabEsMedicoDeCabecera() ? 'Dashboard médico de cabecera' : 'Dashboard por bandeja del CUP'; }
-function medCabNotaCard(){ return medCabEsMedicoDeCabecera() ? 'Médico de cabecera · sin valorización por práctica' : 'Consultorio de pago fijo · sin valorización por práctica'; }
+function medCabNotaCard(){ return medCabEsMedicoDeCabecera() ? 'Médico de cabecera · sin valorización por práctica' : 'Tablero de bandeja · sin importes'; }
 // Un renglón clickeable de la tarjeta: abre la lista de PACIENTES de ese mes y
 // esa categoría (sin valores: la bandeja del CUP no los tiene).
 function medCabLinea(d, tono, label, valor, tipo){
@@ -7561,7 +7564,7 @@ async function loadClientMesCurso(){
   // "bandejaCup": mismo tablero que un médico de cabecera (sin valorizar por
   // práctica), pero en un cliente que sigue siendo Consultorio en todo lo
   // demás (informes, OMEs, reportes, honorarios) — ver normalizeClient en
-  // server.js. Caballito Pediátrico es el primer caso: pago fijo, sin
+  // server.js. Caballito Pediátrico es el primer caso: se trabaja la bandeja, sin
   // valorización, pero NO debe "entrar" a médico de cabecera.
   //
   // Ese tablero es para EL QUE TRABAJA las bandejas: validar / informar /
@@ -7572,7 +7575,7 @@ async function loadClientMesCurso(){
   // no hay nada que valorizar.
   //
   // EXCEPCIÓN, el operador de NS (Javi): ve el MISMO formato en todos sus
-  // centros. Un consultorio de pago fijo (bandejaCup, ej. Caballito) le salía
+  // centros. Un consultorio con el tablero de bandeja (bandejaCup, ej. Caballito) le salía
   // con el tablero de bandejas mientras el resto de sus consultorios le salían
   // con el dashboard de siempre, así que tenía que leer dos pantallas distintas
   // para lo mismo. Ahora le sale el dashboard de siempre también acá (con las

@@ -3179,13 +3179,14 @@ function normalizeClient(client, fallback) {
   // nadie de lugar el día que se desplegó esto.
   const seccionGuardada = String(client.seccion !== undefined ? client.seccion : base.seccion || "").trim();
   const seccion = CLIENT_SECCIONES.has(seccionGuardada) ? seccionGuardada : (enAnalisis ? "potencial" : tipo);
-  // Dashboard con bandeja CUP sin valorizar (el mismo tablero de "Faltan
-  // validar / Faltan informe / Transmitidas / Total en bandeja") en un cliente
-  // que sigue siendo tipo "consultorio" en todo lo demás (informes, OMEs,
-  // reportes, honorarios, Facturación) - para consultorios de pago fijo que no
-  // valorizan por práctica (ej. Caballito Pediátrico), sin que "entren" a
-  // médico de cabecera. Un cliente tipo "med_cabecera" ya usa este tablero
-  // solo, no necesita el flag.
+  // Qué tablero ve el "Dashboard mes en curso": el de bandeja ("Faltan validar /
+  // Faltan informe / Transmitidas / Total en bandeja") en vez del de importes, en un
+  // cliente que sigue siendo tipo "consultorio" en TODO lo demás (informes, OMEs,
+  // reportes, honorarios, Facturación). Es solo la vista: el cliente factura y se
+  // valoriza por práctica igual que los demás - Caballito Pediátrico, que es el caso,
+  // tiene su facturación, sus débitos y sus prestaciones valorizadas como cualquiera.
+  // Sirve cuando lo que se trabaja ahí es la bandeja y los importes al lado no aportan.
+  // Un cliente tipo "med_cabecera" ya usa este tablero solo, no necesita el flag.
   const bandejaCup = !!(client.bandejaCup !== undefined ? client.bandejaCup : base.bandejaCup);
   return {
     slug: String(client.slug || base.slug || "").trim(),
@@ -12723,8 +12724,9 @@ function ensureHolterSeed() {
 }
 ensureHolterSeed();
 
-// Caballito Pediátrico: cliente tipo "consultorio" con dashboard de bandeja
-// CUP (pago fijo, sin valorización) — ver normalizeClient/bandejaCup. Se
+// Caballito Pediátrico: cliente tipo "consultorio" al que se le puso el tablero de
+// bandeja del CUP (es solo la vista; factura y se valoriza por práctica como todos)
+// — ver normalizeClient/bandejaCup. Se
 // fuerza acá en vez de depender de que alguien lo edite a mano desde la web
 // (el botón de editar cliente es solo para admin, y en producción costó
 // encontrarlo). Idempotente: solo guarda si hace falta cambiar algo.
