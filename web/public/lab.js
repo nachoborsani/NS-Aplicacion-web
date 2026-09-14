@@ -847,7 +847,28 @@
       "</div>" +
       tabla("Por obra social", d.porObraSocial || [], "Obra social") +
       tabla("Por profesional", d.porProfesional || [], "Profesional") +
-      tabla("Prácticas más hechas", d.porPractica || [], "Práctica");
+      tabla("Prácticas más hechas", d.porPractica || [], "Práctica") +
+      // Rendimiento: cuanto se aprovecha la agenda que se ofrece. Sin horarios
+      // cargados NO es cero: es que no se puede calcular, y decir cero seria mentir.
+      ((d.rendimiento || []).length
+        ? '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">Rendimiento por especialidad</div>' +
+          '<table class="lab-table"><thead><tr><th>Especialidad</th><th class="num">Pacientes</th><th class="num">Turnos</th><th class="num">Hs. de agenda</th><th class="num">Turnos/hora</th></tr></thead><tbody>' +
+          d.rendimiento.map(function (g) {
+            return "<tr><td>" + esc(g.nombre) + '</td><td class="num">' + g.pacientes + '</td><td class="num">' + g.turnos +
+              '</td><td class="num">' + g.horas + '</td><td class="num">' +
+              (g.turnosHora === null ? '<span class="lab-muted" title="No hay horarios cargados">—</span>' : g.turnosHora) + "</td></tr>";
+          }).join("") + "</tbody></table>" +
+          '<div class="lab-muted" style="font-size:11.5px;margin-top:6px">Horas ofrecidas según los horarios de cada profesional, hasta el ' +
+          esc(String(d.agendaHasta || "").split("-").reverse().join("/")) + ". Los días anulados no cuentan como horas ofrecidas.</div></div>"
+        : "") +
+      ((d.cancelaciones || []).length
+        ? '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">Agenda anulada</div>' +
+          '<table class="lab-table"><thead><tr><th>Profesional</th><th class="num">Días</th><th class="num">Hs. perdidas</th><th>Motivo</th></tr></thead><tbody>' +
+          d.cancelaciones.map(function (g) {
+            return "<tr><td>" + esc(g.nombre) + '</td><td class="num">' + g.dias + '</td><td class="num">' + g.horas +
+              '</td><td class="lab-muted">' + esc(g.motivo || "") + "</td></tr>";
+          }).join("") + "</tbody></table></div>"
+        : "");
     var ip = c.querySelector("#ini-periodo");
     if (ip) ip.onchange = function () { LAB.inicioPeriodo = this.value; viewInicio(c); };
     var ir = c.querySelector("#ini-rec");

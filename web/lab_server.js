@@ -271,6 +271,28 @@ function sanitizePaciente(body, previo) {
 // horarios, y superpone los turnos ya dados. Devuelve la grilla de la agenda.
 // Vacaciones, congresos, feriados. Un bloqueo sin profesional es de todo el centro
 // (un feriado); con profesional, es la ausencia de ese.
+// Horas que un profesional tiene OFRECIDAS un dia (segun sus horarios). Es la base
+// de dos cuentas: cuanto rinde la agenda y cuanto se pierde al anular un dia.
+function horasDelDia(prof, fecha) {
+  const dow = new Date(fecha + "T00:00:00").getDay();
+  return (prof.horarios || []).filter((h) => h.dow === dow).reduce((a, h) => {
+    const [hd, md] = String(h.desde || "0:0").split(":").map((x) => parseInt(x, 10) || 0);
+    const [hh, mh] = String(h.hasta || "0:0").split(":").map((x) => parseInt(x, 10) || 0);
+    return a + Math.max(0, (hh * 60 + mh) - (hd * 60 + md)) / 60;
+  }, 0);
+}
+// Los dias de un rango que caen adentro del periodo pedido.
+function diasEnRango(desde, hasta, desdeTope, hastaTope) {
+  const out = [];
+  let d = new Date((desde < desdeTope ? desdeTope : desde) + "T12:00:00");
+  const fin = new Date((hasta > hastaTope ? hastaTope : hasta) + "T12:00:00");
+  let guard = 0;
+  while (d <= fin && guard++ < 400) {
+    out.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
 function bloqueoDe(store, profId, fecha) {
   return (store.bloqueos || []).find((b) =>
     (!b.profesionalId || b.profesionalId === profId) && fecha >= b.desde && fecha <= b.hasta) || null;
@@ -548,6 +570,63 @@ async function handleLab(ctx) {
     };
     const nombreProf = (id) => ((store.profesionales || []).find((x) => x.id === id) || {}).nombre || "—";
 
+    // --- Cancelaciones de agenda: dias anulados y horas que se perdieron ---
+    const desdeTope = periodo + "-01";
+    const finMes = new Date(Number(periodo.slice(0, 4)), Number(periodo.slice(5, 7)), 0);
+    const ultimoDelMes = periodo + "-" + String(finMes.getDate()).padStart(2, "0");
+    // En el mes en curso se cuenta hasta hoy: sumar la agenda que todavia no paso
+    // ensucia el rendimiento y la comparacion entre meses.
+    const hastaTope = ultimoDelMes > hoy ? hoy : ultimoDelMes;
+    const cancel = {};
+    (store.bloqueos || []).forEach((b) => {
+      const dias = diasEnRango(b.desde, b.hasta, desdeTope, ultimoDelMes);
+      if (!dias.length) return;
+      // Un bloqueo sin profesional es de todo el centro: se le imputa a cada uno.
+      const afectados = b.profesionalId
+        ? (store.profesionales || []).filter((x) => x.id === b.profesionalId)
+        : (store.profesionales || []);
+      afectados.forEach((prof) => {
+        const g = cancel[prof.id] || (cancel[prof.id] = { nombre: prof.nombre, dias: 0, horas: 0, motivos: [] });
+        dias.forEach((f) => { const hs = horasDelDia(prof, f); if (hs) { g.dias++; g.horas += hs; } });
+        if (b.motivo && g.motivos.indexOf(b.motivo) < 0) g.motivos.push(b.motivo);
+      });
+    });
+    const cancelaciones = Object.values(cancel)
+      .filter((g) => g.dias)
+      .map((g) => ({ nombre: g.nombre, dias: g.dias, horas: Math.round(g.horas * 10) / 10, motivo: g.motivos.join(" · ") }))
+      .sort((a, b) => b.horas - a.horas);
+
+    // --- Rendimiento por especialidad: pacientes, horas ofrecidas y turnos por hora ---
+    const rend = {};
+    (store.profesionales || []).forEach((prof) => {
+      const esp = (store.especialidades || []).find((e2) => e2.id === prof.especialidadId);
+      const k = (esp && esp.nombre) || "Sin especialidad";
+      const g = rend[k] || (rend[k] = { nombre: k, turnos: 0, pacientes: new Set(), horas: 0 });
+      diasEnRango(desdeTope, hastaTope, desdeTope, hastaTope).forEach((f) => {
+        // Un dia anulado no ofrecio horas: si se cuentan, el rendimiento del que se
+        // tomo vacaciones se desploma sin que haya hecho nada mal.
+        if (bloqueoDe(store, prof.id, f)) return;
+        g.horas += horasDelDia(prof, f);
+      });
+    });
+    delMes.forEach((t) => {
+      const prof = (store.profesionales || []).find((x) => x.id === t.profesionalId);
+      const esp = prof && (store.especialidades || []).find((e2) => e2.id === prof.especialidadId);
+      const k = (esp && esp.nombre) || "Sin especialidad";
+      const g = rend[k] || (rend[k] = { nombre: k, turnos: 0, pacientes: new Set(), horas: 0 });
+      g.turnos++;
+      if (t.estado === "atendido") g.pacientes.add(t.pacienteId || ("s:" + t.pacienteNombre));
+    });
+    const rendimiento = Object.values(rend)
+      .filter((g) => g.turnos || g.horas)
+      .map((g) => ({
+        nombre: g.nombre, turnos: g.turnos, pacientes: g.pacientes.size,
+        horas: Math.round(g.horas * 10) / 10,
+        // Sin agenda cargada no es cero: es que no se puede calcular.
+        turnosHora: g.horas ? Math.round((g.turnos / g.horas) * 100) / 100 : null,
+      }))
+      .sort((a, b) => b.turnos - a.turnos);
+
     // Lo de hoy: es lo unico accionable de la pantalla, por eso va primero.
     const deHoy = (store.turnos || []).filter((t) => t.fecha === hoy && t.estado !== "cancelado");
     const manana = new Date(hoy + "T12:00:00");
@@ -575,6 +654,11 @@ async function handleLab(ctx) {
       porObraSocial: agrupar(delMes, (t) => t.obraSocial),
       porProfesional: agrupar(delMes, (t) => nombreProf(t.profesionalId)),
       porPractica: agrupar(delMes.filter((t) => t.practicaNombre), (t) => t.practicaNombre).slice(0, 10),
+      cancelaciones,
+      rendimiento,
+      // Hasta que dia se conto la agenda: en el mes en curso no tiene sentido sumar
+      // las horas que todavia no pasaron, darian un rendimiento falso para abajo.
+      agendaHasta: hastaTope,
     }), true;
   }
 
