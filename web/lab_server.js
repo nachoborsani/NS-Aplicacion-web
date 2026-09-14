@@ -156,6 +156,7 @@ const LAB_PLANTILLAS = {
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
   bloqueos: "agenda",
+  reprogramar: "agenda",
   inicio: "agenda",
   movimientos: "caja",
   sala: "sala",
@@ -827,6 +828,77 @@ async function handleLab(ctx) {
     }), true;
   }
 
+  // -- Reprogramar: la cola de los que quedaron sin turno --
+  // Ojo con el orden: esta ruta tiene que pedir que NO venga nada despues, o se
+  // come /reprogramar/libres y la pantalla se queda sin horarios que ofrecer.
+  if (recurso === "reprogramar" && !idPath && method === "GET") {
+    const items = (store.turnos || [])
+      .filter((t) => t.aReprogramar && t.estado !== "cancelado")
+      .sort((a, b) => String(a.fecha + a.hora).localeCompare(String(b.fecha + b.hora)))
+      .map((t) => {
+        const prof = (store.profesionales || []).find((x) => x.id === t.profesionalId) || {};
+        const tel = soloDigitos(t.celular);
+        return {
+          id: t.id, fecha: t.fecha, hora: t.hora, paciente: t.pacienteNombre, celular: t.celular,
+          profesionalId: t.profesionalId, profesional: prof.nombre || "",
+          especialidadId: t.especialidadId || prof.especialidadId || "",
+          practicaNombre: t.practicaNombre || "", motivo: t.motivoReprogramar || "",
+          whatsapp: tel ? "https://wa.me/" + (tel.startsWith("54") ? tel : "54" + tel.replace(/^0+/, "")) : "",
+        };
+      });
+    return json(res, 200, { items }), true;
+  }
+  // Horarios libres para ofrecerle al paciente, de aca a `dias` dias.
+  if (recurso === "reprogramar" && idPath === "libres" && method === "GET") {
+    const profId = clean(url.searchParams.get("profesionalId"));
+    const prof = (store.profesionales || []).find((x) => x.id === profId);
+    if (!prof) return json(res, 404, { error: "Ese profesional ya no está en el sistema." }), true;
+    const hoy = nowIso().slice(0, 10);
+    const dias = Math.min(60, Math.max(1, parseInt(url.searchParams.get("dias"), 10) || 21));
+    const out = [];
+    for (let i = 1; i <= dias && out.length < 12; i++) {
+      const f = sumarDias(hoy, i);
+      if (bloqueoDe(store, prof.id, f)) continue;
+      const delDia = (store.turnos || []).filter((t) => t.profesionalId === prof.id && t.fecha === f && t.estado !== "cancelado");
+      const libres = generarSlots(prof, f, delDia).filter((sl) => !sl.turno).map((sl) => sl.hora);
+      if (libres.length) out.push({ fecha: f, horarios: libres.slice(0, 14) });
+    }
+    return json(res, 200, { dias: out }), true;
+  }
+  // Mover un turno. Vale para cualquiera, no solo los de la cola: cambiar un turno de
+  // dia es de lo que mas se hace en un mostrador.
+  if (recurso === "turnos" && seg[2] === "mover" && method === "POST") {
+    const t = (store.turnos || []).find((x) => x.id === idPath);
+    if (!t) return json(res, 404, { error: "Ese turno ya no está." }), true;
+    const body = await readBody(req);
+    const fecha = clean(body.fecha), hora = clean(body.hora);
+    const profId = clean(body.profesionalId) || t.profesionalId;
+    const prof = (store.profesionales || []).find((x) => x.id === profId);
+    if (!prof) return json(res, 404, { error: "Ese profesional ya no está en el sistema." }), true;
+    if (!fecha || !hora) return json(res, 400, { error: "Elegí el día y el horario nuevos." }), true;
+    if (bloqueoDe(store, prof.id, fecha)) return json(res, 409, { error: "Ese día tampoco se atiende." }), true;
+    const ocupado = (store.turnos || []).find((x) => x.id !== t.id && x.profesionalId === profId &&
+      x.fecha === fecha && x.hora === hora && x.estado !== "cancelado");
+    if (ocupado) return json(res, 409, { error: "Ya hay un turno en ese horario." }), true;
+    // De donde venia, para poder decirselo al paciente y para saber que se movio.
+    t.reprogramadoDe = { fecha: t.fecha, hora: t.hora, profesionalId: t.profesionalId, el: nowIso(), por: me.username };
+    t.fecha = fecha; t.hora = hora; t.profesionalId = profId;
+    t.estado = "dado";
+    // Se movio el turno: el aviso que se le habia mandado ya no sirve.
+    t.avisadoEl = ""; t.avisadoPor = "";
+    delete t.aReprogramar; delete t.motivoReprogramar;
+    saveStore(dataDir, centro, store);
+    return json(res, 200, { item: t }), true;
+  }
+  // Sacarlo de la cola sin moverlo (se lo llamo y no puede, o se cancela).
+  if (recurso === "turnos" && seg[2] === "sin-reprogramar" && method === "POST") {
+    const t = (store.turnos || []).find((x) => x.id === idPath);
+    if (!t) return json(res, 404, { error: "Ese turno ya no está." }), true;
+    delete t.aReprogramar; delete t.motivoReprogramar;
+    saveStore(dataDir, centro, store);
+    return json(res, 200, { ok: true }), true;
+  }
+
   // -- Ausencias y feriados --
   if (recurso === "bloqueos") {
     const lista = store.bloqueos || (store.bloqueos = []);
@@ -847,12 +919,15 @@ async function handleLab(ctx) {
         id: uid(), profesionalId: clean(body.profesionalId), desde, hasta,
         motivo: clean(body.motivo), creadoEl: nowIso(), creadoPor: me.username,
       };
-      lista.push(b); saveStore(dataDir, centro, store);
-      // Los turnos que YA estaban dados en ese rango no se tocan solos: se avisa
-      // cuantos son para que alguien los reprograme o los cancele a mano.
+      lista.push(b);
+      // Los turnos que YA estaban dados no se cancelan solos —eso lo decide una
+      // persona— pero quedan marcados para reprogramar, que es una cola de trabajo:
+      // si no, dependen de que alguien se acuerde.
       const chocan = (store.turnos || []).filter((t) => t.estado !== "cancelado" &&
-        t.fecha >= desde && t.fecha <= hasta && (!b.profesionalId || t.profesionalId === b.profesionalId)).length;
-      return json(res, 200, { item: b, turnosEnElRango: chocan }), true;
+        t.fecha >= desde && t.fecha <= hasta && (!b.profesionalId || t.profesionalId === b.profesionalId));
+      chocan.forEach((t) => { t.aReprogramar = true; t.motivoReprogramar = b.motivo || "El profesional no atiende ese día"; });
+      saveStore(dataDir, centro, store);
+      return json(res, 200, { item: b, turnosEnElRango: chocan.length }), true;
     }
     if (method === "DELETE" && idPath) {
       store.bloqueos = lista.filter((x) => x.id !== idPath);

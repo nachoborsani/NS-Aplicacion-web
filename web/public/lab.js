@@ -123,7 +123,7 @@
   // El cuarto dato de cada modulo es el permiso que pide: el menu se arma con lo que
   // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
-    ["Atención", [["inicio", "📈", "Inicio", "agenda"], ["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
+    ["Atención", [["inicio", "📈", "Inicio", "agenda"], ["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["reprogramar", "🔁", "Reprogramar", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
     ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
@@ -227,6 +227,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "reprogramar") viewReprogramar(c);
     else if (mod === "recordatorios") viewRecordatorios(c);
     else if (mod === "inicio") viewInicio(c);
     else if (mod === "sala") viewSala(c);
@@ -712,6 +713,76 @@
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
     };
+  }
+
+  /* ========================== REPROGRAMAR =============================== */
+  // Los turnos que quedaron adentro de un dia anulado. Antes se avisaba "hay 3 turnos
+  // dados" y ahi terminaba: alguien tenia que acordarse de llamarlos. Esto es la cola
+  // de trabajo, con el horario nuevo a un clic y el mensaje para avisarle al paciente.
+  async function viewReprogramar(c) {
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var r = await api("/api/lab/reprogramar");
+    if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+    var items = (r.data && r.data.items) || [];
+    if (!items.length) {
+      c.innerHTML = '<div class="lab-card"><div class="lab-list-head"><h3>Reprogramar</h3></div>' +
+        '<div class="lab-muted">No hay turnos para reprogramar. Acá van a aparecer los que queden adentro de un día que se anuló.</div></div>';
+      return;
+    }
+    c.innerHTML = '<div class="lab-card">' +
+      '<div class="lab-list-head"><h3>Reprogramar</h3><div class="lab-muted">' + items.length + " turno(s) sin fecha nueva</div></div>" +
+      '<div class="lab-muted" style="margin-bottom:12px">Quedaron adentro de un día que se anuló. Buscales horario, avisales, y salen de esta lista.</div>' +
+      items.map(function (t) {
+        return '<div class="lab-repro" data-id="' + esc(t.id) + '">' +
+          '<div class="lab-repro-cab"><div><b>' + esc(t.paciente || "—") + "</b>" +
+            '<div class="lab-muted">' + esc(String(t.fecha || "").split("-").reverse().join("/")) + " " + esc(t.hora) +
+            " · " + esc(t.profesional || "") + (t.practicaNombre ? " · " + esc(t.practicaNombre) : "") +
+            (t.celular ? " · " + esc(t.celular) : " · <i>sin celular</i>") + "</div>" +
+            (t.motivo ? '<div class="lab-muted">Motivo: ' + esc(t.motivo) + "</div>" : "") + "</div>" +
+            '<div><button class="lab-btn xs" data-buscar="1" type="button">Buscar horario</button> ' +
+            '<button class="lab-btn xs ghost" data-sacar="1" type="button" title="Ya lo arreglaste por otro lado">Sacar de la lista</button></div>' +
+          "</div><div class=\"lab-repro-libres\"></div></div>";
+      }).join("") + "</div>";
+
+    c.querySelectorAll(".lab-repro").forEach(function (caja) {
+      var id = caja.getAttribute("data-id");
+      var t = items.filter(function (x) { return x.id === id; })[0];
+      caja.querySelector("[data-sacar]").onclick = async function () {
+        if (!confirm("¿Sacarlo de la lista sin moverlo?")) return;
+        var rr = await api("/api/lab/turnos/" + id + "/sin-reprogramar", {});
+        if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo.", true); return; }
+        toast("Listo ✓"); viewReprogramar(c);
+      };
+      caja.querySelector("[data-buscar]").onclick = async function () {
+        var box = caja.querySelector(".lab-repro-libres");
+        box.innerHTML = '<div class="lab-muted">Buscando horarios…</div>';
+        var rr = await api("/api/lab/reprogramar/libres?profesionalId=" + encodeURIComponent(t.profesionalId));
+        var dias = (rr.data && rr.data.dias) || [];
+        if (!dias.length) { box.innerHTML = '<div class="lab-muted">No quedan horarios libres en los próximos días. Probá con otro profesional desde la agenda.</div>'; return; }
+        box.innerHTML = dias.map(function (d) {
+          return '<div class="lab-repro-dia"><span class="lab-repro-fecha">' + esc(d.fecha.split("-").reverse().join("/")) + "</span>" +
+            d.horarios.map(function (h) {
+              return '<button class="lab-btn xs" type="button" data-f="' + esc(d.fecha) + '" data-h="' + esc(h) + '">' + esc(h) + "</button>";
+            }).join(" ") + "</div>";
+        }).join("");
+        box.querySelectorAll("[data-f]").forEach(function (b) {
+          b.onclick = async function () {
+            var mover = await api("/api/lab/turnos/" + id + "/mover", { fecha: b.dataset.f, hora: b.dataset.h });
+            if (!mover.ok) { toast((mover.data && mover.data.error) || "No se pudo mover.", true); return; }
+            var nueva = b.dataset.f.split("-").reverse().join("/") + " a las " + b.dataset.h;
+            toast("Turno movido al " + nueva + " ✓");
+            // El mensaje para avisarle: el turno se movio porque lo movimos nosotros,
+            // asi que el aviso no es optativo.
+            if (t.whatsapp) {
+              var texto = "Hola " + String(t.paciente || "").split(",")[0].trim() + ", tuvimos que cambiar su turno con " +
+                (t.profesional || "el profesional") + ". Queda para el " + nueva + ". Si no le sirve, avisenos. Disculpe las molestias.";
+              window.open(t.whatsapp + "?text=" + encodeURIComponent(texto), "_blank", "noopener");
+            }
+            viewReprogramar(c);
+          };
+        });
+      };
+    });
   }
 
   /* ========================= RECORDATORIOS ============================== */
@@ -2043,6 +2114,11 @@
       ".lab-link code{font-size:13px;word-break:break-all;flex:1;min-width:200px}",
       ".lab-online-tag{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.15);color:#0369a1;border-radius:6px;padding:2px 8px}",
       ".lab-prep{background:rgba(234,179,8,.14);border:1px solid rgba(234,179,8,.45);border-radius:9px;padding:7px 11px;margin:8px 0;font-size:13px;color:var(--text)}",
+      ".lab-repro{border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:8px}",
+      ".lab-repro-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}",
+      ".lab-repro-libres:not(:empty){margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}",
+      ".lab-repro-dia{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px}",
+      ".lab-repro-fecha{font-size:12px;font-weight:700;color:var(--text-2);min-width:78px}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
