@@ -3595,7 +3595,29 @@ function diaDeTurno(turno) {
 // se pisan, hay que decir CUÁL par deja más plata. Se prueban todas las
 // combinaciones (son pocas) y gana la que más paga; a igual plata, la que sube
 // menos OMEs — una práctica que paga 0 no se sube.
-function planDeSubida(items, periodoPedido) {
+// Las OMEs que ya tienen SU informe: o porque alguien lo resolvio contra ellas, o
+// porque el matcher se las asigno a otro archivo de la bandeja. Sugerir sumarlas a este
+// informe seria pisarle la OME al otro. Devuelve ome -> nombre del archivo que la tiene.
+function omesDeOtrosInformes(slug, informeId) {
+  const fuera = new Map();
+  if (!slug) return fuera;
+  const items = (loadInformes()[slug] || {}).items || [];
+  for (const it of items) {
+    if (!it || it.id === informeId) continue;
+    if (it.desestimado) continue;   // desestimado no reclama nada
+    const r = it.resuelto || {};
+    const m = it.match || {};
+    const omes = []
+      .concat(r.omes || (r.ome ? [r.ome] : []))
+      .concat(m.omes || (m.ome ? [m.ome] : []));
+    for (const o of omes) {
+      const d = String(o || "").replace(/\D+/g, "");
+      if (d && !fuera.has(d)) fuera.set(d, it.filename || "otro informe");
+    }
+  }
+  return fuera;
+}
+function planDeSubida(items, periodoPedido, ctx) {
   const reglas = loadDebitoReglas().filter((r) => r && r.activa);
   const filas = (Array.isArray(items) ? items : []).slice(0, 12).map((it) => {
     const practica = String((it && it.practica) || "").trim();
@@ -3678,6 +3700,7 @@ function planDeSubida(items, periodoPedido) {
   // Por qué queda afuera cada una: el motivo sale de evaluarlas TODAS juntas.
   const todos = paga(conValor).motivos;
   const enMejor = new Set(mejor.sub.map((f) => f.ome));
+  const deOtros = omesDeOtrosInformes((ctx && ctx.slug) || "", (ctx && ctx.informeId) || "");
   const detalle = conValor.map((f) => ({
     ome: f.ome,
     practica: f.practica,
@@ -3687,6 +3710,9 @@ function planDeSubida(items, periodoPedido) {
     conviene: enMejor.has(f.ome),
     debito: todos.get(f.ome) ? todos.get(f.ome).tipo : "",
     motivo: todos.get(f.ome) ? todos.get(f.ome).texto : "",
+    // El archivo que ya la tiene, si hay otro. No se sugiere sumarla: su informe
+    // esta esperando al lado en la misma bandeja.
+    laTieneOtro: deOtros.get(String(f.ome).replace(/\D+/g, "")) || "",
   }));
   return {
     dia,
@@ -3698,7 +3724,7 @@ function planDeSubida(items, periodoPedido) {
     descartar: detalle.filter((d) => d.tildada && !d.conviene),
     // Las que convienen y todavía no están tildadas ni transmitidas. NO se tildan
     // solas: solo una persona sabe si el informe describe esa práctica.
-    sumar: detalle.filter((d) => !d.tildada && !d.transmitida && d.conviene && d.valor > 0),
+    sumar: detalle.filter((d) => !d.tildada && !d.transmitida && d.conviene && d.valor > 0 && !d.laTieneOtro),
     detalle,
   };
 }
@@ -12157,7 +12183,8 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     const body = await readBody(req);
     const items = (body && Array.isArray(body.items)) ? body.items.slice(0, 12) : [];
-    return json(res, 200, { plan: planDeSubida(items, body && body.periodo) });
+    const ctx = { slug: String((body && body.slug) || "").slice(0, 60), informeId: String((body && body.informeId) || "").slice(0, 40) };
+    return json(res, 200, { plan: planDeSubida(items, body && body.periodo, ctx) });
   }
   if (p === "/api/debito-reglas" && req.method === "PUT") {
     const me = getSessionUser(req);

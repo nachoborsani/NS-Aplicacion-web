@@ -13149,7 +13149,7 @@ async function pedirPlanCabina(){
   });
   try {
     var r = await fetch('/api/debitos/plan', { method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({ items: items }) });
+      body: JSON.stringify({ items: items, slug: (document.getElementById('cabCliente') || {}).value || '', informeId: it.id }) });
     if (!r.ok) return;
     var d = await r.json();
     CAB_PLAN = (d && d.plan) || null;
@@ -13190,6 +13190,15 @@ function pintarPlanCabina(){
       if (cli && cli.noSubirDebito100){
         var ck = document.querySelector('.cab-cand-ck[value="' + d.ome.replace(/"/g, '') + '"]');
         if (ck && ck.checked){ ck.checked = false; actualizarSelOmes(); }
+      }
+    } else if (d.laTieneOtro && !d.tildada && !d.transmitida){
+      // Esa OME ya tiene su propio informe esperando en la bandeja: sumarla acá le
+      // pisaría la OME al otro archivo y encima quedaría uno sin OME.
+      if (!card.querySelector('.cab-cand-nota')){
+        var n2 = document.createElement('div');
+        n2.className = 'cab-cand-nota';
+        n2.innerHTML = '📄 Ya tiene su propio informe: <b>' + esc(d.laTieneOtro) + '</b>';
+        (card.querySelector('.cab-cand-main') || card).appendChild(n2);
       }
     } else if (d.conviene && !d.tildada && !d.transmitida && d.valor > 0){
       card.classList.add('cab-cand-si');
