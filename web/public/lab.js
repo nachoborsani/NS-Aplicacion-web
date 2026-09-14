@@ -13,7 +13,7 @@
     booted: false,
     modulo: "agenda",
     cat: { especialidades: [], profesionales: [], consultorios: [], obrasSociales: [], practicas: [] },
-    rol: "", permisos: [], profesionalId: "",
+    rol: "", permisos: [], profesionalId: "", centro: "", centros: [],
     ag: { especialidadId: "", profesionalId: "", fecha: "" },
   };
   var DOW = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -67,12 +67,20 @@
   function labClose() { var s = document.getElementById("lab-scrim"); if (s) s.remove(); }
   window.labClose = labClose;
 
-  async function api(path, body) { return window.api(path, body); }
-  async function req(method, path, body) { return window.req(method, path, body); }
+  // Todo lo que se pide lleva de que centro es. Va en un solo lugar a proposito: si
+  // cada llamada tuviera que acordarse, la primera que se olvide lee los datos de otro
+  // centro y nadie se entera hasta que aparece un paciente que no es.
+  function conCentro(path) {
+    if (!LAB.centro) return path;
+    return path + (path.indexOf("?") >= 0 ? "&" : "?") + "centro=" + encodeURIComponent(LAB.centro);
+  }
+  async function api(path, body) { return window.api(conCentro(path), body); }
+  async function req(method, path, body) { return window.req(method, conCentro(path), body); }
 
   // ---- init + shell --------------------------------------------------------
   window.labInit = async function () {
     injectCss();
+    if (!LAB.centro) { try { LAB.centro = localStorage.getItem("ns-lab-centro") || ""; } catch (err) {} }
     var root = document.getElementById("view-lab");
     if (!root) return;
     if (!LAB.booted) {
@@ -109,6 +117,23 @@
     var nav = document.querySelector(".sidebar .nav");
     if (!nav) return;
     nav.querySelectorAll(".lab-only").forEach(function (x) { x.remove(); });
+    // Cambiar de centro: solo lo ve quien maneja mas de uno (nosotros). El usuario
+    // del centro no elige: entra al suyo.
+    if ((LAB.centros || []).length > 1) {
+      var wrap = e("div", { class: "lab-only lab-centro-sel" });
+      var sel = e("select", { class: "lab-in" });
+      sel.innerHTML = LAB.centros.map(function (c) {
+        return '<option value="' + esc(c.slug) + '"' + (c.slug === LAB.centro ? " selected" : "") + ">" + esc(c.name) + "</option>";
+      }).join("");
+      sel.onchange = function () {
+        LAB.centro = sel.value;
+        LAB.booted = false;   // otro centro es otra base: se recarga todo
+        try { localStorage.setItem("ns-lab-centro", LAB.centro); } catch (err) {}
+        window.labInit();
+      };
+      wrap.appendChild(sel);
+      nav.appendChild(wrap);
+    }
     // "Inicio" del sistema de turnos: lleva a la primera pantalla que el usuario
     // pueda ver, no a NS. Para volver a NS esta el lapiz de la barra de arriba.
     var inicio = e("a", { class: "lab-only lab-navlink", "data-mod": "__inicio" },
@@ -161,6 +186,8 @@
       LAB.permisos = r.data.permisos || [];
       LAB.profesionalId = r.data.profesionalId || "";
       LAB.config = r.data.config || {};
+      LAB.centro = r.data.centro || LAB.centro || "";
+      LAB.centros = r.data.centros || [];
       // El sistema se presenta con el nombre del centro. "Laboratorio" es como
       // lo llamamos nosotros de este lado; el centro no tiene por que verlo.
       var tit = document.getElementById("pageTitle");
@@ -450,7 +477,7 @@
     if (!r.ok) return { ok: false, error: (r.data && r.data.error) || "No se pudo guardar." };
     if (file) {
       var fd = new FormData(); fd.append("file", file);
-      var sube = await fetch("/api/lab/estudios/" + r.data.item.id + "/archivo", { method: "POST", body: fd });
+      var sube = await fetch(conCentro("/api/lab/estudios/" + r.data.item.id + "/archivo"), { method: "POST", body: fd });
       if (!sube.ok) {
         var d = await sube.json().catch(function () { return {}; });
         return { ok: true, item: r.data.item, aviso: d.error || "El estudio se guardó, pero el archivo no subió." };
@@ -544,7 +571,7 @@
       var mios = ((r.data && r.data.items) || []).filter(function (x) { return x.turnoId === t.id; });
       box.innerHTML = (mios.length ? mios.map(function (x) {
         return '<div class="lab-hc-item es"><div class="lab-hc-meta"><span class="lab-hc-tipo">' + esc(x.tipo) + "</span> " + esc(x.tipoNombre || "") + "</div>" +
-          (x.archivo ? '<div class="lab-hc-archline"><a class="lab-hc-arch" href="/api/lab/estudios/' + x.id + '/archivo" target="_blank" rel="noopener">\ud83d\udcce ' + esc(x.archivo.nombre) + "</a></div>" : "") + "</div>";
+          (x.archivo ? '<div class="lab-hc-archline"><a class="lab-hc-arch" href="' + conCentro("/api/lab/estudios/" + x.id + "/archivo") + '" target="_blank" rel="noopener">\ud83d\udcce ' + esc(x.archivo.nombre) + "</a></div>" : "") + "</div>";
       }).join("") : '<div class="lab-muted">Sin estudios cargados en este turno.</div>')
         + '<div style="margin-top:8px"><button class="lab-btn" id="tn-estudio-new" type="button">+ Cargar estudio</button></div>';
       var b = box.querySelector("#tn-estudio-new");
@@ -1314,7 +1341,7 @@
             '<div class="lab-hc-txt">' + esc(x.texto).replace(/\n/g, "<br>") + "</div></div>";
         }
         var arch = x.archivo
-          ? '<a class="lab-hc-arch" href="/api/lab/estudios/' + x.id + '/archivo" target="_blank" rel="noopener">📎 ' + esc(x.archivo.nombre) + ' <span class="lab-muted">' + pesoKb(x.archivo.tamano) + "</span></a>"
+          ? '<a class="lab-hc-arch" href="' + conCentro("/api/lab/estudios/" + x.id + "/archivo") + '" target="_blank" rel="noopener">📎 ' + esc(x.archivo.nombre) + ' <span class="lab-muted">' + pesoKb(x.archivo.tamano) + "</span></a>"
           : '<span class="lab-muted">sin archivo adjunto</span>';
         return '<div class="lab-hc-item es"><div class="lab-hc-meta"><span class="lab-hc-tipo">' + esc(x.tipo) + "</span> <b>" + esc(fechaAr(x.fecha)) + "</b>" +
           " · " + esc(x.tipoNombre || "") + (x.profesionalId ? " · " + esc(nombreProf(x.profesionalId)) : "") +
@@ -1678,6 +1705,8 @@
       ".lab-rec-msg{font-size:12px;color:var(--text-2);max-width:420px}",
       ".lab-rec-hecho{opacity:.55}",
       ".lab-rec-ok{color:#15803d;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}",
+      ".lab-centro-sel{padding:8px 4px 4px}",
+      ".lab-centro-sel .lab-in{width:100%;font-size:12.5px}",
       ".lab-navlink{cursor:pointer}",
       ".lab-navlink .lab-tab-ic{width:18px;display:inline-flex;justify-content:center;font-size:14px;flex:0 0 auto}",
       ".lab-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}",

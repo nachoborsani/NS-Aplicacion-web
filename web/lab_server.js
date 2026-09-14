@@ -18,10 +18,35 @@ const soloDigitos = (v) => clean(v).replace(/\D/g, "");
 const money = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
 const normNombre = (v) => clean(v).toLowerCase().normalize("NFD").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
-function storeFile(dataDir) { return path.join(dataDir, "lab_gestion.json"); }
+// UN ALMACEN POR CENTRO. Cada centro tiene su archivo: sus pacientes, su agenda y su
+// caja no se cruzan con los de otro. Separarlo ahora costo una ruta distinta; hacerlo
+// con tres centros cargados habria sido una migracion.
+const CENTRO_RE = /^[a-z0-9-]{2,40}$/;
+function storeFile(dataDir, centro) { return path.join(dataDir, "lab_" + centro + ".json"); }
 // Los archivos de los estudios NO van adentro del JSON: se guardan al lado, uno por
 // archivo, con el id del estudio como nombre. Un PDF de ecografia pesa 10 MB.
-function estudiosDir(dataDir) { return path.join(dataDir, "lab_estudios"); }
+function estudiosDir(dataDir, centro) { return path.join(dataDir, "lab_estudios", centro); }
+// Lo que ya estaba cargado (un solo almacen) pasa a ser el centro "demo": es data de
+// prueba y meterla adentro de un centro real seria ensuciarlo.
+function migrarAlMulticentro(dataDir) {
+  try {
+    const viejo = path.join(dataDir, "lab_gestion.json");
+    const nuevo = storeFile(dataDir, "demo");
+    if (!fs.existsSync(viejo) || fs.existsSync(nuevo)) return;
+    fs.copyFileSync(viejo, nuevo);
+    fs.renameSync(viejo, viejo + ".migrado");
+    const estViejo = path.join(dataDir, "lab_estudios");
+    const estNuevo = estudiosDir(dataDir, "demo");
+    if (fs.existsSync(estViejo) && !fs.existsSync(estNuevo)) {
+      fs.mkdirSync(estNuevo, { recursive: true });
+      fs.readdirSync(estViejo).forEach((f) => {
+        const de = path.join(estViejo, f);
+        try { if (fs.statSync(de).isFile()) fs.renameSync(de, path.join(estNuevo, f)); } catch { /* carpeta */ }
+      });
+    }
+    console.log("[lab] el almacen unico paso a ser el centro demo");
+  } catch (e) { console.log("[lab] migracion omitida:", e && e.message); }
+}
 
 // Tipos de estudio. Sale del mapa de Global App, que es el que usan los centros de
 // verdad: la ficha de la historia clinica dice QUE es antes de abrir el archivo.
@@ -46,8 +71,7 @@ const EXT_OK = { "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": "
 
 // Cache en memoria con invalidación por mtime (igual patrón que los otros stores
 // de NS): el archivo puede ser grande y se lee en cada request.
-let _cache = null;
-let _cacheMtime = -1;
+const _cache = new Map();   // centro -> { store, mtime }
 function emptyStore() {
   return {
     especialidades: [],
@@ -80,25 +104,26 @@ function seedStore() {
     s.consultorios.push({ id: uid(), nombre, activo: true }));
   return s;
 }
-function loadStore(dataDir) {
+function loadStore(dataDir, centro) {
   try {
-    const mtime = fs.statSync(storeFile(dataDir)).mtimeMs;
-    if (_cache && mtime === _cacheMtime) return _cache;
-    const parsed = JSON.parse(fs.readFileSync(storeFile(dataDir), "utf8"));
-    _cache = Object.assign(emptyStore(), parsed);
-    _cacheMtime = mtime;
-    return _cache;
+    const mtime = fs.statSync(storeFile(dataDir, centro)).mtimeMs;
+    const hit = _cache.get(centro);
+    if (hit && hit.mtime === mtime) return hit.store;
+    const parsed = JSON.parse(fs.readFileSync(storeFile(dataDir, centro), "utf8"));
+    const store = Object.assign(emptyStore(), parsed);
+    _cache.set(centro, { store, mtime });
+    return store;
   } catch {
-    // No existe todavía: sembramos y guardamos.
+    // Centro nuevo: arranca con los catálogos de siempre, no en blanco.
     const s = seedStore();
-    try { saveStore(dataDir, s); } catch { /* ro fs */ }
+    try { saveStore(dataDir, centro, s); } catch { /* ro fs */ }
     return s;
   }
 }
-function saveStore(dataDir, store) {
+function saveStore(dataDir, centro, store) {
   fs.mkdirSync(dataDir, { recursive: true });
-  fs.writeFileSync(storeFile(dataDir), JSON.stringify(store, null, 2));
-  try { _cacheMtime = fs.statSync(storeFile(dataDir)).mtimeMs; _cache = store; } catch { _cacheMtime = -1; }
+  fs.writeFileSync(storeFile(dataDir, centro), JSON.stringify(store, null, 2));
+  try { _cache.set(centro, { store, mtime: fs.statSync(storeFile(dataDir, centro)).mtimeMs }); } catch { _cache.delete(centro); }
 }
 
 // Permisos del sistema de turnos, de a uno. El centro habilita los que quiera para
@@ -163,6 +188,27 @@ function labRolDe(me) {
 }
 function labPuede(me, permiso) {
   return labPermisosDe(me).includes(permiso);
+}
+
+// El texto del recordatorio. Las llaves se reemplazan con los datos del turno; el
+// centro lo puede cambiar entero desde la pantalla.
+const PLANTILLA_DEFAULT =
+  "Hola {paciente}, le recordamos su turno el {fecha} a las {hora} con {profesional}. " +
+  "Si no puede venir, avisenos asi se lo damos a otra persona. Gracias.";
+function armarRecordatorio(plantilla, t, prof, config) {
+  const f = String(t.fecha || "").split("-");
+  const partes = {
+    "{paciente}": String(t.pacienteNombre || "").split(",")[0].trim() || "paciente",
+    "{fecha}": f.length === 3 ? f[2] + "/" + f[1] : (t.fecha || ""),
+    "{hora}": t.hora || "",
+    "{profesional}": prof.nombre || "",
+    "{practica}": t.practicaNombre || "",
+    "{centro}": config.centroNombre || "",
+    "{direccion}": config.centroDireccion || "",
+  };
+  let out = String(plantilla || PLANTILLA_DEFAULT);
+  Object.keys(partes).forEach((k) => { out = out.split(k).join(partes[k]); });
+  return out.replace(/\s{2,}/g, " ").trim();
 }
 
 // Colecciones simples con CRUD genérico (las que son catálogo plano).
@@ -297,10 +343,20 @@ async function handleLab(ctx) {
   const labRol = labRolDe(me);
   if (!labRol) { json(res, 403, { error: "Tu usuario no tiene acceso al sistema del centro." }); return true; }
 
+  migrarAlMulticentro(dataDir);
+  // De que centro son los datos que se piden. El admin de NS elige (viaja en la URL);
+  // el usuario del centro NO puede elegir: es el suyo y punto, aunque cambie la URL.
+  const pedido = clean(url.searchParams.get("centro")).toLowerCase();
+  const propio = clean(me.lab && me.lab.centro).toLowerCase();
+  let centro = me.role === "admin" ? (pedido || propio || "demo") : propio;
+  if (!centro || !CENTRO_RE.test(centro)) {
+    if (me.role !== "admin") { json(res, 403, { error: "Tu usuario no tiene un centro asignado." }); return true; }
+    centro = "demo";
+  }
   const seg = p.slice("/api/lab/".length).split("/").filter(Boolean); // ["turnos", "<id>"]
   const recurso = seg[0] || "";
   const idPath = seg[1] || "";
-  const store = loadStore(dataDir);
+  const store = loadStore(dataDir, centro);
 
   // Cada recurso pide su permiso. El cierre de caja pide uno propio: la
   // recepcionista cobra todo el dia pero el arqueo no lo cierra ella.
@@ -320,6 +376,9 @@ async function handleLab(ctx) {
       // Con esto el front arma el menu: no se muestra lo que despues va a dar 403.
       rol: labRol, permisos: labPermisosDe(me),
       config: Object.assign({ plantillaRecordatorio: PLANTILLA_DEFAULT }, store.config || {}),
+      centro,
+      // El admin de NS puede moverse entre centros; el del centro ve solo el suyo.
+      centros: me.role === "admin" && ctx.loadClientes ? ctx.loadClientes() : [],
       profesionalId: (me.lab && me.lab.profesionalId) || "",
       totales: { pacientes: (store.pacientes || []).length, turnos: (store.turnos || []).length },
     }), true;
@@ -334,7 +393,7 @@ async function handleLab(ctx) {
       if (body.centroNombre !== undefined) store.config.centroNombre = clean(body.centroNombre);
       if (body.centroDireccion !== undefined) store.config.centroDireccion = clean(body.centroDireccion);
       if (body.plantillaRecordatorio !== undefined) store.config.plantillaRecordatorio = clean(body.plantillaRecordatorio) || PLANTILLA_DEFAULT;
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { config: store.config }), true;
     }
   }
@@ -376,7 +435,7 @@ async function handleLab(ctx) {
     const body = await readBody(req);
     if (body.avisado === false) { t.avisadoEl = ""; t.avisadoPor = ""; }
     else { t.avisadoEl = nowIso(); t.avisadoPor = me.username; }
-    saveStore(dataDir, store);
+    saveStore(dataDir, centro, store);
     return json(res, 200, { item: t }), true;
   }
 
@@ -496,7 +555,7 @@ async function handleLab(ctx) {
         else if (pr.valores[osId] !== undefined) { delete pr.valores[osId]; borrados++; }
       });
     }
-    saveStore(dataDir, store);
+    saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true, cargados, borrados, items: lista }), true;
   }
 
@@ -528,12 +587,12 @@ async function handleLab(ctx) {
         item.valores = vals;
       }
       if (previo) Object.assign(previo, item); else lista.unshift(item);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item }), true;
     }
     if (method === "DELETE" && idPath) {
       store.practicas = lista.filter((x) => x.id !== idPath);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true }), true;
     }
   }
@@ -546,7 +605,7 @@ async function handleLab(ctx) {
     if (method === "POST") {
       const body = await readBody(req);
       const item = Object.assign({ id: uid() }, sanitizeGenerico(def.campos, body));
-      lista.unshift(item); saveStore(dataDir, store);
+      lista.unshift(item); saveStore(dataDir, centro, store);
       return json(res, 200, { item }), true;
     }
     if (method === "PUT" && idPath) {
@@ -554,11 +613,11 @@ async function handleLab(ctx) {
       if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
       const body = await readBody(req);
       lista[idx] = Object.assign({}, lista[idx], sanitizeGenerico(def.campos, body, lista[idx]));
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item: lista[idx] }), true;
     }
     if (method === "DELETE" && idPath) {
-      store[recurso] = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store);
+      store[recurso] = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true }), true;
     }
   }
@@ -590,10 +649,10 @@ async function handleLab(ctx) {
     if (method === "POST") {
       if (existente) return json(res, 409, { error: "La caja de ese día ya está cerrada." }), true;
       const cierre = { id: uid(), fecha, totales: calcular(), cerradoPor: me.username, cerradoEl: nowIso() };
-      cierres.unshift(cierre); saveStore(dataDir, store);
+      cierres.unshift(cierre); saveStore(dataDir, centro, store);
       return json(res, 200, { cierre }), true;
     }
-    if (method === "DELETE") { store.cierres = cierres.filter((c) => c.fecha !== fecha); saveStore(dataDir, store); return json(res, 200, { ok: true }), true; }
+    if (method === "DELETE") { store.cierres = cierres.filter((c) => c.fecha !== fecha); saveStore(dataDir, centro, store); return json(res, 200, { ok: true }), true; }
   }
 
   // -- Profesionales --
@@ -603,7 +662,7 @@ async function handleLab(ctx) {
     if (method === "POST") {
       const body = await readBody(req);
       const item = Object.assign({ id: uid(), creadoEl: nowIso() }, sanitizeProfesional(body));
-      lista.unshift(item); saveStore(dataDir, store);
+      lista.unshift(item); saveStore(dataDir, centro, store);
       return json(res, 200, { item }), true;
     }
     if (method === "PUT" && idPath) {
@@ -611,11 +670,11 @@ async function handleLab(ctx) {
       if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizeProfesional(body, lista[idx]);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item: lista[idx] }), true;
     }
     if (method === "DELETE" && idPath) {
-      store.profesionales = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store);
+      store.profesionales = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true }), true;
     }
   }
@@ -640,7 +699,7 @@ async function handleLab(ctx) {
         creadoEl: nowIso(), creadoPor: me.username,
       };
       if (!ev.texto) return json(res, 400, { error: "La evolución no puede estar vacía." }), true;
-      store.evoluciones.push(ev); saveStore(dataDir, store);
+      store.evoluciones.push(ev); saveStore(dataDir, centro, store);
       return json(res, 200, { item: ev }), true;
     }
   }
@@ -676,7 +735,7 @@ async function handleLab(ctx) {
         archivo: null,
         creadoEl: nowIso(), creadoPor: me.username,
       };
-      store.estudios.push(est); saveStore(dataDir, store);
+      store.estudios.push(est); saveStore(dataDir, centro, store);
       return json(res, 200, { item: est }), true;
     }
   }
@@ -694,7 +753,7 @@ async function handleLab(ctx) {
         if (![".pdf", ".jpg", ".jpeg", ".png"].includes(ext)) {
           return json(res, 400, { error: "El estudio se adjunta como PDF o imagen." }), true;
         }
-        const dir = estudiosDir(dataDir);
+        const dir = estudiosDir(dataDir, centro);
         fs.mkdirSync(dir, { recursive: true });
         const guardadoComo = est.id + ext;
         fs.writeFileSync(path.join(dir, guardadoComo), mp.file.data);
@@ -705,7 +764,7 @@ async function handleLab(ctx) {
           guardadoComo,
           subidoEl: nowIso(), subidoPor: me.username,
         };
-        saveStore(dataDir, store);
+        saveStore(dataDir, centro, store);
         return json(res, 200, { item: est }), true;
       } catch (error) {
         return json(res, 400, { error: error.message || "No se pudo subir el archivo." }), true;
@@ -713,7 +772,7 @@ async function handleLab(ctx) {
     }
     if (method === "GET") {
       if (!est.archivo) return json(res, 404, { error: "Ese estudio no tiene archivo." }), true;
-      const file = path.join(estudiosDir(dataDir), est.archivo.guardadoComo);
+      const file = path.join(estudiosDir(dataDir, centro), est.archivo.guardadoComo);
       if (!fs.existsSync(file)) return json(res, 404, { error: "El archivo no está en el servidor." }), true;
       const buf = fs.readFileSync(file);
       res.writeHead(200, {
@@ -733,10 +792,10 @@ async function handleLab(ctx) {
     const est = (store.estudios || []).find((x) => x.id === idPath);
     if (!est) return json(res, 404, { error: "Ese estudio no existe." }), true;
     if (est.archivo) {
-      try { fs.unlinkSync(path.join(estudiosDir(dataDir), est.archivo.guardadoComo)); } catch { /* ya no estaba */ }
+      try { fs.unlinkSync(path.join(estudiosDir(dataDir, centro), est.archivo.guardadoComo)); } catch { /* ya no estaba */ }
     }
     store.estudios = store.estudios.filter((x) => x.id !== idPath);
-    saveStore(dataDir, store);
+    saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true }), true;
   }
 
@@ -766,7 +825,7 @@ async function handleLab(ctx) {
     // queda colgado de una ficha que dejo de existir.
     (store.estudios || []).forEach((x) => { if (set.has(x.pacienteId)) { x.pacienteId = mantener; estMov++; } });
     store.pacientes = (store.pacientes || []).filter((p) => !set.has(p.id));
-    saveStore(dataDir, store);
+    saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true, fusionados: fusionar.length, turnosMovidos: turnosMov, evolucionesMovidas: evolMov, estudios: estMov }), true;
   }
 
@@ -793,7 +852,7 @@ async function handleLab(ctx) {
     if (method === "POST") {
       const body = await readBody(req);
       const item = Object.assign({ id: uid(), creadoEl: nowIso() }, sanitizePaciente(body));
-      lista.unshift(item); saveStore(dataDir, store);
+      lista.unshift(item); saveStore(dataDir, centro, store);
       return json(res, 200, { item }), true;
     }
     if (method === "PUT" && idPath) {
@@ -801,7 +860,7 @@ async function handleLab(ctx) {
       if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizePaciente(body, lista[idx]);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item: lista[idx] }), true;
     }
     if (method === "DELETE" && idPath) {
@@ -809,7 +868,7 @@ async function handleLab(ctx) {
       store.pacientes = lista.filter((x) => x.id !== idPath);
       // La historia clínica del paciente se va con él; los turnos conservan el nombre.
       store.evoluciones = (store.evoluciones || []).filter((e) => e.pacienteId !== idPath);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true, turnosFuturos }), true;
     }
   }
@@ -852,7 +911,7 @@ async function handleLab(ctx) {
       const ocupado = lista.find((x) => x.profesionalId === t.profesionalId && x.fecha === t.fecha && x.hora === t.hora && x.estado !== "cancelado");
       if (ocupado && !body.permitirSobreturno) return json(res, 409, { error: "Ya hay un turno en ese horario." }), true;
       t.id = uid(); t.creadoEl = nowIso(); t.creadoPor = me.username;
-      lista.push(t); saveStore(dataDir, store);
+      lista.push(t); saveStore(dataDir, centro, store);
       return json(res, 200, { item: t }), true;
     }
     if (method === "PUT" && idPath) {
@@ -860,11 +919,11 @@ async function handleLab(ctx) {
       if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizeTurno(body, lista[idx], store);
-      saveStore(dataDir, store);
+      saveStore(dataDir, centro, store);
       return json(res, 200, { item: lista[idx] }), true;
     }
     if (method === "DELETE" && idPath) {
-      store.turnos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store);
+      store.turnos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store);
       return json(res, 200, { ok: true }), true;
     }
   }
@@ -894,10 +953,10 @@ async function handleLab(ctx) {
       const presup = { id: uid(), numero: store.seqPresup, fecha: clean(body.fecha) || nowIso().slice(0, 10),
         pacienteId: clean(body.pacienteId), pacienteNombre: clean(body.pacienteNombre), obraSocial: clean(body.obraSocial),
         items, total, observaciones: clean(body.observaciones), creadoPor: me.username, creadoEl: nowIso() };
-      lista.unshift(presup); saveStore(dataDir, store);
+      lista.unshift(presup); saveStore(dataDir, centro, store);
       return json(res, 200, { item: presup }), true;
     }
-    if (method === "DELETE" && idPath) { store.presupuestos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, store); return json(res, 200, { ok: true }), true; }
+    if (method === "DELETE" && idPath) { store.presupuestos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store); return json(res, 200, { ok: true }), true; }
   }
 
   json(res, 404, { error: "Ruta de laboratorio no encontrada: " + p });

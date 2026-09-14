@@ -6280,7 +6280,10 @@ const server = http.createServer(async (req, res) => {
   // Módulo aislado (solo admin). Ver web/lab_server.js.
   if (p.startsWith("/api/lab/")) {
     if (await handleLab({ req, res, method: req.method, p, url, me: getSessionUser(req), json, readBody, dataDir,
-                          readBuffer, extractMultipart, loadUsers, saveUsers })) return;
+                          readBuffer, extractMultipart, loadUsers, saveUsers,
+                          // Los centros que puede manejar el admin en el sistema de turnos:
+                          // son los clientes de NS, sin arrastrar toda su ficha.
+                          loadClientes: () => loadClientsStore().map((c) => ({ slug: c.slug, name: c.name || c.slug })) })) return;
   }
 
   // ---- Worker externo: autenticación por token, sin cookie de navegador ----
