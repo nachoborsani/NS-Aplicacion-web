@@ -2380,6 +2380,10 @@
   .cab-badge.subiendo{background:color-mix(in srgb,var(--info,#2563eb) 14%,var(--surface));color:var(--info,#2563eb);border-color:color-mix(in srgb,var(--info,#2563eb) 40%,var(--border))}
   /* Anterior / siguiente en la ficha del informe. */
   .cab-modal-nav{display:flex;align-items:center;gap:6px;margin-left:auto;margin-right:8px}
+  /* El boton de subir, en la cabecera: al lado de las flechas con las que se pasa
+     de un informe al siguiente. */
+  .cab-head-subir{display:flex;align-items:center;gap:8px;margin-right:10px}
+  .cab-head-subir .cab-sub{margin:0;white-space:nowrap}
   .cab-modal-nav #cabModalPos{font-size:12px;color:var(--text-2);min-width:62px;text-align:center}
   .cab-modal-nav .rowbtn[disabled]{opacity:.35;cursor:default}
   /* El estado va ARRIBA del boton, no al costado: al lado empujaba el nombre de la

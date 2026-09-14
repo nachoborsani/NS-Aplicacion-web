@@ -13154,22 +13154,29 @@ function cabActualizarPosicion(){
 // Las tres acciones que se deciden MIRANDO el informe (subir, desestimar,
 // borrar), al pie de la ficha. Antes habia que cerrarla y buscar la fila en la
 // tabla para apretar el mismo boton, con el informe ya fuera de la vista.
+// "Subir a PAMI" va ARRIBA, al lado de las flechas: es lo que se aprieta en cada
+// informe, y estando abajo del panel la mano tenia que cruzar la pantalla entre pasar
+// al siguiente y subirlo. Desestimar y Borrar se quedan abajo, lejos de las flechas:
+// son las dos que no se pueden deshacer y no conviene tenerlas donde uno tira clics.
 function cabRenderAcciones(it){
   var caja = document.getElementById('cabAcciones');
+  var arriba = document.getElementById('cabSubirHead');
   if (!caja) return;
   var e = cabEstadoDe(it);
   if (CAB_SUBIENDO[it.id]){
-    caja.innerHTML = '<button class="btn btn-primary btn-sm" type="button" disabled>Subiendo a PAMI\u2026</button>'
-      + '<span class="cab-sub">Se avisa cuando termina.</span>';
+    if (arriba) arriba.innerHTML = '<button class="btn btn-primary btn-sm" type="button" disabled>Subiendo a PAMI\u2026</button>';
+    caja.innerHTML = '<span class="cab-sub">Se avisa cuando termina.</span>';
     return;
   }
   var puedeSubir = ['ok', 'resuelto', 'falta_validar'].indexOf(e) >= 0;
   var des = !!it.desestimado;
+  if (arriba){
+    arriba.innerHTML = puedeSubir
+      ? '<button class="btn btn-primary btn-sm" type="button" onclick="cabAccion(\'subir\')">\uD83D\uDCE4 Subir a PAMI</button>'
+      : '<span class="cab-sub">' + (des ? 'Desestimado: no se sube.' : 'Todavía no está listo para subir.') + '</span>';
+  }
   caja.innerHTML =
-      (puedeSubir
-        ? '<button class="btn btn-primary btn-sm" type="button" onclick="cabAccion(\'subir\')">\uD83D\uDCE4 Subir a PAMI</button>'
-        : '<span class="cab-sub">' + (des ? 'Desestimado: no se sube.' : 'Todavía no está listo para subir.') + '</span>')
-    + '<span style="flex:1"></span>'
+    '<span style="flex:1"></span>'
     + '<button class="rowbtn" type="button" title="' + (des ? 'Reactivar' : 'Desestimar') + '" onclick="cabAccion(\'desestimar\')">' + (des ? '\u21A9\uFE0F' : '\uD83D\uDEAB') + '</button>'
     + '<button class="rowbtn danger" type="button" title="Borrar" onclick="cabAccion(\'borrar\')">\uD83D\uDDD1</button>';
 }
