@@ -2384,6 +2384,8 @@
      de un informe al siguiente. */
   .cab-head-subir{display:flex;align-items:center;gap:8px;margin-right:10px}
   .cab-head-subir .cab-sub{margin:0;white-space:nowrap}
+  /* El .btn tiene alto fijo: si el texto se parte, se sale de la caja. */
+  .cab-head-subir .btn{white-space:nowrap}
   .cab-modal-nav #cabModalPos{font-size:12px;color:var(--text-2);min-width:62px;text-align:center}
   .cab-modal-nav .rowbtn[disabled]{opacity:.35;cursor:default}
   /* El estado va ARRIBA del boton, no al costado: al lado empujaba el nombre de la
@@ -2445,6 +2447,8 @@
   .cab-acciones{position:sticky;top:-16px;z-index:2;display:flex;align-items:center;gap:6px;flex-wrap:wrap;
     margin:-16px -18px 0;padding:11px 18px;background:var(--surface);border-bottom:1px solid var(--border)}
   .cab-acciones .cab-sub{margin:0}
+  /* Las acciones se fueron a la cabecera: la barra vacia no deja su borde suelto. */
+  .cab-acciones:empty{display:none}
   .cab-datos-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .cab-dato{display:flex;flex-direction:column;gap:2px;border:1px solid var(--border);border-radius:9px;padding:7px 10px;background:var(--surface-2)}
   .cab-dato span{font-size:10.5px;font-weight:750;text-transform:uppercase;letter-spacing:.03em;color:var(--text-2)}

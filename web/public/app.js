@@ -13163,22 +13163,26 @@ function cabRenderAcciones(it){
   var arriba = document.getElementById('cabSubirHead');
   if (!caja) return;
   var e = cabEstadoDe(it);
+  // Todas las acciones van juntas ARRIBA, al lado de las flechas. Abajo no queda
+  // nada: la barra se esconde sola cuando esta vacia, asi el panel derecho arranca
+  // con los datos del paciente y no con una fila de botones sueltos.
   if (CAB_SUBIENDO[it.id]){
-    if (arriba) arriba.innerHTML = '<button class="btn btn-primary btn-sm" type="button" disabled>Subiendo a PAMI\u2026</button>';
-    caja.innerHTML = '<span class="cab-sub">Se avisa cuando termina.</span>';
+    if (arriba) arriba.innerHTML = '<button class="btn btn-primary btn-sm" type="button" disabled>Subiendo a PAMI\u2026</button>'
+      + '<span class="cab-sub">Se avisa cuando termina.</span>';
+    caja.innerHTML = '';
     return;
   }
   var puedeSubir = ['ok', 'resuelto', 'falta_validar'].indexOf(e) >= 0;
   var des = !!it.desestimado;
   if (arriba){
-    arriba.innerHTML = puedeSubir
-      ? '<button class="btn btn-primary btn-sm" type="button" onclick="cabAccion(\'subir\')">\uD83D\uDCE4 Subir a PAMI</button>'
-      : '<span class="cab-sub">' + (des ? 'Desestimado: no se sube.' : 'Todavía no está listo para subir.') + '</span>';
+    arriba.innerHTML =
+      (puedeSubir
+        ? '<button class="btn btn-primary btn-sm" type="button" onclick="cabAccion(\'subir\')">\uD83D\uDCE4 Subir a PAMI</button>'
+        : '<span class="cab-sub">' + (des ? 'Desestimado: no se sube.' : 'Todavía no está listo para subir.') + '</span>')
+      + '<button class="rowbtn" type="button" title="' + (des ? 'Reactivar' : 'Desestimar') + '" onclick="cabAccion(\'desestimar\')">' + (des ? '\u21A9\uFE0F' : '\uD83D\uDEAB') + '</button>'
+      + '<button class="rowbtn danger" type="button" title="Borrar" onclick="cabAccion(\'borrar\')">\uD83D\uDDD1</button>';
   }
-  caja.innerHTML =
-    '<span style="flex:1"></span>'
-    + '<button class="rowbtn" type="button" title="' + (des ? 'Reactivar' : 'Desestimar') + '" onclick="cabAccion(\'desestimar\')">' + (des ? '\u21A9\uFE0F' : '\uD83D\uDEAB') + '</button>'
-    + '<button class="rowbtn danger" type="button" title="Borrar" onclick="cabAccion(\'borrar\')">\uD83D\uDDD1</button>';
+  caja.innerHTML = '';
 }
 // La ficha se cierra sola solo si la accion se hizo: si cancelaste el cartel,
 // seguis mirando el mismo informe.
