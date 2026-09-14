@@ -1831,8 +1831,23 @@ function iniSetAssign(v){
 // mensajes (INICIO.mensajes ya viene filtrado por el servidor según quién
 // pregunta), solo cambia dónde se pinta. Un admin ve, junto a cada mensaje,
 // si los operadores lo pueden ver o no (👁/🔒) - un operador no ve ese badge.
+// Baja del todo, y VUELVE a bajar cuando entra cada imagen: los adjuntos se cargan
+// despues del innerHTML, y al crecer el alto el feed quedaba a mitad de camino. Por
+// eso el chat abria en un mensaje viejo aunque el codigo ya bajaba una vez.
+function iniBajarFeed(feed){
+  feed.scrollTop = feed.scrollHeight;
+  feed.querySelectorAll('img').forEach(function(img){
+    if (img.complete) return;
+    var bajar = function(){ feed.scrollTop = feed.scrollHeight; };
+    img.addEventListener('load', bajar, { once: true });
+    img.addEventListener('error', bajar, { once: true });
+  });
+}
 function iniRenderMensajesEn(feedId){
   var feed = document.getElementById(feedId); if(!feed) return;
+  // Si el que mira se fue para arriba a leer algo viejo, no lo traemos de un tiron
+  // cuando llega un mensaje nuevo. La primera pintada siempre va al final.
+  var pegado = !feed.dataset.pintado || (feed.scrollHeight - feed.scrollTop - feed.clientHeight) < 80;
   var ms = INICIO.mensajes || [];
   if (!ms.length){ feed.innerHTML = '<div class="ini-empty">Todavía no hay mensajes. Dejá el primero 👇</div>'; return; }
   var prevAutor = null;
@@ -1852,7 +1867,8 @@ function iniRenderMensajesEn(feedId){
       + av + '<div class="ini-bub">'+ who + adj + txt
       + '<div class="ini-tm">'+esc(iniFmtHora(m.at))+'</div></div></div>';
   }).join('');
-  feed.scrollTop = feed.scrollHeight;
+  feed.dataset.pintado = '1';
+  if (pegado) iniBajarFeed(feed);
 }
 function iniRenderMensajes(){ iniRenderMensajesEn('iniFeed'); }
 function iniFmtSize(n){ n=Number(n)||0; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(0)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
