@@ -3637,7 +3637,7 @@ function planDeSubida(items, periodoPedido, ctx) {
     fila.codigos = expandedPamiExclusionCodes(fila);
     return fila;
   }).filter((f) => f.practiceCode && f.ome);
-  if (filas.length < 2) return null;
+  if (!filas.length) return null;
 
   // Se trabaja EL DÍA DEL INFORME. Antes se tomaba el día con más candidatos, dando por
   // sentado que era ese, y no siempre lo es: en PONTE ROSARIO el informe es del 08/09
@@ -3653,7 +3653,7 @@ function planDeSubida(items, periodoPedido, ctx) {
   if (delInforme && porDia.has(delInforme)) { dia = delInforme; grupo = porDia.get(delInforme); }
   else if (diaTildado && porDia.has(diaTildado)) { dia = diaTildado; grupo = porDia.get(diaTildado); }
   else for (const [d, g] of porDia) if (g.length > grupo.length) { dia = d; grupo = g; }
-  if (grupo.length < 2) return null;
+  if (!grupo.length) return null;
 
   // Los valores salen del nomenclador del mes del turno; si no está cargado, se
   // devuelve el plan igual pero sin plata (el orden de las reglas no cambia).

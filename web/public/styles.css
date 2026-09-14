@@ -2478,7 +2478,7 @@
   .cab-cand-si{border-color:var(--turq,#0aa);box-shadow:inset 3px 0 0 var(--turq,#0aa)}
   .cab-cand-fuera{opacity:.5}
   .cab-cand-nota{font-size:11.5px;line-height:1.45;color:var(--text-2);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .cab-cand-otrodia{color:#b45309}
+  .cab-cand-otrodia,.cab-cand-nodescribe{color:#b45309}
   .cab-debito{margin-top:10px;border:1px solid #f0b429;background:rgba(240,180,41,.10);border-radius:10px;padding:9px 11px}
   .cab-debito-head{font-weight:800;font-size:12.5px;color:#a16207;margin-bottom:5px}
   .cab-debito-item{font-size:12px;line-height:1.45}

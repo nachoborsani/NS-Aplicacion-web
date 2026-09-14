@@ -13223,6 +13223,10 @@ function cabAvisarOtroDia(){
     var card = ck.closest('.cab-cand'); if (!card) return;
     var viejo = card.querySelector('.cab-cand-otrodia');
     if (viejo) viejo.remove();
+    if (!ck.checked){
+      var nd = card.querySelector('.cab-cand-nodescribe');
+      if (nd) nd.remove();
+    }
     if (!ck.checked || !diaInf) return;
     var c = cands.filter(function(x){ return x.ome === ck.value; })[0];
     var diaT = cabDiaDe(c && c.turno);
@@ -13263,7 +13267,7 @@ async function pedirPlanCabina(){
   CAB_PLAN = null;
   var it = CAB_ITEM; if (!it) return;
   var cands = (it.match && it.match.candidatos) || [];
-  if (cands.length < 2) return;
+  if (!cands.length) return;
   var tildadas = {};
   document.querySelectorAll('.cab-cand-ck:checked').forEach(function(c){ tildadas[c.value] = 1; });
   var items = cands.slice(0, 12).map(function(c){
@@ -13307,6 +13311,7 @@ function pintarPlanCabina(){
   (plan.detalle || []).forEach(function(d){
     var card = cabTarjetaDe(d.ome);
     if (!card) return;
+    var ck = card.querySelector('.cab-cand-ck');
     if (d.debito === 'total' && !d.conviene){
       card.classList.add('cab-cand-no');
       if (!card.querySelector('.cab-cand-nota')){
@@ -13321,6 +13326,16 @@ function pintarPlanCabina(){
       if (cli && cli.noSubirDebito100){
         var ck = document.querySelector('.cab-cand-ck[value="' + d.ome.replace(/"/g, '') + '"]');
         if (ck && ck.checked){ ck.checked = false; actualizarSelOmes(); }
+      }
+    } else if (ck && ck.checked && d.laDescribe === false){
+      // Tildada una practica de la que el informe no habla. No se destilda ni se
+      // bloquea —el lector puede no haberla encontrado— pero hay que verlo antes de
+      // subir: si no, a esa OME le queda pegado el informe de otro estudio.
+      if (!card.querySelector('.cab-cand-nodescribe')){
+        var n3 = document.createElement('div');
+        n3.className = 'cab-cand-nota cab-cand-nodescribe';
+        n3.innerHTML = '\u26a0 El informe no habla de esta práctica';
+        (card.querySelector('.cab-cand-main') || card).appendChild(n3);
       }
     } else if (d.laTieneOtro && !d.tildada && !d.transmitida){
       // Esa OME ya tiene su propio informe esperando en la bandeja: sumarla acá le
