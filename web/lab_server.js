@@ -1153,7 +1153,10 @@ async function handleLab(ctx) {
       // Sin permisos = se le saca el acceso. Se borra el campo entero para no dejar
       // basura que despues confunda al leer el usuario.
       if (!permisos.length) delete u.lab;
-      else u.lab = { rol: rol || "personalizado", permisos, profesionalId: clean(body.profesionalId) };
+      // El CENTRO es el que se esta administrando en ese momento. Sin esto, el usuario
+      // quedaba con permisos pero sin centro y no podia entrar a nada: el sistema le
+      // decia "tu usuario no tiene un centro asignado" y no habia donde cargarlo.
+      else u.lab = { rol: rol || "personalizado", permisos, centro, profesionalId: clean(body.profesionalId) };
       anotar(store, me, "Permisos cambiados",
         `${u.name || u.username}: ${permisos.length ? permisos.join(", ") : "sin acceso"}`);
       saveStore(dataDir, centro, store);
