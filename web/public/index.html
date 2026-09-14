@@ -1206,7 +1206,7 @@
           <div class="nom-filters card">
             <div class="field nom-search">
               <label>Buscar por nombre, DNI o beneficio</label>
-              <input class="inp" id="padQ" placeholder="Ej: Rivero, 16975251, 14018780..." oninput="queuePadronSearch()">
+              <input class="inp" id="padQ" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="Ej: Rivero, 16975251, 14018780..." oninput="queuePadronSearch()">
             </div>
           </div>
 
@@ -1258,7 +1258,7 @@
               <div><b id="cabResultTitle">Informes</b><span id="cabResultMeta">Elegí un cliente.</span></div>
               <div class="cab-buscador">
                 <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                <input class="inp" id="cabBuscar" type="search" placeholder="Buscar paciente, DNI, archivo u OME" oninput="cabSetBuscar(this.value)">
+                <input class="inp" id="cabBuscar" type="search" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="Buscar paciente, DNI, archivo u OME" oninput="cabSetBuscar(this.value)">
               </div>
               <div style="display:flex;gap:6px;align-items:center">
                 <span id="cabTareaEstado" class="cab-estado" hidden></span>

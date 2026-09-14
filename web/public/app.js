@@ -13032,7 +13032,7 @@ function abrirInforme(id){
     // beneficio y volver.
     if (!noPami){
       h += '<div class="cab-cand-title" style="margin-top:10px">Buscar en el padrón</div>'
-        + '<input class="inp" id="cabPadronQ" type="text" autocomplete="off" placeholder="Apellido, DNI o N° de beneficio" oninput="buscarEnPadronCabina()">'
+        + '<input class="inp" id="cabPadronQ" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Apellido, DNI o N° de beneficio" oninput="buscarEnPadronCabina()">'
         + '<div id="cabPadronRes"></div>';
     }
     cont.innerHTML = h;
