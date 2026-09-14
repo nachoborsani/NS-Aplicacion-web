@@ -267,15 +267,21 @@
       '<div class="lab-ag-info" id="lab-ag-info"></div>';
     c.appendChild(head);
 
-    c.appendChild(e("div", { class: "lab-card lab-cal-card", id: "lab-ag-cal" }));
-
-    var leyenda = e("div", { class: "lab-leyenda" }, Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
-      return '<span class="lab-lg"><i style="background:' + ESTADOS[k].color + '"></i>' + esc(ESTADOS[k].label) + "</span>";
-    }).join(""));
-    c.appendChild(leyenda);
-
-    c.appendChild(e("div", { id: "lab-ag-bloqueo" }));
-    c.appendChild(e("div", { class: "lab-card", id: "lab-ag-grid" }, '<div class="lab-muted" style="padding:20px">Cargando…</div>'));
+    // El calendario a la izquierda y los horarios AL LADO. Antes el calendario era una
+    // tarjeta de 340px flotando sola, con tres cuartos de la pantalla en blanco, y los
+    // horarios aparecian mas abajo: la pantalla que mas se usa era la peor aprovechada.
+    var dos = e("div", { class: "lab-ag-dos" });
+    var izq = e("div", { class: "lab-ag-izq" });
+    izq.appendChild(e("div", { class: "lab-card lab-cal-card", id: "lab-ag-cal" }));
+    izq.appendChild(e("div", { class: "lab-card lab-leyenda-card" },
+      '<div class="lab-leyenda">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
+        return '<span class="lab-lg"><i style="background:' + ESTADOS[k].color + '"></i>' + esc(ESTADOS[k].label) + "</span>";
+      }).join("") + "</div>"));
+    var der = e("div", { class: "lab-ag-der" });
+    der.appendChild(e("div", { id: "lab-ag-bloqueo" }));
+    der.appendChild(e("div", { class: "lab-card", id: "lab-ag-grid" }, '<div class="lab-muted" style="padding:20px">Cargando…</div>'));
+    dos.appendChild(izq); dos.appendChild(der);
+    c.appendChild(dos);
 
     // eventos
     document.getElementById("lab-ag-esp").onchange = function () { LAB.ag.especialidadId = this.value; LAB.ag.profesionalId = ""; viewAgenda(c); };
@@ -1660,7 +1666,7 @@
       '<table class="lab-table"><thead><tr><th>Apellido y nombre</th><th>Documento</th><th>Obra social</th><th>Celular</th><th></th></tr></thead><tbody>' +
       (items.map(function (p) {
         return '<tr data-id="' + p.id + '"><td><b>' + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b></td><td>" + esc(p.documento || "") + "</td><td>" + esc(p.obraSocial || "") + (p.nroAfiliado ? " " + esc(p.nroAfiliado) : "") + "</td><td>" + esc(p.celular || "") + "</td>" +
-          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos" title="Turnos">📅</button> <button class="lab-btn xs ghost lab-pac-cuenta" title="Cuenta corriente">💳</button> <button class="lab-btn xs ghost lab-pac-presup" title="Presupuesto">💰</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
+          '<td class="lab-pac-acc"><button class="lab-btn xs lab-pac-hc">Historia clínica</button><button class="lab-btn xs ghost lab-pac-edit">Editar</button><span class="lab-menu"><button class="lab-btn xs ghost lab-pac-mas" title="Más acciones" type="button">⋯</button><span class="lab-menu-pop"><button class="lab-pac-turnos" type="button">Turnos del paciente</button><button class="lab-pac-cuenta" type="button">Cuenta corriente</button><button class="lab-pac-presup" type="button">Presupuesto</button></span></span></td></tr>';
       }).join("") || '<tr><td colspan="5" class="lab-muted" style="padding:16px">Sin pacientes.</td></tr>') + "</tbody></table>";
     list.querySelectorAll(".lab-pac-edit").forEach(function (b) {
       b.onclick = async function () {
@@ -1675,6 +1681,18 @@
         var rr = await api("/api/lab/pacientes/" + id);
         hcModal(rr.data && rr.data.item);
       };
+    });
+    list.querySelectorAll(".lab-pac-mas").forEach(function (b) {
+      b.onclick = function (ev) {
+        ev.stopPropagation();
+        var abierto = b.parentNode.classList.contains("abierto");
+        list.querySelectorAll(".lab-menu.abierto").forEach(function (x) { x.classList.remove("abierto"); });
+        if (!abierto) b.parentNode.classList.add("abierto");
+      };
+    });
+    // Un clic en cualquier lado cierra el menu: si no, quedan tres abiertos a la vez.
+    document.addEventListener("click", function () {
+      document.querySelectorAll(".lab-menu.abierto").forEach(function (x) { x.classList.remove("abierto"); });
     });
     list.querySelectorAll(".lab-pac-cuenta").forEach(function (b) {
       b.onclick = async function () {
@@ -2223,7 +2241,7 @@
       ".lab-ag-fecha{display:flex;gap:6px;align-items:center;margin-left:auto}",
       ".lab-ag-fecha .lab-in{min-width:0}",
       ".lab-ag-info{margin-top:10px;color:var(--text-2);font-size:14px}",
-      ".lab-leyenda{display:flex;gap:14px;flex-wrap:wrap;margin:0 2px 12px;font-size:12px;color:var(--text-2)}",
+      ".lab-leyenda{display:flex;gap:10px 14px;flex-wrap:wrap;font-size:12px;color:var(--text-2)}",
       ".lab-lg{display:flex;align-items:center;gap:5px}.lab-lg i{width:11px;height:11px;border-radius:3px;display:inline-block}",
       ".lab-slots{display:flex;flex-direction:column}",
       ".lab-slot{display:flex;align-items:center;gap:12px;padding:9px 10px;border-bottom:1px solid var(--border);border-left:4px solid transparent;cursor:pointer}",
@@ -2295,6 +2313,20 @@
       ".lab-repro-libres:not(:empty){margin-top:10px;border-top:1px dashed var(--border);padding-top:8px}",
       ".lab-repro-dia{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:5px}",
       ".lab-repro-fecha{font-size:12px;font-weight:700;color:var(--text-2);min-width:78px}",
+      ".lab-ag-dos{display:grid;grid-template-columns:340px minmax(0,1fr);gap:14px;align-items:start}",
+      ".lab-ag-izq{display:flex;flex-direction:column;gap:10px}",
+      ".lab-ag-izq .lab-cal-card{max-width:none;margin:0}",
+      ".lab-leyenda-card{padding:10px 12px}",
+      "@media(max-width:1100px){.lab-ag-dos{grid-template-columns:1fr}}",
+      ".lab-table{max-width:1100px}",
+      ".lab-table td.num,.lab-table th.num{width:110px}",
+      ".lab-pac-acc{white-space:nowrap;text-align:right}",
+      ".lab-pac-acc .lab-btn{margin-left:5px}",
+      ".lab-menu{position:relative;display:inline-block}",
+      ".lab-menu-pop{display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:50;min-width:190px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:4px;text-align:left}",
+      ".lab-menu.abierto .lab-menu-pop{display:block}",
+      ".lab-menu-pop button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px}",
+      ".lab-menu-pop button:hover{background:var(--hover)}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
