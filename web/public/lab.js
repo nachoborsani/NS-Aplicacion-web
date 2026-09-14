@@ -861,6 +861,30 @@
           '<div class="lab-muted" style="font-size:11.5px;margin-top:6px">Horas ofrecidas según los horarios de cada profesional, hasta el ' +
           esc(String(d.agendaHasta || "").split("-").reverse().join("/")) + ". Los días anulados no cuentan como horas ofrecidas.</div></div>"
         : "") +
+      // Pacientes por sexo y edad: barras hechas con divs, sin traer una libreria de
+      // graficos para cinco tramos.
+      ((d.porSexoEdad && d.porSexoEdad.unicos)
+        ? (function () {
+            var sx = d.porSexoEdad;
+            var maxi = Math.max.apply(null, sx.tramos.map(function (_, i) {
+              return (sx.femenino[i] || 0) + (sx.masculino[i] || 0) + (sx.sinSexo[i] || 0);
+            }).concat([1]));
+            return '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">Pacientes por sexo y edad</div>' +
+              '<div class="lab-muted" style="margin-bottom:10px"><b>' + sx.unicos + "</b> paciente(s) único(s) con turno en el mes" +
+              (sx.sinFecha ? " · " + sx.sinFecha + " sin fecha de nacimiento cargada" : "") + "</div>" +
+              '<div class="lab-edades">' + sx.tramos.map(function (t, i) {
+                var fe = sx.femenino[i] || 0, ma = sx.masculino[i] || 0, si = sx.sinSexo[i] || 0;
+                var tot = fe + ma + si;
+                return '<div class="lab-edad"><div class="lab-edad-barras">' +
+                  '<div class="lab-edad-b f" style="height:' + Math.round((fe / maxi) * 100) + '%" title="' + fe + ' femenino"></div>' +
+                  '<div class="lab-edad-b m" style="height:' + Math.round((ma / maxi) * 100) + '%" title="' + ma + ' masculino"></div>' +
+                  (si ? '<div class="lab-edad-b s" style="height:' + Math.round((si / maxi) * 100) + '%" title="' + si + ' sin sexo cargado"></div>' : "") +
+                  "</div><div class=\"lab-edad-rot\">" + esc(t) + '</div><div class="lab-edad-tot">' + tot + "</div></div>";
+              }).join("") + "</div>" +
+              '<div class="lab-edad-ref"><span class="lab-edad-b f"></span> Femenino <span class="lab-edad-b m"></span> Masculino' +
+              (sx.sinSexo.some(function (x) { return x; }) ? ' <span class="lab-edad-b s"></span> Sin cargar' : "") + "</div></div>";
+          })()
+        : "") +
       ((d.cancelaciones || []).length
         ? '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">Agenda anulada</div>' +
           '<table class="lab-table"><thead><tr><th>Profesional</th><th class="num">Días</th><th class="num">Hs. perdidas</th><th>Motivo</th></tr></thead><tbody>' +
@@ -1940,6 +1964,15 @@
       ".oculto{display:none}",
       ".lab-cta-nuevo{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px}",
       ".lab-table td.num,.lab-table th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+      ".lab-edades{display:flex;align-items:flex-end;gap:14px;height:170px}",
+      ".lab-edad{flex:1;display:flex;flex-direction:column;align-items:center;height:100%}",
+      ".lab-edad-barras{flex:1;display:flex;align-items:flex-end;gap:3px;width:100%;justify-content:center}",
+      ".lab-edad-b{width:22px;border-radius:4px 4px 0 0;min-height:2px}",
+      ".lab-edad-b.f{background:#e879a6}.lab-edad-b.m{background:#38bdf8}.lab-edad-b.s{background:#cbd5e1}",
+      ".lab-edad-rot{font-size:11.5px;color:var(--text-2);margin-top:6px}",
+      ".lab-edad-tot{font-size:13px;font-weight:700}",
+      ".lab-edad-ref{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);margin-top:10px}",
+      ".lab-edad-ref .lab-edad-b{width:12px;height:12px;border-radius:3px;display:inline-block}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",

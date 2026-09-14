@@ -627,6 +627,35 @@ async function handleLab(ctx) {
       }))
       .sort((a, b) => b.turnos - a.turnos);
 
+    // --- Pacientes por sexo y edad ---
+    // Unicos con turno en el mes: el que vino tres veces suma uno. La edad se calcula
+    // a hoy, no a la fecha del turno: es un padron, no una estadistica del momento.
+    const TRAMOS = [[0, 17], [18, 35], [36, 50], [51, 65], [66, 200]];
+    const etiquetas = ["0-17", "18-35", "36-50", "51-65", "65+"];
+    const demo = { F: new Array(TRAMOS.length).fill(0), M: new Array(TRAMOS.length).fill(0), "?": new Array(TRAMOS.length).fill(0) };
+    let sinFecha = 0;
+    const yaContado = new Set();
+    delMes.forEach((t) => {
+      if (!t.pacienteId || yaContado.has(t.pacienteId)) return;
+      yaContado.add(t.pacienteId);
+      const pac = (store.pacientes || []).find((x) => x.id === t.pacienteId);
+      if (!pac) return;
+      const sexo = pac.sexo === "F" || pac.sexo === "M" ? pac.sexo : "?";
+      if (!pac.fechaNac) { sinFecha++; return; }
+      const nac = new Date(pac.fechaNac + "T12:00:00");
+      if (isNaN(nac)) { sinFecha++; return; }
+      let edad = new Date(hoy + "T12:00:00").getFullYear() - nac.getFullYear();
+      const m3 = new Date(hoy + "T12:00:00").getMonth() - nac.getMonth();
+      if (m3 < 0 || (m3 === 0 && new Date(hoy + "T12:00:00").getDate() < nac.getDate())) edad--;
+      const i = TRAMOS.findIndex((r) => edad >= r[0] && edad <= r[1]);
+      if (i >= 0) demo[sexo][i]++;
+    });
+    const porSexoEdad = {
+      tramos: etiquetas,
+      femenino: demo.F, masculino: demo.M, sinSexo: demo["?"],
+      unicos: yaContado.size, sinFecha,
+    };
+
     // Lo de hoy: es lo unico accionable de la pantalla, por eso va primero.
     const deHoy = (store.turnos || []).filter((t) => t.fecha === hoy && t.estado !== "cancelado");
     const manana = new Date(hoy + "T12:00:00");
@@ -656,6 +685,7 @@ async function handleLab(ctx) {
       porPractica: agrupar(delMes.filter((t) => t.practicaNombre), (t) => t.practicaNombre).slice(0, 10),
       cancelaciones,
       rendimiento,
+      porSexoEdad,
       // Hasta que dia se conto la agenda: en el mes en curso no tiene sentido sumar
       // las horas que todavia no pasaron, darian un rendimiento falso para abajo.
       agendaHasta: hastaTope,
