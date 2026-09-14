@@ -413,10 +413,10 @@ async function handleLabPublico(ctx) {
   const seg = p.slice("/api/turnos-online/".length).split("/").filter(Boolean);
   const centro = clean(seg[0]).toLowerCase();
   const que = seg[1] || "";
-  if (!centro || !CENTRO_RE.test(centro)) { json(res, 404, { error: "No encontrado." }); return true; }
+  if (!centro || !CENTRO_RE.test(centro)) { json(res, 404, { error: "No encontramos lo que buscabas." }); return true; }
   // Ojo: loadStore CREA el centro si no existe. Aca se mira el archivo primero, asi
   // una direccion inventada no siembra un centro nuevo desde afuera.
-  if (!fs.existsSync(storeFile(dataDir, centro))) { json(res, 404, { error: "No encontrado." }); return true; }
+  if (!fs.existsSync(storeFile(dataDir, centro))) { json(res, 404, { error: "No encontramos lo que buscabas." }); return true; }
   const store = loadStore(dataDir, centro);
   const cfg = onlineConfig(store);
   if (!cfg.activo) { json(res, 403, { error: "Este centro no toma turnos por internet." }); return true; }
@@ -494,7 +494,7 @@ async function handleLabPublico(ctx) {
     store.turnos.push(t); saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true, turno: { fecha: t.fecha, hora: t.hora, profesional: prof.nombre } }), true;
   }
-  json(res, 404, { error: "No encontrado." });
+  json(res, 404, { error: "No encontramos lo que buscabas." });
   return true;
 }
 
@@ -609,7 +609,7 @@ async function handleLab(ctx) {
   // Marcar (o desmarcar) que ya se le aviso.
   if (recurso === "turnos" && seg[2] === "aviso" && method === "POST") {
     const t = (store.turnos || []).find((x) => x.id === idPath);
-    if (!t) return json(res, 404, { error: "Turno no encontrado." }), true;
+    if (!t) return json(res, 404, { error: "Ese turno ya no está." }), true;
     const body = await readBody(req);
     if (body.avisado === false) { t.avisadoEl = ""; t.avisadoPor = ""; }
     else { t.avisadoEl = nowIso(); t.avisadoPor = me.username; }
@@ -897,7 +897,7 @@ async function handleLab(ctx) {
   // No hay padron propio: se le pone el rol al usuario de NS que ya existe. Un solo
   // login, un solo lugar donde dar de baja a alguien.
   if (recurso === "usuarios") {
-    if (!ctx.loadUsers || !ctx.saveUsers) return json(res, 500, { error: "No puedo leer los usuarios." }), true;
+    if (!ctx.loadUsers || !ctx.saveUsers) return json(res, 500, { error: "No se pudo abrir la lista de usuarios." }), true;
     const users = ctx.loadUsers() || [];
     if (method === "GET") {
       const items = users
@@ -920,9 +920,9 @@ async function handleLab(ctx) {
       const uname = clean(body.username).toLowerCase();
       const rol = clean(body.rol);
       const u = users.find((x) => String(x.username).toLowerCase() === uname);
-      if (!u) return json(res, 404, { error: "Ese usuario no existe en NS." }), true;
-      if (u.role === "admin") return json(res, 400, { error: "Un administrador de NS ya entra a todo; no hace falta darle rol." }), true;
-      if (rol && rol !== "personalizado" && !LAB_PLANTILLAS[rol]) return json(res, 400, { error: "Ese puesto no existe." }), true;
+      if (!u) return json(res, 404, { error: "Ese usuario ya no existe." }), true;
+      if (u.role === "admin") return json(res, 400, { error: "Un administrador ya entra a todo: no hace falta darle un puesto." }), true;
+      if (rol && rol !== "personalizado" && !LAB_PLANTILLAS[rol]) return json(res, 400, { error: "Ese puesto no existe. Elegí uno de la lista." }), true;
       // Lo que manda es la lista de permisos. Si no viene, se toman los de la
       // plantilla del puesto elegido.
       const permisos = Array.isArray(body.permisos)
@@ -1035,7 +1035,7 @@ async function handleLab(ctx) {
     }
     if (method === "PUT" && idPath) {
       const idx = lista.findIndex((x) => x.id === idPath);
-      if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
+      if (idx < 0) return json(res, 404, { error: "No encontramos lo que buscabas." }), true;
       const body = await readBody(req);
       lista[idx] = Object.assign({}, lista[idx], sanitizeGenerico(def.campos, body, lista[idx]));
       saveStore(dataDir, centro, store);
@@ -1050,7 +1050,7 @@ async function handleLab(ctx) {
   // -- Caja: cierre diario formal (arqueo) --
   if (recurso === "caja" && idPath === "cierre") {
     const fecha = clean(url.searchParams.get("fecha"));
-    if (!fecha) return json(res, 400, { error: "Falta la fecha." }), true;
+    if (!fecha) return json(res, 400, { error: "Elegí una fecha." }), true;
     const cierres = store.cierres || (store.cierres = []);
     const calcular = () => {
       const delDia = (store.turnos || []).filter((t) => t.fecha === fecha && t.estado !== "cancelado");
@@ -1092,7 +1092,7 @@ async function handleLab(ctx) {
     }
     if (method === "PUT" && idPath) {
       const idx = lista.findIndex((x) => x.id === idPath);
-      if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
+      if (idx < 0) return json(res, 404, { error: "No encontramos lo que buscabas." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizeProfesional(body, lista[idx]);
       saveStore(dataDir, centro, store);
@@ -1198,7 +1198,7 @@ async function handleLab(ctx) {
     if (method === "GET") {
       if (!est.archivo) return json(res, 404, { error: "Ese estudio no tiene archivo." }), true;
       const file = path.join(estudiosDir(dataDir, centro), est.archivo.guardadoComo);
-      if (!fs.existsSync(file)) return json(res, 404, { error: "El archivo no está en el servidor." }), true;
+      if (!fs.existsSync(file)) return json(res, 404, { error: "El archivo del estudio no aparece. Volvé a adjuntarlo." }), true;
       const buf = fs.readFileSync(file);
       res.writeHead(200, {
         "content-type": est.archivo.mime || "application/pdf",
@@ -1272,7 +1272,7 @@ async function handleLab(ctx) {
     }
     if (method === "GET" && idPath) {
       const pac = lista.find((x) => x.id === idPath);
-      return pac ? (json(res, 200, { item: pac }), true) : (json(res, 404, { error: "No encontrado." }), true);
+      return pac ? (json(res, 200, { item: pac }), true) : (json(res, 404, { error: "No encontramos lo que buscabas." }), true);
     }
     if (method === "POST") {
       const body = await readBody(req);
@@ -1282,7 +1282,7 @@ async function handleLab(ctx) {
     }
     if (method === "PUT" && idPath) {
       const idx = lista.findIndex((x) => x.id === idPath);
-      if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
+      if (idx < 0) return json(res, 404, { error: "No encontramos lo que buscabas." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizePaciente(body, lista[idx]);
       saveStore(dataDir, centro, store);
@@ -1321,9 +1321,9 @@ async function handleLab(ctx) {
       const fecha = clean(url.searchParams.get("fecha"));
       // Un profesional ve SU agenda y nada mas, aunque pida otra por la URL.
       if (labRol === "profesional" && me.lab && me.lab.profesionalId) profId = me.lab.profesionalId;
-      if (!profId || !fecha) return json(res, 400, { error: "Falta profesionalId y fecha." }), true;
+      if (!profId || !fecha) return json(res, 400, { error: "Elegí un profesional para ver su agenda." }), true;
       const prof = store.profesionales.find((x) => x.id === profId);
-      if (!prof) return json(res, 404, { error: "Profesional no encontrado." }), true;
+      if (!prof) return json(res, 404, { error: "Ese profesional ya no está en el sistema." }), true;
       const delDia = lista.filter((t) => t.profesionalId === profId && t.fecha === fecha && t.estado !== "cancelado");
       // Si ese dia no se atiende, no se ofrecen horarios: dar un turno para el dia que
       // el profesional no esta es el error que despues se paga en el mostrador. Los
@@ -1335,7 +1335,7 @@ async function handleLab(ctx) {
     if (method === "POST") {
       const body = await readBody(req);
       const t = sanitizeTurno(body, null, store);
-      if (!t.profesionalId || !t.fecha || !t.hora) return json(res, 400, { error: "Falta profesional, fecha u hora." }), true;
+      if (!t.profesionalId || !t.fecha || !t.hora) return json(res, 400, { error: "Falta elegir el profesional, el día o el horario." }), true;
       // Evitar doble turno en el mismo slot (salvo sobreturno explícito).
       const ocupado = lista.find((x) => x.profesionalId === t.profesionalId && x.fecha === t.fecha && x.hora === t.hora && x.estado !== "cancelado");
       if (ocupado && !body.permitirSobreturno) return json(res, 409, { error: "Ya hay un turno en ese horario." }), true;
@@ -1345,7 +1345,7 @@ async function handleLab(ctx) {
     }
     if (method === "PUT" && idPath) {
       const idx = lista.findIndex((x) => x.id === idPath);
-      if (idx < 0) return json(res, 404, { error: "No encontrado." }), true;
+      if (idx < 0) return json(res, 404, { error: "No encontramos lo que buscabas." }), true;
       const body = await readBody(req);
       lista[idx] = sanitizeTurno(body, lista[idx], store);
       saveStore(dataDir, centro, store);
@@ -1367,7 +1367,7 @@ async function handleLab(ctx) {
     }
     if (method === "GET" && idPath) {
       const it = lista.find((x) => x.id === idPath);
-      return it ? (json(res, 200, { item: it }), true) : (json(res, 404, { error: "No encontrado." }), true);
+      return it ? (json(res, 200, { item: it }), true) : (json(res, 404, { error: "No encontramos lo que buscabas." }), true);
     }
     if (method === "POST") {
       const body = await readBody(req);
@@ -1388,7 +1388,7 @@ async function handleLab(ctx) {
     if (method === "DELETE" && idPath) { store.presupuestos = lista.filter((x) => x.id !== idPath); saveStore(dataDir, centro, store); return json(res, 200, { ok: true }), true; }
   }
 
-  json(res, 404, { error: "Ruta de laboratorio no encontrada: " + p });
+  json(res, 404, { error: "Esa parte del sistema no existe." }), true;
   return true;
 }
 

@@ -74,8 +74,16 @@
     if (!LAB.centro) return path;
     return path + (path.indexOf("?") >= 0 ? "&" : "?") + "centro=" + encodeURIComponent(LAB.centro);
   }
-  async function api(path, body) { return window.api(conCentro(path), body); }
-  async function req(method, path, body) { return window.req(method, conCentro(path), body); }
+  // "no-auth" es la clave que usa todo NS para decir que se cayo la sesion. Se
+  // traduce aca, en la unica puerta por la que pasan las respuestas: cambiarla en el
+  // server romperia la convencion del resto del sistema, y dejarla pasar le muestra
+  // al usuario una palabra que no significa nada.
+  function humano(r) {
+    if (r && r.data && r.data.error === "no-auth") r.data.error = "Se cerró la sesión. Volvé a entrar.";
+    return r;
+  }
+  async function api(path, body) { return humano(await window.api(conCentro(path), body)); }
+  async function req(method, path, body) { return humano(await window.req(method, conCentro(path), body)); }
 
   // ---- init + shell --------------------------------------------------------
   window.labInit = async function () {
@@ -372,7 +380,7 @@
     if (!grid) return;
     grid.innerHTML = '<div class="lab-muted" style="padding:20px">Cargando…</div>';
     var r = await api("/api/lab/turnos?profesionalId=" + encodeURIComponent(LAB.ag.profesionalId) + "&fecha=" + encodeURIComponent(LAB.ag.fecha));
-    if (!r.ok) { grid.innerHTML = '<div class="lab-muted" style="padding:20px">' + esc((r.data && r.data.error) || "Error") + "</div>"; return; }
+    if (!r.ok) { grid.innerHTML = '<div class="lab-muted" style="padding:20px">' + esc((r.data && r.data.error) || "No se pudo cargar la agenda.") + "</div>"; return; }
     var d = new Date(LAB.ag.fecha + "T00:00:00");
     if (info) info.innerHTML = "<b>" + DOW[d.getDay()] + "</b> " + LAB.ag.fecha.split("-").reverse().join("/") +
       " · " + esc(r.data.profesional.nombre) + (r.data.profesional.consultorioId ? " · " + esc(nombreCons(r.data.profesional.consultorioId)) : "") +
