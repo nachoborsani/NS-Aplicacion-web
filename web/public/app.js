@@ -174,7 +174,7 @@ function go(v, el){
   if (gPagos){ gPagos.classList.toggle('open', enAdmin); gPagos.classList.toggle('active', enAdmin); }
   if (el) el.classList.add('active');
   document.body.classList.remove('nav-open');
-  if (v !== 'informes') pushHash(v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
+  if (v !== 'informes') pushHash(v === 'lab' ? 'turnos' : v);  // en informes el hash lo pone setInformesTab (con la sub-pestaña)
 }
 
 // Que el menú permita "abrir en pestaña nueva" (click derecho / rueda / Ctrl+click):
@@ -419,9 +419,13 @@ function applyRoute(){
   var parts = (location.hash || '').replace(/^#/, '').split('/').filter(Boolean);
   var v = parts[0] || 'dash';
   if (v === 'gastos') v = 'resumen';  // Gastos ahora es sub-pestaña de Resumen de cuenta
-  if (['dash', 'clientes', 'nomencladores', 'informes', 'omeweb', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'liberarcupo', 'cruzas', 'soon'].indexOf(v) < 0) v = 'dash';
+  // El sistema de turnos viaja como #turnos: "lab" es como lo llamamos nosotros
+  // de este lado y no tiene por que estar en la direccion que ve el centro. Se
+  // acepta #lab igual, para no romper un link que alguien ya haya guardado.
+  if (v === 'lab') v = 'turnos';
+  if (['dash', 'clientes', 'nomencladores', 'informes', 'omeweb', 'credencial', 'resumen', 'facturas', 'padron', 'cabina', 'liberarcupo', 'cruzas', 'turnos', 'soon'].indexOf(v) < 0) v = 'dash';
   APPLYING_ROUTE = true;
-  go(v, navElFor(v));
+  go(v === 'turnos' ? 'lab' : v, navElFor(v));
   APPLYING_ROUTE = false;
   if (v === 'informes'){ var t = parts[1]; setInformesTab(['generar', 'lote', 'config'].indexOf(t) >= 0 ? t : 'generar'); }
   if (v === 'clientes' && parts[1]) selectClientWhenReady(parts[1], parts[2]);
