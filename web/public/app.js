@@ -5967,6 +5967,10 @@ function accionCrearInforme(panelId){
       btn += '<button class="btn btn-ghost mc-crear" type="button" title="Crear informe" onclick="crearInformeDirecto(\'' + panelId + '\',' + idx + ',this)">📝 Crear</button>';
       // "Crear y subir": solo si la fila trae la OME (sin OME no se puede subir).
       if (x.ome) btn += ' <button class="btn btn-ghost mc-crear-subir" type="button" title="Crear y subir a PAMI" onclick="crearYSubirInforme(\'' + panelId + '\',' + idx + ',this)">📤 Crear y subir</button>';
+      // Abrir las opciones a mano. Cuando hay un solo medico y un solo resultado el
+      // sistema no pregunta —y esta bien que no pregunte—, pero entonces no habia
+      // manera de elegir otro resultado ni de mandarlo SIN firma para firmarlo a mano.
+      btn += ' <button class="btn btn-ghost mc-opciones" type="button" title="Opciones" onclick="opcionesInformeFila(\'' + panelId + '\',' + idx + ',this)">⚙️</button>';
     } else {
       // Decir POR QUÉ no se puede, así el admin sabe qué falta configurar.
       var _m = modeloParaPracticaRow(x.practica);
@@ -6284,6 +6288,21 @@ function seguirSubidaInforme(taskId, btn){
       }
     }
   }, 5000);
+}
+// Abre la ventana de opciones aunque no haga falta: elegir el resultado, el firmante o
+// mandarlo sin firma. Si la fila tiene OME, la ventana ofrece crear Y subir; si no,
+// solo crear (sin OME no hay a donde subirlo).
+async function opcionesInformeFila(panelId, idx, btn){
+  var x = faltanInformesDe(panelId)[idx];
+  if (!x) return;
+  var m = modeloParaPracticaRow(x.practica);
+  if (!m){ nsAlert('No hay un modelo cargado para esa práctica.'); return; }
+  var op = opcionesModelo(m);
+  if (!op.medicos.length){ nsAlert('Ningún médico de este centro tiene asignada esta práctica, así que no hay quién la firme. Se asigna en Configuración → Informes → Médicos.'); return; }
+  // El progreso ("En cola", "Subiendo…") se muestra en el boton de Crear y subir, no
+  // en el engranaje: si no, el engranaje se convierte en un cartel y se pierde.
+  var destino = (btn && btn.parentNode && btn.parentNode.querySelector('.mc-crear-subir')) || btn;
+  modalOpcionesInforme(x, m, op, !!x.ome, destino, faltantesDeVisita(panelId, x));
 }
 async function crearInformeDirecto(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx];
