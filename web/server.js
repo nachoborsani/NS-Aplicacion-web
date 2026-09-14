@@ -3607,9 +3607,11 @@ function omesDeOtrosInformes(slug, informeId) {
     if (it.desestimado) continue;   // desestimado no reclama nada
     const r = it.resuelto || {};
     const m = it.match || {};
+    // OJO: `omes` viene como [] cuando el informe matcheo UNA sola practica, y un
+    // array vacio es truthy. Con `||` ganaba el vacio y el numero de `ome` se perdia.
     const omes = []
-      .concat(r.omes || (r.ome ? [r.ome] : []))
-      .concat(m.omes || (m.ome ? [m.ome] : []));
+      .concat((r.omes && r.omes.length) ? r.omes : (r.ome ? [r.ome] : []))
+      .concat((m.omes && m.omes.length) ? m.omes : (m.ome ? [m.ome] : []));
     for (const o of omes) {
       const d = String(o || "").replace(/\D+/g, "");
       if (d && !fuera.has(d)) fuera.set(d, it.filename || "otro informe");
