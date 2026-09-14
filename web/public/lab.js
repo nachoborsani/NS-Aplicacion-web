@@ -120,7 +120,7 @@
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
       ["consultorios", "🚪", "Consultorios", "config"], ["obrasSociales", "🩹", "Obras Sociales", "config"],
-      ["usuarios", "👥", "Usuarios", "usuarios"]]],
+      ["online", "🌐", "Turnos online", "config"], ["usuarios", "👥", "Usuarios", "usuarios"]]],
   ];
   function labPuede(permiso) { return !permiso || (LAB.permisos || []).indexOf(permiso) >= 0; }
   // El menu del sistema va en la barra azul de NS, al lado de "Inicio". Antes vivia
@@ -222,6 +222,7 @@
     else if (mod === "recordatorios") viewRecordatorios(c);
     else if (mod === "inicio") viewInicio(c);
     else if (mod === "sala") viewSala(c);
+    else if (mod === "online") viewOnline(c);
     else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
     else if (mod === "especialidades") viewCatalogo(c, "especialidades", "Especialidades");
@@ -604,6 +605,7 @@
       '<div class="lab-turno-det">' +
         "<div><b>" + esc(t.hora) + "</b> · " + esc(t.pacienteNombre || "—") + "</div>" +
         '<div class="lab-muted">' + [esc(t.documento), esc(t.obraSocial), esc(t.practicaNombre), esc(t.motivo)].filter(Boolean).join(" · ") + "</div>" +
+        (t.online ? '<div class="lab-online-tag">\U0001f310 Lo pidió el paciente por internet</div>' : "") +
       "</div>" +
       '<div class="lab-sec-tit">Estado</div>' +
       '<div class="lab-estados">' + Object.keys(ESTADOS).filter(function (k) { return k !== "cancelado"; }).map(function (k) {
@@ -982,6 +984,49 @@
         if (luego) luego();
       };
     });
+  }
+
+  /* ========================== TURNOS ONLINE ============================= */
+  // El centro publica su agenda: el paciente entra por un link y saca el turno solo.
+  // Apagado hasta que lo prendan a proposito.
+  async function viewOnline(c) {
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var r = await api("/api/lab/config");
+    var cfg = (r.data && r.data.config) || {};
+    var on = cfg.online || {};
+    var link = location.origin + "/turnos/" + (LAB.centro || "");
+    c.innerHTML = '<div class="lab-card">' +
+      '<div class="lab-list-head"><h3>Turnos online</h3></div>' +
+      '<div class="lab-muted" style="margin-bottom:12px">El paciente entra por un link, elige especialidad y horario, y el turno cae en la agenda. ' +
+      "Queda marcado como pedido por internet, para que lo revisen antes de darlo por bueno.</div>" +
+      '<label class="lab-chk" style="margin-bottom:12px"><input type="checkbox" id="on-activo"' + (on.activo ? " checked" : "") + "> Tomar turnos por internet</label>" +
+      '<div class="lab-grid2">' +
+        '<label>Con cuánta anticipación se puede pedir<input class="lab-in" type="number" min="1" max="120" id="on-dias" value="' + (on.dias || 30) + '"> <span class="lab-muted">días</span></label>' +
+        '<label>Mensaje para el paciente<input class="lab-in" id="on-msg" value="' + esc(on.mensaje || "") + '" placeholder="Traé tu credencial y el documento"></label>' +
+      "</div>" +
+      '<div class="lab-modal-actions" style="justify-content:flex-start"><button class="lab-btn primary" id="on-ok" type="button">Guardar</button></div>' +
+      '<div class="lab-sec-tit">El link para compartir</div>' +
+      '<div class="lab-link"><code id="on-link">' + esc(link) + "</code>" +
+      '<button class="lab-btn xs" id="on-copiar" type="button">Copiar</button>' +
+      '<a class="lab-btn xs" href="' + esc(link) + '" target="_blank" rel="noopener">Ver cómo lo ve el paciente</a></div>' +
+      '<div class="lab-muted" style="font-size:11.5px;margin-top:8px">Ese link va en el WhatsApp del centro, en Instagram o en la puerta con un QR. ' +
+      "No pide usuario: cualquiera con el link puede pedir un turno, y por eso solo se muestran los horarios libres, nunca los datos de otros pacientes.</div>" +
+      "</div>";
+    c.querySelector("#on-ok").onclick = async function () {
+      var rr = await api("/api/lab/config", {
+        online: {
+          activo: c.querySelector("#on-activo").checked,
+          dias: c.querySelector("#on-dias").value,
+          mensaje: c.querySelector("#on-msg").value,
+        },
+      });
+      if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+      toast(c.querySelector("#on-activo").checked ? "Turnos online prendidos ✓" : "Turnos online apagados ✓");
+    };
+    c.querySelector("#on-copiar").onclick = function () {
+      navigator.clipboard.writeText(link).then(function () { toast("Link copiado ✓"); },
+        function () { toast("Copialo a mano.", true); });
+    };
   }
 
   /* ============================ USUARIOS ================================ */
@@ -1973,6 +2018,9 @@
       ".lab-edad-tot{font-size:13px;font-weight:700}",
       ".lab-edad-ref{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-2);margin-top:10px}",
       ".lab-edad-ref .lab-edad-b{width:12px;height:12px;border-radius:3px;display:inline-block}",
+      ".lab-link{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface-2,#f1f5f9);border:1px solid var(--border);border-radius:10px;padding:10px 12px}",
+      ".lab-link code{font-size:13px;word-break:break-all;flex:1;min-width:200px}",
+      ".lab-online-tag{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:700;background:rgba(56,189,248,.15);color:#0369a1;border-radius:6px;padding:2px 8px}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",

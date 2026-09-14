@@ -337,6 +337,7 @@ function sanitizeTurno(body, previo, store) {
   t.celular = body.celular !== undefined ? clean(body.celular) : (t.celular || "");
   t.obraSocial = body.obraSocial !== undefined ? clean(body.obraSocial) : (t.obraSocial || "");
   t.nroAfiliado = body.nroAfiliado !== undefined ? clean(body.nroAfiliado) : (t.nroAfiliado || "");
+  t.online = body.online !== undefined ? !!body.online : !!t.online;
   t.avisadoEl = body.avisadoEl !== undefined ? clean(body.avisadoEl) : (t.avisadoEl || "");
   t.avisadoPor = body.avisadoPor !== undefined ? clean(body.avisadoPor) : (t.avisadoPor || "");
   t.practicaId = body.practicaId !== undefined ? clean(body.practicaId) : (t.practicaId || "");
@@ -370,6 +371,119 @@ function sanitizeTurno(body, previo, store) {
     }
   }
   return t;
+}
+
+// ---------------------------------------------------------------------------
+// PUBLICO: turnos online. Sin sesion, asi que todo lo de aca se escribe pensando
+// en que lo llama cualquiera desde internet.
+//
+// Reglas que se respetan en todo el modulo:
+//   - Solo sale lo imprescindible: especialidades, nombre del profesional y las
+//     HORAS LIBRES. Nunca quien esta en las ocupadas ni cuantos turnos hay.
+//   - Se reserva dentro de una ventana (config.online.dias); ni hoy ni para 2029.
+//   - El turno entra como cualquier otro pero marcado `online`, para que la
+//     recepcion lo mire antes de darlo por bueno.
+//   - Tope por documento y por dia, para que no lo usen de juguete.
+// ---------------------------------------------------------------------------
+const ONLINE_TOPE_POR_DOC = 3;
+
+function onlineConfig(store) {
+  const c = (store.config && store.config.online) || {};
+  return { activo: !!c.activo, dias: c.dias || 30, mensaje: c.mensaje || "" };
+}
+function sumarDias(fecha, n) {
+  const d = new Date(fecha + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+async function handleLabPublico(ctx) {
+  const { req, res, method, p, url, json, readBody, dataDir } = ctx;
+  const seg = p.slice("/api/turnos-online/".length).split("/").filter(Boolean);
+  const centro = clean(seg[0]).toLowerCase();
+  const que = seg[1] || "";
+  if (!centro || !CENTRO_RE.test(centro)) { json(res, 404, { error: "No encontrado." }); return true; }
+  // Ojo: loadStore CREA el centro si no existe. Aca se mira el archivo primero, asi
+  // una direccion inventada no siembra un centro nuevo desde afuera.
+  if (!fs.existsSync(storeFile(dataDir, centro))) { json(res, 404, { error: "No encontrado." }); return true; }
+  const store = loadStore(dataDir, centro);
+  const cfg = onlineConfig(store);
+  if (!cfg.activo) { json(res, 403, { error: "Este centro no toma turnos por internet." }); return true; }
+  const hoy = nowIso().slice(0, 10);
+
+  // Con que puede arrancar la pantalla: nombre del centro, especialidades y hasta
+  // cuando se puede pedir.
+  if (que === "info" && method === "GET") {
+    const conProf = new Set((store.profesionales || []).filter((x) => x.activo !== false).map((x) => x.especialidadId));
+    return json(res, 200, {
+      centro: (store.config && store.config.centroNombre) || "",
+      mensaje: cfg.mensaje,
+      desde: sumarDias(hoy, 1), hasta: sumarDias(hoy, cfg.dias),
+      especialidades: (store.especialidades || [])
+        .filter((e2) => e2.activo !== false && conProf.has(e2.id))
+        .map((e2) => ({ id: e2.id, nombre: e2.nombre })),
+    }), true;
+  }
+
+  // Los horarios LIBRES de un dia. No se dice cuales estan ocupados ni por quien.
+  if (que === "libres" && method === "GET") {
+    const fecha = clean(url.searchParams.get("fecha"));
+    const espId = clean(url.searchParams.get("especialidadId"));
+    if (!fecha || fecha < sumarDias(hoy, 1) || fecha > sumarDias(hoy, cfg.dias)) {
+      return json(res, 400, { error: "Elegí una fecha dentro del período disponible." }), true;
+    }
+    const profs = (store.profesionales || [])
+      .filter((x) => x.activo !== false && (!espId || x.especialidadId === espId));
+    const salida = profs.map((prof) => {
+      if (bloqueoDe(store, prof.id, fecha)) return null;
+      const delDia = (store.turnos || []).filter((t) => t.profesionalId === prof.id && t.fecha === fecha && t.estado !== "cancelado");
+      const libres = generarSlots(prof, fecha, delDia).filter((sl) => !sl.turno).map((sl) => sl.hora);
+      if (!libres.length) return null;
+      return { profesionalId: prof.id, profesional: prof.nombre, horarios: libres };
+    }).filter(Boolean);
+    return json(res, 200, { fecha, profesionales: salida }), true;
+  }
+
+  // Reservar. Lo que llega de afuera no se usa tal cual: se toman SOLO estos campos.
+  if (que === "reservar" && method === "POST") {
+    const body = await readBody(req);
+    const fecha = clean(body.fecha), hora = clean(body.hora), profId = clean(body.profesionalId);
+    const nombre = clean(body.nombre).slice(0, 80);
+    const documento = soloDigitos(body.documento).slice(0, 12);
+    const celular = clean(body.celular).slice(0, 30);
+    if (!nombre || !documento || !celular) return json(res, 400, { error: "Completá nombre, documento y celular." }), true;
+    if (!fecha || fecha < sumarDias(hoy, 1) || fecha > sumarDias(hoy, cfg.dias)) {
+      return json(res, 400, { error: "Esa fecha no está disponible." }), true;
+    }
+    const prof = (store.profesionales || []).find((x) => x.id === profId && x.activo !== false);
+    if (!prof) return json(res, 404, { error: "Ese profesional no está disponible." }), true;
+    if (bloqueoDe(store, prof.id, fecha)) return json(res, 409, { error: "Ese día no se atiende." }), true;
+    const delDia = (store.turnos || []).filter((t) => t.profesionalId === prof.id && t.fecha === fecha && t.estado !== "cancelado");
+    // El horario tiene que ser uno de los que la agenda ofrece Y estar libre. Sin
+    // esto, alguien manda "03:00" y se mete fuera de horario.
+    const slots = generarSlots(prof, fecha, delDia);
+    const slot = slots.find((sl) => sl.hora === hora);
+    // Se distingue "ese horario no existe" de "ya lo tomaron": el primero es una
+    // direccion armada a mano, el segundo le pasa a cualquiera que tardo en completar.
+    if (!slot) return json(res, 400, { error: "Ese horario no está disponible." }), true;
+    if (slot.turno) return json(res, 409, { error: "Ese horario ya fue tomado. Elegí otro." }), true;
+    // Tope por documento: que no se use de juguete ni se tape la agenda.
+    const suyos = (store.turnos || []).filter((t) => t.online && t.documento === documento &&
+      t.estado !== "cancelado" && t.fecha >= hoy).length;
+    if (suyos >= ONLINE_TOPE_POR_DOC) {
+      return json(res, 429, { error: "Ya tenés varios turnos pedidos. Llamá al centro para sacar otro." }), true;
+    }
+    const t = {
+      id: uid(), profesionalId: prof.id, especialidadId: prof.especialidadId || "",
+      fecha, hora, pacienteId: "", pacienteNombre: nombre, documento, celular,
+      obraSocial: clean(body.obraSocial).slice(0, 60), motivo: clean(body.motivo).slice(0, 120),
+      estado: "dado", online: true, importe: 0, sena: 0, insumos: 0, pagado: false,
+      creadoEl: nowIso(), creadoPor: "online",
+    };
+    store.turnos.push(t); saveStore(dataDir, centro, store);
+    return json(res, 200, { ok: true, turno: { fecha: t.fecha, hora: t.hora, profesional: prof.nombre } }), true;
+  }
+  json(res, 404, { error: "No encontrado." });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,6 +550,15 @@ async function handleLab(ctx) {
       if (body.centroNombre !== undefined) store.config.centroNombre = clean(body.centroNombre);
       if (body.centroDireccion !== undefined) store.config.centroDireccion = clean(body.centroDireccion);
       if (body.plantillaRecordatorio !== undefined) store.config.plantillaRecordatorio = clean(body.plantillaRecordatorio) || PLANTILLA_DEFAULT;
+      // Turnos online: apagado hasta que el centro lo prenda. `dias` es con cuanta
+      // anticipacion se puede reservar; sin tope, alguien saca turno para 2029.
+      if (body.online !== undefined && body.online && typeof body.online === "object") {
+        store.config.online = {
+          activo: !!body.online.activo,
+          dias: Math.min(120, Math.max(1, parseInt(body.online.dias, 10) || 30)),
+          mensaje: clean(body.online.mensaje).slice(0, 300),
+        };
+      }
       saveStore(dataDir, centro, store);
       return json(res, 200, { config: store.config }), true;
     }
@@ -1254,4 +1377,4 @@ async function handleLab(ctx) {
   return true;
 }
 
-module.exports = { handleLab };
+module.exports = { handleLab, handleLabPublico };

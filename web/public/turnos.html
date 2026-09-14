@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pedir turno</title>
+<style>
+  :root{
+    --tinta:#0f172a; --tinta-2:#64748b; --linea:#e2e8f0; --fondo:#f6f8fb;
+    --acento:#12b3a6; --acento-o:#0a7d73; --papel:#fff; --error:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:var(--tinta);
+       font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  .caja{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+  header{text-align:center;padding:26px 0 18px}
+  header h1{margin:0 0 4px;font-size:24px;letter-spacing:-.01em}
+  header p{margin:0;color:var(--tinta-2);font-size:14px}
+  .tarjeta{background:var(--papel);border:1px solid var(--linea);border-radius:14px;padding:18px;margin-bottom:14px}
+  .paso{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-2);margin-bottom:10px}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:12px}
+  input,select{width:100%;margin-top:4px;padding:10px 12px;border:1px solid var(--linea);border-radius:10px;
+               font:inherit;font-size:15px;background:var(--papel);color:var(--tinta)}
+  input:focus,select:focus{outline:2px solid var(--acento);outline-offset:1px;border-color:transparent}
+  .dos{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  @media(max-width:480px){ .dos{grid-template-columns:1fr} }
+  .prof{border-top:1px solid var(--linea);padding-top:12px;margin-top:12px}
+  .prof:first-child{border-top:0;padding-top:0;margin-top:0}
+  .prof h3{margin:0 0 8px;font-size:15px}
+  .horas{display:flex;flex-wrap:wrap;gap:7px}
+  .hora{border:1px solid var(--linea);background:var(--papel);color:var(--tinta);border-radius:9px;
+        padding:8px 13px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+  .hora:hover{border-color:var(--acento);color:var(--acento-o)}
+  .hora[aria-pressed="true"]{background:var(--acento);border-color:var(--acento);color:#04302f}
+  .btn{width:100%;padding:13px;border:0;border-radius:11px;background:var(--acento);color:#04302f;
+       font:inherit;font-size:16px;font-weight:700;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .aviso{padding:11px 13px;border-radius:10px;font-size:14px;margin-bottom:12px}
+  .aviso.mal{background:#fef2f2;color:var(--error);border:1px solid #fecaca}
+  .aviso.info{background:#ecfeff;color:#155e63;border:1px solid #a5f3fc}
+  .ok{text-align:center;padding:26px 10px}
+  .ok .tilde{font-size:44px;line-height:1}
+  .ok h2{margin:10px 0 6px;font-size:21px}
+  .ok p{margin:0 0 4px;color:var(--tinta-2)}
+  .ok .datos{display:inline-block;text-align:left;margin-top:14px;background:var(--fondo);
+             border-radius:10px;padding:12px 16px;font-size:15px}
+  .muted{color:var(--tinta-2);font-size:13px}
+  footer{text-align:center;color:var(--tinta-2);font-size:12px;padding-top:10px}
+</style>
+</head>
+<body>
+<div class="caja">
+  <header>
+    <h1 id="tit">Pedir turno</h1>
+    <p id="sub">Cargando…</p>
+  </header>
+  <div id="cuerpo"></div>
+  <footer>Al pedir el turno, el centro te va a confirmar por teléfono.</footer>
+</div>
+<script>
+// Página pública: la abre el paciente, sin usuario. Solo habla con
+// /api/turnos-online/<centro>/..., que devuelve lo mínimo (especialidades, nombres
+// de profesionales y horarios libres). Nada de datos de otros pacientes.
+(function () {
+  var CENTRO = (location.pathname.split("/")[2] || "").toLowerCase();
+  var INFO = null, ELEGIDO = null;
+  var cuerpo = document.getElementById("cuerpo");
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fechaAr(f) { var x = String(f || "").split("-"); return x.length === 3 ? x[2] + "/" + x[1] + "/" + x[0] : f; }
+  async function pedir(ruta, opciones) {
+    var r = await fetch("/api/turnos-online/" + encodeURIComponent(CENTRO) + ruta, opciones);
+    var d = {};
+    try { d = await r.json(); } catch (e) {}
+    return { ok: r.ok, data: d };
+  }
+  function aviso(texto, clase) {
+    return '<div class="aviso ' + (clase || "info") + '">' + esc(texto) + "</div>";
+  }
+
+  async function arrancar() {
+    var r = await pedir("/info");
+    if (!r.ok) {
+      document.getElementById("sub").textContent = "";
+      cuerpo.innerHTML = aviso(r.data.error || "No se pudo abrir la agenda.", "mal");
+      return;
+    }
+    INFO = r.data;
+    if (INFO.centro) document.getElementById("tit").textContent = INFO.centro;
+    document.getElementById("sub").textContent = "Pedí tu turno por internet";
+    pintarPaso1();
+  }
+
+  function pintarPaso1() {
+    var esp = INFO.especialidades || [];
+    cuerpo.innerHTML =
+      (INFO.mensaje ? aviso(INFO.mensaje, "info") : "") +
+      '<div class="tarjeta">' +
+        '<div class="paso">1 · Qué necesitás</div>' +
+        "<label>Especialidad<select id=\"esp\">" +
+          '<option value="">Elegí una…</option>' +
+          esp.map(function (e) { return '<option value="' + esc(e.id) + '">' + esc(e.nombre) + "</option>"; }).join("") +
+        "</select></label>" +
+        '<label>Día<input type="date" id="fecha" min="' + esc(INFO.desde) + '" max="' + esc(INFO.hasta) + '" value="' + esc(INFO.desde) + '"></label>' +
+        '<div class="muted">Se puede pedir desde el ' + esc(fechaAr(INFO.desde)) + " hasta el " + esc(fechaAr(INFO.hasta)) + ".</div>" +
+      "</div>" +
+      '<div id="libres"></div>';
+    document.getElementById("esp").onchange = buscarLibres;
+    document.getElementById("fecha").onchange = buscarLibres;
+  }
+
+  async function buscarLibres() {
+    var esp = document.getElementById("esp").value;
+    var fecha = document.getElementById("fecha").value;
+    var caja = document.getElementById("libres");
+    ELEGIDO = null;
+    if (!esp || !fecha) { caja.innerHTML = ""; return; }
+    caja.innerHTML = '<div class="tarjeta"><div class="muted">Buscando horarios…</div></div>';
+    var r = await pedir("/libres?especialidadId=" + encodeURIComponent(esp) + "&fecha=" + encodeURIComponent(fecha));
+    if (!r.ok) { caja.innerHTML = '<div class="tarjeta">' + aviso(r.data.error || "No se pudo buscar.", "mal") + "</div>"; return; }
+    var profs = r.data.profesionales || [];
+    if (!profs.length) {
+      caja.innerHTML = '<div class="tarjeta"><div class="paso">2 · Elegí el horario</div>' +
+        '<div class="muted">No quedan horarios ese día. Probá con otra fecha.</div></div>';
+      return;
+    }
+    caja.innerHTML = '<div class="tarjeta"><div class="paso">2 · Elegí el horario</div>' +
+      profs.map(function (p) {
+        return '<div class="prof"><h3>' + esc(p.profesional) + "</h3><div class=\"horas\">" +
+          p.horarios.map(function (h) {
+            return '<button type="button" class="hora" aria-pressed="false" data-prof="' + esc(p.profesionalId) +
+              '" data-nom="' + esc(p.profesional) + '" data-hora="' + esc(h) + '">' + esc(h) + "</button>";
+          }).join("") + "</div></div>";
+      }).join("") + "</div><div id=\"datos\"></div>";
+    caja.querySelectorAll(".hora").forEach(function (b) {
+      b.onclick = function () {
+        caja.querySelectorAll(".hora").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        ELEGIDO = { profesionalId: b.dataset.prof, profesional: b.dataset.nom, hora: b.dataset.hora, fecha: fecha };
+        pintarPaso3();
+      };
+    });
+  }
+
+  function pintarPaso3() {
+    var caja = document.getElementById("datos");
+    caja.innerHTML =
+      '<div class="tarjeta">' +
+        '<div class="paso">3 · Tus datos</div>' +
+        '<div class="muted" style="margin-bottom:12px">' + esc(ELEGIDO.profesional) + " · " +
+          esc(fechaAr(ELEGIDO.fecha)) + " a las " + esc(ELEGIDO.hora) + "</div>" +
+        "<label>Apellido y nombre<input id=\"nombre\" autocomplete=\"name\"></label>" +
+        '<div class="dos">' +
+          "<label>Documento<input id=\"doc\" inputmode=\"numeric\" autocomplete=\"off\"></label>" +
+          "<label>Celular<input id=\"cel\" inputmode=\"tel\" autocomplete=\"tel\"></label>" +
+        "</div>" +
+        "<label>Obra social <span class=\"muted\">(si tenés)</span><input id=\"os\"></label>" +
+        '<div id="err"></div>' +
+        '<button class="btn" id="ok">Pedir el turno</button>' +
+      "</div>";
+    caja.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById("ok").onclick = reservar;
+  }
+
+  async function reservar() {
+    var btn = document.getElementById("ok");
+    var err = document.getElementById("err");
+    var datos = {
+      profesionalId: ELEGIDO.profesionalId, fecha: ELEGIDO.fecha, hora: ELEGIDO.hora,
+      nombre: document.getElementById("nombre").value.trim(),
+      documento: document.getElementById("doc").value.trim(),
+      celular: document.getElementById("cel").value.trim(),
+      obraSocial: document.getElementById("os").value.trim(),
+    };
+    if (!datos.nombre || !datos.documento || !datos.celular) {
+      err.innerHTML = aviso("Completá apellido y nombre, documento y celular.", "mal");
+      return;
+    }
+    btn.disabled = true; btn.textContent = "Pidiendo…";
+    var r = await pedir("/reservar", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(datos),
+    });
+    if (!r.ok) {
+      err.innerHTML = aviso(r.data.error || "No se pudo pedir el turno.", "mal");
+      btn.disabled = false; btn.textContent = "Pedir el turno";
+      // Si el horario se lo llevó otro mientras completaba, se refresca la lista.
+      if (r.data.error && r.data.error.indexOf("tomado") >= 0) buscarLibres();
+      return;
+    }
+    var t = r.data.turno || {};
+    cuerpo.innerHTML =
+      '<div class="tarjeta ok"><div class="tilde">✅</div>' +
+        "<h2>Listo, tu turno quedó pedido</h2>" +
+        "<p>Te esperamos. Si no podés venir, avisanos.</p>" +
+        '<div class="datos"><b>' + esc(t.profesional || "") + "</b><br>" +
+          esc(fechaAr(t.fecha)) + " a las " + esc(t.hora) + "</div>" +
+      "</div>";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  if (!CENTRO) {
+    document.getElementById("sub").textContent = "";
+    cuerpo.innerHTML = aviso("Falta la dirección del centro.", "mal");
+  } else {
+    arrancar();
+  }
+})();
+</script>
+</body>
+</html>

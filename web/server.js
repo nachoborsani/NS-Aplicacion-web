@@ -20,7 +20,7 @@ let gmailInformes = null;
 try { gmailInformes = require("./gmail_informes"); }
 catch (e) { console.warn("[informes] descarga de Gmail no disponible:", e && e.message); }
 const cruceGjs = require("./cruce_gjs");
-const { handleLab } = require("./lab_server");
+const { handleLab, handleLabPublico } = require("./lab_server");
 const nomExport = require("./nomenclador_export");
 const comparativaExport = require("./comparativa_export");
 const zipMin = require("./zip_min");
@@ -6271,6 +6271,17 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   if (p === "/health") return json(res, 200, { ok: true, service: "ns-web" });
+
+  // ---- Turnos online: pagina publica del centro, SIN sesion ----
+  // Va antes del porton de autenticacion a proposito: la saca el paciente desde
+  // su casa. El modulo devuelve solo horarios libres; ver web/lab_server.js.
+  if (p.startsWith("/api/turnos-online/")) {
+    if (await handleLabPublico({ req, res, method: req.method, p, url, json, readBody, dataDir })) return;
+  }
+  // La pagina en si: /turnos/<centro>
+  if (p === "/turnos" || p.startsWith("/turnos/")) {
+    return sendFile(res, path.join(publicDir, "turnos.html"));
+  }
 
   // Versión de los assets (para avisar "hay versión nueva, recargá" sin depender
   // de que el usuario recargue el index.html — la SPA no lo hace al navegar por hash).
