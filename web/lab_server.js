@@ -804,11 +804,17 @@ async function handleLab(ctx) {
     const demo = { F: new Array(TRAMOS.length).fill(0), M: new Array(TRAMOS.length).fill(0), "?": new Array(TRAMOS.length).fill(0) };
     let sinFecha = 0;
     const yaContado = new Set();
+    // Los numeros del grafico tienen que cerrar con el total que dice arriba: cada
+    // paciente cae en un tramo o en "sin fecha de nacimiento", nunca en ninguno de los
+    // dos. Antes el que tenia turno pero ya no tenia ficha sumaba al total y no a las
+    // barras, y el grafico parecia mostrar menos gente de la que decia.
+    let unicos = 0;
     delMes.forEach((t) => {
       if (!t.pacienteId || yaContado.has(t.pacienteId)) return;
       yaContado.add(t.pacienteId);
       const pac = (store.pacientes || []).find((x) => x.id === t.pacienteId);
       if (!pac) return;
+      unicos++;
       const sexo = pac.sexo === "F" || pac.sexo === "M" ? pac.sexo : "?";
       if (!pac.fechaNac) { sinFecha++; return; }
       const nac = new Date(pac.fechaNac + "T12:00:00");
@@ -817,12 +823,14 @@ async function handleLab(ctx) {
       const m3 = new Date(hoy + "T12:00:00").getMonth() - nac.getMonth();
       if (m3 < 0 || (m3 === 0 && new Date(hoy + "T12:00:00").getDate() < nac.getDate())) edad--;
       const i = TRAMOS.findIndex((r) => edad >= r[0] && edad <= r[1]);
+      // Una fecha de nacimiento futura o imposible no es una edad: cuenta como no cargada.
       if (i >= 0) demo[sexo][i]++;
+      else sinFecha++;
     });
     const porSexoEdad = {
       tramos: etiquetas,
       femenino: demo.F, masculino: demo.M, sinSexo: demo["?"],
-      unicos: yaContado.size, sinFecha,
+      unicos, sinFecha,
     };
 
     // Lo de hoy: es lo unico accionable de la pantalla, por eso va primero.

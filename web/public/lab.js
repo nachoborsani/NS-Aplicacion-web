@@ -130,6 +130,13 @@
       ["consultorios", "🚪", "Consultorios", "config"], ["obrasSociales", "🩹", "Obras Sociales", "config"],
       ["online", "🌐", "Turnos online", "config"], ["usuarios", "👥", "Usuarios", "usuarios"], ["registro", "📜", "Registro", "usuarios"]]],
   ];
+  // Las ventanas de confirmar son las de NS, no las del navegador: las del navegador
+  // dicen el dominio arriba, no se pueden escribir en castellano y en un sistema que
+  // se le muestra a un centro quedan como un error.
+  function preguntar(cuerpo, opts) {
+    if (typeof window.nsConfirm === "function") return window.nsConfirm(cuerpo, opts || {});
+    return Promise.resolve(window.confirm(cuerpo));
+  }
   function labPuede(permiso) { return !permiso || (LAB.permisos || []).indexOf(permiso) >= 0; }
   // El menu del sistema va en la barra azul de NS, al lado de "Inicio". Antes vivia
   // en una tarjeta blanca al costado y quedaban dos menus, uno arriba del otro.
@@ -140,11 +147,17 @@
     // Cambiar de centro: solo lo ve quien maneja mas de uno (nosotros). El usuario
     // del centro no elige: entra al suyo.
     if ((LAB.centros || []).length > 1) {
+      // Con el rotulo arriba se entiende que el desplegable es el centro y no un
+      // filtro cualquiera. El nombre largo se corta en el ancho de la barra, asi que
+      // el nombre entero queda en el titulo de la pagina y al pasar el mouse.
+      nav.appendChild(e("div", { class: "nav-section lab-only" }, "Centro"));
       var wrap = e("div", { class: "lab-only lab-centro-sel" });
       var sel = e("select", { class: "lab-in" });
       sel.innerHTML = LAB.centros.map(function (c) {
         return '<option value="' + esc(c.slug) + '"' + (c.slug === LAB.centro ? " selected" : "") + ">" + esc(c.name) + "</option>";
       }).join("");
+      var actual = LAB.centros.filter(function (c) { return c.slug === LAB.centro; })[0];
+      sel.title = (actual && actual.name) || "Elegí el centro";
       sel.onchange = function () {
         LAB.centro = sel.value;
         LAB.booted = false;   // otro centro es otra base: se recarga todo
@@ -178,6 +191,24 @@
     }
     return "agenda";
   }
+  // El titulo de arriba dice el centro Y la pantalla: con doce modulos parecidos,
+  // el centro solo no alcanza para saber donde estas parado.
+  function tituloModulo(mod) {
+    for (var i = 0; i < LAB_MENU.length; i++) {
+      var g = LAB_MENU[i][1];
+      for (var j = 0; j < g.length; j++) if (g[j][0] === mod) return g[j][2];
+    }
+    return "";
+  }
+  function pintarTitulo() {
+    var tit = document.getElementById("pageTitle");
+    if (!tit) return;
+    // El sistema se presenta con el nombre del centro. "Laboratorio" es como lo
+    // llamamos nosotros de este lado; el centro no tiene por que verlo.
+    var centro = (LAB.config && LAB.config.centroNombre) || "Sistema de turnos";
+    var pant = tituloModulo(LAB.modulo);
+    tit.textContent = pant ? centro + " · " + pant : centro;
+  }
   function marcarNavActivo() {
     document.querySelectorAll(".sidebar .nav .lab-navlink").forEach(function (a) {
       a.classList.toggle("active", a.getAttribute("data-mod") === LAB.modulo);
@@ -205,10 +236,7 @@
       LAB.config = r.data.config || {};
       LAB.centro = r.data.centro || LAB.centro || "";
       LAB.centros = r.data.centros || [];
-      // El sistema se presenta con el nombre del centro. "Laboratorio" es como
-      // lo llamamos nosotros de este lado; el centro no tiene por que verlo.
-      var tit = document.getElementById("pageTitle");
-      if (tit) tit.textContent = LAB.config.centroNombre || "Sistema de turnos";
+      pintarTitulo();
     }
     return true;
   }
@@ -216,6 +244,7 @@
   function labGo(mod) {
     LAB.modulo = mod;
     marcarNavActivo();
+    pintarTitulo();
     var c = document.getElementById("lab-content");
     if (!c) return;
     if (mod === "agenda") viewAgenda(c);
@@ -322,7 +351,9 @@
     for (var i = 0; i < startDow; i++) html += "<span></span>";
     for (var dd = 1; dd <= days; dd++) {
       var iso = y + "-" + String(mo + 1).padStart(2, "0") + "-" + String(dd).padStart(2, "0");
-      html += '<button class="lab-cal-d' + (iso === LAB.ag.fecha ? " sel" : "") + (iso === hoy ? " hoy" : "") + '" data-iso="' + iso + '">' + dd + '<i class="lab-cal-dot" data-iso="' + iso + '"></i></button>';
+      html += '<button class="lab-cal-d' + (iso === LAB.ag.fecha ? " sel" : "") + (iso === hoy ? " hoy" : "") +
+        '" data-iso="' + iso + '"' + (iso === hoy ? ' title="Hoy"' : "") + ">" + dd +
+        '<i class="lab-cal-dot" data-iso="' + iso + '"></i></button>';
     }
     box.innerHTML = html + "</div>";
     box.querySelector("#cal-prev").onclick = function () { LAB.ag.fecha = shiftMes(LAB.ag.fecha, -1); viewAgenda(document.getElementById("lab-content")); };
@@ -445,7 +476,7 @@
         : "";
       var qb = document.getElementById("ag-desbloquear");
       if (qb) qb.onclick = async function () {
-        if (!confirm("¿Volver a atender esos días?")) return;
+        if (!(await preguntar("Se vuelven a ofrecer turnos esos días.", { titulo: "Volver a atender", okLabel: "Volver a atender" }))) return;
         var rr = await req("DELETE", "/api/lab/bloqueos/" + r.data.bloqueo.id);
         if (!rr.ok) { toast("No se pudo quitar.", true); return; }
         toast("Listo, vuelve a atender ✓"); agLoad();
@@ -756,7 +787,7 @@
       labClose(); toast("Cobro guardado ✓"); agLoad();
     };
     m.body.querySelector("#tn-cancel").onclick = async function () {
-      if (!confirm("¿Cancelar este turno?")) return;
+      if (!(await preguntar("El horario queda libre para otro paciente.", { titulo: "Cancelar el turno", okLabel: "Cancelar el turno", peligro: true }))) return;
       var rr = await req("DELETE", "/api/lab/turnos/" + id);
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
@@ -877,7 +908,7 @@
       var id = caja.getAttribute("data-id");
       var t = items.filter(function (x) { return x.id === id; })[0];
       caja.querySelector("[data-sacar]").onclick = async function () {
-        if (!confirm("¿Sacarlo de la lista sin moverlo?")) return;
+        if (!(await preguntar("Sale de los pendientes y el turno queda como está.", { titulo: "Sacar de la lista", okLabel: "Sacar" }))) return;
         var rr = await api("/api/lab/turnos/" + id + "/sin-reprogramar", {});
         if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo.", true); return; }
         toast("Listo ✓"); viewReprogramar(c);
@@ -1086,19 +1117,28 @@
       ((d.porSexoEdad && d.porSexoEdad.unicos)
         ? (function () {
             var sx = d.porSexoEdad;
-            var maxi = Math.max.apply(null, sx.tramos.map(function (_, i) {
-              return (sx.femenino[i] || 0) + (sx.masculino[i] || 0) + (sx.sinSexo[i] || 0);
-            }).concat([1]));
+            // La barra mas alta tiene que llegar arriba de todo. Se comparaba contra la
+            // SUMA del tramo, pero las barras van una al lado de la otra, no apiladas:
+            // con 12 mujeres y 10 varones el maximo daba 22 y ninguna pasaba de la mitad.
+            var maxi = 1;
+            sx.tramos.forEach(function (_, i) {
+              maxi = Math.max(maxi, sx.femenino[i] || 0, sx.masculino[i] || 0, sx.sinSexo[i] || 0);
+            });
             return '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">Pacientes por sexo y edad</div>' +
               '<div class="lab-muted" style="margin-bottom:10px"><b>' + sx.unicos + "</b> paciente(s) único(s) con turno en el mes" +
               (sx.sinFecha ? " · " + sx.sinFecha + " sin fecha de nacimiento cargada" : "") + "</div>" +
               '<div class="lab-edades">' + sx.tramos.map(function (t, i) {
                 var fe = sx.femenino[i] || 0, ma = sx.masculino[i] || 0, si = sx.sinSexo[i] || 0;
                 var tot = fe + ma + si;
-                return '<div class="lab-edad"><div class="lab-edad-barras">' +
-                  '<div class="lab-edad-b f" style="height:' + Math.round((fe / maxi) * 100) + '%" title="' + fe + ' femenino"></div>' +
-                  '<div class="lab-edad-b m" style="height:' + Math.round((ma / maxi) * 100) + '%" title="' + ma + ' masculino"></div>' +
-                  (si ? '<div class="lab-edad-b s" style="height:' + Math.round((si / maxi) * 100) + '%" title="' + si + ' sin sexo cargado"></div>' : "") +
+                // Un tramo sin nadie no dibuja barras: antes quedaban dos rayitas de 2px
+                // que se leian como "hay poquitos" en vez de "no hay ninguno".
+                function barra(cant, clase, rotulo) {
+                  if (!cant) return "";
+                  return '<div class="lab-edad-b ' + clase + '" style="height:' + Math.max(3, Math.round((cant / maxi) * 100)) +
+                    '%" title="' + cant + " " + rotulo + " de " + esc(t) + ' años"></div>';
+                }
+                return '<div class="lab-edad' + (tot ? "" : " vacio") + '"><div class="lab-edad-barras">' +
+                  barra(fe, "f", "femenino") + barra(ma, "m", "masculino") + barra(si, "s", "sin sexo cargado") +
                   "</div><div class=\"lab-edad-rot\">" + esc(t) + '</div><div class="lab-edad-tot">' + tot + "</div></div>";
               }).join("") + "</div>" +
               '<div class="lab-edad-ref"><span class="lab-edad-b f"></span> Femenino <span class="lab-edad-b m"></span> Masculino' +
@@ -1164,15 +1204,23 @@
           '<div class="lab-list-head"><h3>Sala de espera</h3>' +
             '<div class="lab-inline"><input class="lab-in" type="date" id="sala-fecha" value="' + esc(LAB.salaFecha) + '">' +
             '<button class="lab-btn" id="sala-hoy" type="button">Hoy</button></div></div>' +
-          '<div class="lab-sala-kpis">' +
-            '<div class="lab-sala-kpi"><b>' + (t.turnos || 0) + "</b><span>turnos</span></div>" +
-            '<div class="lab-sala-kpi amar"><b>' + (t.esperando || 0) + "</b><span>esperando</span></div>" +
-            '<div class="lab-sala-kpi verde"><b>' + (t.atendidos || 0) + "</b><span>atendidos</span></div>" +
-            '<div class="lab-sala-kpi roja"><b>' + (t.ausentes || 0) + "</b><span>ausentes</span></div>" +
-            '<div class="lab-sala-kpi"><b>' + (t.porVenir || 0) + "</b><span>por venir</span></div>" +
-          "</div>" +
-          (cols ? '<div class="lab-sala-grid">' + cols + "</div>"
-                : '<div class="lab-muted" style="padding:14px">No hay turnos ese día.</div>') +
+          // Un dia sin turnos no muestra cinco ceros: eso se lee como si el sistema
+          // hubiera fallado. Se dice en castellano que ese dia no hay nada.
+          (t.turnos
+            ? '<div class="lab-sala-kpis">' +
+                '<div class="lab-sala-kpi"><b>' + (t.turnos || 0) + "</b><span>turnos</span></div>" +
+                '<div class="lab-sala-kpi amar"><b>' + (t.esperando || 0) + "</b><span>esperando</span></div>" +
+                '<div class="lab-sala-kpi verde"><b>' + (t.atendidos || 0) + "</b><span>atendidos</span></div>" +
+                '<div class="lab-sala-kpi roja"><b>' + (t.ausentes || 0) + "</b><span>ausentes</span></div>" +
+                '<div class="lab-sala-kpi"><b>' + (t.porVenir || 0) + "</b><span>por venir</span></div>" +
+              "</div>"
+            : "") +
+          (t.turnos && cols
+            ? '<div class="lab-sala-grid">' + cols + "</div>"
+            : '<div class="lab-vacio"><div class="lab-vacio-ic">🪧</div>' +
+              "<b>No hay turnos para el " + esc(DOW[new Date(LAB.salaFecha + "T00:00:00").getDay()].toLowerCase()) +
+              " " + esc(LAB.salaFecha.split("-").reverse().join("/")) + "</b>" +
+              '<div class="lab-muted">Los turnos que se carguen en la agenda de ese día aparecen acá.</div></div>') +
         "</div>";
       c.querySelector("#sala-fecha").onchange = function () { LAB.salaFecha = this.value; pintar(); };
       c.querySelector("#sala-hoy").onclick = function () { LAB.salaFecha = hoyISO(); pintar(); };
@@ -1419,7 +1467,7 @@
     m.body.querySelector("#vo-aumentar").onclick = async function () {
       var pct = parseFloat(m.body.querySelector("#vo-pct").value);
       if (!pct) { toast("Poné el porcentaje del aumento.", true); return; }
-      if (!confirm("¿Aumentar " + pct + "% todos los valores cargados de " + os.nombre + "? Las prácticas sin valor no se tocan.")) return;
+      if (!(await preguntar("Se aumentan " + pct + "% todos los valores cargados de " + os.nombre + ". Las prácticas sin valor no se tocan.", { titulo: "Aumentar valores", okLabel: "Aumentar" }))) return;
       var rr = await api("/api/lab/practicas/valores", { obraSocialId: os.id, aumentoPct: pct });
       if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo aplicar.", true); return; }
       LAB.cat.practicas = (rr.data && rr.data.items) || LAB.cat.practicas;
@@ -1467,7 +1515,7 @@
     });
     c.querySelectorAll("[data-del]").forEach(function (b) {
       b.onclick = async function () {
-        if (!confirm("¿Borrar esta práctica? Los turnos que ya la usaron la siguen mostrando.")) return;
+        if (!(await preguntar("Los turnos que ya la usaron la siguen mostrando.", { titulo: "Borrar la práctica", okLabel: "Borrar", peligro: true }))) return;
         var rr = await req("DELETE", "/api/lab/practicas/" + b.closest("tr").getAttribute("data-id"));
         if (!rr.ok) { toast("No se pudo borrar.", true); return; }
         toast("Práctica borrada ✓"); viewPracticas(c);
@@ -1649,7 +1697,7 @@
         var mantener = (m.body.querySelector('input[name="dup-' + gi + '"]:checked') || {}).value;
         if (!mantener) return;
         var fusionar = g.pacientes.map(function (p) { return p.id; }).filter(function (id) { return id !== mantener; });
-        if (!confirm("¿Unificar " + fusionar.length + " paciente(s) en el elegido? No se puede deshacer.")) return;
+        if (!(await preguntar("Se unifican " + fusionar.length + " ficha(s) en la elegida. No se puede deshacer.", { titulo: "Unificar pacientes", okLabel: "Unificar", peligro: true }))) return;
         var rr = await api("/api/lab/pacientes/unificar", { mantener: mantener, fusionar: fusionar });
         if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo unificar.", true); return; }
         toast("Unificados ✓ (" + rr.data.turnosMovidos + " turnos movidos)");
@@ -1869,7 +1917,7 @@
       }).join("");
       box.querySelectorAll("[data-del]").forEach(function (b) {
         b.onclick = async function () {
-          if (!confirm("¿Borrar este estudio y su archivo?")) return;
+          if (!(await preguntar("Se borra el estudio y el archivo adjunto.", { titulo: "Borrar el estudio", okLabel: "Borrar", peligro: true }))) return;
           var r = await req("DELETE", "/api/lab/estudios/" + b.dataset.del);
           if (!r.ok) { toast((r.data && r.data.error) || "No se pudo borrar.", true); return; }
           toast("Estudio borrado ✓"); load();
@@ -1957,7 +2005,7 @@
       };
       m.body.querySelectorAll("[data-del]").forEach(function (b) {
         b.onclick = async function () {
-          if (!confirm("¿Borrar este movimiento?")) return;
+          if (!(await preguntar("Se borra el movimiento de la cuenta corriente.", { titulo: "Borrar el movimiento", okLabel: "Borrar", peligro: true }))) return;
           var rr = await req("DELETE", "/api/lab/movimientos/" + b.dataset.del);
           if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo borrar.", true); return; }
           toast("Borrado ✓"); pintar();
@@ -1990,7 +2038,7 @@
       '<div class="lab-modal-actions">' + (p.id ? '<button class="lab-btn ghost danger" id="pc-del">Eliminar</button>' : "") + '<button class="lab-btn ghost" id="pc-cancel">Cancelar</button><button class="lab-btn primary" id="pc-ok">Guardar</button></div>';
     m.body.querySelector("#pc-cancel").onclick = labClose;
     if (p.id) m.body.querySelector("#pc-del").onclick = async function () {
-      if (!confirm("¿Eliminar la ficha de " + [p.apellido, p.nombre].filter(Boolean).join(", ") + "? Se borra su historia clínica; los turnos quedan con el nombre.")) return;
+      if (!(await preguntar("Se borra la ficha de " + [p.apellido, p.nombre].filter(Boolean).join(", ") + " y su historia clínica. Los turnos quedan con el nombre.", { titulo: "Eliminar el paciente", okLabel: "Eliminar", peligro: true }))) return;
       var r = await req("DELETE", "/api/lab/pacientes/" + p.id);
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo eliminar.", true); return; }
       labClose(); toast("Paciente eliminado" + (r.data.turnosFuturos ? " (tenía " + r.data.turnosFuturos + " turno/s futuros)" : "")); pacBuscar();
@@ -2047,7 +2095,7 @@
     });
     c.querySelectorAll(".cat-del").forEach(function (b) {
       b.onclick = async function () {
-        if (!confirm("¿Eliminar?")) return;
+        if (!(await preguntar("Se elimina de la lista.", { titulo: "Eliminar", okLabel: "Eliminar", peligro: true }))) return;
         var rr = await req("DELETE", "/api/lab/" + recurso + "/" + b.closest("tr").getAttribute("data-id"));
         if (rr.ok) { await cargarBootstrap(); viewCatalogo(c, recurso, titulo); }
         else { toast((rr.data && rr.data.error) || "No se pudo eliminar.", true); }
@@ -2115,7 +2163,7 @@
         '<div class="lab-cierre-actions"><button class="lab-btn" id="cj-print">🖨️ Imprimir arqueo</button><button class="lab-btn ghost danger" id="cj-reabrir">Reabrir</button></div>';
       box.querySelector("#cj-print").onclick = function () { imprimirArqueo(d.cierre); };
       box.querySelector("#cj-reabrir").onclick = async function () {
-        if (!confirm("¿Reabrir la caja de este día? Vas a poder volver a cobrar y cerrar.")) return;
+        if (!(await preguntar("Vas a poder volver a cobrar y a cerrarla.", { titulo: "Reabrir la caja", okLabel: "Reabrir" }))) return;
         await req("DELETE", "/api/lab/caja/cierre?fecha=" + LAB.cajaFecha);
         toast("Caja reabierta"); cajaLoad();
       };
@@ -2124,7 +2172,7 @@
         (medios ? '<div class="lab-chips">' + medios + "</div>" : "") +
         '<div class="lab-cierre-actions"><button class="lab-btn primary" id="cj-cerrar">🔒 Finalizar caja</button></div>';
       box.querySelector("#cj-cerrar").onclick = async function () {
-        if (!confirm("¿Finalizar la caja de " + LAB.cajaFecha.split("-").reverse().join("/") + "? Queda el arqueo del día.")) return;
+        if (!(await preguntar("Queda el arqueo del " + LAB.cajaFecha.split("-").reverse().join("/") + ".", { titulo: "Finalizar la caja", okLabel: "Finalizar" }))) return;
         var rr = await api("/api/lab/caja/cierre?fecha=" + LAB.cajaFecha, { fecha: LAB.cajaFecha });
         if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo cerrar.", true); return; }
         toast("Caja cerrada ✓"); cajaLoad();
@@ -2327,6 +2375,11 @@
       ".lab-menu.abierto .lab-menu-pop{display:block}",
       ".lab-menu-pop button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px}",
       ".lab-menu-pop button:hover{background:var(--hover)}",
+      ".lab-edad.vacio .lab-edad-rot,.lab-edad.vacio .lab-edad-tot{opacity:.45}",
+      ".lab-edad-barras{border-bottom:1px solid var(--border)}",
+      ".lab-vacio{text-align:center;padding:34px 16px;color:var(--text-2)}",
+      ".lab-vacio-ic{font-size:30px;line-height:1;margin-bottom:8px;opacity:.7}",
+      ".lab-vacio b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}",
       ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
@@ -2358,8 +2411,9 @@
       ".lab-cal-w{font-size:11px;color:var(--text-2);padding:2px 0}",
       ".lab-cal-d{position:relative;border:0;background:transparent;color:var(--text);padding:7px 0;border-radius:7px;cursor:pointer;font-size:13px}",
       ".lab-cal-d:hover{background:rgba(45,212,191,.15)}",
-      ".lab-cal-d.hoy{outline:1px solid var(--accent,#2dd4bf)}",
-      ".lab-cal-d.sel{background:var(--accent,#2dd4bf);color:#04201c;font-weight:700}",
+      ".lab-cal-d.hoy{font-weight:800;color:var(--accent,#2dd4bf);background:rgba(45,212,191,.14)}",
+      ".lab-cal-d.hoy.sel{color:#04201c}",
+      ".lab-cal-d.sel{background:var(--accent,#2dd4bf);color:#04201c;font-weight:700;box-shadow:0 2px 6px rgba(45,212,191,.45)}",
       ".lab-cal-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:transparent}",
       ".lab-cal-dot.on{background:#f59e0b}.lab-cal-d.sel .lab-cal-dot.on{background:#04201c}",
       ".lab-pend{color:#ef4444;font-weight:600}",
