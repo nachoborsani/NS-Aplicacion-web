@@ -88,7 +88,19 @@
       // El bootstrap PRIMERO: de ahi salen los permisos, y el menu se arma con eso.
       // Al reves —que es como estaba— el menu se dibujaba con la lista de permisos
       // todavia vacia y no quedaba ningun boton: la pantalla salia sin costado.
-      await cargarBootstrap();
+      var listo = await cargarBootstrap();
+      if (!listo) {
+        // Pasa en cada deploy: el navegador ya tiene el archivo nuevo y el servidor
+        // todavia esta reiniciando. Antes quedaba la pantalla armada a medias, sin
+        // menu, como si el sistema estuviera roto.
+        root.innerHTML = '<div class="lab-card" style="max-width:520px;margin:40px auto;text-align:center">' +
+          '<h3 style="margin:0 0 6px">No pude conectarme al sistema</h3>' +
+          '<div class="lab-muted" style="margin-bottom:14px">Puede ser que el servidor se esté reiniciando. Probá de nuevo en unos segundos.</div>' +
+          '<button class="lab-btn primary" id="lab-reintentar" type="button">Reintentar</button></div>';
+        var b = document.getElementById("lab-reintentar");
+        if (b) b.onclick = function () { window.labInit(); };
+        return;
+      }
       root.innerHTML = "";
       root.appendChild(shell());
       LAB.booted = true;
@@ -176,7 +188,8 @@
 
   async function cargarBootstrap() {
     var r = await api("/api/lab/bootstrap");
-    if (r.ok && r.data) {
+    if (!r.ok || !r.data) return false;
+    {
       LAB.cat.especialidades = r.data.especialidades || [];
       LAB.cat.profesionales = r.data.profesionales || [];
       LAB.cat.consultorios = r.data.consultorios || [];
@@ -193,6 +206,7 @@
       var tit = document.getElementById("pageTitle");
       if (tit) tit.textContent = LAB.config.centroNombre || "Sistema de turnos";
     }
+    return true;
   }
 
   function labGo(mod) {
