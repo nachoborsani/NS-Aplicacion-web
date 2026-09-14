@@ -6203,8 +6203,19 @@ async function crearYSubirInforme(panelId, idx, btn){
   if (!payload) return;
   delete payload._modelo;
   payload.ome = x.ome; payload.practicaTexto = x.practica || '';
+  // Cuando hay una sola opcion de cada cosa no se pregunta nada, asi que este cartel es
+  // el UNICO lugar donde se ve quien firma y con que resultado. Sin eso se sube a PAMI
+  // un informe firmado por alguien sin haberlo visto nunca.
+  var med = (op.medicos || [])[0];
+  var preset = (op.presets || [])[0];
   if (!await nsConfirm('', { titulo:'Crear y subir a PAMI',
-      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)+'<br>Modelo: '+esc(m.practicaConCodigo || m.label || m.key)+'<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
+      cuerpoHtml:'<b>'+esc(x.nombre || '')+'</b><br>'+esc(x.practica || '')+'<br>OME '+esc(x.ome)
+        + '<br>Modelo: '+esc(m.practicaConCodigo || m.label || m.key)
+        + '<br>Firma: <b>'+esc((med && (med.nombre || med.label)) || 'sin firma')+'</b>'
+        + (med && med.matricula ? ' <span class="nom-muted">'+esc(med.matricula)+'</span>' : '')
+        + (med && !med.hasFirma ? ' <span style="color:#b45309">⚠ sin firma cargada</span>' : '')
+        + (preset ? '<br>Resultado: '+esc(preset.nombre || preset.label || preset.id) : '')
+        + '<br><br>Se crea el informe y se sube a PAMI. Es real e irreversible.',
       okLabel:'Crear y subir' })) return;
   ejecutarCrearYSubir(payload, x, btn);
 }
