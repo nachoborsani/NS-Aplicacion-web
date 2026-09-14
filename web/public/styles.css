@@ -2310,8 +2310,10 @@
   .cab-chip.off{opacity:.5}
   .cab-chip.off:hover{opacity:.85}
   /* Buscador de paciente al lado del título "Informes". */
-  .cab-buscador{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-2)}
-  .cab-buscador input{border:none;background:transparent;padding:2px 0;font-size:12.5px;min-width:210px;color:var(--text)}
+  /* El buscador se estira con el lugar que haya. Con ancho fijo el texto de adentro
+     quedaba cortado: decia "archivo u OM" y la E de OME no entraba. */
+  .cab-buscador{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-2);flex:1 1 280px;max-width:460px;min-width:0}
+  .cab-buscador input{border:none;background:transparent;padding:2px 0;font-size:12.5px;min-width:250px;width:100%;color:var(--text)}
   .cab-buscador input:focus{outline:none}
   .cab-badge{display:inline-flex;align-items:center;font-size:11px;font-weight:750;padding:3px 9px;border-radius:999px;white-space:nowrap}
   /* Estado de la tarea (subiendo/auditando): chip notable, texto en llano. */
