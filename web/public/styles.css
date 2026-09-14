@@ -737,6 +737,53 @@
     .top-client-meta{gap:8px}
     .top-client-meta .crumb{display:none}
     .top-client-meta h2{font-size:15.5px}
+    /* El nombre del cliente es lo que dice DONDE estás parado: se queda con el
+       lugar. Antes tenía min-width:0 y los chips no se achican, así que el que
+       desaparecía era siempre el nombre y quedaba "Activo · UP (" cortado. */
+    .top-client-meta{flex:1 1 auto}
+    .top-client-meta > div{flex:1 1 auto}
+    .top-client-meta .client-status{display:none}
+    .top-client-meta .client-up-header{flex:0 0 auto;max-width:46%;overflow:hidden}
+    /* El estado del server es información de guardia, no de trabajo diario. */
+    #srvBtn{display:none !important}
+
+    /* ---- Informes recibidos en celular ---- */
+    /* Una tabla de 10 columnas en un teléfono se lee de costado y cada fila ocupa
+       media pantalla. Acá cada informe es una tarjeta y el orden lo manda el CSS:
+       primero el paciente, después la práctica, y el nombre del archivo al final
+       (es lo que menos se mira y lo más largo). */
+    #view-cabina .table-scroll{overflow:visible}
+    #view-cabina .nom-results-table{min-width:0;table-layout:auto;display:block}
+    #view-cabina .nom-results-table thead{display:none}
+    #view-cabina .nom-results-table tbody{display:block}
+    #view-cabina .nom-results-table tr{display:grid;grid-template-columns:24px minmax(0,1fr);
+      gap:3px 9px;padding:12px 13px;border-bottom:1px solid var(--border);align-items:start}
+    #view-cabina .nom-results-table td{display:block;grid-column:2;padding:0;border:0;
+      font-size:12.5px;line-height:1.35;white-space:normal;max-width:none;min-width:0}
+    #view-cabina .nom-results-table td.cab-c-check{grid-column:1;grid-row:1;text-align:left}
+    #view-cabina .nom-results-table td.cab-c-paciente{order:1;font-weight:700;font-size:14px}
+    #view-cabina .nom-results-table td.cab-c-estado{order:2}
+    #view-cabina .nom-results-table td.cab-c-practica{order:3;color:var(--text-2)}
+    #view-cabina .nom-results-table td.cab-c-ome{order:4}
+    #view-cabina .nom-results-table td.cab-c-obs{order:5}
+    #view-cabina .nom-results-table td.cab-c-archivo{order:6;font-size:11.5px;color:var(--text-2);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #view-cabina .nom-results-table td.cab-c-archivo .cab-file{font-weight:500}
+    #view-cabina .nom-results-table td.cab-c-recibido{order:7;font-size:11.5px;color:var(--text-2)}
+    /* El asunto del mail y la observación vacía no dicen nada en una pantalla chica. */
+    #view-cabina .nom-results-table td.cab-c-asunto,#view-cabina .nom-results-table td.cab-vacio{display:none}
+    #view-cabina .nom-results-table td.cab-c-acciones{order:8;margin-top:8px;display:flex;gap:9px;
+      flex-wrap:wrap;text-align:left;white-space:normal}
+    #view-cabina .nom-results-table td.nom-empty{grid-column:1/-1;text-align:center}
+
+    /* La botonera de arriba: cada botón entero y la tira se corre de costado. El
+       .btn tiene alto fijo, así que al apretarlos el texto se partía y "PAMI"
+       terminaba escrito ABAJO del botón, fuera de la caja. */
+    .nom-table .table-head{flex-direction:column;align-items:stretch;gap:9px;padding:11px 12px}
+    .nom-table .table-head > div{min-width:0}
+    .nom-table .table-head > div:last-child{overflow-x:auto;overflow-y:hidden;padding-bottom:3px}
+    .nom-table .table-head .btn{flex:0 0 auto;white-space:nowrap;height:38px;font-size:13px;padding:0 13px}
+
     /* En mobile manda el drawer (hamburguesa), no el modo colapsado */
     .side-collapse{display:none}
     body.sidebar-collapsed .sidebar{width:200px}
@@ -744,6 +791,9 @@
   }
   /* En celular: más ancho útil (menos padding) y botones de fila más cómodos al toque. */
   @media(max-width:560px){
+    /* En teléfono el nombre del cliente se lleva la barra entera: el UP se copia
+       desde la configuración PAMI del cliente, el nombre no está en ningún otro lado. */
+    .top-client-meta .client-up-header{display:none}
     .content{padding:16px 13px 30px}
     .page-head h1{font-size:18px}
     .rowbtn{padding:7px 10px}
@@ -2356,6 +2406,13 @@
   .cab-modal-body{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:0;padding:0;height:calc(100vh - 96px);max-height:calc(100vh - 96px)}
   .cab-modal-file{border-right:1px solid var(--border);min-height:520px;background:var(--surface-2)}
   .cab-modal-file iframe{width:100%;height:100%;min-height:520px;border:0;display:block}
+  /* Cuando el PDF se abre aparte (Chrome de Android), la caja del archivo no tiene
+     que seguir ocupando media pantalla: se achica al botón. */
+  .cab-modal-file.cab-file-compacto{min-height:0}
+  .cab-doc-abrir{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:11px;text-align:center;min-height:0;height:auto;white-space:normal;padding:22px 18px}
+  .cab-doc-abrir .btn{text-decoration:none}
+  .cab-doc-abrir-nm{font-size:13px;font-weight:650;word-break:break-word}
   .cab-doc-texto{height:100%;min-height:520px;max-height:80vh;overflow:auto;padding:20px 22px;white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.55;color:var(--text-1);background:var(--surface-1)}
   .cab-modal-side{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
   /* Las acciones van ARRIBA de todo y pegadas: es lo primero que se decide
@@ -2410,4 +2467,4 @@
   .cab-manual-sub:last-child{margin-bottom:0}
   /* En pantallas medianas la columna fija le comería demasiado al visor. */
   @media(max-width:1180px){ .cab-modal-body{grid-template-columns:minmax(0,1fr) 340px} }
-  @media(max-width:820px){ .cab-modal-body{grid-template-columns:1fr;height:auto}.cab-modal-file{border-right:0;border-bottom:1px solid var(--border);min-height:300px}.cab-datos-grid{grid-template-columns:1fr} }
+  @media(max-width:820px){ .cab-modal-body{grid-template-columns:1fr;height:auto}.cab-modal-file{border-right:0;border-bottom:1px solid var(--border);min-height:300px}.cab-modal-file.cab-file-compacto{min-height:0}.cab-datos-grid{grid-template-columns:1fr} }

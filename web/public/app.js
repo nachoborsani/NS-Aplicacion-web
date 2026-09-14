@@ -4,8 +4,13 @@ var root = document.documentElement;
 var TH_MOON = '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
 var TH_SUN  = '<circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>';
 function applyThemeIcon(){
+  var oscuro = root.getAttribute('data-theme') === 'dark';
   var el = document.getElementById('thIco');
-  if (el) el.innerHTML = (root.getAttribute('data-theme') === 'dark') ? TH_SUN : TH_MOON;
+  if (el) el.innerHTML = oscuro ? TH_SUN : TH_MOON;
+  // El renglon del menu dice A DONDE vas, no donde estas: con el tema oscuro puesto,
+  // el boton ofrece volver al claro.
+  var tx = document.getElementById('thTxt');
+  if (tx) tx.textContent = oscuro ? 'Modo claro' : 'Modo oscuro';
 }
 function toggleTheme(){
   var d = root.getAttribute('data-theme') === 'dark';
@@ -12635,20 +12640,22 @@ function renderCabinaRows(slug, items){
     var subiendo = !!CAB_SUBIENDO[it.id];
     var nRepe = porPaciente[cabClavePaciente(it)] || 0;
     var repe = nRepe > 1 ? ' <span class="cab-repe" title="Este paciente tiene ' + nRepe + ' informes en la lista">\u00d7' + nRepe + '</span>' : '';
+    // Cada celda lleva el nombre de su columna: en celular la fila se dibuja como
+    // tarjeta y el orden lo pone el CSS (primero el paciente, no el nombre del archivo).
     return '<tr class="cab-row' + (subiendo ? ' cab-row-subiendo' : '') + '" onclick="abrirInforme(\''+esc(it.id)+'\')">'
-      + '<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
-      + '<td><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
-      + '<td>'+esc((it.extract&&it.extract.nombre)||'—')+repe+'<div class="cab-sub">'+dni+'</div></td>'
-      + '<td class="cab-practica">'+esc((it.extract&&it.extract.practica)||'—')
+      + '<td class="cab-c-check" style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="cab-check" value="'+esc(it.id)+'" onclick="cabToggleSel()"></td>'
+      + '<td class="cab-c-archivo"><span class="cab-file">'+esc(it.filename)+'</span>'+ocr+'</td>'
+      + '<td class="cab-c-paciente">'+esc((it.extract&&it.extract.nombre)||'—')+repe+'<div class="cab-sub">'+dni+'</div></td>'
+      + '<td class="cab-practica cab-c-practica">'+esc((it.extract&&it.extract.practica)||'—')
         + '<div class="cab-sub">'+(fEstudio ? 'fecha '+esc(fEstudio) : 'no se pudo leer la fecha')+'</div></td>'
-      + '<td>'+(subiendo ? '<span class="cab-badge subiendo">Subiendo a PAMI…</span>' : cabBadge(it))+'</td>'
-      + '<td class="cab-obs" title="'+esc(obsTit)+'">'+(obs ? esc(obs) : '—')+'</td>'
-      + '<td>'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'+cabFechasOme(it, omesArr)):'—')+'</td>'
-      + '<td class="cab-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
+      + '<td class="cab-c-estado">'+(subiendo ? '<span class="cab-badge subiendo">Subiendo a PAMI…</span>' : cabBadge(it))+'</td>'
+      + '<td class="cab-obs cab-c-obs' + (obs ? '' : ' cab-vacio') + '" title="'+esc(obsTit)+'">'+(obs ? esc(obs) : '—')+'</td>'
+      + '<td class="cab-c-ome' + (ome ? '' : ' cab-vacio') + '">'+(ome?('<span class="cab-ome" title="Clic para copiar el N° de OME" onclick="event.stopPropagation();cabCopiarOme(this,\''+esc(ome)+'\')">'+esc(ome)+'</span>'+cabFechasOme(it, omesArr)):'—')+'</td>'
+      + '<td class="cab-recibido cab-c-recibido" title="'+esc(rec.title)+'">'+esc(rec.txt)
         + (rec.hora ? '<div class="cab-sub">'+esc(rec.hora)+'</div>' : '')
         + (rec.aMano ? '<div class="cab-sub">a mano</div>' : (rec.generado ? '<div class="cab-sub">lo hicimos nosotros</div>' : (rec.delCentro ? '<div class="cab-sub">del sistema del centro</div>' : ''))) + '</td>'
-      + '<td class="cab-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
-      + '<td class="cab-actions" onclick="event.stopPropagation()">'
+      + '<td class="cab-asunto cab-c-asunto" title="'+(it.asunto?esc(it.asunto):'')+'">'+asunto+'</td>'
+      + '<td class="cab-actions cab-c-acciones" onclick="event.stopPropagation()">'
         + '<button class="rowbtn" title="Revisar" onclick="abrirInforme(\''+esc(it.id)+'\')">🔍</button>'
         + (['ok','resuelto','falta_validar'].indexOf(cabEstadoDe(it))>=0 ? '<button class="rowbtn" title="Subir este a PAMI (si ya validaste la OME)" onclick="event.stopPropagation();subirInformeUno(\''+esc(it.id)+'\')">📤</button>' : '')
         + '<button class="rowbtn" title="Reanalizar" onclick="reanalizarInforme(\''+esc(it.id)+'\')">🔄</button>'
@@ -12855,10 +12862,23 @@ function abrirInforme(id){
   var cajaTxt = document.getElementById('cabTexto');
   var urlArch = '/api/clientes/'+slug+'/informes/'+id+'/archivo';
   var esPreview = /\.(pdf|jpe?g|png|tiff?)$/i.test(it.filename);
-  if (esPreview){ frame.style.display=''; frame.src = urlArch; cajaTxt.style.display='none'; }
+  // Chrome de Android NO dibuja PDFs adentro de la página: el iframe queda como una
+  // caja gris con un "Abrir" que ni dice de qué archivo es, ocupando media pantalla.
+  // navigator.pdfViewerEnabled === false es justamente "este navegador no los dibuja".
+  var pdfAfuera = /\.pdf$/i.test(it.filename) && navigator.pdfViewerEnabled === false;
+  var cajaArch = frame.parentNode;
+  if (cajaArch) cajaArch.classList.toggle('cab-file-compacto', pdfAfuera);
+  if (esPreview && !pdfAfuera){ frame.style.display=''; frame.src = urlArch; cajaTxt.style.display='none'; }
+  else if (pdfAfuera){
+    frame.style.display='none'; frame.removeAttribute('src');
+    cajaTxt.style.display=''; cajaTxt.className = 'cab-doc-texto cab-doc-abrir';
+    cajaTxt.innerHTML = '<div class="cab-doc-abrir-nm">📄 ' + esc(it.filename) + '</div>'
+      + '<a class="btn btn-primary" target="_blank" rel="noopener" href="' + esc(urlArch) + '">Abrir el informe</a>'
+      + '<div class="nom-muted">Tu navegador no muestra PDFs dentro de la página. Se abre aparte y con la flecha de atrás volvés acá.</div>';
+  }
   else {
     frame.style.display='none'; frame.removeAttribute('src');
-    cajaTxt.style.display=''; cajaTxt.textContent = 'Leyendo el documento…';
+    cajaTxt.style.display=''; cajaTxt.className = 'cab-doc-texto'; cajaTxt.textContent = 'Leyendo el documento…';
     var reqId = id;
     fetch('/api/clientes/'+slug+'/informes/'+id+'/texto').then(function(r){ return r.json(); }).then(function(d){
       if (!CAB_ITEM || CAB_ITEM.id !== reqId) return; // cambió de informe mientras cargaba
