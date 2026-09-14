@@ -82,6 +82,7 @@ function emptyStore() {
     turnos: [],
     practicas: [],
     bloqueos: [],
+    movimientos: [],
     config: {},
     evoluciones: [],
     estudios: [],
@@ -155,6 +156,7 @@ const LAB_PLANTILLAS = {
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
   bloqueos: "agenda",
+  movimientos: "caja",
   sala: "sala",
   recordatorios: "recordatorios",
   config: "config",
@@ -368,7 +370,12 @@ async function handleLab(ctx) {
 
   // Cada recurso pide su permiso. El cierre de caja pide uno propio: la
   // recepcionista cobra todo el dia pero el arqueo no lo cierra ella.
-  const permisoPedido = (recurso === "caja" && idPath === "cierre") ? "cierre" : LAB_RECURSO_PERMISO[recurso];
+  // La cuenta corriente es plata, no ficha: pide el permiso de caja aunque cuelgue
+  // de /pacientes. Si no, la recepcion que no cobra veria lo que cada uno debe.
+  const permisoPedido =
+    (recurso === "caja" && idPath === "cierre") ? "cierre"
+    : (recurso === "pacientes" && (seg[2] === "cuenta" || seg[2] === "movimientos")) ? "caja"
+    : LAB_RECURSO_PERMISO[recurso];
   if (permisoPedido && !labPuede(me, permisoPedido)) {
     return json(res, 403, { error: "Tu usuario no tiene permiso para esta parte del sistema." }), true;
   }
@@ -445,6 +452,56 @@ async function handleLab(ctx) {
     else { t.avisadoEl = nowIso(); t.avisadoPor = me.username; }
     saveStore(dataDir, centro, store);
     return json(res, 200, { item: t }), true;
+  }
+
+  // -- Cuenta corriente del paciente --
+  // No se lleva un libro aparte: los cargos salen de los turnos, que es donde ya se
+  // anota lo que se cobra. Un libro paralelo obliga a mantener dos verdades y a la
+  // semana no coinciden. Los movimientos sueltos son para lo que NO es un turno: un
+  // pago a cuenta, un certificado, un ajuste.
+  if (recurso === "pacientes" && seg[2] === "cuenta" && method === "GET") {
+    const pacId = idPath;
+    const movs = [];
+    (store.turnos || []).filter((t) => t.pacienteId === pacId && t.estado !== "cancelado").forEach((t) => {
+      const cargo = money((t.importe || 0) + (t.insumos || 0));
+      // Lo que entro por ese turno: si quedo pagado, todo; si no, la sena.
+      const pagado = t.pagado ? cargo : money(t.sena || 0);
+      const prof = (store.profesionales || []).find((x) => x.id === t.profesionalId) || {};
+      if (cargo) movs.push({ id: "t-" + t.id, fecha: t.fecha, tipo: "cargo", turnoId: t.id,
+        concepto: t.practicaNombre || "Consulta" + (prof.nombre ? " · " + prof.nombre : ""), importe: cargo });
+      if (pagado) movs.push({ id: "p-" + t.id, fecha: t.fecha, tipo: "pago", turnoId: t.id,
+        concepto: (t.pagado ? "Cobrado" : "Seña") + (t.medioPago ? " · " + t.medioPago : ""), importe: pagado });
+    });
+    (store.movimientos || []).filter((m2) => m2.pacienteId === pacId).forEach((m2) => movs.push(m2));
+    movs.sort((a, b) => String(b.fecha + (b.creadoEl || "")).localeCompare(String(a.fecha + (a.creadoEl || ""))));
+    const suma = (tipo) => money(movs.filter((x) => x.tipo === tipo).reduce((a, x) => a + (x.importe || 0), 0));
+    const cargos = suma("cargo"), pagos = suma("pago"), ajustes = suma("ajuste");
+    return json(res, 200, { items: movs, totales: { cargos, pagos, ajustes, saldo: money(cargos + ajustes - pagos) } }), true;
+  }
+  // Movimientos que NO salen de un turno.
+  if (recurso === "pacientes" && seg[2] === "movimientos" && method === "POST") {
+    const pacId = idPath;
+    if (!(store.pacientes || []).some((x) => x.id === pacId)) return json(res, 404, { error: "Ese paciente no existe." }), true;
+    const body = await readBody(req);
+    const tipo = ["cargo", "pago", "ajuste"].includes(clean(body.tipo)) ? clean(body.tipo) : "pago";
+    const importe = money(body.importe);
+    if (!importe) return json(res, 400, { error: "Poné el importe." }), true;
+    const m2 = {
+      id: uid(), pacienteId: pacId, fecha: clean(body.fecha) || nowIso().slice(0, 10),
+      tipo, concepto: clean(body.concepto) || (tipo === "pago" ? "Pago a cuenta" : "Movimiento"),
+      medioPago: clean(body.medioPago), importe,
+      creadoEl: nowIso(), creadoPor: me.username,
+    };
+    if (!store.movimientos) store.movimientos = [];
+    store.movimientos.push(m2); saveStore(dataDir, centro, store);
+    return json(res, 200, { item: m2 }), true;
+  }
+  if (recurso === "movimientos" && idPath && method === "DELETE") {
+    const antes = (store.movimientos || []).length;
+    store.movimientos = (store.movimientos || []).filter((x) => x.id !== idPath);
+    if (store.movimientos.length === antes) return json(res, 404, { error: "Ese movimiento no existe (los de un turno se corrigen desde el turno)." }), true;
+    saveStore(dataDir, centro, store);
+    return json(res, 200, { ok: true }), true;
   }
 
   // -- Ausencias y feriados --

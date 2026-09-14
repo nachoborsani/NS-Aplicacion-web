@@ -1233,7 +1233,7 @@
       '<table class="lab-table"><thead><tr><th>Apellido y nombre</th><th>Documento</th><th>Obra social</th><th>Celular</th><th></th></tr></thead><tbody>' +
       (items.map(function (p) {
         return '<tr data-id="' + p.id + '"><td><b>' + esc([p.apellido, p.nombre].filter(Boolean).join(", ")) + "</b></td><td>" + esc(p.documento || "") + "</td><td>" + esc(p.obraSocial || "") + (p.nroAfiliado ? " " + esc(p.nroAfiliado) : "") + "</td><td>" + esc(p.celular || "") + "</td>" +
-          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos" title="Turnos">📅</button> <button class="lab-btn xs ghost lab-pac-presup" title="Presupuesto">💰</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
+          '<td style="white-space:nowrap"><button class="lab-btn xs ghost lab-pac-turnos" title="Turnos">📅</button> <button class="lab-btn xs ghost lab-pac-cuenta" title="Cuenta corriente">💳</button> <button class="lab-btn xs ghost lab-pac-presup" title="Presupuesto">💰</button> <button class="lab-btn xs ghost lab-pac-hc">📋 H.C.</button> <button class="lab-btn xs ghost lab-pac-edit">Editar</button></td></tr>';
       }).join("") || '<tr><td colspan="5" class="lab-muted" style="padding:16px">Sin pacientes.</td></tr>') + "</tbody></table>";
     list.querySelectorAll(".lab-pac-edit").forEach(function (b) {
       b.onclick = async function () {
@@ -1247,6 +1247,13 @@
         var id = b.closest("tr").getAttribute("data-id");
         var rr = await api("/api/lab/pacientes/" + id);
         hcModal(rr.data && rr.data.item);
+      };
+    });
+    list.querySelectorAll(".lab-pac-cuenta").forEach(function (b) {
+      b.onclick = async function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        var rr = await api("/api/lab/pacientes/" + id);
+        cuentaModal(rr.data && rr.data.item);
       };
     });
     list.querySelectorAll(".lab-pac-turnos").forEach(function (b) {
@@ -1453,6 +1460,68 @@
     };
     load();
   }
+  // Cuenta corriente: lo que se le cobro, lo que pago y lo que debe. Los cargos
+  // salen de los turnos —ahi ya se anota el cobro— y aca se suman los movimientos
+  // que no son un turno: un pago a cuenta, un certificado, un ajuste.
+  async function cuentaModal(p) {
+    if (!p) return;
+    var m = modal("Cuenta corriente · " + [p.apellido, p.nombre].filter(Boolean).join(", "), { ancho: "ancho" });
+    m.body.innerHTML = '<div class="lab-muted">Cargando…</div>';
+    async function pintar() {
+      var r = await api("/api/lab/pacientes/" + p.id + "/cuenta");
+      if (!r.ok) { m.body.innerHTML = '<div class="lab-muted">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div>"; return; }
+      var t = r.data.totales || {};
+      var filas = (r.data.items || []).map(function (x) {
+        var esPago = x.tipo === "pago";
+        return "<tr><td>" + esc(String(x.fecha || "").split("-").reverse().join("/")) + "</td>" +
+          "<td>" + esc(x.concepto || "") + (x.turnoId ? ' <span class="lab-muted">turno</span>' : "") + "</td>" +
+          '<td class="num">' + (esPago ? "" : fmt$(x.importe)) + "</td>" +
+          '<td class="num">' + (esPago ? fmt$(x.importe) : "") + "</td>" +
+          '<td style="text-align:right">' + (x.turnoId ? "" : '<button class="lab-btn xs ghost danger" data-del="' + esc(x.id) + '" type="button">✕</button>') + "</td></tr>";
+      }).join("");
+      var debe = (t.saldo || 0) > 0;
+      m.body.innerHTML =
+        '<div class="lab-sala-kpis">' +
+          '<div class="lab-sala-kpi"><b>' + fmt$(t.cargos || 0) + "</b><span>se le cobró</span></div>" +
+          '<div class="lab-sala-kpi verde"><b>' + fmt$(t.pagos || 0) + "</b><span>pagó</span></div>" +
+          '<div class="lab-sala-kpi' + (debe ? " roja" : "") + '"><b>' + fmt$(t.saldo || 0) + "</b><span>" + (debe ? "debe" : "saldo") + "</span></div>" +
+        "</div>" +
+        '<div class="lab-cta-nuevo"><div class="lab-grid3">' +
+          '<label>Fecha<input class="lab-in" type="date" id="cc-fecha" value="' + hoyISO() + '"></label>' +
+          '<label>Concepto<input class="lab-in" id="cc-concepto" placeholder="Pago a cuenta, certificado…"></label>' +
+          '<label>Importe<input class="lab-in" type="number" min="0" step="100" id="cc-importe"></label>' +
+        "</div>" +
+        '<div class="lab-inline" style="justify-content:flex-end;gap:8px;margin-top:8px">' +
+          '<select class="lab-in" id="cc-tipo" style="width:150px"><option value="pago">Pago</option><option value="cargo">Cargo</option><option value="ajuste">Ajuste</option></select>' +
+          '<select class="lab-in" id="cc-medio" style="width:160px"><option value="">— Medio —</option>' +
+          ["Efectivo", "Débito", "Crédito", "Transferencia", "Mercado Pago"].map(function (x) { return "<option>" + x + "</option>"; }).join("") + "</select>" +
+          '<button class="lab-btn primary" id="cc-add" type="button">Agregar</button></div></div>' +
+        (filas
+          ? '<table class="lab-table"><thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Debe</th><th class="num">Pagó</th><th></th></tr></thead><tbody>' + filas + "</tbody></table>"
+          : '<div class="lab-muted" style="padding:14px">Todavía no hay movimientos.</div>');
+      m.body.querySelector("#cc-add").onclick = async function () {
+        var rr = await api("/api/lab/pacientes/" + p.id + "/movimientos", {
+          fecha: m.body.querySelector("#cc-fecha").value,
+          tipo: m.body.querySelector("#cc-tipo").value,
+          concepto: m.body.querySelector("#cc-concepto").value,
+          medioPago: m.body.querySelector("#cc-medio").value,
+          importe: m.body.querySelector("#cc-importe").value,
+        });
+        if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
+        toast("Movimiento agregado ✓"); pintar();
+      };
+      m.body.querySelectorAll("[data-del]").forEach(function (b) {
+        b.onclick = async function () {
+          if (!confirm("¿Borrar este movimiento?")) return;
+          var rr = await req("DELETE", "/api/lab/movimientos/" + b.dataset.del);
+          if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo borrar.", true); return; }
+          toast("Borrado ✓"); pintar();
+        };
+      });
+    }
+    pintar();
+  }
+
   function pacForm(p) {
     p = p || {};
     var m = modal(p.id ? "Editar paciente" : "Nuevo paciente", { ancho: "ancho" });
@@ -1779,6 +1848,8 @@
       ".lab-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}",
       ".lab-perm{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);padding:2px 0}",
       ".oculto{display:none}",
+      ".lab-cta-nuevo{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px}",
+      ".lab-table td.num,.lab-table th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
       ".lab-sala-kpi b{display:block;font-size:20px;line-height:1.1}",
