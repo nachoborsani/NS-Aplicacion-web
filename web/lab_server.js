@@ -893,6 +893,47 @@ async function handleLab(ctx) {
     return json(res, 200, { periodo, profesional: prof.nombre, contrato: prof.contrato || null, items: suyos }), true;
   }
 
+  // -- Transferir agenda: los turnos de uno pasan a otro --
+  // Cubre el caso de siempre: el profesional no viene y otro lo reemplaza. Los
+  // pacientes conservan SU horario, que es lo que ya tienen anotado.
+  if (recurso === "turnos" && idPath === "transferir" && method === "POST") {
+    const body = await readBody(req);
+    const deId = clean(body.deProfesionalId), aId = clean(body.aProfesionalId);
+    const desde = clean(body.desde), hasta = clean(body.hasta) || desde;
+    const de = (store.profesionales || []).find((x) => x.id === deId);
+    const a = (store.profesionales || []).find((x) => x.id === aId);
+    if (!de || !a) return json(res, 404, { error: "Elegí de qué profesional y a cuál." }), true;
+    if (deId === aId) return json(res, 400, { error: "Es el mismo profesional." }), true;
+    if (!desde) return json(res, 400, { error: "Elegí desde qué día." }), true;
+    if (hasta < desde) return json(res, 400, { error: "El día final no puede ser anterior al inicial." }), true;
+    const candidatos = (store.turnos || []).filter((t) => t.profesionalId === deId &&
+      t.estado !== "cancelado" && t.fecha >= desde && t.fecha <= hasta);
+    const movidos = [], chocaron = [];
+    candidatos.forEach((t) => {
+      // Si el que recibe ya tiene algo a esa hora, NO se pisa: se informa para que
+      // alguien decida. Mover dos pacientes al mismo horario es peor que no mover.
+      const ocupado = (store.turnos || []).find((x) => x.profesionalId === aId && x.fecha === t.fecha &&
+        x.hora === t.hora && x.estado !== "cancelado");
+      if (ocupado) {
+        chocaron.push({ fecha: t.fecha, hora: t.hora, paciente: t.pacienteNombre, contra: ocupado.pacienteNombre });
+        return;
+      }
+      t.transferidoDe = { profesionalId: t.profesionalId, el: nowIso(), por: me.username };
+      t.profesionalId = aId;
+      if (a.especialidadId) t.especialidadId = a.especialidadId;
+      // El aviso que se le habia mandado decia otro nombre: ya no sirve.
+      t.avisadoEl = ""; t.avisadoPor = "";
+      movidos.push(t.id);
+    });
+    if (movidos.length) saveStore(dataDir, centro, store);
+    return json(res, 200, {
+      movidos: movidos.length, chocaron,
+      // Si el que recibe no atiende esos dias, los turnos quedan igual pero fuera de
+      // su grilla: se avisa para que no sorprenda.
+      fueraDeHorario: candidatos.filter((t) => t.profesionalId === aId && !horasDelDia(a, t.fecha)).length,
+    }), true;
+  }
+
   // -- Reprogramar: la cola de los que quedaron sin turno --
   // Ojo con el orden: esta ruta tiene que pedir que NO venga nada despues, o se
   // come /reprogramar/libres y la pantalla se queda sin horarios que ofrecer.

@@ -260,7 +260,7 @@
           '<button class="lab-btn ghost" id="lab-ag-prev" title="Día anterior">‹</button>' +
           '<input type="date" id="lab-ag-date" class="lab-in" value="' + esc(LAB.ag.fecha) + '">' +
           '<button class="lab-btn ghost" id="lab-ag-next" title="Día siguiente">›</button>' +
-          '<button class="lab-btn" id="lab-ag-ausencia" type="button" title="Marcar vacaciones, un congreso o un feriado">No atender…</button><button class="lab-btn" id="lab-ag-hoy">Hoy</button>' +
+          '<button class="lab-btn" id="lab-ag-ausencia" type="button" title="Marcar vacaciones, un congreso o un feriado">No atender…</button><button class="lab-btn" id="lab-ag-transf" type="button" title="Pasarle los turnos a otro profesional">Transferir…</button><button class="lab-btn" id="lab-ag-hoy">Hoy</button>' +
         "</div>" +
       "</div>" +
       '<div class="lab-ag-info" id="lab-ag-info"></div>';
@@ -282,6 +282,8 @@
     document.getElementById("lab-ag-date").onchange = function () { LAB.ag.fecha = this.value; agLoad(); };
     var bAus = document.getElementById("lab-ag-ausencia");
     if (bAus) bAus.onclick = ausenciaModal;
+    var bTr = document.getElementById("lab-ag-transf");
+    if (bTr) bTr.onclick = transferirModal;
     document.getElementById("lab-ag-hoy").onclick = function () { LAB.ag.fecha = hoyISO(); viewAgenda(c); };
     document.getElementById("lab-ag-prev").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, -1); viewAgenda(c); };
     document.getElementById("lab-ag-next").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, 1); viewAgenda(c); };
@@ -369,6 +371,48 @@
       // Los turnos ya dados no se tocan solos: se avisa para que alguien decida.
       var ya = r.data.turnosEnElRango || 0;
       toast(ya ? "Guardado. Ojo: hay " + ya + " turno(s) ya dado(s) en esos días" : "Guardado ✓", !!ya);
+      agLoad();
+    };
+  }
+  // Transferir la agenda: el profesional no viene y otro lo reemplaza. Los pacientes
+  // conservan su horario; lo unico que cambia es quien los atiende.
+  function transferirModal() {
+    if (!LAB.ag.profesionalId) { toast("Elegí primero el profesional que no va a atender.", true); return; }
+    var m = modal("Transferir agenda");
+    var otros = (LAB.cat.profesionales || []).filter(function (o) { return o.id !== LAB.ag.profesionalId; });
+    if (!otros.length) { m.body.innerHTML = '<div class="lab-muted">No hay otro profesional cargado al que pasarle los turnos.</div>'; return; }
+    m.body.innerHTML =
+      '<div class="lab-form">' +
+      '<div class="lab-muted" style="margin-bottom:10px">Los turnos de <b>' + esc(nombreProf(LAB.ag.profesionalId)) +
+      "</b> pasan a otro profesional. Los pacientes conservan su día y su horario.</div>" +
+      '<div class="lab-grid3">' +
+        '<label>Pasan a<select class="lab-in" id="tr-a">' + otros.map(function (o) {
+          return '<option value="' + o.id + '">' + esc(o.nombre) + "</option>";
+        }).join("") + "</select></label>" +
+        '<label>Desde<input class="lab-in" type="date" id="tr-desde" value="' + esc(LAB.ag.fecha) + '"></label>' +
+        '<label>Hasta<input class="lab-in" type="date" id="tr-hasta" value="' + esc(LAB.ag.fecha) + '"></label>' +
+      "</div>" +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="tr-cancel">Cancelar</button><button class="lab-btn primary" id="tr-ok">Transferir</button></div></div>';
+    m.body.querySelector("#tr-cancel").onclick = labClose;
+    m.body.querySelector("#tr-ok").onclick = async function () {
+      var r = await api("/api/lab/turnos/transferir", {
+        deProfesionalId: LAB.ag.profesionalId,
+        aProfesionalId: m.body.querySelector("#tr-a").value,
+        desde: m.body.querySelector("#tr-desde").value,
+        hasta: m.body.querySelector("#tr-hasta").value,
+      });
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo transferir.", true); return; }
+      labClose();
+      var d = r.data;
+      toast(d.movidos + " turno(s) transferido(s) ✓");
+      if ((d.chocaron || []).length) {
+        // Los que chocaron NO se movieron: hay que decir cuales, no un numero.
+        alert("Estos no se pudieron pasar porque el otro profesional ya tenía un turno a esa hora:\n\n" +
+          d.chocaron.map(function (x) {
+            return "· " + x.fecha.split("-").reverse().join("/") + " " + x.hora + " — " + (x.paciente || "") +
+              " (ya estaba " + (x.contra || "otro paciente") + ")";
+          }).join("\n") + "\n\nQuedaron con el profesional original.");
+      }
       agLoad();
     };
   }
