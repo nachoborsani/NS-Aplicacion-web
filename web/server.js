@@ -3713,6 +3713,15 @@ function planDeSubida(items, periodoPedido, ctx) {
   const todos = paga(conValor).motivos;
   const enMejor = new Set(mejor.sub.map((f) => f.ome));
   const deOtros = omesDeOtrosInformes((ctx && ctx.slug) || "", (ctx && ctx.informeId) || "");
+  // Que el informe HABLE de esa practica. Sin esto se proponia sumarle a una ecografia
+  // renal una consulta de diabetologia, solo porque paga y no se pisa con nada: la
+  // plata sola no alcanza como criterio. La lista sale de lo que el lector encontro
+  // escrito en el informe (extract.practicas), que es justo lo que el informe describe.
+  // Si no se pudo leer ninguna, no se filtra: "no pude leerlo" no es "no lo cubre".
+  const practicasInf = (Array.isArray(ctx && ctx.practicasInforme) ? ctx.practicasInforme : [])
+    .map((p) => String(p || "").trim()).filter(Boolean);
+  const lodescribe = (practicaCand) => !practicasInf.length
+    || practicasInf.some((p) => informeMatch.practicaCompatible(p, practicaCand));
   const detalle = conValor.map((f) => ({
     ome: f.ome,
     practica: f.practica,
@@ -3725,6 +3734,8 @@ function planDeSubida(items, periodoPedido, ctx) {
     // El archivo que ya la tiene, si hay otro. No se sugiere sumarla: su informe
     // esta esperando al lado en la misma bandeja.
     laTieneOtro: deOtros.get(String(f.ome).replace(/\D+/g, "")) || "",
+    // ¿El informe habla de esta practica? Solo se sugiere sumar lo que describe.
+    laDescribe: lodescribe(f.practica),
   }));
   return {
     dia,
@@ -3736,7 +3747,7 @@ function planDeSubida(items, periodoPedido, ctx) {
     descartar: detalle.filter((d) => d.tildada && !d.conviene),
     // Las que convienen y todavía no están tildadas ni transmitidas. NO se tildan
     // solas: solo una persona sabe si el informe describe esa práctica.
-    sumar: detalle.filter((d) => !d.tildada && !d.transmitida && d.conviene && d.valor > 0 && !d.laTieneOtro),
+    sumar: detalle.filter((d) => !d.tildada && !d.transmitida && d.conviene && d.valor > 0 && !d.laTieneOtro && d.laDescribe),
     detalle,
   };
 }
@@ -12195,7 +12206,12 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: "no-auth" });
     const body = await readBody(req);
     const items = (body && Array.isArray(body.items)) ? body.items.slice(0, 12) : [];
-    const ctx = { slug: String((body && body.slug) || "").slice(0, 60), informeId: String((body && body.informeId) || "").slice(0, 40) };
+    const ctx = {
+      slug: String((body && body.slug) || "").slice(0, 60),
+      informeId: String((body && body.informeId) || "").slice(0, 40),
+      fechaInforme: String((body && body.fechaInforme) || "").slice(0, 10),
+      practicasInforme: (Array.isArray(body && body.practicasInforme) ? body.practicasInforme : []).slice(0, 12),
+    };
     return json(res, 200, { plan: planDeSubida(items, body && body.periodo, ctx) });
   }
   if (p === "/api/debito-reglas" && req.method === "PUT") {

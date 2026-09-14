@@ -13199,7 +13199,11 @@ async function pedirPlanCabina(){
         informeId: it.id,
         // La fecha que dice el informe adentro: es la que manda para saber de qué día
         // son las prácticas que cubre.
-        fechaInforme: (it.extract && it.extract.fecha) || '' }) });
+        fechaInforme: (it.extract && it.extract.fecha) || '',
+        // Y LAS PRÁCTICAS que el lector encontró escritas adentro: sin esto, la
+        // sugerencia se guía solo por la plata y propone cualquier cosa del día.
+        practicasInforme: ((it.extract && it.extract.practicas) || [])
+          .concat((it.extract && it.extract.practica) ? [it.extract.practica] : []) }) });
     if (!r.ok) return;
     var d = await r.json();
     CAB_PLAN = (d && d.plan) || null;

@@ -441,4 +441,4 @@ function sugerirPadron(nombre, padronCliente, limite) {
   return arr.slice(0, limite || 5);
 }
 
-module.exports = { matchInforme, resolverBeneficio, sugerirPadron, scoreNombre, soloDigitos, normNombre: norm };
+module.exports = { matchInforme, resolverBeneficio, sugerirPadron, scoreNombre, soloDigitos, normNombre: norm, practicaCompatible };
