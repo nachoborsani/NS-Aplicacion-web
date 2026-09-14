@@ -252,7 +252,7 @@
           '<button class="lab-btn ghost" id="lab-ag-prev" title="Día anterior">‹</button>' +
           '<input type="date" id="lab-ag-date" class="lab-in" value="' + esc(LAB.ag.fecha) + '">' +
           '<button class="lab-btn ghost" id="lab-ag-next" title="Día siguiente">›</button>' +
-          '<button class="lab-btn" id="lab-ag-hoy">Hoy</button>' +
+          '<button class="lab-btn" id="lab-ag-ausencia" type="button" title="Marcar vacaciones, un congreso o un feriado">No atender…</button><button class="lab-btn" id="lab-ag-hoy">Hoy</button>' +
         "</div>" +
       "</div>" +
       '<div class="lab-ag-info" id="lab-ag-info"></div>';
@@ -265,12 +265,15 @@
     }).join(""));
     c.appendChild(leyenda);
 
+    c.appendChild(e("div", { id: "lab-ag-bloqueo" }));
     c.appendChild(e("div", { class: "lab-card", id: "lab-ag-grid" }, '<div class="lab-muted" style="padding:20px">Cargando…</div>'));
 
     // eventos
     document.getElementById("lab-ag-esp").onchange = function () { LAB.ag.especialidadId = this.value; LAB.ag.profesionalId = ""; viewAgenda(c); };
     document.getElementById("lab-ag-prof").onchange = function () { LAB.ag.profesionalId = this.value; agLoad(); };
     document.getElementById("lab-ag-date").onchange = function () { LAB.ag.fecha = this.value; agLoad(); };
+    var bAus = document.getElementById("lab-ag-ausencia");
+    if (bAus) bAus.onclick = ausenciaModal;
     document.getElementById("lab-ag-hoy").onclick = function () { LAB.ag.fecha = hoyISO(); viewAgenda(c); };
     document.getElementById("lab-ag-prev").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, -1); viewAgenda(c); };
     document.getElementById("lab-ag-next").onclick = function () { LAB.ag.fecha = shiftDia(LAB.ag.fecha, 1); viewAgenda(c); };
@@ -329,6 +332,38 @@
     });
   }
 
+  function fechaCorta(f) { var x = String(f || "").split("-"); return x.length === 3 ? x[2] + "/" + x[1] : f; }
+  // Vacaciones, congresos, feriados: los dias en los que no se dan turnos. Sin esto,
+  // la agenda ofrece horarios de un dia que el profesional no esta, y el turno se da.
+  function ausenciaModal() {
+    var m = modal("No atender estos días");
+    var profOpts = '<option value="">Todo el centro (feriado)</option>' + LAB.cat.profesionales.map(function (o) {
+      return '<option value="' + o.id + '"' + (o.id === LAB.ag.profesionalId ? " selected" : "") + ">" + esc(o.nombre) + "</option>";
+    }).join("");
+    m.body.innerHTML =
+      '<div class="lab-form"><div class="lab-grid3">' +
+        "<label>Quién<select class=\"lab-in\" id=\"bq-prof\">" + profOpts + "</select></label>" +
+        '<label>Desde<input class="lab-in" type="date" id="bq-desde" value="' + esc(LAB.ag.fecha) + '"></label>' +
+        '<label>Hasta<input class="lab-in" type="date" id="bq-hasta" value="' + esc(LAB.ag.fecha) + '"></label>' +
+      "</div>" +
+      '<label>Motivo<input class="lab-in" id="bq-motivo" placeholder="Vacaciones, congreso, feriado…"></label>' +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="bq-cancel">Cancelar</button><button class="lab-btn primary" id="bq-ok">Guardar</button></div></div>';
+    m.body.querySelector("#bq-cancel").onclick = labClose;
+    m.body.querySelector("#bq-ok").onclick = async function () {
+      var r = await api("/api/lab/bloqueos", {
+        profesionalId: m.body.querySelector("#bq-prof").value,
+        desde: m.body.querySelector("#bq-desde").value,
+        hasta: m.body.querySelector("#bq-hasta").value,
+        motivo: m.body.querySelector("#bq-motivo").value,
+      });
+      if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
+      labClose();
+      // Los turnos ya dados no se tocan solos: se avisa para que alguien decida.
+      var ya = r.data.turnosEnElRango || 0;
+      toast(ya ? "Guardado. Ojo: hay " + ya + " turno(s) ya dado(s) en esos días" : "Guardado ✓", !!ya);
+      agLoad();
+    };
+  }
   async function agLoad() {
     var grid = document.getElementById("lab-ag-grid");
     var info = document.getElementById("lab-ag-info");
@@ -340,6 +375,23 @@
     if (info) info.innerHTML = "<b>" + DOW[d.getDay()] + "</b> " + LAB.ag.fecha.split("-").reverse().join("/") +
       " · " + esc(r.data.profesional.nombre) + (r.data.profesional.consultorioId ? " · " + esc(nombreCons(r.data.profesional.consultorioId)) : "") +
       " · <b>" + r.data.cantidad + "</b> turno" + (r.data.cantidad === 1 ? "" : "s");
+    var av = document.getElementById("lab-ag-bloqueo");
+    if (av) {
+      var b = r.data.bloqueo;
+      av.innerHTML = b
+        ? '<div class="lab-bloqueo">\u26d4 <b>No se atiende este día</b>' +
+            (b.motivo ? " \u00b7 " + esc(b.motivo) : "") +
+            ' <span class="lab-muted">(' + esc(fechaCorta(b.desde)) + (b.hasta !== b.desde ? " al " + esc(fechaCorta(b.hasta)) : "") + ")</span>" +
+            ' <button class="lab-btn xs ghost" type="button" id="ag-desbloquear">Quitar</button></div>'
+        : "";
+      var qb = document.getElementById("ag-desbloquear");
+      if (qb) qb.onclick = async function () {
+        if (!confirm("¿Volver a atender esos días?")) return;
+        var rr = await req("DELETE", "/api/lab/bloqueos/" + r.data.bloqueo.id);
+        if (!rr.ok) { toast("No se pudo quitar.", true); return; }
+        toast("Listo, vuelve a atender ✓"); agLoad();
+      };
+    }
     agRender(grid, r.data.slots || []);
   }
 
@@ -1721,6 +1773,7 @@
       ".lab-rec-ok{color:#15803d;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}",
       ".lab-centro-sel{padding:8px 4px 4px}",
       ".lab-centro-sel .lab-in{width:100%;font-size:12.5px}",
+      ".lab-bloqueo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.35);color:var(--text);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px}",
       ".lab-navlink{cursor:pointer}",
       ".lab-navlink .lab-tab-ic{width:18px;display:inline-flex;justify-content:center;font-size:14px;flex:0 0 auto}",
       ".lab-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 10px}",

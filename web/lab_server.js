@@ -81,6 +81,7 @@ function emptyStore() {
     pacientes: [],
     turnos: [],
     practicas: [],
+    bloqueos: [],
     config: {},
     evoluciones: [],
     estudios: [],
@@ -153,6 +154,7 @@ const LAB_PLANTILLAS = {
 // Que permiso pide cada recurso de la API.
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
+  bloqueos: "agenda",
   sala: "sala",
   recordatorios: "recordatorios",
   config: "config",
@@ -264,6 +266,12 @@ function sanitizePaciente(body, previo) {
 
 // Genera los slots de un profesional para una fecha (YYYY-MM-DD) a partir de sus
 // horarios, y superpone los turnos ya dados. Devuelve la grilla de la agenda.
+// Vacaciones, congresos, feriados. Un bloqueo sin profesional es de todo el centro
+// (un feriado); con profesional, es la ausencia de ese.
+function bloqueoDe(store, profId, fecha) {
+  return (store.bloqueos || []).find((b) =>
+    (!b.profesionalId || b.profesionalId === profId) && fecha >= b.desde && fecha <= b.hasta) || null;
+}
 function generarSlots(prof, fecha, turnosDelDia) {
   const dow = new Date(fecha + "T00:00:00").getDay();
   const bloques = (prof.horarios || []).filter((h) => h.dow === dow);
@@ -437,6 +445,40 @@ async function handleLab(ctx) {
     else { t.avisadoEl = nowIso(); t.avisadoPor = me.username; }
     saveStore(dataDir, centro, store);
     return json(res, 200, { item: t }), true;
+  }
+
+  // -- Ausencias y feriados --
+  if (recurso === "bloqueos") {
+    const lista = store.bloqueos || (store.bloqueos = []);
+    if (method === "GET") {
+      const desde = clean(url.searchParams.get("desde"));
+      const items = lista
+        .filter((b) => !desde || b.hasta >= desde)
+        .sort((a, b) => String(a.desde).localeCompare(String(b.desde)));
+      return json(res, 200, { items }), true;
+    }
+    if (method === "POST") {
+      const body = await readBody(req);
+      const desde = clean(body.desde);
+      const hasta = clean(body.hasta) || desde;
+      if (!desde) return json(res, 400, { error: "Poné desde qué día." }), true;
+      if (hasta < desde) return json(res, 400, { error: "El día de vuelta no puede ser anterior al de salida." }), true;
+      const b = {
+        id: uid(), profesionalId: clean(body.profesionalId), desde, hasta,
+        motivo: clean(body.motivo), creadoEl: nowIso(), creadoPor: me.username,
+      };
+      lista.push(b); saveStore(dataDir, centro, store);
+      // Los turnos que YA estaban dados en ese rango no se tocan solos: se avisa
+      // cuantos son para que alguien los reprograme o los cancele a mano.
+      const chocan = (store.turnos || []).filter((t) => t.estado !== "cancelado" &&
+        t.fecha >= desde && t.fecha <= hasta && (!b.profesionalId || t.profesionalId === b.profesionalId)).length;
+      return json(res, 200, { item: b, turnosEnElRango: chocan }), true;
+    }
+    if (method === "DELETE" && idPath) {
+      store.bloqueos = lista.filter((x) => x.id !== idPath);
+      saveStore(dataDir, centro, store);
+      return json(res, 200, { ok: true }), true;
+    }
   }
 
   // -- Sala de espera: el dia entero, todos los profesionales de una --
@@ -900,8 +942,12 @@ async function handleLab(ctx) {
       const prof = store.profesionales.find((x) => x.id === profId);
       if (!prof) return json(res, 404, { error: "Profesional no encontrado." }), true;
       const delDia = lista.filter((t) => t.profesionalId === profId && t.fecha === fecha && t.estado !== "cancelado");
-      const slots = generarSlots(prof, fecha, delDia);
-      return json(res, 200, { profesional: prof, fecha, slots, cantidad: delDia.length }), true;
+      // Si ese dia no se atiende, no se ofrecen horarios: dar un turno para el dia que
+      // el profesional no esta es el error que despues se paga en el mostrador. Los
+      // turnos YA dados se siguen mostrando — hay que poder reprogramarlos.
+      const bloqueo = bloqueoDe(store, profId, fecha);
+      const slots = bloqueo ? delDia.map((t) => ({ hora: t.hora, turno: t })) : generarSlots(prof, fecha, delDia);
+      return json(res, 200, { profesional: prof, fecha, slots, cantidad: delDia.length, bloqueo }), true;
     }
     if (method === "POST") {
       const body = await readBody(req);
