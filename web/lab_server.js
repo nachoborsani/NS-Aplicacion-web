@@ -719,8 +719,12 @@ async function handleLab(ctx) {
 
     // Plata del mes: lo facturado es lo que se cobra por los turnos; lo cobrado, lo
     // que efectivamente entro (pagado completo o la sena).
-    const facturado = money(delMes.reduce((a, t) => a + (t.importe || 0) + (t.insumos || 0), 0));
-    const cobrado = money(delMes.reduce((a, t) => a + (t.pagado ? (t.importe || 0) + (t.insumos || 0) : (t.sena || 0)), 0));
+    // Facturado = lo ATENDIDO, no todo lo agendado. Contar los turnos que todavia no
+    // pasaron (y los ausentes, que no se cobran) inflaba el mes y dejaba un "por
+    // cobrar" enorme que parecia deuda. Ademas la liquidacion ya contaba solo los
+    // atendidos: las dos pantallas decian numeros distintos de lo mismo.
+    const facturado = money(atendidosMes.reduce((a, t) => a + (t.importe || 0) + (t.insumos || 0), 0));
+    const cobrado = money(atendidosMes.reduce((a, t) => a + (t.pagado ? (t.importe || 0) + (t.insumos || 0) : (t.sena || 0)), 0));
 
     const agrupar = (lista, clave) => {
       const m2 = {};
