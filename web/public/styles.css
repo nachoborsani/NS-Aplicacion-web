@@ -794,6 +794,15 @@
     /* En teléfono el nombre del cliente se lleva la barra entera: el UP se copia
        desde la configuración PAMI del cliente, el nombre no está en ningún otro lado. */
     .top-client-meta .client-up-header{display:none}
+    /* Los dos botones verdes de Informes recibidos: a todo lo ancho y uno abajo del
+       otro. Sueltos y de anchos distintos quedaban desparejos, y el texto de la
+       casilla alineado a la derecha no se ataba a nada. */
+    #view-cabina .cab-head-controls{align-items:stretch}
+    #view-cabina .cab-head-controls > .field,#view-cabina .cab-mailbox{width:100%}
+    #view-cabina .cab-mailbox .field{flex:1 1 0;min-width:0}
+    #view-cabina .cab-mailbox .btn{flex:1 0 100%;width:100%}
+    #view-cabina #cabUploadBtn{width:100%;justify-content:center}
+    #view-cabina .cab-head-info{margin-left:0;text-align:left;width:100%}
     .content{padding:16px 13px 30px}
     .page-head h1{font-size:18px}
     .rowbtn{padding:7px 10px}
