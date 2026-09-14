@@ -115,7 +115,7 @@
   // El cuarto dato de cada modulo es el permiso que pide: el menu se arma con lo que
   // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
-    ["Atención", [["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
+    ["Atención", [["inicio", "📈", "Inicio", "agenda"], ["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
     ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
@@ -150,7 +150,7 @@
     // pueda ver, no a NS. Para volver a NS esta el lapiz de la barra de arriba.
     var inicio = e("a", { class: "lab-only lab-navlink", "data-mod": "__inicio" },
       '<svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio');
-    inicio.onclick = function () { labGo(primerModulo()); };
+    inicio.onclick = function () { labGo(labPuede("agenda") ? "inicio" : primerModulo()); };
     nav.appendChild(inicio);
     LAB_MENU.forEach(function (grupo) {
       var visibles = grupo[1].filter(function (m) { return labPuede(m[3]); });
@@ -220,6 +220,7 @@
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
     else if (mod === "recordatorios") viewRecordatorios(c);
+    else if (mod === "inicio") viewInicio(c);
     else if (mod === "sala") viewSala(c);
     else if (mod === "usuarios") viewUsuarios(c);
     else if (mod === "practicas") viewPracticas(c);
@@ -783,6 +784,74 @@
       if (!rr.ok) { toast((rr.data && rr.data.error) || "No se pudo guardar.", true); return; }
       labClose(); toast("Texto guardado ✓"); if (luego) luego();
     };
+  }
+
+  /* ============================== INICIO ================================ */
+  // Arriba lo de HOY, que es lo unico sobre lo que se puede hacer algo ahora; abajo
+  // los indicadores del mes. Los numeros y sus definiciones estan tomados de lo que
+  // el centro ya mira en Global App —ausentismo sobre turnos transcurridos, pacientes
+  // nuevos sobre unicos del mes— para que den lo mismo y se puedan comparar.
+  async function viewInicio(c) {
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    if (!LAB.inicioPeriodo) LAB.inicioPeriodo = hoyISO().slice(0, 7);
+    var r = await api("/api/lab/inicio?periodo=" + encodeURIComponent(LAB.inicioPeriodo));
+    if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+    var d = r.data, h = d.hoyResumen || {}, ci = d.citas || {}, pa = d.pacientes || {}, pl = d.plata || {};
+    function kpi(valor, rotulo, clase) {
+      return '<div class="lab-sala-kpi' + (clase ? " " + clase : "") + '"><b>' + valor + "</b><span>" + esc(rotulo) + "</span></div>";
+    }
+    function tabla(titulo, filas, rotulo) {
+      if (!filas.length) return "";
+      return '<div class="lab-card"><div class="lab-sec-tit" style="margin-top:0">' + esc(titulo) + "</div>" +
+        '<table class="lab-table"><thead><tr><th>' + esc(rotulo) + '</th><th class="num">Turnos</th><th class="num">Atendidos</th><th class="num">Ausentismo</th></tr></thead><tbody>' +
+        filas.map(function (g) {
+          var pct = g.turnos ? Math.round((g.ausentes / g.turnos) * 1000) / 10 : 0;
+          return "<tr><td>" + esc(g.nombre) + '</td><td class="num">' + g.turnos + '</td><td class="num">' + g.atendidos +
+            '</td><td class="num"' + (pct >= 20 ? ' style="color:#b91c1c;font-weight:700"' : "") + ">" + pct + "%</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+    var avisar = (d.manana || {}).sinAvisar || 0;
+    c.innerHTML =
+      '<div class="lab-card">' +
+        '<div class="lab-list-head"><h3>Hoy</h3><div class="lab-muted">' + esc(String(d.hoy || "").split("-").reverse().join("/")) + "</div></div>" +
+        '<div class="lab-sala-kpis">' +
+          kpi(h.turnos || 0, "turnos") + kpi(h.esperando || 0, "esperando", "amar") +
+          kpi(h.atendidos || 0, "atendidos", "verde") + kpi(h.ausentes || 0, "ausentes", "roja") +
+          kpi(fmt$(h.porCobrar || 0), "falta cobrar") +
+        "</div>" +
+        (avisar
+          ? '<div class="lab-aviso">\u2709\ufe0f Hay <b>' + avisar + "</b> turno(s) de mañana sin avisar. " +
+            '<button class="lab-btn xs" type="button" id="ini-rec">Ir a recordatorios</button></div>'
+          : "") +
+      "</div>" +
+      '<div class="lab-card">' +
+        '<div class="lab-list-head"><h3>El mes</h3>' +
+          '<input class="lab-in" type="month" id="ini-periodo" value="' + esc(LAB.inicioPeriodo) + '" style="width:170px"></div>' +
+        '<div class="lab-sec-tit" style="margin-top:0">Turnos</div>' +
+        '<div class="lab-sala-kpis">' +
+          kpi(ci.total || 0, "total") + kpi(ci.atendidos || 0, "atendidos", "verde") +
+          kpi(ci.ausentes || 0, "ausentes", "roja") + kpi((ci.ausentismo || 0) + "%", "ausentismo", (ci.ausentismo || 0) >= 20 ? "roja" : "") +
+        "</div>" +
+        '<div class="lab-sec-tit">Pacientes</div>' +
+        '<div class="lab-sala-kpis">' +
+          kpi(pa.atendidos || 0, "atendidos") + kpi(pa.nuevos || 0, "nuevos") +
+          kpi((pa.nuevosPct || 0) + "%", "son nuevos") + kpi((Math.round((100 - (pa.nuevosPct || 0)) * 10) / 10) + "%", "vuelven") +
+        "</div>" +
+        '<div class="lab-sec-tit">Plata</div>' +
+        '<div class="lab-sala-kpis">' +
+          kpi(fmt$(pl.facturado || 0), "facturado") + kpi(fmt$(pl.cobrado || 0), "cobrado", "verde") +
+          kpi(fmt$(pl.porCobrar || 0), "por cobrar", (pl.porCobrar || 0) > 0 ? "roja" : "") +
+        "</div>" +
+        '<div class="lab-muted" style="font-size:11.5px;margin-top:6px">El ausentismo se mide sobre los turnos que ya pasaron, no sobre todo el mes. ' +
+        "Un paciente que vino tres veces cuenta una.</div>" +
+      "</div>" +
+      tabla("Por obra social", d.porObraSocial || [], "Obra social") +
+      tabla("Por profesional", d.porProfesional || [], "Profesional") +
+      tabla("Prácticas más hechas", d.porPractica || [], "Práctica");
+    var ip = c.querySelector("#ini-periodo");
+    if (ip) ip.onchange = function () { LAB.inicioPeriodo = this.value; viewInicio(c); };
+    var ir = c.querySelector("#ini-rec");
+    if (ir) ir.onclick = function () { labGo("recordatorios"); };
   }
 
   /* ========================== SALA DE ESPERA ============================ */
@@ -1850,6 +1919,7 @@
       ".oculto{display:none}",
       ".lab-cta-nuevo{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px}",
       ".lab-table td.num,.lab-table th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}",
+      ".lab-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:rgba(234,179,8,.12);border:1px solid rgba(234,179,8,.4);border-radius:10px;padding:8px 12px;font-size:13px;color:var(--text)}",
       ".lab-sala-kpis{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}",
       ".lab-sala-kpi{flex:1 1 100px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;text-align:center}",
       ".lab-sala-kpi b{display:block;font-size:20px;line-height:1.1}",

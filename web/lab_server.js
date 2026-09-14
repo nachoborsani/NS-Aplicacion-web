@@ -156,6 +156,7 @@ const LAB_PLANTILLAS = {
 const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
   bloqueos: "agenda",
+  inicio: "agenda",
   movimientos: "caja",
   sala: "sala",
   recordatorios: "recordatorios",
@@ -322,7 +323,12 @@ function sanitizeTurno(body, previo, store) {
   t.practicaNombre = body.practicaNombre !== undefined ? clean(body.practicaNombre) : (t.practicaNombre || "");
   t.motivo = body.motivo !== undefined ? clean(body.motivo) : (t.motivo || "");
   t.observaciones = body.observaciones !== undefined ? clean(body.observaciones) : (t.observaciones || "");
+  const estadoAntes = t.estado;
   t.estado = ESTADOS_TURNO.includes(body.estado) ? body.estado : (t.estado || "dado");
+  if (t.estado !== estadoAntes) {
+    if (t.estado === "esperando" && !t.esperandoDesde) t.esperandoDesde = nowIso();
+    if (t.estado === "atendido" && !t.atendidoEl) t.atendidoEl = nowIso();
+  }
   // Cobro (para Caja): importe de la consulta, seña, insumos, si se cobró y medio.
   const money = (v) => Math.round((parseFloat(v) || 0) * 100) / 100;
   if (body.importe !== undefined) t.importe = money(body.importe); else if (t.importe === undefined) t.importe = 0;
@@ -502,6 +508,74 @@ async function handleLab(ctx) {
     if (store.movimientos.length === antes) return json(res, 404, { error: "Ese movimiento no existe (los de un turno se corrigen desde el turno)." }), true;
     saveStore(dataDir, centro, store);
     return json(res, 200, { ok: true }), true;
+  }
+
+  // -- Inicio: los indicadores del mes y lo de hoy --
+  if (recurso === "inicio" && method === "GET") {
+    const hoy = nowIso().slice(0, 10);
+    const periodo = clean(url.searchParams.get("periodo")) || hoy.slice(0, 7);
+    const delMes = (store.turnos || []).filter((t) => String(t.fecha || "").startsWith(periodo) && t.estado !== "cancelado");
+    const cuenta = (lista, est) => lista.filter((t) => t.estado === est).length;
+    const ausentes = (lista) => cuenta(lista, "ausente") + cuenta(lista, "ausente_aviso");
+    // Ausentismo sobre los turnos YA TRANSCURRIDOS: si se mide sobre todo el mes, el
+    // dia 3 da 2% siempre y no sirve para nada. Misma definicion que usa Global App.
+    const transcurridos = delMes.filter((t) => t.fecha <= hoy);
+    const atendidosMes = delMes.filter((t) => t.estado === "atendido");
+
+    // Pacientes: unicos del mes, y cuantos de esos vinieron por primera vez.
+    const vistos = new Set(atendidosMes.map((t) => t.pacienteId || ("s:" + t.pacienteNombre)).filter(Boolean));
+    const antes = new Set((store.turnos || [])
+      .filter((t) => t.estado !== "cancelado" && String(t.fecha || "") < periodo + "-01")
+      .map((t) => t.pacienteId || ("s:" + t.pacienteNombre)).filter(Boolean));
+    let nuevos = 0;
+    vistos.forEach((k) => { if (!antes.has(k)) nuevos++; });
+
+    // Plata del mes: lo facturado es lo que se cobra por los turnos; lo cobrado, lo
+    // que efectivamente entro (pagado completo o la sena).
+    const facturado = money(delMes.reduce((a, t) => a + (t.importe || 0) + (t.insumos || 0), 0));
+    const cobrado = money(delMes.reduce((a, t) => a + (t.pagado ? (t.importe || 0) + (t.insumos || 0) : (t.sena || 0)), 0));
+
+    const agrupar = (lista, clave) => {
+      const m2 = {};
+      lista.forEach((t) => {
+        const k = clave(t) || "—";
+        const g = m2[k] || (m2[k] = { nombre: k, turnos: 0, atendidos: 0, ausentes: 0 });
+        g.turnos++;
+        if (t.estado === "atendido") g.atendidos++;
+        if (t.estado === "ausente" || t.estado === "ausente_aviso") g.ausentes++;
+      });
+      return Object.values(m2).sort((a, b) => b.turnos - a.turnos);
+    };
+    const nombreProf = (id) => ((store.profesionales || []).find((x) => x.id === id) || {}).nombre || "—";
+
+    // Lo de hoy: es lo unico accionable de la pantalla, por eso va primero.
+    const deHoy = (store.turnos || []).filter((t) => t.fecha === hoy && t.estado !== "cancelado");
+    const manana = new Date(hoy + "T12:00:00");
+    manana.setDate(manana.getDate() + 1);
+    const finMan = manana.toISOString().slice(0, 10);
+    const turnosManana = (store.turnos || []).filter((t) => t.fecha === finMan && t.estado === "dado");
+
+    return json(res, 200, {
+      periodo, hoy,
+      hoyResumen: {
+        turnos: deHoy.length, esperando: cuenta(deHoy, "esperando"), atendidos: cuenta(deHoy, "atendido"),
+        ausentes: ausentes(deHoy), porVenir: cuenta(deHoy, "dado"),
+        porCobrar: money(deHoy.filter((t) => !t.pagado).reduce((a, t) => a + (t.importe || 0) + (t.insumos || 0) - (t.sena || 0), 0)),
+      },
+      manana: { fecha: finMan, turnos: turnosManana.length, sinAvisar: turnosManana.filter((t) => !t.avisadoEl).length },
+      citas: {
+        total: delMes.length, atendidos: atendidosMes.length, ausentes: ausentes(delMes),
+        ausentismo: transcurridos.length ? Math.round((ausentes(transcurridos) / transcurridos.length) * 1000) / 10 : 0,
+      },
+      pacientes: {
+        atendidos: vistos.size, nuevos,
+        nuevosPct: vistos.size ? Math.round((nuevos / vistos.size) * 1000) / 10 : 0,
+      },
+      plata: { facturado, cobrado, porCobrar: money(facturado - cobrado) },
+      porObraSocial: agrupar(delMes, (t) => t.obraSocial),
+      porProfesional: agrupar(delMes, (t) => nombreProf(t.profesionalId)),
+      porPractica: agrupar(delMes.filter((t) => t.practicaNombre), (t) => t.practicaNombre).slice(0, 10),
+    }), true;
   }
 
   // -- Ausencias y feriados --
