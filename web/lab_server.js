@@ -138,6 +138,7 @@ const LAB_PERMISOS_CAT = [
   { cod: "hc", label: "Historia clínica" },
   { cod: "caja", label: "Caja: cobrar" },
   { cod: "cierre", label: "Caja: cerrar el día" },
+  { cod: "liquidacion", label: "Liquidación de profesionales" },
   { cod: "estadistica", label: "Estadística" },
   { cod: "config", label: "Configuración (profesionales, prácticas, valores)" },
   { cod: "usuarios", label: "Usuarios y permisos" },
@@ -149,7 +150,7 @@ const LAB_PLANTILLAS = {
   recepcionista: ["agenda", "sala", "recordatorios", "pacientes"],
   cajero: ["agenda", "pacientes", "caja"],
   profesional: ["agenda", "sala", "pacientes", "hc"],
-  coordinador: ["agenda", "sala", "recordatorios", "pacientes", "hc", "caja", "cierre", "estadistica", "config"],
+  coordinador: ["agenda", "sala", "recordatorios", "pacientes", "hc", "caja", "cierre", "liquidacion", "estadistica", "config"],
   admin: LAB_TODOS.slice(),
 };
 // Que permiso pide cada recurso de la API.
@@ -157,6 +158,7 @@ const LAB_RECURSO_PERMISO = {
   turnos: "agenda",
   bloqueos: "agenda",
   reprogramar: "agenda",
+  liquidacion: "liquidacion",
   inicio: "agenda",
   movimientos: "caja",
   sala: "sala",
@@ -261,6 +263,17 @@ function sanitizeProfesional(body, previo) {
       duracionMin: Math.max(5, Math.min(240, parseInt(h.duracionMin, 10) || 15)),
     }));
   } else if (!p.horarios) p.horarios = [];
+  // Contrato: como se le paga. `porcentaje` sobre lo facturado o lo cobrado del mes,
+  // o `fijo` por turno atendido. Se guarda en el profesional porque es SUYO, no del
+  // mes: la liquidacion lo lee, no lo copia.
+  if (body.contrato !== undefined && body.contrato && typeof body.contrato === "object") {
+    const tipo = ["porcentaje", "fijo"].includes(clean(body.contrato.tipo)) ? clean(body.contrato.tipo) : "";
+    p.contrato = tipo ? {
+      tipo,
+      valor: money(body.contrato.valor),
+      sobre: clean(body.contrato.sobre) === "facturado" ? "facturado" : "cobrado",
+    } : null;
+  }
   return p;
 }
 
@@ -826,6 +839,58 @@ async function handleLab(ctx) {
       // las horas que todavia no pasaron, darian un rendimiento falso para abajo.
       agendaHasta: hastaTope,
     }), true;
+  }
+
+  // -- Liquidacion de profesionales --
+  // Cuanto le toca a cada uno en el mes, segun su contrato. Se calcula al vuelo: no se
+  // guarda un numero que despues quede viejo cuando alguien corrige un cobro.
+  // Igual que en reprogramar: sin el !idPath, esta ruta se come
+  // /liquidacion/<profesional> y el detalle devuelve el listado.
+  if (recurso === "liquidacion" && !idPath && method === "GET") {
+    const periodo = clean(url.searchParams.get("periodo")) || nowIso().slice(0, 7);
+    const delMes = (store.turnos || []).filter((t) => String(t.fecha || "").startsWith(periodo) && t.estado !== "cancelado");
+    const items = (store.profesionales || []).map((prof) => {
+      const suyos = delMes.filter((t) => t.profesionalId === prof.id);
+      const atendidos = suyos.filter((t) => t.estado === "atendido");
+      const facturado = money(atendidos.reduce((a, t) => a + (t.importe || 0) + (t.insumos || 0), 0));
+      const cobrado = money(atendidos.reduce((a, t) => a + (t.pagado ? (t.importe || 0) + (t.insumos || 0) : (t.sena || 0)), 0));
+      const c = prof.contrato || null;
+      let aPagar = null, base = "";
+      if (c && c.tipo === "porcentaje") {
+        base = c.sobre === "facturado" ? "facturado" : "cobrado";
+        aPagar = money(((base === "facturado" ? facturado : cobrado) * (c.valor || 0)) / 100);
+      } else if (c && c.tipo === "fijo") {
+        base = "por turno atendido";
+        aPagar = money(atendidos.length * (c.valor || 0));
+      }
+      return {
+        profesionalId: prof.id, profesional: prof.nombre,
+        turnos: suyos.length, atendidos: atendidos.length,
+        facturado, cobrado,
+        // null = no tiene contrato cargado. NO es cero: cero se lee como "no le
+        // corresponde nada" y lo que pasa es que nadie cargo como se le paga.
+        contrato: c ? { tipo: c.tipo, valor: c.valor, sobre: c.sobre } : null,
+        base, aPagar,
+      };
+    }).filter((x) => x.turnos || x.contrato);
+    const total = money(items.reduce((a, x) => a + (x.aPagar || 0), 0));
+    const sinContrato = items.filter((x) => !x.contrato).length;
+    return json(res, 200, { periodo, items, total, sinContrato }), true;
+  }
+  // El detalle de uno, para mandarselo o imprimirlo.
+  if (recurso === "liquidacion" && idPath && method === "GET") {
+    const periodo = clean(url.searchParams.get("periodo")) || nowIso().slice(0, 7);
+    const prof = (store.profesionales || []).find((x) => x.id === idPath);
+    if (!prof) return json(res, 404, { error: "Ese profesional ya no está en el sistema." }), true;
+    const suyos = (store.turnos || []).filter((t) => String(t.fecha || "").startsWith(periodo) &&
+      t.estado === "atendido" && t.profesionalId === prof.id)
+      .sort((a, b) => String(a.fecha + a.hora).localeCompare(String(b.fecha + b.hora)))
+      .map((t) => ({
+        fecha: t.fecha, hora: t.hora, paciente: t.pacienteNombre, obraSocial: t.obraSocial || "",
+        practica: t.practicaNombre || "", importe: money((t.importe || 0) + (t.insumos || 0)),
+        cobrado: money(t.pagado ? (t.importe || 0) + (t.insumos || 0) : (t.sena || 0)),
+      }));
+    return json(res, 200, { periodo, profesional: prof.nombre, contrato: prof.contrato || null, items: suyos }), true;
   }
 
   // -- Reprogramar: la cola de los que quedaron sin turno --

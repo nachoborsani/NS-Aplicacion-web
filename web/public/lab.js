@@ -124,7 +124,7 @@
   // el usuario PUEDE, asi no se muestra algo que despues devuelve 403.
   var LAB_MENU = [
     ["Atención", [["inicio", "📈", "Inicio", "agenda"], ["agenda", "📅", "Agenda", "agenda"], ["sala", "🪧", "Sala de espera", "agenda"], ["recordatorios", "📲", "Recordatorios", "agenda"], ["reprogramar", "🔁", "Reprogramar", "agenda"], ["pacientes", "👤", "Pacientes", "pacientes"]]],
-    ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"]]],
+    ["Administración", [["caja", "💵", "Caja", "caja"], ["estadistica", "📊", "Estadística", "estadistica"], ["liquidacion", "🧾", "Liquidación", "liquidacion"]]],
     ["Configuración", [["profesionales", "🩺", "Profesionales", "config"], ["practicas", "🧾", "Prácticas", "config"],
       ["especialidades", "🏷️", "Especialidades", "config"],
       ["consultorios", "🚪", "Consultorios", "config"], ["obrasSociales", "🩹", "Obras Sociales", "config"],
@@ -154,12 +154,8 @@
       wrap.appendChild(sel);
       nav.appendChild(wrap);
     }
-    // "Inicio" del sistema de turnos: lleva a la primera pantalla que el usuario
-    // pueda ver, no a NS. Para volver a NS esta el lapiz de la barra de arriba.
-    var inicio = e("a", { class: "lab-only lab-navlink", "data-mod": "__inicio" },
-      '<svg viewBox="0 0 24 24" fill="none"><path d="M3 12l9-8 9 8M5 10v10h14V10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Inicio');
-    inicio.onclick = function () { labGo(labPuede("agenda") ? "inicio" : primerModulo()); };
-    nav.appendChild(inicio);
+    // El "Inicio" del sistema es el modulo de Atencion; no va uno suelto arriba, que
+    // dejaba dos "Inicio" a tres centimetros uno del otro.
     LAB_MENU.forEach(function (grupo) {
       var visibles = grupo[1].filter(function (m) { return labPuede(m[3]); });
       if (!visibles.length) return;   // un grupo entero sin permiso no deja el titulo solo
@@ -227,6 +223,7 @@
     else if (mod === "estadistica") viewEstadistica(c);
     else if (mod === "pacientes") viewPacientes(c);
     else if (mod === "profesionales") viewProfesionales(c);
+    else if (mod === "liquidacion") viewLiquidacion(c);
     else if (mod === "reprogramar") viewReprogramar(c);
     else if (mod === "recordatorios") viewRecordatorios(c);
     else if (mod === "inicio") viewInicio(c);
@@ -712,6 +709,87 @@
       var rr = await req("DELETE", "/api/lab/turnos/" + id);
       if (!rr.ok) { toast("No se pudo cancelar.", true); return; }
       labClose(); toast("Turno cancelado"); agLoad();
+    };
+  }
+
+  /* ========================== LIQUIDACION =============================== */
+  // Cuanto le toca a cada profesional en el mes. Se calcula al vuelo cada vez: guardar
+  // el numero lo dejaria viejo apenas alguien corrige un cobro.
+  async function viewLiquidacion(c) {
+    if (!LAB.liqPeriodo) LAB.liqPeriodo = hoyISO().slice(0, 7);
+    c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">Cargando…</div></div>';
+    var r = await api("/api/lab/liquidacion?periodo=" + encodeURIComponent(LAB.liqPeriodo));
+    if (!r.ok) { c.innerHTML = '<div class="lab-card"><div class="lab-muted" style="padding:16px">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div></div>"; return; }
+    var d = r.data, items = d.items || [];
+    function contratoTxt(x) {
+      if (!x.contrato) return '<span class="lab-muted">sin contrato</span>';
+      return x.contrato.tipo === "porcentaje"
+        ? x.contrato.valor + "% de lo " + esc(x.contrato.sobre)
+        : fmt$(x.contrato.valor) + " por paciente";
+    }
+    c.innerHTML = '<div class="lab-card">' +
+      '<div class="lab-list-head"><h3>Liquidación</h3>' +
+        '<input class="lab-in" type="month" id="liq-periodo" value="' + esc(LAB.liqPeriodo) + '" style="width:170px"></div>' +
+      (d.sinContrato
+        ? '<div class="lab-aviso">' + d.sinContrato + " profesional(es) sin contrato cargado: no se les puede calcular nada. " +
+          "Se carga en su ficha, en <b>Cómo se le paga</b>.</div>"
+        : "") +
+      '<table class="lab-table"><thead><tr><th>Profesional</th><th>Contrato</th><th class="num">Atendidos</th>' +
+        '<th class="num">Facturado</th><th class="num">Cobrado</th><th class="num">Le toca</th><th></th></tr></thead><tbody>' +
+      (items.length ? items.map(function (x) {
+        return '<tr data-id="' + esc(x.profesionalId) + '"><td><b>' + esc(x.profesional) + "</b></td>" +
+          "<td>" + contratoTxt(x) + '</td><td class="num">' + x.atendidos + '</td>' +
+          '<td class="num">' + fmt$(x.facturado) + '</td><td class="num">' + fmt$(x.cobrado) + "</td>" +
+          '<td class="num"><b>' + (x.aPagar === null ? '<span class="lab-muted">—</span>' : fmt$(x.aPagar)) + "</b></td>" +
+          '<td style="text-align:right"><button class="lab-btn xs" data-det="1" type="button">Detalle</button></td></tr>';
+      }).join("") : '<tr><td colspan="7" class="lab-muted">No hay movimiento ese mes.</td></tr>') +
+      "</tbody>" +
+      (d.total ? '<tfoot><tr><td colspan="5" style="text-align:right"><b>Total a pagar</b></td><td class="num"><b>' + fmt$(d.total) + "</b></td><td></td></tr></tfoot>" : "") +
+      "</table></div>";
+    c.querySelector("#liq-periodo").onchange = function () { LAB.liqPeriodo = this.value; viewLiquidacion(c); };
+    c.querySelectorAll("[data-det]").forEach(function (b) {
+      b.onclick = function () {
+        var id = b.closest("tr").getAttribute("data-id");
+        liquidacionDetalle(id, items.filter(function (x) { return x.profesionalId === id; })[0]);
+      };
+    });
+  }
+  async function liquidacionDetalle(id, resumen) {
+    var m = modal("Liquidación · " + ((resumen && resumen.profesional) || ""), { ancho: "ancho" });
+    m.body.innerHTML = '<div class="lab-muted">Cargando…</div>';
+    var r = await api("/api/lab/liquidacion/" + id + "?periodo=" + encodeURIComponent(LAB.liqPeriodo));
+    if (!r.ok) { m.body.innerHTML = '<div class="lab-muted">' + esc((r.data && r.data.error) || "No se pudo cargar.") + "</div>"; return; }
+    var items = r.data.items || [];
+    m.body.innerHTML =
+      '<div class="lab-sala-kpis">' +
+        '<div class="lab-sala-kpi"><b>' + items.length + "</b><span>pacientes</span></div>" +
+        '<div class="lab-sala-kpi"><b>' + fmt$(resumen ? resumen.facturado : 0) + "</b><span>facturado</span></div>" +
+        '<div class="lab-sala-kpi verde"><b>' + fmt$(resumen ? resumen.cobrado : 0) + "</b><span>cobrado</span></div>" +
+        '<div class="lab-sala-kpi"><b>' + (resumen && resumen.aPagar !== null ? fmt$(resumen.aPagar) : "—") + "</b><span>le toca</span></div>" +
+      "</div>" +
+      (items.length
+        ? '<table class="lab-table"><thead><tr><th>Fecha</th><th>Paciente</th><th>Obra social</th><th>Práctica</th><th class="num">Facturado</th><th class="num">Cobrado</th></tr></thead><tbody>' +
+          items.map(function (x) {
+            return "<tr><td>" + esc(x.fecha.split("-").reverse().join("/")) + " " + esc(x.hora) + "</td>" +
+              "<td>" + esc(x.paciente || "") + "</td><td>" + esc(x.obraSocial || "") + "</td><td>" + esc(x.practica || "") + "</td>" +
+              '<td class="num">' + fmt$(x.importe) + '</td><td class="num">' + fmt$(x.cobrado) + "</td></tr>";
+          }).join("") + "</tbody></table>"
+        : '<div class="lab-muted">Sin pacientes atendidos ese mes.</div>') +
+      '<div class="lab-modal-actions"><button class="lab-btn" id="liq-print" type="button">Imprimir</button>' +
+      '<button class="lab-btn primary" id="liq-cerrar" type="button">Cerrar</button></div>';
+    m.body.querySelector("#liq-cerrar").onclick = labClose;
+    m.body.querySelector("#liq-print").onclick = function () {
+      var w = window.open("", "_blank");
+      if (!w) { toast("Permití las ventanas emergentes para imprimir.", true); return; }
+      w.document.write('<html><head><meta charset="utf-8"><title>Liquidación</title>' +
+        "<style>body{font-family:system-ui,Arial,sans-serif;padding:26px;color:#111}table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}" +
+        "td,th{padding:6px 5px;border-bottom:1px solid #ddd;text-align:left}.num{text-align:right}h1{font-size:19px;margin:0}</style></head><body>" +
+        "<h1>Liquidación · " + esc((resumen && resumen.profesional) || "") + "</h1>" +
+        "<div>" + esc(LAB.liqPeriodo) + " · " + items.length + " paciente(s) · Le toca: " +
+        (resumen && resumen.aPagar !== null ? fmt$(resumen.aPagar) : "—") + "</div>" +
+        (m.body.querySelector("table") ? m.body.querySelector("table").outerHTML : "") +
+        "</body></html>");
+      w.document.close(); w.focus(); setTimeout(function () { w.print(); }, 300);
     };
   }
 
@@ -1395,6 +1473,16 @@
           '<label>Especialidad<select class="lab-in" id="pf-esp">' + espOpts + "</select></label>" +
           '<label>Consultorio<select class="lab-in" id="pf-cons">' + consOpts + "</select></label>" +
           '<label>Valor consulta (particular)<input class="lab-in" id="pf-valor" type="number" min="0" step="100" value="' + (p.valorConsulta || 0) + '"></label>' +
+        '<label>Cómo se le paga<select class="lab-in" id="pf-ctipo">' +
+          '<option value="">— sin contrato —</option>' +
+          '<option value="porcentaje"' + ((p.contrato || {}).tipo === "porcentaje" ? " selected" : "") + '>Un % de lo que se factura</option>' +
+          '<option value="fijo"' + ((p.contrato || {}).tipo === "fijo" ? " selected" : "") + '>Un monto fijo por paciente</option>' +
+        "</select></label>" +
+        '<label>Cuánto<input class="lab-in" id="pf-cvalor" type="number" min="0" step="1" value="' + ((p.contrato || {}).valor || "") + '" placeholder="% o $"></label>' +
+        '<label>Sobre<select class="lab-in" id="pf-csobre">' +
+          '<option value="cobrado"' + ((p.contrato || {}).sobre !== "facturado" ? " selected" : "") + ">Lo cobrado</option>" +
+          '<option value="facturado"' + ((p.contrato || {}).sobre === "facturado" ? " selected" : "") + ">Lo facturado</option>" +
+        "</select></label>" +
         "</div>" +
         '<div class="lab-horarios-head"><b>Horarios de atención</b><button class="lab-btn xs" id="pf-add-h">+ Agregar bloque</button></div>' +
         '<div id="pf-horarios"></div>' +
@@ -1422,7 +1510,10 @@
         var ins = row.querySelectorAll("input");
         return { dow: parseInt(row.querySelector(".dow").value, 10), desde: ins[0].value, hasta: ins[1].value, duracionMin: parseInt(row.querySelector(".dur").value, 10) || 15 };
       });
-      var payload = { nombre: nombre, matricula: m.body.querySelector("#pf-mat").value, especialidadId: m.body.querySelector("#pf-esp").value, consultorioId: m.body.querySelector("#pf-cons").value, valorConsulta: m.body.querySelector("#pf-valor").value, horarios: horarios };
+      var payload = { nombre: nombre, matricula: m.body.querySelector("#pf-mat").value, especialidadId: m.body.querySelector("#pf-esp").value, consultorioId: m.body.querySelector("#pf-cons").value, valorConsulta: m.body.querySelector("#pf-valor").value, horarios: horarios,
+        contrato: { tipo: m.body.querySelector("#pf-ctipo").value,
+                    valor: m.body.querySelector("#pf-cvalor").value,
+                    sobre: m.body.querySelector("#pf-csobre").value } };
       var r = p.id ? await req("PUT", "/api/lab/profesionales/" + p.id, payload) : await api("/api/lab/profesionales", payload);
       if (!r.ok) { toast((r.data && r.data.error) || "No se pudo guardar.", true); return; }
       labClose(); toast("Profesional guardado ✓");
