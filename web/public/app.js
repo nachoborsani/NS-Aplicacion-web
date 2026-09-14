@@ -13165,7 +13165,11 @@ async function pedirPlanCabina(){
   });
   try {
     var r = await fetch('/api/debitos/plan', { method:'POST', headers:{'content-type':'application/json'},
-      body: JSON.stringify({ items: items, slug: (document.getElementById('cabCliente') || {}).value || '', informeId: it.id }) });
+      body: JSON.stringify({ items: items, slug: (document.getElementById('cabCliente') || {}).value || '',
+        informeId: it.id,
+        // La fecha que dice el informe adentro: es la que manda para saber de qué día
+        // son las prácticas que cubre.
+        fechaInforme: (it.extract && it.extract.fecha) || '' }) });
     if (!r.ok) return;
     var d = await r.json();
     CAB_PLAN = (d && d.plan) || null;

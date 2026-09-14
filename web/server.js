@@ -3639,11 +3639,20 @@ function planDeSubida(items, periodoPedido, ctx) {
   }).filter((f) => f.practiceCode && f.ome);
   if (filas.length < 2) return null;
 
-  // El día con más candidatos es el del informe: los de otros días no se cruzan.
+  // Se trabaja EL DÍA DEL INFORME. Antes se tomaba el día con más candidatos, dando por
+  // sentado que era ese, y no siempre lo es: en PONTE ROSARIO el informe es del 08/09
+  // (renal + vesical con residuo) y el 14/09 tenía tres OMEs de otros estudios. El plan
+  // se armaba sobre el 14/09 y proponía sumarle ecodopplers a una ecografía, sin ver la
+  // práctica que el informe sí describe.
   const porDia = new Map();
   for (const f of filas) porDia.set(f.dia, [...(porDia.get(f.dia) || []), f]);
+  const delInforme = String((ctx && ctx.fechaInforme) || "").slice(0, 10);
+  // Segunda opción: el día de lo que el operador ya tildó (también es "este informe").
+  const diaTildado = (filas.find((f) => f.tildada) || {}).dia || "";
   let dia = "", grupo = [];
-  for (const [d, g] of porDia) if (g.length > grupo.length) { dia = d; grupo = g; }
+  if (delInforme && porDia.has(delInforme)) { dia = delInforme; grupo = porDia.get(delInforme); }
+  else if (diaTildado && porDia.has(diaTildado)) { dia = diaTildado; grupo = porDia.get(diaTildado); }
+  else for (const [d, g] of porDia) if (g.length > grupo.length) { dia = d; grupo = g; }
   if (grupo.length < 2) return null;
 
   // Los valores salen del nomenclador del mes del turno; si no está cargado, se
