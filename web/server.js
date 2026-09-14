@@ -6281,9 +6281,12 @@ const server = http.createServer(async (req, res) => {
   if (p.startsWith("/api/lab/")) {
     if (await handleLab({ req, res, method: req.method, p, url, me: getSessionUser(req), json, readBody, dataDir,
                           readBuffer, extractMultipart, loadUsers, saveUsers,
-                          // Los centros que puede manejar el admin en el sistema de turnos:
-                          // son los clientes de NS, sin arrastrar toda su ficha.
-                          loadClientes: () => loadClientsStore().map((c) => ({ slug: c.slug, name: c.name || c.slug })) })) return;
+                          // Los centros que puede manejar el admin en el sistema de turnos: los
+                          // clientes de NS, sin arrastrar toda su ficha. Los medicos de cabecera
+                          // quedan afuera: no tienen agenda ni consultorio, no van a usar el sistema.
+                          loadClientes: () => loadClientsStore()
+                            .filter((c) => c.tipo !== "med_cabecera")
+                            .map((c) => ({ slug: c.slug, name: c.name || c.slug })) })) return;
   }
 
   // ---- Worker externo: autenticación por token, sin cookie de navegador ----
