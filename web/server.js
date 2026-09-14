@@ -6295,9 +6295,14 @@ const server = http.createServer(async (req, res) => {
                           // Los centros que puede manejar el admin en el sistema de turnos: los
                           // clientes de NS, sin arrastrar toda su ficha. Los medicos de cabecera
                           // quedan afuera: no tienen agenda ni consultorio, no van a usar el sistema.
-                          loadClientes: () => loadClientsStore()
+                          loadClientes: () => [
+                            // Centro de PRUEBA: no es un cliente de NS, es el que se usa para
+                            // mostrar el sistema. Va primero y separado para que nadie lo
+                            // confunda con un centro real.
+                            { slug: "prueba", name: "PRUEBA — para mostrar el sistema" },
+                          ].concat(loadClientsStore()
                             .filter((c) => c.tipo !== "med_cabecera")
-                            .map((c) => ({ slug: c.slug, name: c.name || c.slug })) })) return;
+                            .map((c) => ({ slug: c.slug, name: c.name || c.slug }))) })) return;
   }
 
   // ---- Worker externo: autenticación por token, sin cookie de navegador ----
