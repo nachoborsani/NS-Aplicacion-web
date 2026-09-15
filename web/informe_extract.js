@@ -45,7 +45,14 @@ const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]
 // y se dejan para revisión a mano.
 const _PRACTICA_MAP = [
   [/\bETT\b|ECOCARDIOGRAMA|ECODOPPLER\s+CARDIACO/i, "ECODOPPLER CARDIACO"],
-  [/\bMAPA\b|PRESUROMETR|MONITOREO\s+AMBULATORIO\s+DE\s+PRESION|PRESION\s+ARTERIAL\s+24/i, "PRESUROMETRIA"],
+  // El segundo grupo son frases del informe de presion que NO pueden aparecer en otro
+  // estudio: "dipper" es el patron circadiano de la presion arterial y SAHA es la
+  // Sociedad Argentina de Hipertension Arterial. Hacen falta porque el otro formato de
+  // Baimed se titula solo "MONITOREO AMBULATORIO", que a secas NO alcanza: un Holter
+  // tambien es un monitoreo ambulatorio de 24 hs y quedaria marcado como presurometria.
+  // Medido sobre los 418 informes de Baimed: recupera los 4 MAPA que se perdian (24 de
+  // 24) y no agarra ninguno de los 31 Holter ni ningun otro estudio.
+  [/\bMAPA\b|PRESUROMETR|MONITOREO\s+AMBULATORIO\s+DE\s+PRESION|PRESION\s+ARTERIAL\s+24|\bNON[-\s]?DIPPER\b|\bDIPPER\b|RITMO\s+CIRCADIANO\s+DE\s+PA\b|\bPA\s*\(\s*mmHg|PRESION\s+ARTERIAL\s+MADRUGADA|\bSAHA\b/i, "PRESUROMETRIA"],
   [/\bHOLTER\b/i, "HOLTER"],
   [/ECO\s*VC\b|VASOS\s+DEL?\s+CUELLO/i, "VASOS DEL CUELLO"],
   [/\bESPIRO\w*|SPIROMETR|FUNCION\s+PULMONAR/i, "ESPIROMETRIA"],
