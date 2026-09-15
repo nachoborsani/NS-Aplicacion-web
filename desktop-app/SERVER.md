@@ -28,6 +28,7 @@ Todo `enabled` (arranca solo con el server):
 | `ns-bandeja-poller.timer` | Refresco on-demand (botón "Actualizar ahora" de la web) | cada 10 min |
 | `ns-bandeja-refresh.timer` | `bandeja_sync.py` (bajar/refrescar bandeja mes en curso) | 20:00 |
 | `ns-bandeja-retry.timer` | `bandeja_retry.py` (reintentar bandejas con error) | 22:00 |
+| `ns-globalapp-informes.timer` | `globalapp_informes.py` (bajar los informes de Global App a la cabina) | 23:00 |
 | `ns-scheffelaar-cadena.timer` | `pipeline_scheffelaar.py` (benef→credencial→OME) | Lun/Mar 17:00 y 19:30 · Mié/Vie 12:00, 17:00 y 19:30 |
 | `ns-scheffelaar-benef.timer` | `benef_sweep.py` | Lun/Mar/Mié/Vie 19:00 |
 
@@ -37,6 +38,33 @@ corre `apply_schedule.py`, que **regenera los `.timer` de arriba** con validaci�
 ⚠️ **No edites los `.timer` a mano**: en la próxima corrida de apply se sobreescriben con
 lo que diga la web. Para cambiar un horario, editá en la web. `apply_schedule.py` solo
 reescribe si cambió la versión (guarda la última en `desktop-app/.schedule_version`).
+
+### Dar de alta una tarea nueva (el `.service` va a mano, una sola vez)
+
+`apply_schedule.py` escribe **solo los `.timer`**. La unidad de servicio que cada timer
+dispara se crea a mano en el server, una vez. Por eso, al agregar una tarea nueva hay que
+hacer este paso — si no, el timer existe y al dispararse no encuentra nada.
+
+Lo más seguro es **copiar una que ya funcione** y cambiarle el `ExecStart`: así se hereda
+el entorno tal como está (el `HOME` que necesita Playwright para encontrar su Chromium,
+el usuario, etc.) en vez de reescribirlo de memoria.
+
+```bash
+cd /opt/NS-Aplicacion-web && git pull
+sed 's#^ExecStart=.*#ExecStart=/opt/NS-Aplicacion-web/desktop-app/.venv/bin/python globalapp_informes.py#; s#^Description=.*#Description=NS bajar informes de Global App#' \
+  /etc/systemd/system/ns-bandeja-refresh.service > /etc/systemd/system/ns-globalapp-informes.service
+systemctl daemon-reload
+systemctl start ns-globalapp-informes.service   # probarla una vez a mano
+journalctl -u ns-globalapp-informes.service -n 60 --no-pager
+```
+
+El `.timer` **no** hay que crearlo: lo escribe `apply_schedule.py` con la hora que diga la
+web (panel "Estado del server" → ⚙ Editar horarios → Informes), y corre solo cada 5 min.
+
+Ojo con el `TimeoutStartSec` de la unidad que copiaste: la corrida de Global App recorre
+las prestaciones que esperan informe de a una (0,4 s de pausa entre pacientes más lo que
+tarde la API), así que con 800 pendientes puede pasar la media hora. Si la unidad tiene un
+timeout más corto, subilo.
 
 El worker se identifica en la web como `WORKER_ID = hostname` del server.
 El código vive en `/opt/NS-Aplicacion-web` (clone del repo). El venv en
