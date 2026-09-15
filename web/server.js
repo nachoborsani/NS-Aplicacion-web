@@ -623,6 +623,67 @@ function matchearInforme(slug, extract) {
 // Los informes viejos no la tienen: se completa la primera vez que hace falta.
 // El tope es para no leer 600 archivos de una en el medio de un pedido: se completan
 // de a 200 por vez y en dos o tres pantallas ya estan todas.
+// El padron aprende solo del cruce que ya esta hecho. El informe trae el DNI (lo dice
+// el papel) y la bandeja trae el beneficio (lo dice PAMI): juntos son el par que despues
+// hace que ese paciente matchee sin que nadie lo toque.
+//
+// Hasta ahora esto pasaba SOLO cuando alguien apretaba "Usar" en la cabina. Todo lo que
+// el matcher cruzaba solo no ensenaba nada, y el mismo paciente volvia a aparecer sin
+// beneficio la vez siguiente.
+//
+// Dos recaudos, y los dos salieron de medir:
+//   · el beneficio se toma de la BANDEJA, nunca del que se leyo en el PDF. Comparando
+//     contra el padron cargado a mano, el del PDF metia 4 pares mal en Caballito: tres
+//     sin los dos digitos de orden del final y uno con un digito cambiado.
+//   · si dos prestaciones a nombre de ese paciente traen beneficios distintos, son
+//     homonimos y no se aprende nada.
+// Control: sobre los 187 pares de Baimed confirmados a mano, la regla coincide en los
+// 75 que comparten y no contradice ninguno. En Caballito el unico desacuerdo es al
+// reves: PAMI dice lo mismo en las cuatro prestaciones del paciente y lo que estaba
+// cargado venia con un error de tipeo de la planilla del centro.
+function aprenderPadronDeInformes(slug, items) {
+  // normTxt no junta los espacios dobles y los nombres de PAMI vienen con ellos
+  // ("SERUR  PATRICIA"), asi que dos escrituras del mismo nombre no darian iguales.
+  const nomb = (v) => cabinaLib.normTxt(v).replace(/\s+/g, " ");
+  // Primero se junta TODO y recien despues se decide, porque un DNI puede venir mal
+  // leido del papel y aparecer en informes de pacientes distintos. Caso real: el DNI
+  // 6338713 de Caballito figura en tres informes (MAZZEO, VAZQUEZ y uno mas), cada uno
+  // con su beneficio. Quedandose con el primero se elegia uno de tres al azar.
+  const porDni = new Map();
+  for (const it of items) {
+    if (!it || it.desestimado) continue;
+    const e = it.extract || {};
+    const dni = cabinaLib.digs(e.dni);
+    const nom = nomb(e.nombre);
+    if (!dni || !nom) continue;
+    const m = it.match || {};
+    const bens = new Set();
+    const pr = m.prestacion || {};
+    if (nomb(pr.nombre) === nom && cabinaLib.digs(pr.beneficio)) bens.add(cabinaLib.digs(pr.beneficio));
+    for (const c of (m.candidatos || [])) {
+      if (nomb(c.nombre) === nom && cabinaLib.digs(c.beneficio)) bens.add(cabinaLib.digs(c.beneficio));
+    }
+    if (bens.size !== 1) continue;   // 0 = no sabemos; 2 o mas = homonimos
+    if (!porDni.has(dni)) porDni.set(dni, { bens: new Set(), nombre: e.nombre || "" });
+    porDni.get(dni).bens.add([...bens][0]);
+  }
+  const filas = [];
+  for (const [dni, v] of porDni) {
+    if (v.bens.size !== 1) continue;   // el mismo DNI con dos beneficios: se lo leyo mal
+    filas.push({ dni, beneficio: [...v.bens][0], nombre: v.nombre, tramite: "" });
+  }
+  if (!filas.length) return 0;
+  const pad = loadPadron();
+  if (!pad[slug]) pad[slug] = {};
+  // mergeRows no toca lo que ya coincide, asi que esto no escribe salvo que haya algo
+  // nuevo o algo distinto.
+  const r = padronLib.mergeRows(pad[slug], filas, "cabina:auto", new Date().toISOString());
+  if (r.creados || r.actualizados) {
+    savePadron(pad);
+    return r.creados + r.actualizados;
+  }
+  return 0;
+}
 function completarHuellas(store, slug, tope = 200) {
   const items = (store[slug] && store[slug].items) || [];
   let n = 0;
@@ -11181,6 +11242,9 @@ const server = http.createServer(async (req, res) => {
     if (completarHuellas(storeInf, slug)) saveInformes(storeInf);
     const cli = storeInf[slug] || { items: [], updatedAt: "" };
     const items = cli.items || [];
+    // El padron se lleva los pares DNI<->beneficio que el cruce ya dejo servidos. Va
+    // aca y no en un boton porque asi aprende del trabajo de todos los dias.
+    try { aprenderPadronDeInformes(slug, items); } catch (e) { console.log("[padron auto]", e && e.message); }
     // Contadores por estado para el encabezado.
     const resumen = {};
     for (const it of items) {
