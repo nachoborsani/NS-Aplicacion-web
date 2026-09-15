@@ -3048,10 +3048,25 @@ function avisosCargar(){
   AVISOS_SESION = d.avisos.filter(function(a){ return a && a.at && new Date(a.at).getTime() > corte; }).slice(0, 40);
   AVISOS_NO_LEIDOS = Math.min(Number(d.noLeidos) || 0, AVISOS_SESION.length);
 }
+// De que centro salio el aviso. Se saca solo, asi no hay que pasarlo en cada lugar que
+// avisa: si el que esta a la vista es la cabina, el centro es el de su selector; si no,
+// el cliente abierto en el dashboard.
+function avisoClienteActual(){
+  try {
+    var vista = document.getElementById('view-cabina');
+    var sel = document.getElementById('cabCliente');
+    if (vista && vista.style.display !== 'none' && sel && sel.value){
+      var op = sel.options[sel.selectedIndex];
+      return (op && op.textContent) || '';
+    }
+    return (ACTIVE_CLIENT && ACTIVE_CLIENT.name) || '';
+  } catch (e) { return ''; }
+}
 function avisarEnCampana(ok, titulo, detalle, tipo, tarea){
   AVISOS_SESION.unshift({
     id: 'av' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     ok: !!ok, titulo: String(titulo || ''), detalle: String(detalle || ''),
+    cliente: avisoClienteActual(),
     at: new Date().toISOString(), tipo: tipo || '', tarea: tarea || null
   });
   if (AVISOS_SESION.length > 40) AVISOS_SESION.length = 40;
@@ -3067,6 +3082,15 @@ function avisoCampanaAbrir(id){
   closeDrawer();
   mostrarResultadoTarea(a.tipo, a.tarea);
 }
+// La hora del aviso, corta. Si es de ayer se aclara el dia (los avisos viven 24 hs).
+function avisoHora(iso){
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  var hoy = new Date();
+  var mismoDia = d.toDateString() === hoy.toDateString();
+  var hh = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return mismoDia ? hh : (d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + hh);
+}
 function avisosCampanaHtml(){
   if (!AVISOS_SESION.length) return '';
   var bien = AVISOS_SESION.filter(function(a){ return a.ok; }).length;
@@ -3078,11 +3102,19 @@ function avisosCampanaHtml(){
     + (bien && mal ? ' · ' : '')
     + (mal ? '<b style="color:#dc2626">' + mal + '</b> con error' : '')
     + '</div>';
-  AVISOS_SESION.slice(0, 8).forEach(function(a){
+  AVISOS_SESION.slice(0, 12).forEach(function(a){
     var clic = a.tarea ? ' onclick="avisoCampanaAbrir(&quot;' + a.id + '&quot;)" style="cursor:pointer"' : '';
-    h += '<div class="drawer-item"' + clic + '>'
+    // El centro y la hora: con seis "Subida a PAMI · 2 de 2" seguidos, sin esto no hay
+    // forma de saber cual fue cual.
+    // Todo en un renglon: el detalle, de que centro y a que hora. En dos renglones el
+    // aviso ocupa lo mismo que antes y el problema era justamente el alto.
+    var linea = [a.detalle || '', a.cliente || ''].filter(Boolean).join(' · ');
+    h += '<div class="drawer-item compacto"' + clic + '>'
       + '<div class="di-ic">' + (a.ok ? '✅' : '⚠️') + '</div>'
-      + '<div class="di-tx"><b>' + esc(a.titulo) + '</b><span>' + esc(a.detalle) + '</span></div></div>';
+      + '<div class="di-tx">'
+      + '<div class="di-tit"><b>' + esc(a.titulo) + '</b><i class="di-hora">' + esc(avisoHora(a.at)) + '</i></div>'
+      + '<span>' + esc(linea) + '</span>'
+      + '</div></div>';
   });
   return h;
 }
