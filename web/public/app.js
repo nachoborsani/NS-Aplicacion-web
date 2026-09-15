@@ -5969,6 +5969,7 @@ function faltanInformesDe(panelId){
 // Botón por fila: sólo aparece si hay un modelo para esa práctica.
 var MESCURSO_OMES_GEN = {}; // OMEs que ya tienen informe generado (para no crear/subir de nuevo)
 var MESCURSO_FALTANTES_DESEST = {}; // OMEs de faltantes desestimados (no se crea informe; el monto igual cuenta)
+var MESCURSO_OMES_CABINA = {};      // OMEs que ya tienen un informe DEL CENTRO en la cabina
 function accionCrearInforme(panelId){
   if (!puedeAccionesGestionCliente()) return null;
   return function(idx){
@@ -5985,6 +5986,16 @@ function accionCrearInforme(panelId){
     // no se ofrece crear/subir de nuevo. Persiste tras F5 (viene de omes-generadas).
     if (omeDig && MESCURSO_OMES_GEN[omeDig]) {
       return '<span class="mc-generado" style="color:#16a34a;font-weight:600;font-size:12px;white-space:nowrap" title="Ya se generó un informe para esta OME (subiéndose o subido). Cuando la bandeja se refresque, sale de la lista.">✅ Generado</span>';
+    }
+    // El centro YA mandó el informe de esta OME y está esperando en la cabina: no se
+    // ofrece crear uno nuestro. Hacer otro al lado es duplicar documentación, y el
+    // bueno es el del centro. Se ofrece abrirlo, que es lo que hay que hacer con ese.
+    var enCabina = omeDig && MESCURSO_OMES_CABINA[omeDig];
+    if (enCabina) {
+      return '<span class="mc-encabina" style="color:#0c7a7a;font-weight:600;font-size:12px;white-space:nowrap" title="'
+        + esc('El centro ya mandó el informe de esta OME: ' + (enCabina.archivo || 'está en Informes recibidos') + '. No hay que crear otro.')
+        + '">📄 Ya está en la cabina</span>'
+        + ' <button class="btn btn-ghost mc-crear" type="button" title="Abrirlo en Informes recibidos" onclick="verInformeDeCabina(\'' + escJs(enCabina.id) + '\')">Ver</button>';
     }
     // Hacen falta las DOS cosas: modelo para esa práctica y un médico de este
     // centro que la firme. Si falta alguna no se ofrece crear (antes se ofrecía
@@ -6008,6 +6019,21 @@ function accionCrearInforme(panelId){
     if (omeDig) btn += ' <button class="btn btn-ghost mc-desest-btn" type="button" title="Desestimar: no generar informe (paciente no afiliado, etc.). El monto igual cuenta." onclick="desestimarFaltante(\'' + panelId + '\',' + idx + ',this)">🚫 Desestimar</button>';
     return btn;
   };
+}
+// Abre ESE informe en la Cabina, con el centro ya elegido. La lista tarda en llegar
+// (la Cabina la pide al entrar), así que se espera a que el informe exista antes de
+// abrirlo; si no llega, queda la Cabina abierta en ese centro, que ya es la mitad.
+async function verInformeDeCabina(id){
+  var slug = ACTIVE_CLIENT && ACTIVE_CLIENT.slug;
+  if (!slug || !id) return;
+  go('cabina');
+  cabinaElegirCliente(slug);
+  for (var i = 0; i < 60; i++){
+    // CAB_ITEMS trae TODOS los del centro, no solo los que pasan el filtro de la
+    // pantalla: se abre igual aunque esté fuera del rango de fechas elegido.
+    if ((CAB_ITEMS || []).some(function(x){ return x.id === id; })){ abrirInforme(id); return; }
+    await new Promise(function(r){ setTimeout(r, 200); });
+  }
 }
 async function desestimarFaltante(panelId, idx, btn){
   var x = faltanInformesDe(panelId)[idx]; if (!x) return;
@@ -7640,6 +7666,7 @@ async function loadClientMesCurso(){
   // al apretar F5 (se dibujaba antes de que llegara la data).
   MESCURSO_OMES_GEN = {};
   MESCURSO_FALTANTES_DESEST = {};
+  MESCURSO_OMES_CABINA = {};
   // El mes anterior es SIEMPRE el calendario anterior a hoy (Agosto -> Julio), no
   // "el último reporte que exista". Si no hay reporte de ese mes, se muestra el
   // cartel de "falta reporte" (no se cae a un mes más viejo).
@@ -7653,9 +7680,11 @@ async function loadClientMesCurso(){
     api('/api/clientes/' + encodeURIComponent(slug) + '/dashboard?period=' + encodeURIComponent(prev2) + '&sinDetalle=1&compare=none'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-generadas'),
     api('/api/clientes/' + encodeURIComponent(slug) + '/faltantes-desestimados'),
+    api('/api/clientes/' + encodeURIComponent(slug) + '/informes/omes-en-cabina'),
   ]);
   if (results[5] && results[5].ok && results[5].data) ((results[5].data.omes) || []).forEach(function(o){ MESCURSO_OMES_GEN[String(o).replace(/\D/g, '')] = 1; });
   if (results[6] && results[6].ok && results[6].data) ((results[6].data.omes) || []).forEach(function(o){ MESCURSO_FALTANTES_DESEST[String(o).replace(/\D/g, '')] = 1; });
+  if (results[7] && results[7].ok && results[7].data) MESCURSO_OMES_CABINA = results[7].data.omes || {};
   if (!ACTIVE_CLIENT || ACTIVE_CLIENT.slug !== slug) return; // cambió de cliente mientras cargaba
   var resumen = (results[0].ok && results[0].data) ? results[0].data.resumen : null;
   var estadoSync = (results[0].ok && results[0].data) ? results[0].data.estado : null;
@@ -12694,6 +12723,40 @@ function marcarSubiendo(ids, prendido){
   (ids || []).forEach(function(id){ if (prendido) CAB_SUBIENDO[id] = true; else delete CAB_SUBIENDO[id]; });
   aplicarFiltroCabina();
 }
+// ¿Es la hoja de imágenes del estudio y no el informe escrito? Baimed manda los dos,
+// con el MISMO nombre de archivo, así que sin esto hay que abrir los dos para saber
+// cuál es cuál. Tres señales, y hacen falta las tres:
+//   · pesa más de 1 MB — el informe escrito pesa entre 50 y 300 KB;
+//   · no se le leyó NINGUNA práctica — el escrito siempre trae la suya;
+//   · el lector sí le sacó el DNI o el beneficio, o sea que el archivo TIENE texto.
+// La tercera es la que evita el error caro: sin ella quedaban marcadas las planillas
+// escaneadas de Caballito (la hoja de sesiones de kinesiología firmada a mano, 10 MB),
+// que no son las imágenes de un estudio sino un documento de verdad. Un escaneo no
+// tiene ni una letra legible, así que el lector no le saca nada.
+// Medido sobre los 10 centros: marca los 27 de Baimed y ninguno de los demás.
+function cabEsHojaDeImagenes(it){
+  var e = (it && it.extract) || {};
+  var practicas = (e.practicas || []).length || (e.practica ? 1 : 0);
+  if (practicas) return false;
+  if ((it.tam || 0) <= 1000000) return false;   // sin tamaño medido tampoco se marca
+  return !!(e.dni || e.beneficio);
+}
+// ¿Hay otro archivo con el MISMO nombre? Entonces ese otro es el informe escrito, y
+// conviene decirlo: es la pregunta que uno se hace al ver el par.
+function cabTieneGemelo(it){
+  if (!it || !it.filename) return false;
+  var n = 0;
+  for (var i = 0; i < (CAB_ITEMS || []).length; i++){
+    if (CAB_ITEMS[i].filename === it.filename && ++n > 1) return true;
+  }
+  return false;
+}
+// El cartelito de "imágenes", con el motivo adentro.
+function cabChipImagenes(it){
+  if (!cabEsHojaDeImagenes(it)) return '';
+  return ' <span class="cab-imgs" title="' + esc('Archivo pesado del que no se leyó ninguna práctica: son las imágenes del estudio, no el informe escrito.'
+      + (cabTieneGemelo(it) ? ' El otro archivo con este mismo nombre es el informe escrito.' : '')) + '">imágenes</span>';
+}
 // Lo que se esta viendo, en orden: lo usan las flechas de anterior/siguiente.
 var CAB_VISIBLES = [];
 function renderCabinaRows(slug, items){
@@ -12709,6 +12772,10 @@ function renderCabinaRows(slug, items){
     }
     var ome = omesArr.join(', ');
     var ocr = it.extract && it.extract.ocrUsado ? ' <span class="cab-ocr" title="Leído por OCR (escaneado)">OCR</span>' : '';
+    // Va pegado al nombre del archivo a propósito: son DOS archivos con el MISMO
+    // nombre (el informe escrito y las imágenes del estudio) y esto es lo único que
+    // los distingue sin abrir los dos.
+    ocr += cabChipImagenes(it);
     var dni = it.extract && it.extract.dni ? 'DNI '+esc(it.extract.dni) : (it.extract && it.extract.beneficio ? 'Benef '+esc(it.extract.beneficio) : '');
     var asunto = it.asunto ? esc(it.asunto) : '—';
     var rec = cabRecibido(it);
@@ -12997,6 +13064,7 @@ function abrirInforme(id){
     + '</div>'
     + '<div class="cab-estado-line">'+cabBadge(it)+ (via?(' <span class="cab-sub">por '+esc(via)+'</span>'):'')
     + (it.extract&&it.extract.ocrUsado?' <span class="cab-ocr">OCR</span>':'')
+    + cabChipImagenes(it)
     + (!esPreview?(' · <a href="'+urlArch+'" target="_blank" rel="noopener">Abrir el Word original</a>'):'') + '</div>';
   document.getElementById('cabDatos').innerHTML = datos;
   // Candidatos de la bandeja.

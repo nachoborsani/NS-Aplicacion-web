@@ -210,6 +210,7 @@ function aplicarGateDeRol(req, meGate, p) {
         || p === `/api/clientes/${centroCod}/bandeja/resumen`
         || p === `/api/clientes/${centroCod}/reportes`
         || p === `/api/clientes/${centroCod}/informes/omes-generadas`
+        || p === `/api/clientes/${centroCod}/informes/omes-en-cabina`
         || p === `/api/clientes/${centroCod}/faltantes-desestimados`
         || p === "/api/bandeja/refresco/estado";
     }

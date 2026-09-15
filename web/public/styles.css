@@ -2369,6 +2369,7 @@
   /* Observación (motivo del desestimado / nota del reclamo): mismo trato que el
      asunto, acotada para que no empuje la tabla. El texto completo va en el title. */
   .cab-obs{max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);font-size:12.5px}
+  .cab-imgs{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#64748b 18%,var(--surface));color:var(--text-2);vertical-align:middle}
   .cab-ocr{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:color-mix(in srgb,#7a5cff 16%,var(--surface));color:#5a3ec8;vertical-align:middle}
   .cab-actions{white-space:nowrap;text-align:right}
   /* La practica se partia en tres renglones y estiraba la fila entera, mientras

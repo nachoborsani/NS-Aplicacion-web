@@ -11204,6 +11204,41 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { fichas, total: fichas.length });
   }
 
+  // Las OMEs que YA tienen un informe DEL CENTRO esperando en la cabina. Lo usa
+  // "Faltan informes" para no ofrecer crear uno nuestro: generar uno al lado del que
+  // ya mando el centro es duplicar documentacion, y el bueno es el del centro.
+  // Los generados por nosotros quedan afuera: de esos se encarga omes-generadas.
+  // Va liviano: solo ome -> { id, archivo }.
+  const informeOmesCabina = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/omes-en-cabina$/);
+  if (informeOmesCabina && req.method === "GET") {
+    const me = getSessionUser(req);
+    if (!me) return json(res, 401, { error: "no-auth" });
+    if (!esOperativo(me)) return json(res, 403, { error: "Solo un usuario operativo." });
+    const slug = informeOmesCabina[1];
+    const items = (loadInformes()[slug] || {}).items || [];
+    const omes = {};
+    for (const it of items) {
+      if (!it || it.desestimado) continue;      // desestimado no cuenta como informe cargado
+      if (it.origen === "generado") continue;   // ese ya lo reporta omes-generadas
+      const r = it.resuelto || {};
+      const m = it.match || {};
+      // OJO: `omes` viene como [] cuando matcheo UNA sola practica, y un array vacio
+      // es truthy. Con `||` gana el vacio y el numero de `ome` se pierde.
+      const lista = []
+        .concat((r.omes && r.omes.length) ? r.omes : (r.ome ? [r.ome] : []))
+        .concat((m.omes && m.omes.length) ? m.omes : (m.ome ? [m.ome] : []));
+      for (const o of lista) {
+        const d = cabinaLib.digs(o);
+        if (!d) continue;
+        // Gana el que ya esta resuelto: es el que alguien confirmo.
+        if (!omes[d] || (r.ome && !omes[d].resuelto)) {
+          omes[d] = { id: it.id, archivo: it.filename || "", resuelto: !!r.ome };
+        }
+      }
+    }
+    return json(res, 200, { omes, total: Object.keys(omes).length });
+  }
+
   // OMEs que ya tienen un informe GENERADO desde "Crear y subir" (aunque la
   // bandeja todavía no lo refleje). Sirve para no ofrecer crear/subir de nuevo.
   const informeOmesGen = p.match(/^\/api\/clientes\/([a-z0-9-]+)\/informes\/omes-generadas$/);
