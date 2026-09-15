@@ -224,36 +224,115 @@ class GlobalApp:
             raise RuntimeError(f"el archivo respondio {(res or {}).get('__error')}")
         return base64.b64decode(res["b64"])
 
-    def buscar_paciente(self, nombre: str, benef: str = "") -> dict | None:
-        """Busca por apellido y, si hay varios, desempata por el carnet."""
-        apellido = _norm(nombre).split(" ")[0]
-        if len(apellido) < 3:
-            return None
+    def _pagina_pacientes(self, palabra: str, tam: int, pagina: int):
+        """Una pagina de la busqueda. Devuelve (filas, total)."""
+        from urllib.parse import quote
         filtros = json.dumps({
-            "andarr": [{"nombre": {"ilike": f"%{apellido}%"}, "idcliente": self.cfg["idcliente"]}],
+            "andarr": [{"nombre": {"ilike": f"%{palabra}%"}, "idcliente": self.cfg["idcliente"]}],
             "idcliente": {"eq": self.cfg["idcliente"]},
         })
-        from urllib.parse import quote
-        data = self._api(f"/api/pacientes/get-all-pacientes?pageSize=50&page=1&filters={quote(filtros)}")
+        data = self._api(
+            f"/api/pacientes/get-all-pacientes?pageSize={tam}&page={pagina}&filters={quote(filtros)}"
+        )
         # La respuesta viene envuelta dos veces: {pacientes: {count, rows}}.
         caja = (data or {}).get("pacientes") or data or {}
-        filas = caja.get("rows") if isinstance(caja, dict) else (caja if isinstance(caja, list) else [])
-        filas = filas or []
-        if not filas:
-            return None
-        benef_d = _digitos(benef)
-        # 1) por carnet, que es el dato duro
-        if benef_d:
-            for p in filas:
-                if _digitos(p.get("carnet")) == benef_d:
-                    return p
-        # 2) por nombre completo normalizado
-        objetivo = _norm(nombre)
+        if isinstance(caja, dict):
+            return list(caja.get("rows") or []), int(caja.get("count") or 0)
+        return list(caja or []), 0
+
+    def _buscar_por(self, palabra: str) -> list[dict]:
+        """Todas las filas con esa palabra en el nombre, recorriendo las paginas.
+
+        OJO: el `count` que devuelve la API es el total de verdad y la pagina trae solo
+        lo que se pidio. Pidiendo 50 y quedandose con eso, un apellido comun se corta sin
+        ningun error: RODRIGUEZ da 193 y ROMERO 92, asi que el paciente buscado quedaba
+        afuera y la corrida lo contaba como "no esta en Global App".
+        """
+        TAM, TOPE_PAGINAS = 200, 6
+        filas, _ = self._pagina_pacientes(palabra, TAM, 1)
+        total = 0
+        try:
+            _, total = self._pagina_pacientes(palabra, 1, 1)
+        except Exception:  # noqa: BLE001
+            total = len(filas)
+        pagina = 2
+        while len(filas) < total and pagina <= TOPE_PAGINAS:
+            mas, _ = self._pagina_pacientes(palabra, TAM, pagina)
+            if not mas:
+                break
+            filas += mas
+            pagina += 1
+        return filas
+
+    @staticmethod
+    def _mismo_carnet(a: str, b: str) -> bool:
+        """El carnet de PAMI son 11 digitos + 2 de orden, y no siempre viene con los dos.
+        Se comparan los 11 que identifican a la persona."""
+        a, b = _digitos(a), _digitos(b)
+        if len(a) < 11 or len(b) < 11:
+            return bool(a) and a == b
+        return a[:11] == b[:11]
+
+    @staticmethod
+    def _elegir(filas: list[dict], nombre: str, benef: str) -> dict | None:
+        """Cual de las filas es. En este orden, y si ninguno cierra NO se elige.
+
+        Lo que se saco a proposito: la regla vieja de "si hay una sola fila, esa es".
+        Buscando ACOSTA RAMON ELIZALDE traia ELIZALDE CARMEN HAYDEE —otra persona— y la
+        daba por buena por ser la unica.
+        """
+        # 1) el carnet, que es el dato duro
+        if _digitos(benef):
+            porCarnet = [p for p in filas if GlobalApp._mismo_carnet(p.get("carnet"), benef)]
+            if porCarnet:
+                return porCarnet[0]
+        # 2) las mismas palabras, en cualquier orden: PAMI escribe "SILVIA PERALTA
+        #    VALENTINA" y Global App "PERALTA SILVIA VALENTINA".
+        objetivo = set(_norm(nombre).split())
+        iguales = [p for p in filas if set(_norm(p.get("nombre")).split()) == objetivo]
+        if len(iguales) == 1:
+            return iguales[0]
+        # 3) uno contiene al otro y no hay dudas: a veces falta un nombre de pila
+        #    ("ZARAGOZA PATRICIA" contra "ZARAGOZA PATRICIA EDITH").
+        dentro = []
         for p in filas:
-            if _norm(p.get("nombre")) == objetivo:
-                return p
-        # 3) uno solo con ese apellido: se toma
-        return filas[0] if len(filas) == 1 else None
+            suyas = set(_norm(p.get("nombre")).split())
+            if suyas and (suyas <= objetivo or objetivo <= suyas):
+                dentro.append(p)
+        if len(dentro) == 1:
+            return dentro[0]
+        return None
+
+    def buscar_paciente(self, nombre: str, benef: str = "") -> dict | None:
+        """Encuentra al paciente por nombre, y desempata por el carnet.
+
+        Se busca por la palabra MAS LARGA del nombre y no por la primera: "SINFOROSA"
+        devuelve 1 fila y "RODRIGUEZ" 193. Si esa no da, se prueban las que siguen.
+
+        Y la palabra va con sus acentos: la busqueda del otro lado distingue la ñ, asi
+        que mandando "QUINONES" normalizado no aparece nadie y con "QUIÑONES" hay 9.
+        """
+        crudo = re.sub(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+", " ", str(nombre or ""))
+        palabras = [p for p in crudo.split() if len(p) >= 4]
+        if not palabras:
+            return None
+        # de la mas larga a la mas corta: la mas larga es la que menos filas trae
+        orden = sorted(dict.fromkeys(palabras), key=len, reverse=True)[:3]
+        juntas, vistos = [], set()
+        for palabra in orden:
+            try:
+                filas = self._buscar_por(palabra)
+            except Exception:  # noqa: BLE001 - una palabra que falla no corta las otras
+                continue
+            for p in filas:
+                pid = p.get("id")
+                if pid not in vistos:
+                    vistos.add(pid)
+                    juntas.append(p)
+            elegido = GlobalApp._elegir(juntas, nombre, benef)
+            if elegido:
+                return elegido
+        return None
 
     def registros(self, idpaciente: int, tope: int = 60) -> list[dict]:
         data = self._api(
