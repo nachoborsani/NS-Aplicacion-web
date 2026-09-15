@@ -2866,12 +2866,27 @@ function loadWorkerState() {
     // Si todavía no hay un `schedule` guardado (estado previo a esta feature), usar
     // el default COMPLETO — no validarSchedule({}), que daría Scheffelaar vacío.
     const tieneSched = parsed && parsed.schedule && typeof parsed.schedule === "object";
-    return {
+    const estado = {
       workers: parsed && typeof parsed.workers === "object" && !Array.isArray(parsed.workers) ? parsed.workers : {},
       tasks: Array.isArray(parsed && parsed.tasks) ? parsed.tasks : [],
       schedule: tieneSched ? validarSchedule(parsed.schedule) : defaultSchedule(),
       scheduleVersion: Number(parsed && parsed.scheduleVersion) || 1,
     };
+    // Si aparecio una tarea NUEVA en el horario (una que el guardado no tenia), el
+    // default la completa pero la version queda igual — y el server solo reaplica sus
+    // timers cuando la version cambia. Sin esto el timer nuevo no se escribe nunca y
+    // hay que acordarse de entrar a la pantalla y guardar sin cambiar nada.
+    // Se compara por CLAVES y no por valores: comparando valores, cualquier
+    // normalizacion de validarSchedule subiria la version en cada lectura y el server
+    // reescribiria los timers cada 5 minutos para siempre.
+    if (tieneSched) {
+      const nuevas = Object.keys(defaultSchedule()).filter((k) => !(k in parsed.schedule));
+      if (nuevas.length) {
+        estado.scheduleVersion += 1;
+        try { saveWorkerState(estado); } catch { /* si no se puede guardar, se reintenta en la proxima lectura */ }
+      }
+    }
+    return estado;
   } catch {
     return emptyWorkerState();
   }
