@@ -11227,12 +11227,23 @@ const server = http.createServer(async (req, res) => {
       const lista = []
         .concat((r.omes && r.omes.length) ? r.omes : (r.ome ? [r.ome] : []))
         .concat((m.omes && m.omes.length) ? m.omes : (m.ome ? [m.ome] : []));
+      // El informe escrito y la hoja de imagenes del estudio llegan con el MISMO
+      // nombre y pueden tener la misma OME. El que hay que abrir es el escrito.
+      const hojaImg = !((it.extract || {}).practicas || []).length
+        && !(it.extract || {}).practica
+        && (it.tam || 0) > 1000000
+        && !!((it.extract || {}).dni || (it.extract || {}).beneficio);
       for (const o of lista) {
         const d = cabinaLib.digs(o);
         if (!d) continue;
-        // Gana el que ya esta resuelto: es el que alguien confirmo.
-        if (!omes[d] || (r.ome && !omes[d].resuelto)) {
-          omes[d] = { id: it.id, archivo: it.filename || "", resuelto: !!r.ome };
+        // Gana el que ya esta resuelto (alguien lo confirmo) y, a igualdad, el que
+        // no es la hoja de imagenes.
+        const hay = omes[d];
+        const mejor = !hay
+          || (r.ome && !hay.resuelto)
+          || (hay.hojaImg && !hojaImg && !(hay.resuelto && !r.ome));
+        if (mejor) {
+          omes[d] = { id: it.id, archivo: it.filename || "", resuelto: !!r.ome, hojaImg };
         }
       }
     }
