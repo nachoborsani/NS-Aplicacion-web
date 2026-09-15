@@ -10819,6 +10819,7 @@ function srvFormatSchedule(s){
   out.push('• Refresco de bandeja <b>'+esc(s.bandejaRefresh)+'</b> · reintentos <b>'+esc(s.bandejaRetry)+'</b>');
   out.push('• "Actualizar ahora" <b>cada '+esc(String(s.pollerCadaMin))+' min</b>');
   out.push('• Traer del mail (informes): <b>10:00, 14:00, 16:00, 18:00</b>');
+  out.push('• Bajar informes de Global App: <b>'+esc(s.globalappInformes||'23:00')+'</b>');
   out.push('• Resumen de subidas por Telegram: <b>'+esc(s.telegramResumenHora||'19:00')+'</b>');
   var cad = s.scheffelaarCadena || {};
   var partes = SRV_DIAS_ORDEN.filter(function(d){ return (cad[d]||[]).length; })
@@ -10856,6 +10857,9 @@ function renderConfigServer(s){
   h += '<div '+row+'><span style="width:150px">Refresco (bajar bandeja)</span><input type="time" id="cfgRefresh" class="inp mini" value="'+esc(s.bandejaRefresh||'20:00')+'"></div>';
   h += '<div '+row+'><span style="width:150px">Reintentar con error</span><input type="time" id="cfgRetry" class="inp mini" value="'+esc(s.bandejaRetry||'22:00')+'"></div>';
   h += '<div '+row+'><span style="width:150px">"Actualizar ahora"</span>cada <input type="number" id="cfgPoller" class="inp mini" min="1" max="60" value="'+esc(String(s.pollerCadaMin||10))+'" style="width:64px"> min</div>';
+  h += '<span '+lbl+'>Informes</span>';
+  h += '<div '+row+'><span style="width:150px">Bajar de Global App</span><input type="time" id="cfgGlobalApp" class="inp mini" value="'+esc(s.globalappInformes||'23:00')+'"></div>';
+  h += '<div class="lote-muted" style="margin:-4px 0 6px 0;font-size:11.5px">Tiene que ir despues del refresco de bandeja: lee de ahi que prestaciones esperan informe.</div>';
 
   h += '<span '+lbl+'>Cadena Scheffelaar — horas por día (separadas por coma)</span>';
   SRV_DIAS_ORDEN.forEach(function(d){
@@ -10895,6 +10899,7 @@ async function guardarConfigServer(){
   var schedule = {
     bandejaRefresh: (document.getElementById('cfgRefresh')||{}).value || '20:00',
     bandejaRetry: (document.getElementById('cfgRetry')||{}).value || '22:00',
+    globalappInformes: (document.getElementById('cfgGlobalApp')||{}).value || '23:00',
     pollerCadaMin: parseInt((document.getElementById('cfgPoller')||{}).value, 10) || 10,
     scheffelaarCadena: cad,
     scheffelaarBenef: { dias: benefDias, hora: (document.getElementById('cfgBenefHora')||{}).value || '19:00' },

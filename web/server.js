@@ -2816,6 +2816,10 @@ function isWorkerAuth(req) {
 function defaultSchedule() {
   return {
     bandejaRefresh: "20:00",
+    // Bajar los informes de Global App. Va DESPUES del refresco de la bandeja (20:00) y
+    // del reintento (22:00), porque lee de la bandeja que prestaciones esperan informe:
+    // corriendo antes trabajaria sobre la lista de ayer.
+    globalappInformes: "23:00",
     bandejaRetry: "22:00",
     pollerCadaMin: 10,
     // Cadena Scheffelaar: por día, la lista de horas a las que corre (vacío = no corre).
@@ -2842,6 +2846,7 @@ function validarSchedule(s) {
   if (!(poller >= 1 && poller <= 60)) poller = 10;
   return {
     bandejaRefresh: okTime(s.bandejaRefresh) ? s.bandejaRefresh : "20:00",
+    globalappInformes: okTime(s.globalappInformes) ? s.globalappInformes : "23:00",
     bandejaRetry: okTime(s.bandejaRetry) ? s.bandejaRetry : "22:00",
     pollerCadaMin: poller,
     scheffelaarCadena: cad,

@@ -399,10 +399,82 @@ def bajar(slug: str = "", solo: int = 0, headless: bool = True, log=print) -> di
     return resumen
 
 
+def centros_con_globalapp(web) -> list[dict]:
+    """Los centros que tienen cargado el acceso a Global App en su ficha. Se recorre la
+    lista en vez de tener el slug escrito: hoy es solo Baimed, y el dia que otro centro
+    cargue su acceso entra solo, sin tocar el server."""
+    salen = []
+    for c in web.list_clients():
+        slug = c.get("slug") or ""
+        if not slug:
+            continue
+        try:
+            g = web.client_globalapp(slug) or {}
+        except Exception:  # noqa: BLE001 - un centro que falla no corta el barrido
+            continue
+        if g.get("gaUser") and g.get("gaPassword"):
+            salen.append({"slug": slug, "nombre": c.get("name") or slug})
+    return salen
+
+
+def bajar_todos(solo: int = 0, headless: bool = True, log=print) -> list[dict]:
+    """Una corrida por cada centro con Global App. Lo que falla en uno no corta el resto:
+    el objetivo es que la corrida de la noche termine siempre."""
+    web = ns_web.NSWebClient.desde_config()
+    centros = centros_con_globalapp(web)
+    if not centros:
+        log("Ningun centro tiene cargado el acceso a Global App.")
+        return []
+    log(f"{len(centros)} centro(s) con Global App: " + ", ".join(c["nombre"] for c in centros))
+    salidas = []
+    for c in centros:
+        log(f"--- {c['nombre']} ---")
+        try:
+            r = bajar(slug=c["slug"], solo=solo, headless=headless, log=log)
+            r.update({"slug": c["slug"], "nombre": c["nombre"], "ok": True})
+        except Exception as e:  # noqa: BLE001
+            log(f"  FALLO: {e!r}")
+            r = {"slug": c["slug"], "nombre": c["nombre"], "ok": False, "error": str(e)[:160]}
+        salidas.append(r)
+    return salidas
+
+
+def aviso_telegram(salidas: list[dict]) -> str:
+    """Un renglon por centro. Sin esto, una corrida que se rompe de noche no la ve nadie
+    hasta que alguien nota que faltan informes."""
+    if not salidas:
+        return "Global App: ningun centro tiene el acceso cargado."
+    lineas = ["Informes de Global App:"]
+    for r in salidas:
+        if not r.get("ok"):
+            lineas.append(f"  {r['nombre']}: FALLO - {r.get('error')}")
+            continue
+        lineas.append(
+            f"  {r['nombre']}: {r.get('bajados', 0)} informe(s) nuevos"
+            f" de {r.get('pendientes', 0)} pendientes"
+            + (f" - {r['sin_paciente']} sin paciente" if r.get("sin_paciente") else "")
+            + (f" - {r['sin_ficha']} sin ficha ese dia" if r.get("sin_ficha") else "")
+            + (f" - {r['sin_archivo']} con ficha pero sin informe" if r.get("sin_archivo") else "")
+            + (f" - {r['fallados']} con error" if r.get("fallados") else "")
+        )
+    return "\n".join(lineas)
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     solo = 0
     for a in args:
         if a.startswith("--solo="):
             solo = int(a.split("=", 1)[1] or 0)
-    bajar(solo=solo, headless=("--ver" not in args))
+    headless = "--ver" not in args
+    if "--uno" in args:
+        # Una sola corrida con el centro de siempre: para probar a mano.
+        bajar(solo=solo, headless=headless)
+    else:
+        salidas = bajar_todos(solo=solo, headless=headless)
+        try:
+            w = ns_web.NSWebClient.desde_config()
+            w.avisar(aviso_telegram(salidas))
+            print("  -> aviso Telegram enviado")
+        except Exception as e:  # noqa: BLE001 - el aviso no puede tumbar la corrida
+            print(f"  -> no pude enviar el aviso Telegram: {e!r}")

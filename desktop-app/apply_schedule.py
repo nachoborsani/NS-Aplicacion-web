@@ -47,6 +47,7 @@ def _validar(s: dict) -> dict:
     if not (1 <= poller <= 60):
         poller = 10
     br = str(s.get("bandejaRefresh", "20:00"))
+    ga = str(s.get("globalappInformes", "23:00"))
     rt = str(s.get("bandejaRetry", "22:00"))
     cad_src = s.get("scheffelaarCadena") if isinstance(s.get("scheffelaarCadena"), dict) else {}
     cad = {d: _horas(cad_src.get(d)) for d in DIAS}
@@ -54,6 +55,7 @@ def _validar(s: dict) -> dict:
     bdias = [d for d in DIAS if d in (b.get("dias") or [])]
     return {
         "bandejaRefresh": br if _TIME.match(br) else "20:00",
+        "globalappInformes": ga if _TIME.match(ga) else "23:00",
         "bandejaRetry": rt if _TIME.match(rt) else "22:00",
         "pollerCadaMin": poller,
         "scheffelaarCadena": cad,
@@ -121,6 +123,9 @@ def main() -> int:
 
     st = _aplicar_timer("ns-bandeja-retry", [f"*-*-* {s['bandejaRetry']}:00"], True, "NS reintentar bandejas con error")
     if st == "on": encendidos.append("ns-bandeja-retry")
+
+    st = _aplicar_timer("ns-globalapp-informes", [f"*-*-* {s['globalappInformes']}:00"], True, "NS bajar informes de Global App")
+    if st == "on": encendidos.append("ns-globalapp-informes")
 
     st = _aplicar_timer("ns-bandeja-poller", [f"*:0/{s['pollerCadaMin']}"], False, "NS poller refresco bandejas")
     if st == "on": encendidos.append("ns-bandeja-poller")
